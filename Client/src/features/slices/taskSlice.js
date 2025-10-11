@@ -9,14 +9,18 @@ const getToken = () => {
   return user?.token || null;
 };
 
-// Fetch tasks
+// =====================
+// Async Thunks
+// =====================
+
+// Fetch all tasks
 export const fetchTasks = createAsyncThunk("tasks/fetchTasks", async (_, thunkAPI) => {
   try {
     const token = getToken();
     const res = await axios.get(API_URL, {
       headers: { Authorization: `Bearer ${token}` },
     });
-    return res.data;
+    return res.data; // Should return array of tasks
   } catch (err) {
     return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
   }
@@ -25,35 +29,34 @@ export const fetchTasks = createAsyncThunk("tasks/fetchTasks", async (_, thunkAP
 // Create task
 export const createTask = createAsyncThunk(
   "tasks/createTask",
-  async ({ data, token }, thunkAPI) => {
+  async ({ data }, thunkAPI) => {
     try {
-      const res = await axios.post(`${API_URL}/create`, { ...data }, {
-        headers: { Authorization: `Bearer ${token}` }
+      const token = getToken();
+      const res = await axios.post(API_URL, data, {
+        headers: { Authorization: `Bearer ${token}` },
       });
-      return res.data.task;
+      return res.data; // Should return created task
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
-
 
 // Update task
 export const updateTask = createAsyncThunk(
   "tasks/updateTask",
-  async ({ id, updates, token }, thunkAPI) => {
+  async ({ id, updates }, thunkAPI) => {
     try {
-      const res = await axios.put(`${API_URL}/update/${id}`, updates, {
+      const token = getToken();
+      const res = await axios.put(`${API_URL}/${id}`, updates, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      return res.data.task;
+      return res.data; // Should return updated task
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
-
-
 
 // Delete task
 export const deleteTask = createAsyncThunk("tasks/deleteTask", async (id, thunkAPI) => {
@@ -68,6 +71,9 @@ export const deleteTask = createAsyncThunk("tasks/deleteTask", async (id, thunkA
   }
 });
 
+// =====================
+// Slice
+// =====================
 const taskSlice = createSlice({
   name: "tasks",
   initialState: {
