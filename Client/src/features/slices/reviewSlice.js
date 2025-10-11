@@ -1,0 +1,81 @@
+import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+import axios from "axios";
+
+const API_URL = "http://localhost:4000/api/v1/reviews";
+
+// Helper to get token from localStorage
+const getToken = () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  return user?.token || null;
+};
+
+// Add review
+export const addReview = createAsyncThunk("reviews/addReview", async (data, thunkAPI) => {
+  try {
+    const token = getToken();
+    const res = await axios.post(API_URL, data, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    return res.data;
+  } catch (err) {
+    return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+  }
+});
+
+// Get reviews by task
+export const getReviewsByTask = createAsyncThunk(
+  "reviews/getReviewsByTask",
+  async (taskId, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.get(`${API_URL}/task/${taskId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+// Resolve review
+export const resolveReview = createAsyncThunk(
+  "reviews/resolveReview",
+  async (reviewId, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.put(`${API_URL}/${reviewId}/resolve`, {}, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+const reviewSlice = createSlice({
+  name: "reviews",
+  initialState: {
+    reviews: [],
+    loading: false,
+    error: null,
+  },
+  reducers: {},
+  extraReducers: (builder) => {
+    builder
+      .addCase(addReview.fulfilled, (state, action) => {
+        state.reviews.push(action.payload);
+      })
+      .addCase(getReviewsByTask.fulfilled, (state, action) => {
+        state.reviews = action.payload;
+      })
+      .addCase(resolveReview.fulfilled, (state, action) => {
+        state.reviews = state.reviews.map((r) =>
+          r._id === action.payload._id ? action.payload : r
+        );
+      });
+  },
+});
+
+export default reviewSlice.reducer;
