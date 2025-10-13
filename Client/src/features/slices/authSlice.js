@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "https://task-managment-4.onrender.com/api/v1/auth"; // no /auth
+const API_URL = "https://task-managment-4.onrender.com/api/v1"; // no /auth
 
 
 // =====================
