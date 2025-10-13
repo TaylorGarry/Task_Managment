@@ -46,7 +46,7 @@ const TaskStatus = () => {
 
   return (
     <div className="p-6 mt-16">
-      <h2 className="text-2xl font-bold mb-6">Task Status (Kanban)</h2>
+      <h2 className="text-2xl font-bold mb-6">Task Status</h2>
       <div className="grid grid-cols-4 gap-4">
         {statuses.map((status) => (
           <div key={status} className="bg-gray-100 p-4 rounded-lg flex flex-col">

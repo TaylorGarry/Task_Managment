@@ -95,7 +95,6 @@ export const logout = async (req, res) => {
 };
 
 
-// Get all employees
 export const getAllEmployees = async (req, res) => {
   try {
     const employees = await User.find({ accountType: "employee" }).select("_id username");
