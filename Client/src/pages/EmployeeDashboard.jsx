@@ -1,142 +1,109 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchTasks, updateTask } from "../features/slices/taskSlice";
-import { FiMessageSquare } from "react-icons/fi";
-import toast, { Toaster } from "react-hot-toast";
+import { fetchTasks, updateTaskStatus } from "../features/slices/taskSlice";
+import TaskCard from "./TaskCard";
 
 const EmployeeDashboard = () => {
   const dispatch = useDispatch();
-  const { tasks } = useSelector((state) => state.tasks);
+  const { tasks, loading, error } = useSelector((state) => state.tasks);
 
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [message, setMessage] = useState("");
+  const user = JSON.parse(localStorage.getItem("user"));
+  const employeeDepartment = user?.department || "";
 
-  const statuses = ["Pending", "Working", "Reviewing", "Done"];
+  const [filters, setFilters] = useState({
+    date: new Date().toISOString().split("T")[0],
+    shift: "",
+    department: employeeDepartment,
+  });
+
+  const shiftOptions = ["Start", "Mid", "End"];
+  const departmentOptions = [employeeDepartment];
 
   useEffect(() => {
-    dispatch(fetchTasks());
-  }, [dispatch]);
+    dispatch(fetchTasks(filters));
+  }, [dispatch, filters]);
 
-  const handleStatusChange = async (taskId, newStatus) => {
-    const token = JSON.parse(localStorage.getItem("user"))?.token;
+  const handleFilterChange = (e) => {
+    setFilters({ ...filters, [e.target.name]: e.target.value });
+  };
+
+  const handleStatusChange = async (taskId, status) => {
     try {
-      await dispatch(updateTask({ id: taskId, updates: { status: newStatus }, token })).unwrap();
-      toast.success("Task status updated");
+      const updatedStatus = await dispatch(updateTaskStatus({ id: taskId, status })).unwrap();
+      dispatch({
+        type: "tasks/updateTaskStatus/fulfilled",
+        payload: updatedStatus,
+      });
+
     } catch (err) {
-      toast.error(err || "Error updating task");
+      console.error("Failed to update status:", err);
+      alert("Failed to update status, please try again.");
     }
   };
 
-  const handleOpenMessage = (task) => {
-    setSelectedTask(task);
-    setMessage("");
-  };
-
-  const handleCloseMessage = () => {
-    setSelectedTask(null);
-    setMessage("");
-  };
-
-  const handleSendMessage = () => {
-    console.log("Send message for task:", selectedTask?._id, message);
-    handleCloseMessage();
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "High":
-        return "bg-red-500 text-white";
-      case "Medium":
-        return "bg-yellow-400 text-black";
-      case "Low":
-        return "bg-green-400 text-black";
-      default:
-        return "bg-gray-300 text-black";
-    }
-  };
 
   return (
-    <div className="p-6 mt-16">
-      <Toaster />
-      <h1 className="text-2xl font-bold mb-6 text-center">Employee Dashboard</h1>
+    <div className="p-6 bg-gray-50 min-h-screen">
+      <h2 className="text-3xl font-bold mb-6 text-gray-800">Employee Dashboard</h2>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-        {statuses.map((status) => (
-          <div key={status} className="bg-gray-100 p-4 rounded-lg flex flex-col">
-            <h3 className="font-semibold mb-3 text-center">{status}</h3>
-            {tasks
-              .filter((task) => task.status === status)
-              .map((task) => (
-                <div
-                  key={task._id}
-                  className="bg-white p-4 rounded shadow mb-3 hover:shadow-lg transition cursor-pointer flex flex-col gap-2"
-                >
-                  {/* Title + Priority */}
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-medium text-lg">{task.title}</h4>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${getPriorityColor(
-                        task.priority
-                      )}`}
-                    >
-                      {task.priority}
-                    </span>
-                  </div>
+      <div className="flex flex-wrap gap-4 mb-6 items-end">
+        <div className="flex flex-col">
+          <label className="text-gray-700 font-semibold mb-1">Date</label>
+          <input
+            type="date"
+            name="date"
+            value={filters.date}
+            onChange={handleFilterChange}
+            className="p-2 rounded border"
+          />
+        </div>
 
-                  <p className="text-sm mb-2">{task.description}</p>
+        <div className="flex flex-col">
+          <label className="text-gray-700 font-semibold mb-1">Shift</label>
+          <select
+            name="shift"
+            value={filters.shift}
+            onChange={handleFilterChange}
+            className="p-2 rounded border"
+          >
+            <option value="">All Shifts</option>
+            {shiftOptions.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        </div>
 
-                  <div className="flex justify-between items-center text-xs text-gray-700">
-                    <select
-                      value={task.status}
-                      onChange={(e) => handleStatusChange(task._id, e.target.value)}
-                      className="border rounded px-1 text-xs"
-                    >
-                      {statuses.map((s) => (
-                        <option key={s} value={s}>{s}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleOpenMessage(task)}
-                      className="flex items-center gap-1 text-blue-600 hover:underline"
-                      title="Add Review"
-                    >
-                      <FiMessageSquare size={16} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        ))}
+        <div className="flex flex-col">
+          <label className="text-gray-700 font-semibold mb-1">Department</label>
+          <select
+            name="department"
+            value={filters.department}
+            onChange={handleFilterChange}
+            className="p-2 rounded border"
+          >
+            {departmentOptions.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {selectedTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-96 relative shadow-lg">
-            <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 font-bold"
-              onClick={handleCloseMessage}
-            >
-              X
-            </button>
-            <h3 className="text-lg font-semibold mb-4">
-              Add Review for "{selectedTask.title}"
-            </h3>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={4}
-              className="border rounded w-full p-2 mb-4 resize-none"
-              placeholder="Write your message here..."
+      {loading && <p className="text-gray-700">Loading tasks...</p>}
+      {error && <p className="text-red-500">{error}</p>}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {tasks.length === 0 && !loading ? (
+          <p className="text-gray-700">No tasks assigned for this date/shift.</p>
+        ) : (
+          tasks.map((task) => (
+            <TaskCard
+              key={task._id}
+              task={task}
+              onStatusChange={handleStatusChange}
             />
-            <button
-              onClick={handleSendMessage}
-              className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      )}
+          ))
+        )}
+      </div>
     </div>
   );
 };

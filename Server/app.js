@@ -3,6 +3,7 @@ import cors from "cors";
 import authRoutes from "./routes/auth.routes.js"
 import taskRoutes from "./routes/task.routes.js"
 import reviewRoutes from "./routes/review.routes.js"
+import taskStatusRoutes from "./routes/taskStatus.routes.js"
 const app = express();
 
 const allowedOrigins = [
@@ -24,6 +25,8 @@ app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes)
 // app.use("/api/tasks", taskRoutes);
 // app.use("/api/reviews", reviewRoutes);
+
+app.use("/api/v1/task-status", taskStatusRoutes);
 
 app.use((err, req, res, next) => {
   if (err.message === "CORS_NOT_ALLOWED") {
