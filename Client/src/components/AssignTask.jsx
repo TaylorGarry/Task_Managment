@@ -24,7 +24,6 @@ const AssignTask = () => {
     dispatch(fetchTasks());
   }, [dispatch]);
 
-  // Update filtered employees when department changes
   useEffect(() => {
     if (formData.department) {
       setFilteredEmployees(
@@ -40,12 +39,18 @@ const AssignTask = () => {
 
   const handleAddTask = async (e) => {
     e.preventDefault();
-    if (!formData.department || !formData.assignedTo || !formData.title) {
+    if (!formData.department || !formData.title) {
       toast.error("Please fill all required fields!");
       return;
     }
+
+    const dataToSend = {
+      ...formData,
+      assignedTo: formData.assignedTo ? [formData.assignedTo] : [],
+    };
+
     try {
-      await dispatch(createTask({ data: formData })).unwrap();
+      await dispatch(createTask({ data: dataToSend })).unwrap();
       toast.success("Task assigned successfully!");
       setFormData({
         title: "",
@@ -60,7 +65,6 @@ const AssignTask = () => {
     }
   };
 
-  // Get unique departments from employees
   const departments = [...new Set(employees.map((emp) => emp.department))];
 
   return (
@@ -102,9 +106,8 @@ const AssignTask = () => {
             value={formData.assignedTo}
             onChange={handleInputChange}
             className="border border-gray-300 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-blue-400"
-            required
           >
-            <option value="">Select Employee</option>
+            <option value="">All Employees in Department</option>
             {filteredEmployees.map((emp) => (
               <option key={emp._id} value={emp._id}>
                 {emp.username}
@@ -151,3 +154,4 @@ const AssignTask = () => {
 };
 
 export default AssignTask;
+

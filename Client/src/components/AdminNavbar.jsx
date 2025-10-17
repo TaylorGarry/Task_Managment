@@ -10,7 +10,6 @@ const AdminNavbar = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const dropdownRef = useRef();
-
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -20,7 +19,6 @@ const AdminNavbar = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
   const getInitials = (name) => {
     if (!name) return "U";
     const parts = name.split(" ");
@@ -28,18 +26,15 @@ const AdminNavbar = () => {
       ? parts[0][0].toUpperCase() + parts[1][0].toUpperCase()
       : name[0].toUpperCase();
   };
-
   const handleLogout = () => {
     dispatch(logoutUser());
     setShowDropdown(false);
     setShowMobileMenu(false);
   };
-
   return (
-    <nav className="fixed top-0 left-0 w-full bg-gray-800 text-white z-50 shadow-lg">
+    <nav className="fixed top-0 left-0  w-full bg-gray-800 text-white z-50 shadow-lg">
       <div className="flex justify-between items-center p-2">
         <h1 className="text-lg font-bold">Task Management</h1>
-
         <div className="hidden md:flex items-center gap-4">
           <Link to="/admin/assign-task" className="hover:underline">
             Assign Task
@@ -54,7 +49,6 @@ const AdminNavbar = () => {
             >
               {getInitials(user?.username)}
             </button>
-
             {showDropdown && (
               <div className="absolute right-0 mt-2 w-32 bg-white text-black rounded shadow-lg py-2">
                 <button
@@ -67,7 +61,6 @@ const AdminNavbar = () => {
             )}
           </div>
         </div>
-
         <div className="md:hidden">
           <button
             onClick={() => setShowMobileMenu(true)}
