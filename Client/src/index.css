@@ -16,3 +16,17 @@
 .animation-delay-400 {
   animation-delay: 0.4s;
 }
+
+@layer base {
+  input[type="password"]::-ms-reveal,
+  input[type="password"]::-ms-clear,
+  input[type="password"]::-webkit-credentials-auto-fill-button {
+    display: none !important;
+    appearance: none;
+  }
+
+  input[type="password"] {
+    background-image: none !important;
+  }
+}
+

@@ -221,12 +221,10 @@
 // };
 
 
-import mongoose from "mongoose";
 import Task from "../Modals/Task.modal.js";
 import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
 
-// ✅ Utility: Get IST date (no time)
 const getISTDate = () => {
   const now = new Date();
   const istOffset = 5.5 * 60; // IST offset in minutes
@@ -235,28 +233,6 @@ const getISTDate = () => {
   return new Date(istTime.toISOString().split("T")[0]);
 };
 
-// ✅ Utility: Check shift window
-// const isWithinShift = (shift) => {
-//   const now = new Date();
-//   const offset = 5.5 * 60;
-//   const istNow = new Date(now.getTime() + offset * 60 * 1000);
-//   const hours = istNow.getHours();
-
-//   switch (shift) {
-//     case "Start":
-//       return hours >= 5 && hours < 9;
-//     case "Mid":
-//       return hours >= 9 && hours < 13;
-//     case "End":
-//       return hours >= 13 && hours < 17;
-//     default:
-//       return false;
-//   }
-// };
-
-// =====================
-// Create Task (Admin Only)
-// =====================
 export const createTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin")
@@ -493,7 +469,6 @@ export const getTasks = async (req, res) => {
 //         };
 //       })
 //     );
-
 //     res.status(200).json(enrichedTasks);
 //   } catch (error) {
 //     console.error("Get Tasks Error:", error);
@@ -501,10 +476,6 @@ export const getTasks = async (req, res) => {
 //   }
 // };
 
-
-// =====================
-// Update Task Status (Employee Only)
-// =====================
 // export const updateTaskStatus = async (req, res) => {
 //   try {
 //     if (req.user.accountType !== "employee")
@@ -541,79 +512,141 @@ export const getTasks = async (req, res) => {
 // };
 
 
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee")
+//       return res.status(403).json({ message: "Only employees can update status" });
+
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status))
+//       return res.status(400).json({ message: "Invalid status value" });
+
+//     const task = await Task.findById(taskId);
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+
+//     if (!task.assignedTo.includes(req.user.id))
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+
+//     // -----------------------------
+//     // Determine current shift date in IST
+//     // -----------------------------
+//     const now = new Date();
+//     const istOffset = 5.5 * 60; 
+//     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//     const istTime = new Date(utc + istOffset * 60000);
+
+//     const hours = istTime.getHours();
+
+//     let shiftDate = new Date(istTime.toISOString().split("T")[0]);
+
+//     if (task.shift === "8 PM - 5 AM" && hours < 5) {
+//       shiftDate.setDate(shiftDate.getDate() - 1);
+//     } else if (task.shift === "1 AM - 10 AM" && hours < 10) {
+//       shiftDate.setDate(shiftDate.getDate() - 1);
+//     }
+
+//     shiftDate.setHours(0, 0, 0, 0);
+
+//     // -----------------------------
+//     // Fetch task status for this employee
+//     // -----------------------------
+//     const taskStatus = await TaskStatus.findOne({ taskId, employeeId: req.user.id });
+//     if (!taskStatus)
+//       return res.status(404).json({ message: "Task status not found for this employee" });
+//     const taskStatusDate = new Date(taskStatus.date);
+//     taskStatusDate.setHours(0, 0, 0, 0);
+
+//     // -----------------------------
+//     // Restrict future and past updates
+//     // -----------------------------
+//     if (taskStatusDate.getTime() !== shiftDate.getTime()) {
+//       return res.status(403).json({
+//         message: "You can only update task status for your current shift date",
+//       });
+//     }
+
+//     // -----------------------------
+//     // Update status
+//     // -----------------------------
+//     taskStatus.status = status;
+//     taskStatus.updatedAt = new Date();
+//     await taskStatus.save();
+
+//     res.status(200).json({ message: "Status updated successfully", updatedStatus: taskStatus });
+//   } catch (error) {
+//     // console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+//this is working for some way in shift strict means previous can be changed future can not be
 export const updateTaskStatus = async (req, res) => {
   try {
-    if (req.user.accountType !== "employee")
+    if (req.user.accountType !== "employee") {
       return res.status(403).json({ message: "Only employees can update status" });
+    }
 
     const { taskId } = req.params;
     const { status } = req.body;
 
-    if (!["Done", "Not Done"].includes(status))
+    if (!["Done", "Not Done"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
+    }
 
+    // Fetch the task
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    if (!task.assignedTo.includes(req.user.id))
+    if (!task.assignedTo.includes(req.user.id)) {
       return res.status(403).json({ message: "You are not assigned to this task" });
+    }
 
     // -----------------------------
-    // Determine current shift date in IST
+    // Determine today's date in IST
     // -----------------------------
     const now = new Date();
     const istOffset = 5.5 * 60; // IST offset in minutes
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
     const istTime = new Date(utc + istOffset * 60000);
-
-    const hours = istTime.getHours();
-
-    // Start with today's date in IST
-    let shiftDate = new Date(istTime.toISOString().split("T")[0]);
-
-    // Night shift handling
-    if (task.shift === "8 PM - 5 AM" && hours < 5) {
-      shiftDate.setDate(shiftDate.getDate() - 1);
-    } else if (task.shift === "1 AM - 10 AM" && hours < 10) {
-      shiftDate.setDate(shiftDate.getDate() - 1);
-    }
-
-    shiftDate.setHours(0, 0, 0, 0);
+    const today = new Date(istTime.toISOString().split("T")[0]);
+    today.setHours(0, 0, 0, 0);
 
     // -----------------------------
-    // Fetch task status for this employee
+    // Find or create TaskStatus for today
     // -----------------------------
-    const taskStatus = await TaskStatus.findOne({ taskId, employeeId: req.user.id });
+    let taskStatus = await TaskStatus.findOne({
+      taskId,
+      employeeId: req.user.id,
+      date: today,
+    });
 
-    if (!taskStatus)
-      return res.status(404).json({ message: "Task status not found for this employee" });
-
-    const taskStatusDate = new Date(taskStatus.date);
-    taskStatusDate.setHours(0, 0, 0, 0);
-
-    // -----------------------------
-    // Restrict future and past updates
-    // -----------------------------
-    if (taskStatusDate.getTime() !== shiftDate.getTime()) {
-      return res.status(403).json({
-        message: "You can only update task status for your current shift date",
+    if (!taskStatus) {
+      // Create a new TaskStatus for today
+      taskStatus = new TaskStatus({
+        taskId,
+        employeeId: req.user.id,
+        date: today,
+        status,
       });
+    } else {
+      // Update existing TaskStatus
+      taskStatus.status = status;
+      taskStatus.updatedAt = new Date();
     }
 
-    // -----------------------------
-    // Update status
-    // -----------------------------
-    taskStatus.status = status;
-    taskStatus.updatedAt = new Date();
     await taskStatus.save();
 
-    res.status(200).json({ message: "Status updated successfully", updatedStatus: taskStatus });
+    res.status(200).json({
+      message: "Status updated successfully for today",
+      updatedStatus: taskStatus,
+    });
   } catch (error) {
-    // console.error("Update Task Status Error:", error);
+    console.error("Update Task Status Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const updateTask = async (req, res) => {
   try {
@@ -656,7 +689,6 @@ export const updateTask = async (req, res) => {
   }
 };
 
-
 export const deleteTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin")
@@ -675,9 +707,6 @@ export const deleteTask = async (req, res) => {
   }
 };
 
-// =====================
-// Assign Task (Admin Only)
-// =====================
 export const assignTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin")
@@ -713,6 +742,84 @@ export const assignTask = async (req, res) => {
     res.status(200).json({ message: "Task assigned successfully", task });
   } catch (error) {
     console.error("Assign Task Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+export const getAllTasks = async (req, res) => {
+  try {
+    const { date, shift } = req.query;
+
+    // Base filter: employee sees only their assigned tasks
+    const filter = req.user.accountType === "employee"
+      ? { assignedTo: req.user.id }
+      : {};
+
+    // Fetch all tasks with assignedTo populated
+    let tasksQuery = Task.find(filter).populate("assignedTo", "username department");
+
+    // Apply shift filter if provided
+    if (shift) {
+      tasksQuery = tasksQuery.where("shift").equals(shift);
+    }
+
+    // Apply date filter if provided
+    if (date) {
+      // Compare only the date part (ignoring time)
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      tasksQuery = tasksQuery.where("createdAt").gte(startOfDay).lte(endOfDay);
+    }
+
+    const tasks = await tasksQuery;
+
+    // Get all task IDs for these tasks
+    const taskIds = tasks.map(t => t._id);
+
+    // Fetch all statuses at once for these tasks
+    const allStatuses = await TaskStatus.find({
+      taskId: { $in: taskIds },
+    }).sort({ updatedAt: -1 });
+
+    // Map: taskId -> employeeId -> status
+    const taskStatusMap = {};
+    allStatuses.forEach(s => {
+      const taskId = s.taskId.toString();
+      const empId = s.employeeId.toString();
+
+      if (!taskStatusMap[taskId]) taskStatusMap[taskId] = {};
+      if (!taskStatusMap[taskId][empId]) taskStatusMap[taskId][empId] = s.status;
+    });
+
+    // Process tasks and assign employeeStatus
+    const result = tasks.map(task => {
+      const doneEmployees = [];
+      const notDoneEmployees = [];
+      let employeeStatus = "Not Done";
+
+      task.assignedTo.forEach(emp => {
+        const status = taskStatusMap[task._id.toString()]?.[emp._id.toString()] || "Not Done";
+
+        if (status === "Done") doneEmployees.push({ _id: emp._id, username: emp.username });
+        else notDoneEmployees.push({ _id: emp._id, username: emp.username });
+
+        if (emp._id.toString() === req.user.id) employeeStatus = status;
+      });
+
+      return {
+        ...task.toObject(),
+        employeeStatus,
+        doneEmployees,
+        notDoneEmployees,
+      };
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Get All Tasks Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

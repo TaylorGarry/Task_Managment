@@ -185,6 +185,28 @@ export const fetchEmployees = createAsyncThunk(
   }
 );
 
+export const updateProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async (updateData, thunkAPI) => {
+    try {
+      const token = getToken();
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.post(`${API_URL}/update-profile`, updateData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Update stored user info (preserve token)
+      const updatedUser = { ...res.data.user, token };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+
+      return updatedUser;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -236,6 +258,18 @@ const authSlice = createSlice({
         state.employees = action.payload;
       })
       .addCase(fetchEmployees.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

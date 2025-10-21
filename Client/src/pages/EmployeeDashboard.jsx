@@ -148,19 +148,16 @@ const EmployeeDashboard = () => {
   const handleStatusChange = async (taskId, status) => {
     try {
       const updatedStatus = await dispatch(updateTaskStatus({ id: taskId, status })).unwrap();
-      
-      // Update slice manually if needed
+
       dispatch({
         type: "tasks/updateTaskStatus/fulfilled",
         payload: updatedStatus,
       });
 
-      // ✅ Show success toast
       toast.success("Task status updated successfully!");
     } catch (err) {
       console.error("Failed to update status:", err);
 
-      // ✅ Show error toast dynamically from backend message
       toast.error(err || "Failed to update status, please try again.");
     }
   };
@@ -170,7 +167,6 @@ const EmployeeDashboard = () => {
       <Toaster position="top-right" reverseOrder={false} />
       <Navbar />
       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen">
-        {/* Filters */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#EAEAEA] mb-8 grid grid-cols-1 md:grid-cols-3 gap-6 cursor-pointer">
           {/* Date */}
           <div className="flex flex-col w-full">
@@ -180,10 +176,11 @@ const EmployeeDashboard = () => {
               name="date"
               value={filters.date}
               onChange={handleFilterChange}
+              max={new Date().toISOString().split("T")[0]}// Disables future dates
+              min={new Date().toISOString().split("T")[0]} //Disables past dates
               className="w-full p-3 rounded-xl border border-[#EAEAEA] bg-white text-gray-700 focus:border-sky-400 focus:ring-1 focus:ring-sky-100 outline-none transition-all cursor-pointer"
             />
           </div>
-          {/* Shift */}
           <div className="flex flex-col w-full">
             <label className="text-gray-700 font-semibold mb-2 cursor-pointer">Shift</label>
             <select

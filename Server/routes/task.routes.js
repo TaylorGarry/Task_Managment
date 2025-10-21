@@ -6,7 +6,8 @@ import {
   updateTask,
   deleteTask,
   assignTask,
-  updateTaskStatus, // optional if you want a separate assign endpoint
+  updateTaskStatus,
+  getAllTasks,  
 } from "../Controllers/task.controller.js";
 
 const router = express.Router();
@@ -21,5 +22,6 @@ router.get("/", authMiddleware, getTasks);
 router.put("/update/:id", authMiddleware, updateTask);
 
 router.put("/status/:taskId", authMiddleware, updateTaskStatus);
+router.get("/AllTasks", authMiddleware, getAllTasks);
 
 export default router;

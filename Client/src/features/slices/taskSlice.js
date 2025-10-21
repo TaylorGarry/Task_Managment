@@ -311,6 +311,32 @@ export const fetchTasks = createAsyncThunk(
   }
 );
 
+//fetch All tasks for employee
+// Fetch all tasks (with optional filters)
+//fetch All tasks for employee
+export const fetchAllTasks = createAsyncThunk(
+  "allTasks/fetchAllTasks",
+  async (filters = {}, thunkAPI) => {
+    try {
+      const token = getToken();
+
+      // Pass filters as query params using URLSearchParams
+      const query = new URLSearchParams();
+      if (filters.date) query.append("date", filters.date);
+      if (filters.shift) query.append("shift", filters.shift);
+
+      const res = await axios.get(`${API_URL}/AllTasks?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+
 // Create a new task
 export const createTask = createAsyncThunk(
   "tasks/createTask",
@@ -399,6 +425,18 @@ const taskSlice = createSlice({
         state.tasks = action.payload;
       })
       .addCase(fetchTasks.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+       .addCase(fetchAllTasks.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchAllTasks.fulfilled, (state, action) => {
+        state.loading = false;
+        state.tasks = action.payload;
+      })
+      .addCase(fetchAllTasks.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })

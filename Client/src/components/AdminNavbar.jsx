@@ -1,15 +1,26 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link } from "react-router-dom";
+import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { FiLogOut, FiMenu, FiX } from "react-icons/fi";
+import toast from "react-hot-toast";
+
+const API_URL = "http://localhost:4000/api/v1";
 
 const AdminNavbar = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
+
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [username, setUsername] = useState(user?.username || "");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+
   const dropdownRef = useRef();
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -19,6 +30,7 @@ const AdminNavbar = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
   const getInitials = (name) => {
     if (!name) return "U";
     const parts = name.split(" ");
@@ -26,22 +38,51 @@ const AdminNavbar = () => {
       ? parts[0][0].toUpperCase() + parts[1][0].toUpperCase()
       : name[0].toUpperCase();
   };
+
   const handleLogout = () => {
     dispatch(logoutUser());
     setShowDropdown(false);
     setShowMobileMenu(false);
   };
+
+  const handleUpdateProfile = async () => {
+  try {
+    setLoading(true);
+    const token = user?.token;
+    const res = await axios.post(
+      `${API_URL}/update-profile`,
+      { username, password },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (res.data.user) {
+      const updatedUser = { ...user, ...res.data.user };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+      toast.success("Profile updated successfully!");
+      setShowProfilePopup(false);
+    }
+  } catch (err) {
+    console.error("Profile update failed:", err);
+    toast.error(err.response?.data?.message || "Failed to update profile");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
   return (
-    <nav className="fixed top-0 left-0  w-full bg-gray-800 text-white z-50 shadow-lg">
+    <nav className="fixed top-0 left-0 w-full bg-gray-800 text-white z-50 shadow-lg">
       <div className="flex justify-between items-center p-2">
-        <h1 className="text-lg font-bold">Task Management</h1>
+        <h1 className="text-lg font-bold text-white">Task Management</h1>
+
         <div className="hidden md:flex items-center gap-4">
-          <Link to="/admin/assign-task" className="hover:underline">
+          <Link to="/admin/assign-task" className="hover:underline text-white">
             Assign Task
           </Link>
-          <Link to="/admin/tasks" className="hover:underline">
+          <Link to="/admin/tasks" className="hover:underline text-white">
             Task Status
           </Link>
+
           <div className="relative ml-4" ref={dropdownRef}>
             <button
               className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white border-2 border-white cursor-pointer"
@@ -49,8 +90,15 @@ const AdminNavbar = () => {
             >
               {getInitials(user?.username)}
             </button>
+
             {showDropdown && (
               <div className="absolute right-0 mt-2 w-32 bg-white text-black rounded shadow-lg py-2">
+                <button
+                  onClick={() => setShowProfilePopup(true)}
+                  className="w-full px-2 py-2 hover:bg-gray-200 text-left"
+                >
+                  Profile
+                </button>
                 <button
                   onClick={handleLogout}
                   className="w-full px-2 py-2 hover:bg-gray-200 text-left"
@@ -61,11 +109,9 @@ const AdminNavbar = () => {
             )}
           </div>
         </div>
+
         <div className="md:hidden">
-          <button
-            onClick={() => setShowMobileMenu(true)}
-            className="text-2xl"
-          >
+          <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-white">
             <FiMenu />
           </button>
         </div>
@@ -76,11 +122,10 @@ const AdminNavbar = () => {
           <div className="bg-gray-800 w-64 p-4 flex flex-col gap-4 relative text-white">
             <button
               onClick={() => setShowMobileMenu(false)}
-              className="absolute top-2 right-2 text-2xl"
+              className="absolute top-2 right-2 text-2xl text-white"
             >
               <FiX />
             </button>
-
             <Link
               to="/admin/assign-task"
               className="hover:underline"
@@ -95,23 +140,56 @@ const AdminNavbar = () => {
             >
               Task Status
             </Link>
-            <div className="mt-4 flex items-center gap-2 cursor-pointer">
-              {/* <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white">
-                {getInitials(user?.username)}
-              </div> */}
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 hover:underline text-white mt-4"
+            >
+              <FiLogOut size={18} className="text-white cursor-pointer" />
+              Logout
+            </button>
+          </div>
+          <div className="flex-1" onClick={() => setShowMobileMenu(false)}></div>
+        </div>
+      )}
+
+      {showProfilePopup && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center">
+          <div className="bg-white p-6 rounded-2xl shadow-xl w-80 relative text-black">
+            <button
+              onClick={() => setShowProfilePopup(false)}
+              className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+            >
+              <FiX size={20} />
+            </button>
+
+            <h2 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+              Update Profile
+            </h2>
+
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="New Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                className="border border-gray-300 text-black rounded px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+              />
+              <input
+                type="password"
+                placeholder="New Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="border border-gray-300 text-black rounded px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+              />
               <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 hover:underline text-white cursor-pointer"
+                onClick={handleUpdateProfile}
+                disabled={loading}
+                className="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md mt-2"
               >
-                <FiLogOut size={18} className="text-black cursor-pointer" />
-                Logout
+                {loading ? "Updating..." : "Update"}
               </button>
             </div>
           </div>
-          <div
-            className="flex-1"
-            onClick={() => setShowMobileMenu(false)}
-          ></div>
         </div>
       )}
     </nav>
@@ -119,3 +197,4 @@ const AdminNavbar = () => {
 };
 
 export default AdminNavbar;
+
