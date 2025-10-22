@@ -18,7 +18,7 @@ const reviewSchema = new mongoose.Schema(
       trim: true,
     },
     issue: {
-      type: String, // optional if employee reports an issue
+      type: String,  
       trim: true,
     },
     status: {

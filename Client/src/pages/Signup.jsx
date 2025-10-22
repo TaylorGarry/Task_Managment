@@ -1,19 +1,29 @@
-// src/pages/Signup.jsx
-import React from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { useDispatch } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { signupUser } from "../features/slices/authSlice.js";
+import { Eye, EyeOff } from "lucide-react"; 
 
 const Signup = () => {
-  const { register, handleSubmit } = useForm();
+  const { register, handleSubmit, watch } = useForm();
   const dispatch = useDispatch();
   const navigate = useNavigate();
 
+  const accountType = watch("accountType"); 
+  const [showPassword, setShowPassword] = useState(false);
+
   const onSubmit = async (data) => {
     try {
-      const resultAction = await dispatch(signupUser(data));
+      const payload = {
+        username: data.username,
+        password: data.password,
+        accountType: data.accountType,
+        department: data.department, 
+      };
+
+      const resultAction = await dispatch(signupUser(payload));
       if (signupUser.fulfilled.match(resultAction)) {
         toast.success("Signup successful! Please login.");
         navigate("/login");
@@ -36,17 +46,44 @@ const Signup = () => {
             {...register("username", { required: true })}
             className="w-full p-2 border rounded"
           />
-          <input
-            type="password"
-            placeholder="Password"
-            {...register("password", { required: true })}
+
+          {/* Password with toggle */}
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              {...register("password", { required: true })}
+              className="w-full p-2 border rounded"
+            />
+            <span
+              className="absolute right-3 top-2.5 cursor-pointer text-gray-500"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </span>
+          </div>
+
+          <select
+            {...register("accountType")}
+            defaultValue="employee"
             className="w-full p-2 border rounded"
-          />
-          <select {...register("accountType")} className="w-full p-2 border rounded">
+          >
             <option value="employee">Employee</option>
-            <option value="admin">Admin</option>
           </select>
-          <button type="submit" className="w-full bg-blue-500 text-white p-2 rounded">
+
+          {accountType === "employee" && (
+            <input
+              type="text"
+              placeholder="Department"
+              {...register("department", { required: true })}
+              className="w-full p-2 border rounded"
+            />
+          )}
+
+          <button
+            type="submit"
+            className="w-full bg-blue-500 text-white p-2 rounded hover:bg-blue-600"
+          >
             Sign Up
           </button>
         </form>
@@ -62,3 +99,5 @@ const Signup = () => {
 };
 
 export default Signup;
+
+

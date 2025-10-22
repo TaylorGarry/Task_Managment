@@ -1,123 +1,127 @@
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { fetchTasks } from "../features/slices/taskSlice";
-import { FiMessageSquare } from "react-icons/fi"; 
+import { fetchTasks } from "../features/slices/taskSlice.js";
+import { fetchEmployees } from "../features/slices/authSlice.js";
+import TaskCard from "./TaskCard.jsx";
 
 const TaskStatus = () => {
   const dispatch = useDispatch();
   const { tasks } = useSelector((state) => state.tasks);
-
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [message, setMessage] = useState("");
-
-  const statuses = ["Pending", "Working", "Reviewing", "Done"];
+  const { employees, user } = useSelector((state) => state.auth);
+  const todayDate = new Date().toISOString().split("T")[0];
+  const [filters, setFilters] = useState({
+    date: todayDate,
+    department: "",
+    shift: "",
+    employee: "",
+  });
 
   useEffect(() => {
-    dispatch(fetchTasks());
-  }, [dispatch]);
+    dispatch(fetchTasks(filters));
+    dispatch(fetchEmployees());
+  }, [dispatch, filters]);
 
-  const handleOpenMessage = (task) => {
-    setSelectedTask(task);
-    setMessage("");
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "date" && value > todayDate) return;
+
+    setFilters((prev) => ({
+      ...prev,
+      [name]: value,
+      ...(name === "department" ? { employee: "" } : {}),
+    }));
   };
-
-  const handleCloseMessage = () => {
-    setSelectedTask(null);
-    setMessage("");
+  const departments = [...new Set(tasks.map((t) => t.department).filter(Boolean))];
+  const filteredEmployees = filters.department
+    ? employees.filter((e) => e.department === filters.department)
+    : employees;
+  const formatLocalDate = (dateStr) => {
+    const d = new Date(dateStr);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
   };
-
-  const handleSendMessage = () => {
-    console.log("Send message for task:", selectedTask?._id, message);
-    handleCloseMessage();
-  };
-
-  const getPriorityColor = (priority) => {
-    switch (priority) {
-      case "High":
-        return "bg-red-500 text-white";
-      case "Medium":
-        return "bg-yellow-400 text-black";
-      case "Low":
-        return "bg-green-400 text-black";
-      default:
-        return "bg-gray-300 text-black";
+  const filteredTasks = tasks.filter((task) => {
+    if (user.accountType === "employee") {
+      if (!task.assignedTo.some((e) => e._id.toString() === user._id.toString()))
+        return false;
     }
-  };
+    if (filters.date && task.date) {
+      if (formatLocalDate(task.date) !== filters.date) return false;
+    }
+    if (filters.department && task.department !== filters.department) return false;
+    if (filters.shift && task.shift !== filters.shift) return false;
+    if (
+      filters.employee &&
+      !task.assignedTo.some((e) => e._id.toString() === filters.employee.toString())
+    )
+      return false;
 
+    return true;
+  });
   return (
     <div className="p-6 mt-16">
-      <h2 className="text-2xl font-bold mb-6">Task Status</h2>
-      <div className="grid grid-cols-4 gap-4">
-        {statuses.map((status) => (
-          <div key={status} className="bg-gray-100 p-4 rounded-lg flex flex-col">
-            <h3 className="font-semibold mb-3 text-center">{status}</h3>
-            {tasks
-              .filter((task) => task.status === status)
-              .map((task) => (
-                <div
-                  key={task._id}
-                  className="bg-white p-4 rounded shadow mb-3 hover:shadow-lg transition cursor-pointer flex flex-col gap-2"
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <h4 className="font-medium text-lg">{task.title}</h4>
-                    <span
-                      className={`px-2 py-1 rounded text-xs font-semibold ${getPriorityColor(
-                        task.priority
-                      )}`}
-                    >
-                      {task.priority}
-                    </span>
-                  </div>
-
-                  <p className="text-sm mb-2">{task.description}</p>
-
-                  <div className="flex justify-between items-center text-xs text-gray-700">
-                    <span>Assigned to: {task.assignedTo?.username || "Unassigned"}</span>
-                    <span>Status: {task.status}</span>
-                    <button
-                      onClick={() => handleOpenMessage(task)}
-                      className="flex items-center gap-1 text-blue-600 hover:underline"
-                      title="Add Review"
-                    >
-                      <FiMessageSquare size={18} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-          </div>
-        ))}
+      <h2 className="text-2xl font-bold mb-6 text-gray-800">Task Status</h2>
+      <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <input
+          type="date"
+          name="date"
+          value={filters.date}
+          onChange={handleFilterChange}
+          max={todayDate}
+          className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
+        />
+        <select
+          name="department"
+          value={filters.department}
+          onChange={handleFilterChange}
+          className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
+        >
+          <option value="">All Departments</option>
+          {departments.map((dept) => (
+            <option key={dept} value={dept}>
+              {dept}
+            </option>
+          ))}
+        </select>
+        <select
+          name="shift"
+          value={filters.shift}
+          onChange={handleFilterChange}
+          className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
+        >
+          <option value="">All Shifts</option>
+          <option value="Start">Start</option>
+          <option value="Mid">Mid</option>
+          <option value="End">End</option>
+        </select>
+        <select
+          name="employee"
+          value={filters.employee}
+          onChange={handleFilterChange}
+          className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
+        >
+          <option value="">All Employees</option>
+          {filteredEmployees.map((emp) => (
+            <option key={emp._id} value={emp._id}>
+              {emp.username}
+            </option>
+          ))}
+        </select>
       </div>
-
-      {selectedTask && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-96 relative shadow-lg">
-            <button
-              className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 font-bold"
-              onClick={handleCloseMessage}
-            >
-              X
-            </button>
-            <h3 className="text-lg font-semibold mb-4">
-              Add Review for "{selectedTask.title}"
-            </h3>
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              rows={4}
-              className="border rounded w-full p-2 mb-4 resize-none"
-              placeholder="Write your message here..."
-            />
-            <button
-              onClick={handleSendMessage}
-              className="bg-blue-600 text-white py-2 px-4 rounded hover:bg-blue-700"
-            >
-              Send
-            </button>
-          </div>
+      {filteredTasks.length > 0 ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          {filteredTasks.map((task) => (
+            <TaskCard key={task._id} task={task} />
+          ))}
         </div>
+      ) : (
+        <h1 className="text-center text-gray-500 mt-10 text-4xl font-bold tracking-wide bg-gray-50 py-35 rounded-lg shadow-sm">
+          No tasks found
+        </h1>
       )}
     </div>
   );
 };
-
 export default TaskStatus;

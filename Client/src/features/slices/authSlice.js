@@ -1,14 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "https://task-managment-4.onrender.com/api/v1"; // no /auth
+// const API_URL = "https://task-managment-4.onrender.com/api/v1"; 
+const API_URL = "http://localhost:4000/api/v1"
 
-
-// =====================
-// Async Thunks
-// =====================
-
-// Login
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
   async (userData, thunkAPI) => {
@@ -25,7 +20,6 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-// Signup
 export const signupUser = createAsyncThunk(
   "auth/signupUser",
   async (userData, thunkAPI) => {
@@ -42,13 +36,14 @@ export const signupUser = createAsyncThunk(
   }
 );
 
-// Logout
-export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
-  localStorage.removeItem("user");
-  await axios.post(`${API_URL}/logout`);
-});
+export const logoutUser = createAsyncThunk(
+  "auth/logoutUser",
+  async () => {
+    localStorage.removeItem("user");
+    await axios.post(`${API_URL}/logout`);
+  }
+);
 
-// Fetch all employees (admin only)
 export const fetchEmployees = createAsyncThunk(
   "auth/fetchEmployees",
   async (_, thunkAPI) => {
@@ -61,29 +56,45 @@ export const fetchEmployees = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return res.data; // array of employee objects
+      return res.data;  
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
 
-// =====================
-// Slice
-// =====================
+export const updateProfile = createAsyncThunk(
+  "auth/updateProfile",
+  async (updateData, thunkAPI) => {
+    try {
+      const token = getToken();
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.post(`${API_URL}/update-profile`, updateData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const updatedUser = { ...res.data.user, token };
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+
+      return updatedUser;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
 
 const authSlice = createSlice({
   name: "auth",
   initialState: {
     user: JSON.parse(localStorage.getItem("user")) || null,
-    employees: [], // store fetched employees for admin
+    employees: [],
     loading: false,
     error: null,
   },
   reducers: {},
   extraReducers: (builder) => {
     builder
-      // Login
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -96,24 +107,21 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Signup
       .addCase(signupUser.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(signupUser.fulfilled, (state, action) => {
         state.loading = false;
-        state.user = action.payload;
+        state.user = action.payload;  
       })
       .addCase(signupUser.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
-      // Logout
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
       })
-      // Fetch Employees
       .addCase(fetchEmployees.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -123,6 +131,18 @@ const authSlice = createSlice({
         state.employees = action.payload;
       })
       .addCase(fetchEmployees.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.loading = false;
+        state.user = action.payload;
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });

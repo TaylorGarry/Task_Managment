@@ -1,79 +1,111 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "https://task-managment-4.onrender.com/api/v1/tasks";
+const API_URL = "http://localhost:4000/api/v1/tasks";
 
-// Helper to get token from localStorage
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token || null;
 };
 
-// =====================
-// Async Thunks
-// =====================
-
-// Fetch all tasks
-export const fetchTasks = createAsyncThunk("tasks/fetchTasks", async (_, thunkAPI) => {
-  try {
-    const token = getToken();
-    const res = await axios.get(API_URL, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return res.data; // Should return array of tasks
-  } catch (err) {
-    return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+export const fetchTasks = createAsyncThunk(
+  "tasks/fetchTasks",
+  async (filters = {}, thunkAPI) => {
+    try {
+      const token = getToken();
+      const query = new URLSearchParams({
+        date: filters.date || "",
+        shift: filters.shift || "",
+        department: filters.department || "",
+        employeeId: filters.employee || "",
+      }).toString();
+      const res = await axios.get(`${API_URL}?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
   }
-});
-
-// Create task
+);
+export const fetchAllTasks = createAsyncThunk(
+  "allTasks/fetchAllTasks",
+  async (filters = {}, thunkAPI) => {
+    try {
+      const token = getToken();
+      const query = new URLSearchParams();
+      if (filters.date) query.append("date", filters.date);
+      if (filters.shift) query.append("shift", filters.shift);
+      const res = await axios.get(`${API_URL}/AllTasks?${query.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
 export const createTask = createAsyncThunk(
   "tasks/createTask",
   async ({ data }, thunkAPI) => {
     try {
       const token = getToken();
-      const res = await axios.post(API_URL, data, {
+      const res = await axios.post(`${API_URL}/create`, data, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      return res.data; // Should return created task
+      thunkAPI.dispatch(fetchTasks());
+      return res.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
-
-// Update task
 export const updateTask = createAsyncThunk(
   "tasks/updateTask",
   async ({ id, updates }, thunkAPI) => {
     try {
       const token = getToken();
-      const res = await axios.put(`${API_URL}/${id}`, updates, {
+      const res = await axios.put(`${API_URL}/update/${id}`, updates, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      return res.data; // Should return updated task
+      return res.data.task;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
 
-// Delete task
-export const deleteTask = createAsyncThunk("tasks/deleteTask", async (id, thunkAPI) => {
-  try {
-    const token = getToken();
-    await axios.delete(`${API_URL}/${id}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    return id;
-  } catch (err) {
-    return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+export const deleteTask = createAsyncThunk(
+  "tasks/deleteTask",
+  async (id, thunkAPI) => {
+    try {
+      const token = getToken();
+      await axios.delete(`${API_URL}/${id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return id;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
   }
-});
+);
 
-// =====================
-// Slice
-// =====================
+export const updateTaskStatus = createAsyncThunk(
+  "tasks/updateTaskStatus",
+  async ({ id, status }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.put(
+        `${API_URL}/status/${id}`,
+        { status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return res.data.updatedStatus;  
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
 const taskSlice = createSlice({
   name: "tasks",
   initialState: {
@@ -83,31 +115,75 @@ const taskSlice = createSlice({
   },
   reducers: {},
   extraReducers: (builder) => {
-    builder
-      .addCase(fetchTasks.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(fetchTasks.fulfilled, (state, action) => {
-        state.loading = false;
-        state.tasks = action.payload;
-      })
-      .addCase(fetchTasks.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      })
-      .addCase(createTask.fulfilled, (state, action) => {
-        state.tasks.push(action.payload);
-      })
-      .addCase(updateTask.fulfilled, (state, action) => {
-        state.tasks = state.tasks.map((task) =>
-          task._id === action.payload._id ? action.payload : task
-        );
-      })
-      .addCase(deleteTask.fulfilled, (state, action) => {
-        state.tasks = state.tasks.filter((task) => task._id !== action.payload);
+  builder
+    .addCase(fetchTasks.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    })
+    .addCase(fetchTasks.fulfilled, (state, action) => {
+      state.loading = false;
+      state.tasks = action.payload;
+    })
+    .addCase(fetchTasks.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
+    })
+    .addCase(fetchAllTasks.pending, (state) => {
+      state.loading = true;
+      state.error = null;
+    })
+    .addCase(fetchAllTasks.fulfilled, (state, action) => {
+      state.loading = false;
+      state.tasks = action.payload;
+    })
+    .addCase(fetchAllTasks.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
+    })
+    .addCase(createTask.fulfilled, (state, action) => {
+      state.tasks.unshift(action.payload.task);
+    })
+    .addCase(updateTask.fulfilled, (state, action) => {
+      const updatedTask = action.payload;
+      state.tasks = state.tasks.map((task) =>
+        task._id === updatedTask._id ? updatedTask : task
+      );
+    })
+    .addCase(deleteTask.fulfilled, (state, action) => {
+      state.tasks = state.tasks.filter((task) => task._id !== action.payload);
+    })
+    .addCase(updateTaskStatus.fulfilled, (state, action) => {
+      const updatedStatus = action.payload;
+      state.tasks = state.tasks.map((task) => {
+        if (task._id === updatedStatus.taskId) {
+          let doneEmployees = task.doneEmployees || [];
+          let notDoneEmployees = task.notDoneEmployees || [];
+
+          doneEmployees = doneEmployees.filter((e) => e._id !== updatedStatus.employeeId);
+          notDoneEmployees = notDoneEmployees.filter((e) => e._id !== updatedStatus.employeeId);
+
+          const empObj = {
+            _id: updatedStatus.employeeId,
+            username: updatedStatus.username || "Unknown",
+          };
+
+          if (updatedStatus.status === "Done") doneEmployees.push(empObj);
+          else notDoneEmployees.push(empObj);
+
+          return {
+            ...task,
+            doneEmployees,
+            notDoneEmployees,
+            employeeStatus:
+              task.assignedTo?.some((e) => e._id === updatedStatus.employeeId)
+                ? updatedStatus.status
+                : task.employeeStatus,
+          };
+        }
+        return task;
       });
-  },
+    });
+}
 });
 
 export default taskSlice.reducer;

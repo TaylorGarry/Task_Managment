@@ -1,17 +1,20 @@
-// src/pages/Login.jsx
-import React from "react";
 import { useForm } from "react-hook-form";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, Link } from "react-router-dom";
 import toast from "react-hot-toast";
 import { loginUser } from "../features/slices/authSlice.js";
+import { Eye, EyeOff } from "lucide-react";
+import { useState } from "react";
 
 const Login = () => {
   const { register, handleSubmit } = useForm();
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { loading } = useSelector((state) => state.auth);
+  const [showPassword, setShowPassword] = useState(false);
 
   const onSubmit = async (data) => {
+    if (loading) return;
     try {
       const resultAction = await dispatch(loginUser(data));
       if (loginUser.fulfilled.match(resultAction)) {
@@ -38,14 +41,29 @@ const Login = () => {
             {...register("username", { required: true })}
             className="w-full p-2 border rounded"
           />
-          <input
-            type="password"
-            placeholder="Password"
-            {...register("password", { required: true })}
-            className="w-full p-2 border rounded"
-          />
-          <button type="submit" className="w-full bg-blue-500 text-white p-2 rounded">
-            Login
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              placeholder="Password"
+              {...register("password", { required: true })}
+              className="w-full p-2 border rounded pr-10"  
+            />
+            <span
+              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 cursor-pointer text-gray-500"
+              onClick={() => setShowPassword(!showPassword)}
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </span>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className={`w-full p-2 rounded text-white ${
+              loading ? "bg-blue-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
+            }`}
+          >
+            {loading ? "Logging in..." : "Login"}
           </button>
         </form>
         <p className="mt-4 text-center">
