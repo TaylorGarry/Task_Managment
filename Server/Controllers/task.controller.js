@@ -10,26 +10,40 @@ import TaskStatus from "../Modals/TaskStatus.modal.js";
 //   return new Date(istTime.toISOString().split("T")[0]);
 // };
 
+// const getShiftDate = () => {
+//   const now = new Date();
+
+//   // Convert to IST
+//   const istOffset = 5.5 * 60; // IST offset in minutes
+//   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//   const istTime = new Date(utc + istOffset * 60000);
+
+//   // Define your night shift start hour (8 PM in 24h format)
+//   const shiftStartHour = 20;
+
+//   // If current time is before shift start, count it as previous day's shift
+//   let shiftDate = new Date(istTime);
+//   if (istTime.getHours() < shiftStartHour) {
+//     shiftDate.setDate(shiftDate.getDate() - 1);
+//   }
+
+//   // Reset hours/minutes/seconds/milliseconds to 00:00:00
+//   shiftDate.setHours(0, 0, 0, 0);
+
+//   return shiftDate;
+// };
 const getShiftDate = () => {
   const now = new Date();
-
-  // Convert to IST
-  const istOffset = 5.5 * 60; // IST offset in minutes
+  const usOffset = -4 * 60;
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const istTime = new Date(utc + istOffset * 60000);
-
-  // Define your night shift start hour (8 PM in 24h format)
-  const shiftStartHour = 20;
-
-  // If current time is before shift start, count it as previous day's shift
-  let shiftDate = new Date(istTime);
-  if (istTime.getHours() < shiftStartHour) {
+  const usTime = new Date(utc + usOffset * 60000);
+  const shiftStartHour = 16;
+  const shiftEndHour = 10;
+  let shiftDate = new Date(usTime);
+  if (usTime.getHours() < shiftStartHour && usTime.getHours() >= shiftEndHour) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
-
-  // Reset hours/minutes/seconds/milliseconds to 00:00:00
   shiftDate.setHours(0, 0, 0, 0);
-
   return shiftDate;
 };
 

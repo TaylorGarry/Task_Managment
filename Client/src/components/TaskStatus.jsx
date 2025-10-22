@@ -31,7 +31,7 @@ const TaskStatus = () => {
       ...(name === "department" ? { employee: "" } : {}),
     }));
   };
-  const departments = [...new Set(tasks.map((t) => t.department).filter(Boolean))];
+  const departments = [...new Set(employees.map((e) => e.department).filter(Boolean))];
   const filteredEmployees = filters.department
     ? employees.filter((e) => e.department === filters.department)
     : employees;

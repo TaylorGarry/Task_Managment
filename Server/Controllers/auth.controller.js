@@ -6,6 +6,9 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 export const signup = async (req, res) => {
   try {
+    //   if (!req.user || req.user.accountType !== "admin") {
+    //   return res.status(403).json({ message: "Only admin can create new users" });
+    // }
     const { username, password, accountType, department } = req.body;
 
     if (!username || !password || !department) {
