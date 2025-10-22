@@ -2,13 +2,37 @@ import Task from "../Modals/Task.modal.js";
 import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
 
-const getISTDate = () => {
+// const getISTDate = () => {
+//   const now = new Date();
+//   const istOffset = 5.5 * 60;  
+//   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//   const istTime = new Date(utc + istOffset * 60000);
+//   return new Date(istTime.toISOString().split("T")[0]);
+// };
+
+const getShiftDate = () => {
   const now = new Date();
-  const istOffset = 5.5 * 60;  
+
+  // Convert to IST
+  const istOffset = 5.5 * 60; // IST offset in minutes
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   const istTime = new Date(utc + istOffset * 60000);
-  return new Date(istTime.toISOString().split("T")[0]);
+
+  // Define your night shift start hour (8 PM in 24h format)
+  const shiftStartHour = 20;
+
+  // If current time is before shift start, count it as previous day's shift
+  let shiftDate = new Date(istTime);
+  if (istTime.getHours() < shiftStartHour) {
+    shiftDate.setDate(shiftDate.getDate() - 1);
+  }
+
+  // Reset hours/minutes/seconds/milliseconds to 00:00:00
+  shiftDate.setHours(0, 0, 0, 0);
+
+  return shiftDate;
 };
+
 
 export const createTask = async (req, res) => {
   try {
