@@ -183,14 +183,14 @@ export const updateTaskStatus = async (req, res) => {
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
-    const now = new Date();
-    const istOffset = 5.5 * 60;  
-    const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    const istTime = new Date(utc + istOffset * 60000);
-    const today = new Date(istTime.toISOString().split("T")[0]);
-    today.setHours(0, 0, 0, 0);
+    // const now = new Date();
+    // const istOffset = 5.5 * 60;  
+    // const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+    // const istTime = new Date(utc + istOffset * 60000);
+    // const today = new Date(istTime.toISOString().split("T")[0]);
+    // today.setHours(0, 0, 0, 0);
 
-   
+   const today = getShiftDate();
     let taskStatus = await TaskStatus.findOne({
       taskId,
       employeeId: req.user.id,
