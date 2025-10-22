@@ -66,7 +66,7 @@ export const createTask = async (req, res) => {
       statusUnlocked: false,
     });
 
-    const today = getISTDate();
+    const today = getShiftDate();
     const statuses = employees.map((emp) => ({
       taskId: newTask._id,
       employeeId: emp._id,
@@ -262,7 +262,7 @@ export const updateTask = async (req, res) => {
 
     await task.save();
 
-    const today = getISTDate();
+    const today = getShiftDate();
 
     const existingStatuses = await TaskStatus.find({
       taskId: task._id,
@@ -353,7 +353,7 @@ export const assignTask = async (req, res) => {
     task.assignedTo = employees.map((e) => e._id);
     await task.save();
 
-    const today = getISTDate();
+    const today = getShiftDate();
     const newStatuses = employees.map((emp) => ({
       taskId,
       employeeId: emp._id,
