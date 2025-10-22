@@ -69,7 +69,6 @@ const Signup = () => {
             className="w-full p-2 border rounded"
           >
             <option value="employee">Employee</option>
-            {/* <option value="admin">Admin</option> */}
           </select>
 
           {accountType === "employee" && (

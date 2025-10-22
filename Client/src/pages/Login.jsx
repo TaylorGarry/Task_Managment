@@ -41,14 +41,12 @@ const Login = () => {
             {...register("username", { required: true })}
             className="w-full p-2 border rounded"
           />
-
-          {/* Password input with proper relative wrapper */}
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
               {...register("password", { required: true })}
-              className="w-full p-2 border rounded pr-10" // add padding-right for icon
+              className="w-full p-2 border rounded pr-10"  
             />
             <span
               className="absolute right-3 top-1/2 -translate-y-1/2 z-10 cursor-pointer text-gray-500"

@@ -12,12 +12,10 @@ import {
 
 const router = express.Router();
 
-// Admin-only routes
 router.post("/create", authMiddleware, createTask);
 router.delete("/:id", authMiddleware, deleteTask);
-router.put("/assign/:taskId", authMiddleware, assignTask); // optional
+router.put("/assign/:taskId", authMiddleware, assignTask);  
 
-// Common routes (accessible to both admin and employee)
 router.get("/", authMiddleware, getTasks);
 router.put("/update/:id", authMiddleware, updateTask);
 

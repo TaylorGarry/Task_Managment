@@ -70,7 +70,6 @@ const TaskStatus = () => {
           value={filters.date}
           onChange={handleFilterChange}
           max={todayDate}
-          // min={todayDate}
           className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
         />
         <select

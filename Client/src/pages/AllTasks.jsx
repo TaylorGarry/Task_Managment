@@ -7,20 +7,17 @@ const AllTasks = () => {
   const dispatch = useDispatch();
   const { tasks, loading, error } = useSelector((state) => state.tasks);
 
-  const todayDate = new Date().toISOString().split("T")[0]; // yyyy-mm-dd
+  const todayDate = new Date().toISOString().split("T")[0];  
 
-  // Local state for filters
   const [filters, setFilters] = useState({
     date: todayDate,
     shift: "",
   });
 
-  // Fetch tasks on page load and when filters change
   useEffect(() => {
-    dispatch(fetchAllTasks(filters)); // Pass object directly
+    dispatch(fetchAllTasks(filters));  
   }, [dispatch, filters]);
 
-  // Handle filter changes
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
     setFilters((prev) => ({
@@ -35,9 +32,7 @@ const AllTasks = () => {
       <div className="p-6 mt-16">
         <h1 className="text-2xl font-bold mb-4 text-gray-800">Your Tasks</h1>
 
-        {/* Filters */}
         <div className="flex flex-col sm:flex-row gap-4 mb-6">
-          {/* Calendar Input */}
           <input
             type="date"
             name="date"
@@ -47,7 +42,6 @@ const AllTasks = () => {
             className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
           />
 
-          {/* Shift Dropdown */}
           <select
             name="shift"
             value={filters.shift}
@@ -61,11 +55,9 @@ const AllTasks = () => {
           </select>
         </div>
 
-        {/* Loading / Error */}
         {loading && <p>Loading tasks...</p>}
         {error && <p className="text-red-500">Error: {error}</p>}
 
-        {/* Task List */}
         {tasks.length === 0 && !loading && <p>No tasks found.</p>}
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {tasks.map((task) => (

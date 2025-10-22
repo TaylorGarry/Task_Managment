@@ -19,7 +19,7 @@ const userSchema = new mongoose.Schema(
     },
     department: {
       type: String,
-      required: true, // always required
+      required: true,  
       trim: true,
     },
   },

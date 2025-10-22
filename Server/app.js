@@ -7,8 +7,8 @@ import taskStatusRoutes from "./routes/taskStatus.routes.js"
 const app = express();
 
 const allowedOrigins = [
-  "http://localhost:5173",      // for local dev
-  "https://mydevtm.com"         // live frontend
+  "http://localhost:5173",       
+  "https://mydevtm.com"          
 ];
 
 
@@ -23,9 +23,6 @@ app.use(express.json());
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes)
-// app.use("/api/tasks", taskRoutes);
-// app.use("/api/reviews", reviewRoutes);
-
 app.use("/api/v1/task-status", taskStatusRoutes);
 
 app.use((err, req, res, next) => {
