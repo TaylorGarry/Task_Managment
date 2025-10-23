@@ -1,17 +1,19 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Link } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload } from "react-icons/fi";
 import toast from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 const API_URL = "http://localhost:4000/api/v1";
 
 const AdminNavbar = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
+  const navigate = useNavigate()
 
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -71,8 +73,7 @@ const AdminNavbar = () => {
     }
   };
 
-  // ✅ Handle Export to Excel
- // inside AdminNavbar component
+
 const handleExport = async () => {
   try {
     setExporting(true);
@@ -115,19 +116,26 @@ const handleExport = async () => {
             Task Status
           </Link>
 
-          {/* ✅ Export Button (Only for Admins) */}
           {user?.accountType === "admin" && (
-            <button
-              onClick={handleExport}
-              disabled={exporting}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
-            >
-              <FiDownload />
-              {exporting ? "Exporting..." : "Export Excel"}
-            </button>
+            <>
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+              >
+                <FiDownload />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </button>
+
+              <button
+                onClick={() => navigate("/signup")}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+              >
+                Create User
+              </button>
+            </>
           )}
 
-          {/* Profile Dropdown */}
           <div className="relative ml-4" ref={dropdownRef}>
             <button
               className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white border-2 border-white cursor-pointer"
@@ -155,7 +163,6 @@ const handleExport = async () => {
           </div>
         </div>
 
-        {/* Mobile Menu */}
         <div className="md:hidden">
           <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-white">
             <FiMenu />
@@ -163,7 +170,6 @@ const handleExport = async () => {
         </div>
       </div>
 
-      {/* Mobile Menu Panel */}
       {showMobileMenu && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex">
           <div className="bg-gray-800 w-64 p-4 flex flex-col gap-4 relative text-white">
@@ -188,16 +194,26 @@ const handleExport = async () => {
               Task Status
             </Link>
 
-            {/* ✅ Export option on mobile */}
             {user?.accountType === "admin" && (
-              <button
-                onClick={handleExport}
-                disabled={exporting}
-                className="flex items-center gap-2 hover:underline mt-2"
-              >
-                <FiDownload size={18} />
-                {exporting ? "Exporting..." : "Export Excel"}
-              </button>
+              <>
+                <button
+                  onClick={handleExport}
+                  disabled={exporting}
+                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+                >
+                  <FiDownload size={18} />
+                  {exporting ? "Exporting..." : "Export Excel"}
+                </button>
+                <button
+                  onClick={() => {
+                    navigate("/signup");
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+                >
+                  Create User
+                </button>
+              </>
             )}
 
             <button
