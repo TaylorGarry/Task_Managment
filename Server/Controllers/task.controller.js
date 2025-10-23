@@ -447,54 +447,40 @@ export const exportTaskStatusExcel = async (req, res) => {
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
-    const filter = { date: { $gte: start, $lte: end } };
-    if (department) filter.department = department;
-    if (shift) filter.shift = shift;
-    if (employeeId) filter.employeeId = employeeId;
+    // Aggregation: latest status per task per employee per date
+    const statuses = await TaskStatus.aggregate([
+      { $match: { date: { $gte: start, $lte: end }, ...(department && { department }), ...(shift && { shift }), ...(employeeId && { employeeId: mongoose.Types.ObjectId(employeeId) }) } },
+      { $sort: { updatedAt: -1 } },
+      { $group: { _id: { taskId: "$taskId", employeeId: "$employeeId", date: "$date" }, taskId: { $first: "$taskId" }, employeeId: { $first: "$employeeId" }, status: { $first: "$status" }, date: { $first: "$date" } } },
+      { $lookup: { from: "tasks", localField: "taskId", foreignField: "_id", as: "task" } },
+      { $unwind: "$task" },
+      { $lookup: { from: "users", localField: "employeeId", foreignField: "_id", as: "employee" } },
+      { $unwind: "$employee" },
+      { $project: { _id: 0, Task: "$task.title", Shift: "$task.shift", Department: "$task.department", Employee: "$employee.username", Date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } }, Status: "$status" } },
+    ]);
 
-    const statuses = await TaskStatus.find(filter)
-      .populate("taskId", "title shift department")
-      .populate("employeeId", "username");
-
-    const validStatuses = statuses.filter((s) => s.taskId && s.employeeId);
-
-    // 🔹 Group data month-wise
     const monthGroups = {};
-    validStatuses.forEach((s) => {
-      const date = new Date(s.date);
+    statuses.forEach((s) => {
+      const date = new Date(s.Date);
       const monthName = date.toLocaleString("default", { month: "long" });
       const year = date.getFullYear();
       const key = `${monthName} ${year}`;
-
       if (!monthGroups[key]) monthGroups[key] = [];
-
-      monthGroups[key].push({
-        Task: s.taskId?.title || "Unknown Task",
-        Shift: s.taskId?.shift || "Unknown Shift",
-        Department: s.taskId?.department || "Unknown Department",
-        Employee: s.employeeId?.username || "Unknown Employee",
-        Date: s.date.toISOString().split("T")[0],
-        Status: s.status || "Not Done",
-      });
+      monthGroups[key].push(s);
     });
 
-    // 🔹 Create workbook
     const workbook = XLSX.utils.book_new();
 
-    // Apply styling for each month
     Object.entries(monthGroups).forEach(([month, data]) => {
-      // Add styled rows
       const styledData = [
-        // Header row
         {
-          Task: { v: "Task", s: { font: { bold: true }, fill: { fgColor: { rgb: "E0E0E0" } } } },
-          Shift: { v: "Shift", s: { font: { bold: true } } },
-          Department: { v: "Department", s: { font: { bold: true } } },
-          Employee: { v: "Employee", s: { font: { bold: true } } },
-          Date: { v: "Date", s: { font: { bold: true } } },
-          Status: { v: "Status", s: { font: { bold: true } } },
+          Task: { v: "Task", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } }, alignment: { horizontal: "center" } } },
+          Shift: { v: "Shift", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } }, alignment: { horizontal: "center" } } },
+          Department: { v: "Department", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } }, alignment: { horizontal: "center" } } },
+          Employee: { v: "Employee", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } }, alignment: { horizontal: "center" } } },
+          Date: { v: "Date", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } }, alignment: { horizontal: "center" } } },
+          Status: { v: "Status", s: { font: { bold: true, color: { rgb: "FFFFFF" } }, fill: { fgColor: { rgb: "4F81BD" } }, alignment: { horizontal: "center" } } },
         },
-        // Data rows with color-coded status
         ...data.map((item) => ({
           Task: { v: item.Task },
           Shift: { v: item.Shift },
@@ -503,31 +489,31 @@ export const exportTaskStatusExcel = async (req, res) => {
           Date: { v: item.Date },
           Status: {
             v: item.Status,
-            s: {
-              font: {
-                color: {
-                  rgb: item.Status.toLowerCase() === "done" ? "008000" : "FF0000", // ✅ Green/Red
-                },
-                bold: true,
-              },
-            },
+            s: { font: { color: { rgb: item.Status.toLowerCase() === "done" ? "008000" : "FF0000" }, bold: true } },
           },
         })),
       ];
 
       const worksheet = XLSX.utils.json_to_sheet(styledData, { skipHeader: true });
+
+      // Auto-width for each column
+      const wsCols = ["Task", "Shift", "Department", "Employee", "Date", "Status"].map((key) => {
+        const maxLength = Math.max(
+          key.length,
+          ...data.map((row) => (row[key] ? row[key].toString().length : 0))
+        );
+        return { wch: maxLength + 5 };
+      });
+      worksheet['!cols'] = wsCols;
+
       XLSX.utils.book_append_sheet(workbook, worksheet, month);
     });
 
-    // 🔹 Export Excel
     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
     const fileName = `Task_Status_Last_12_Months_${Date.now()}.xlsx`;
 
     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.send(buffer);
   } catch (error) {
     console.error("Export Excel Error:", error);
