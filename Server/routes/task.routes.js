@@ -7,7 +7,8 @@ import {
   deleteTask,
   assignTask,
   updateTaskStatus,
-  getAllTasks,  
+  getAllTasks,
+  exportTaskStatusExcel,  
 } from "../Controllers/task.controller.js";
 
 const router = express.Router();
@@ -21,5 +22,5 @@ router.put("/update/:id", authMiddleware, updateTask);
 
 router.put("/status/:taskId", authMiddleware, updateTaskStatus);
 router.get("/AllTasks", authMiddleware, getAllTasks);
-
+router.get("/export-status", authMiddleware, exportTaskStatusExcel);
 export default router;

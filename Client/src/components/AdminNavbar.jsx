@@ -3,7 +3,8 @@ import { useSelector, useDispatch } from "react-redux";
 import { Link } from "react-router-dom";
 import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
-import { FiLogOut, FiMenu, FiX } from "react-icons/fi";
+import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
+import { FiLogOut, FiMenu, FiX, FiDownload } from "react-icons/fi";
 import toast from "react-hot-toast";
 
 const API_URL = "http://localhost:4000/api/v1";
@@ -18,6 +19,7 @@ const AdminNavbar = () => {
   const [username, setUsername] = useState(user?.username || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   const dropdownRef = useRef();
 
@@ -46,26 +48,56 @@ const AdminNavbar = () => {
   };
 
   const handleUpdateProfile = async () => {
-  try {
-    setLoading(true);
-    const token = user?.token;
-    const res = await axios.post(
-      `${API_URL}/update-profile`,
-      { username, password },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
+    try {
+      setLoading(true);
+      const token = user?.token;
+      const res = await axios.post(
+        `${API_URL}/update-profile`,
+        { username, password },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
-    if (res.data.user) {
-      const updatedUser = { ...user, ...res.data.user };
-      localStorage.setItem("user", JSON.stringify(updatedUser));
-      toast.success("Profile updated successfully!");
-      setShowProfilePopup(false);
+      if (res.data.user) {
+        const updatedUser = { ...user, ...res.data.user };
+        localStorage.setItem("user", JSON.stringify(updatedUser));
+        toast.success("Profile updated successfully!");
+        setShowProfilePopup(false);
+      }
+    } catch (err) {
+      console.error("Profile update failed:", err);
+      toast.error(err.response?.data?.message || "Failed to update profile");
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // ✅ Handle Export to Excel
+ // inside AdminNavbar component
+const handleExport = async () => {
+  try {
+    setExporting(true);
+    // dispatch thunk and unwrap to get the blob + filename
+    const result = await dispatch(exportTaskStatusExcel()).unwrap(); // { blob, filename }
+
+    if (!result || !result.blob) {
+      throw new Error("No file returned from server");
+    }
+
+    const url = window.URL.createObjectURL(result.blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = result.filename || `Task_Status_${new Date().toISOString().slice(0,10)}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.URL.revokeObjectURL(url);
+
+    toast.success("Excel exported successfully!");
   } catch (err) {
-    console.error("Profile update failed:", err);
-    toast.error(err.response?.data?.message || "Failed to update profile");
+    console.error("Export failed:", err);
+    toast.error(err?.message || "Failed to export tasks!");
   } finally {
-    setLoading(false);
+    setExporting(false);
   }
 };
 
@@ -83,6 +115,19 @@ const AdminNavbar = () => {
             Task Status
           </Link>
 
+          {/* ✅ Export Button (Only for Admins) */}
+          {user?.accountType === "admin" && (
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+            >
+              <FiDownload />
+              {exporting ? "Exporting..." : "Export Excel"}
+            </button>
+          )}
+
+          {/* Profile Dropdown */}
           <div className="relative ml-4" ref={dropdownRef}>
             <button
               className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white border-2 border-white cursor-pointer"
@@ -110,6 +155,7 @@ const AdminNavbar = () => {
           </div>
         </div>
 
+        {/* Mobile Menu */}
         <div className="md:hidden">
           <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-white">
             <FiMenu />
@@ -117,6 +163,7 @@ const AdminNavbar = () => {
         </div>
       </div>
 
+      {/* Mobile Menu Panel */}
       {showMobileMenu && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex">
           <div className="bg-gray-800 w-64 p-4 flex flex-col gap-4 relative text-white">
@@ -140,6 +187,19 @@ const AdminNavbar = () => {
             >
               Task Status
             </Link>
+
+            {/* ✅ Export option on mobile */}
+            {user?.accountType === "admin" && (
+              <button
+                onClick={handleExport}
+                disabled={exporting}
+                className="flex items-center gap-2 hover:underline mt-2"
+              >
+                <FiDownload size={18} />
+                {exporting ? "Exporting..." : "Export Excel"}
+              </button>
+            )}
+
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 hover:underline text-white mt-4"
@@ -152,6 +212,7 @@ const AdminNavbar = () => {
         </div>
       )}
 
+      {/* Profile Popup */}
       {showProfilePopup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="bg-white p-6 rounded-2xl shadow-xl w-80 relative text-black">
@@ -197,4 +258,3 @@ const AdminNavbar = () => {
 };
 
 export default AdminNavbar;
-

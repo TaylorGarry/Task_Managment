@@ -6,8 +6,9 @@ import TaskCard from "./TaskCard.jsx";
 
 const TaskStatus = () => {
   const dispatch = useDispatch();
-  const { tasks } = useSelector((state) => state.tasks);
+  const { tasks, loading } = useSelector((state) => state.tasks);
   const { employees, user } = useSelector((state) => state.auth);
+
   const todayDate = new Date().toISOString().split("T")[0];
   const [filters, setFilters] = useState({
     date: todayDate,
@@ -31,10 +32,12 @@ const TaskStatus = () => {
       ...(name === "department" ? { employee: "" } : {}),
     }));
   };
+
   const departments = [...new Set(employees.map((e) => e.department).filter(Boolean))];
   const filteredEmployees = filters.department
     ? employees.filter((e) => e.department === filters.department)
     : employees;
+
   const formatLocalDate = (dateStr) => {
     const d = new Date(dateStr);
     const year = d.getFullYear();
@@ -42,6 +45,7 @@ const TaskStatus = () => {
     const day = String(d.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
+
   const filteredTasks = tasks.filter((task) => {
     if (user.accountType === "employee") {
       if (!task.assignedTo.some((e) => e._id.toString() === user._id.toString()))
@@ -60,9 +64,22 @@ const TaskStatus = () => {
 
     return true;
   });
+
   return (
-    <div className="p-6 mt-16">
+    <div className="p-6 mt-16 relative min-h-[70vh]">
+      {/* Loader */}
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-20">
+          <div className="flex space-x-2">
+            <div className="w-4 h-4 bg-gray-800 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+            <div className="w-4 h-4 bg-gray-800 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+            <div className="w-4 h-4 bg-gray-800 rounded-full animate-bounce"></div>
+          </div>
+        </div>
+      )}
+
       <h2 className="text-2xl font-bold mb-6 text-gray-800">Task Status</h2>
+
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
         <input
           type="date"
@@ -110,18 +127,25 @@ const TaskStatus = () => {
           ))}
         </select>
       </div>
-      {filteredTasks.length > 0 ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredTasks.map((task) => (
-            <TaskCard key={task._id} task={task} />
-          ))}
-        </div>
-      ) : (
-        <h1 className="text-center text-gray-500 mt-10 text-4xl font-bold tracking-wide bg-gray-50 py-35 rounded-lg shadow-sm">
-          No tasks found
-        </h1>
+
+      {!loading && (
+        <>
+          {filteredTasks.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              {filteredTasks.map((task) => (
+                <TaskCard key={task._id} task={task} />
+              ))}
+            </div>
+          ) : (
+            <h1 className="text-center text-gray-500 mt-10 text-4xl font-bold tracking-wide bg-gray-50 py-35 rounded-lg shadow-sm">
+              No tasks found
+            </h1>
+          )}
+        </>
       )}
     </div>
   );
 };
+
+
 export default TaskStatus;

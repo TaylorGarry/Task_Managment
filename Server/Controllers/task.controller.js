@@ -1,14 +1,7 @@
 import Task from "../Modals/Task.modal.js";
 import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
-
-// const getISTDate = () => {
-//   const now = new Date();
-//   const istOffset = 5.5 * 60;  
-//   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-//   const istTime = new Date(utc + istOffset * 60000);
-//   return new Date(istTime.toISOString().split("T")[0]);
-// };
+import XLSX from "xlsx-js-style";
 
 // const getShiftDate = () => {
 //   const now = new Date();
@@ -34,16 +27,26 @@ import TaskStatus from "../Modals/TaskStatus.modal.js";
 // };
 const getShiftDate = () => {
   const now = new Date();
-  const usOffset = -4 * 60;
+
+  // Convert to US time (UTC-4)
+  const usOffset = -4 * 60; // minutes
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   const usTime = new Date(utc + usOffset * 60000);
-  const shiftStartHour = 16;
-  const shiftEndHour = 10;
+
+  // Define shift hours
+  const shiftStartHour = 16; // 4 PM
+  const shiftEndHour = 10;   // 10 AM (next day)
+
   let shiftDate = new Date(usTime);
-  if (usTime.getHours() < shiftStartHour && usTime.getHours() >= shiftEndHour) {
+
+  // If current time is between midnight and shiftEndHour (next day part of shift)
+  if (usTime.getHours() < shiftEndHour) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
+
+  // Reset to start of day
   shiftDate.setHours(0, 0, 0, 0);
+
   return shiftDate;
 };
 
@@ -96,12 +99,94 @@ export const createTask = async (req, res) => {
   }
 };
 
+// export const getTasks = async (req, res) => {
+//   try {
+//     const { date, shift, department, employeeId } = req.query;
+
+//     let filter = {};
+
+//     if (req.user.accountType === "employee") {
+//       filter.assignedTo = req.user.id;
+//       if (shift) filter.shift = shift;
+//     } else {
+//       if (shift) filter.shift = shift;
+//       if (department) filter.department = department;
+//       if (employeeId) filter.assignedTo = employeeId;
+//     }
+
+//     const tasks = await Task.find(filter).populate("assignedTo", "username department createdAt");
+
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
+
+//     const enrichedTasks = await Promise.all(
+//       tasks.map(async (task) => {
+//         const taskCreatedDate = new Date(task.createdAt);
+//         taskCreatedDate.setHours(0, 0, 0, 0);
+
+//         let start, end;
+
+//         if (date) {
+//           const selectedDate = new Date(date);
+//           selectedDate.setHours(0, 0, 0, 0);
+
+//           if (selectedDate < taskCreatedDate || selectedDate > today) return null;
+
+//           start = selectedDate;
+//           end = new Date(selectedDate);
+//           end.setHours(23, 59, 59, 999);
+//         } else {
+//           start = taskCreatedDate > today ? today : taskCreatedDate;
+//           end = new Date(start);
+//           end.setHours(23, 59, 59, 999);
+//         }
+
+//         const statuses = await TaskStatus.find({
+//           taskId: task._id,
+//           date: { $gte: start, $lte: end },
+//         }).populate("employeeId", "username");
+
+//         let employeeStatus = "Not Done";
+//         const doneEmployees = [];
+//         const notDoneEmployees = [];
+
+//         for (const s of statuses) {
+//           const username = s.employeeId.username || "Unknown";
+
+//           if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
+//           else notDoneEmployees.push({ _id: s.employeeId._id, username });
+
+//           if (s.employeeId._id.toString() === req.user.id) {
+//             employeeStatus = s.status;
+//           }
+//         }
+
+//         return {
+//           ...task.toObject(),
+//           employeeStatus,
+//           doneEmployees,
+//           notDoneEmployees,
+//           date: start,
+//         };
+//       })
+//     );
+
+//     const filteredTasks = enrichedTasks.filter((t) => t !== null);
+
+//     res.status(200).json(filteredTasks);
+//   } catch (error) {
+//     console.error("Get Tasks Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+//this is for 23-10-2025
 export const getTasks = async (req, res) => {
   try {
     const { date, shift, department, employeeId } = req.query;
 
-    let filter = {};
-
+    // Filter tasks depending on user role
+    const filter = {};
     if (req.user.accountType === "employee") {
       filter.assignedTo = req.user.id;
       if (shift) filter.shift = shift;
@@ -111,7 +196,7 @@ export const getTasks = async (req, res) => {
       if (employeeId) filter.assignedTo = employeeId;
     }
 
-    const tasks = await Task.find(filter).populate("assignedTo", "username department createdAt");
+    const tasks = await Task.find(filter).populate("assignedTo", "username department");
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -138,17 +223,18 @@ export const getTasks = async (req, res) => {
           end.setHours(23, 59, 59, 999);
         }
 
+        // ✅ Fetch all TaskStatus for this task in date range
         const statuses = await TaskStatus.find({
           taskId: task._id,
           date: { $gte: start, $lte: end },
         }).populate("employeeId", "username");
 
-        let employeeStatus = "Not Done";
         const doneEmployees = [];
         const notDoneEmployees = [];
+        let employeeStatus = "Not Done";
 
         for (const s of statuses) {
-          const username = s.employeeId.username || "Unknown";
+          const username = s.employeeId?.username || "Unknown";
 
           if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
           else notDoneEmployees.push({ _id: s.employeeId._id, username });
@@ -157,6 +243,13 @@ export const getTasks = async (req, res) => {
             employeeStatus = s.status;
           }
         }
+
+        // Add any assigned employees without status (not done by default)
+        const assignedWithoutStatus = task.assignedTo
+          .filter((emp) => !statuses.some((s) => s.employeeId._id.toString() === emp._id.toString()))
+          .map((emp) => ({ _id: emp._id, username: emp.username }));
+
+        notDoneEmployees.push(...assignedWithoutStatus);
 
         return {
           ...task.toObject(),
@@ -177,8 +270,68 @@ export const getTasks = async (req, res) => {
   }
 };
 
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee") {
+//       return res.status(403).json({ message: "Only employees can update status" });
+//     }
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const task = await Task.findById(taskId);
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+
+//     if (!task.assignedTo.includes(req.user.id)) {
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+//     }
+
+//     // const now = new Date();
+//     // const istOffset = 5.5 * 60;  
+//     // const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//     // const istTime = new Date(utc + istOffset * 60000);
+//     // const today = new Date(istTime.toISOString().split("T")[0]);
+//     // today.setHours(0, 0, 0, 0);
+
+//    const today = getShiftDate();
+//     let taskStatus = await TaskStatus.findOne({
+//       taskId,
+//       employeeId: req.user.id,
+//       date: today,
+//     });
+
+//     if (!taskStatus) {
+//       taskStatus = new TaskStatus({
+//         taskId,
+//         employeeId: req.user.id,
+//         date: today,
+//         status,
+//       });
+//     } else {
+//       taskStatus.status = status;
+//       taskStatus.updatedAt = new Date();
+//     }
+
+//     await taskStatus.save();
+
+//     res.status(200).json({
+//       message: "Status updated successfully for today",
+//       updatedStatus: taskStatus,
+//     });
+//   } catch (error) {
+//     console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
+//this is 23-10-2025
 export const updateTaskStatus = async (req, res) => {
   try {
+    // Only employees can update their own task status
     if (req.user.accountType !== "employee") {
       return res.status(403).json({ message: "Only employees can update status" });
     }
@@ -193,18 +346,15 @@ export const updateTaskStatus = async (req, res) => {
     const task = await Task.findById(taskId);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    if (!task.assignedTo.includes(req.user.id)) {
+    // Ensure the employee is assigned to this task
+    if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
-    // const now = new Date();
-    // const istOffset = 5.5 * 60;  
-    // const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-    // const istTime = new Date(utc + istOffset * 60000);
-    // const today = new Date(istTime.toISOString().split("T")[0]);
-    // today.setHours(0, 0, 0, 0);
+    // Get shift-based "today"
+    const today = getShiftDate();
 
-   const today = getShiftDate();
+    // Find existing TaskStatus for this task & employee for the shift date
     let taskStatus = await TaskStatus.findOne({
       taskId,
       employeeId: req.user.id,
@@ -212,28 +362,39 @@ export const updateTaskStatus = async (req, res) => {
     });
 
     if (!taskStatus) {
-      taskStatus = new TaskStatus({
+      // Create new status if not exist
+      taskStatus = await TaskStatus.create({
         taskId,
         employeeId: req.user.id,
         date: today,
         status,
       });
     } else {
+      // Update existing status
       taskStatus.status = status;
       taskStatus.updatedAt = new Date();
+      await taskStatus.save();
     }
 
-    await taskStatus.save();
+    // Populate employee info for frontend update
+    await taskStatus.populate("employeeId", "username");
 
     res.status(200).json({
-      message: "Status updated successfully for today",
-      updatedStatus: taskStatus,
+      message: "Status updated successfully",
+      updatedStatus: {
+        taskId: taskStatus.taskId,
+        employeeId: taskStatus.employeeId._id,
+        username: taskStatus.employeeId.username,
+        status: taskStatus.status,
+        date: taskStatus.date,
+      },
     });
   } catch (error) {
     console.error("Update Task Status Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 export const updateTask = async (req, res) => {
   try {
@@ -449,4 +610,166 @@ export const getAllTasks = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+export const exportTaskStatusExcel = async (req, res) => {
+  try {
+    if (req.user.accountType !== "admin")
+      return res.status(403).json({ message: "Only admin can export tasks" });
 
+    const { department, shift, employeeId } = req.query;
+
+    // 🔹 Shift-based date range: last 12 months
+    const currentShiftDate = getShiftDate();
+    const end = new Date(currentShiftDate);
+    const start = new Date(currentShiftDate);
+    start.setMonth(start.getMonth() - 12);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const filter = { date: { $gte: start, $lte: end } };
+    if (department) filter.department = department;
+    if (shift) filter.shift = shift;
+    if (employeeId) filter.employeeId = employeeId;
+
+    const statuses = await TaskStatus.find(filter)
+      .populate("taskId", "title shift department")
+      .populate("employeeId", "username");
+
+    const validStatuses = statuses.filter((s) => s.taskId && s.employeeId);
+
+    // 🔹 Group data month-wise
+    const monthGroups = {};
+    validStatuses.forEach((s) => {
+      const date = new Date(s.date);
+      const monthName = date.toLocaleString("default", { month: "long" });
+      const year = date.getFullYear();
+      const key = `${monthName} ${year}`;
+
+      if (!monthGroups[key]) monthGroups[key] = [];
+
+      monthGroups[key].push({
+        Task: s.taskId?.title || "Unknown Task",
+        Shift: s.taskId?.shift || "Unknown Shift",
+        Department: s.taskId?.department || "Unknown Department",
+        Employee: s.employeeId?.username || "Unknown Employee",
+        Date: s.date.toISOString().split("T")[0],
+        Status: s.status || "Not Done",
+      });
+    });
+
+    // 🔹 Create workbook
+    const workbook = XLSX.utils.book_new();
+
+    // Apply styling for each month
+    Object.entries(monthGroups).forEach(([month, data]) => {
+      // Add styled rows
+      const styledData = [
+        // Header row
+        {
+          Task: { v: "Task", s: { font: { bold: true }, fill: { fgColor: { rgb: "E0E0E0" } } } },
+          Shift: { v: "Shift", s: { font: { bold: true } } },
+          Department: { v: "Department", s: { font: { bold: true } } },
+          Employee: { v: "Employee", s: { font: { bold: true } } },
+          Date: { v: "Date", s: { font: { bold: true } } },
+          Status: { v: "Status", s: { font: { bold: true } } },
+        },
+        // Data rows with color-coded status
+        ...data.map((item) => ({
+          Task: { v: item.Task },
+          Shift: { v: item.Shift },
+          Department: { v: item.Department },
+          Employee: { v: item.Employee },
+          Date: { v: item.Date },
+          Status: {
+            v: item.Status,
+            s: {
+              font: {
+                color: {
+                  rgb: item.Status.toLowerCase() === "done" ? "008000" : "FF0000", // ✅ Green/Red
+                },
+                bold: true,
+              },
+            },
+          },
+        })),
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(styledData, { skipHeader: true });
+      XLSX.utils.book_append_sheet(workbook, worksheet, month);
+    });
+
+    // 🔹 Export Excel
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const fileName = `Task_Status_Last_12_Months_${Date.now()}.xlsx`;
+
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(buffer);
+  } catch (error) {
+    console.error("Export Excel Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
+
+
+
+// export const exportTaskStatusExcel = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "admin")
+//       return res.status(403).json({ message: "Only admin can export tasks" });
+
+//     const { startDate, endDate, month, year, employeeId, department, shift } = req.query;
+//     let filter = {};
+
+//     // Date filter: if not provided, default to all previous tasks
+//     const start = startDate ? new Date(startDate) : new Date("1970-01-01");
+//     const end = endDate ? new Date(endDate) : new Date();
+//     end.setHours(23, 59, 59, 999);
+//     filter.date = { $gte: start, $lte: end };
+
+//     // Optional filters
+//     if (employeeId) filter.employeeId = employeeId;
+//     if (department) filter.department = department;
+//     if (shift) filter.shift = shift;
+
+//     // Fetch task statuses
+//     const statuses = await TaskStatus.find(filter)
+//       .populate("taskId", "title shift department")
+//       .populate("employeeId", "username");
+
+//     // Filter out null taskId or employeeId
+//     const validStatuses = statuses.filter((s) => s.taskId && s.employeeId);
+
+//     // Map data for Excel
+//     const data = validStatuses.map((s) => ({
+//       Task: s.taskId?.title || "Unknown Task",
+//       Shift: s.taskId?.shift || "Unknown Shift",
+//       Department: s.taskId?.department || "Unknown Department",
+//       Employee: s.employeeId?.username || "Unknown Employee",
+//       Date: s.date.toISOString().split("T")[0],
+//       Status: s.status || "Not Done",
+//     }));
+
+//     // Create workbook
+//     const workbook = XLSX.utils.book_new();
+//     const worksheet = XLSX.utils.json_to_sheet(data);
+//     XLSX.utils.book_append_sheet(workbook, worksheet, "Task Status");
+
+//     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+//     const fileName = `Task_Status_${Date.now()}.xlsx`;
+//     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+//     res.setHeader(
+//       "Content-Type",
+//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//     );
+//     res.send(buffer);
+//   } catch (error) {
+//     console.error("Export Excel Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
