@@ -39,12 +39,10 @@ const getShiftDate = () => {
 
   let shiftDate = new Date(usTime);
 
-  // If current time is between midnight and shiftEndHour (next day part of shift)
   if (usTime.getHours() < shiftEndHour) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
 
-  // Reset to start of day
   shiftDate.setHours(0, 0, 0, 0);
 
   return shiftDate;
@@ -98,6 +96,91 @@ export const createTask = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+export const getTasks = async (req, res) => {
+  try {
+    const { date, shift, department, employeeId } = req.query;
+
+    const filter = {};
+    if (req.user.accountType === "employee") {
+      filter.assignedTo = req.user.id;
+      if (shift) filter.shift = shift;
+    } else {
+      if (shift) filter.shift = shift;
+      if (department) filter.department = department;
+      if (employeeId) filter.assignedTo = employeeId;
+    }
+
+    const tasks = await Task.find(filter).populate("assignedTo", "username department");
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const enrichedTasks = await Promise.all(
+      tasks.map(async (task) => {
+        const taskCreatedDate = new Date(task.createdAt);
+        taskCreatedDate.setHours(0, 0, 0, 0);
+
+        let start, end;
+
+        if (date) {
+          const selectedDate = new Date(date);
+          selectedDate.setHours(0, 0, 0, 0);
+
+          if (selectedDate < taskCreatedDate || selectedDate > today) return null;
+
+          start = selectedDate;
+          end = new Date(selectedDate);
+          end.setHours(23, 59, 59, 999);
+        } else {
+          start = taskCreatedDate > today ? today : taskCreatedDate;
+          end = new Date(start);
+          end.setHours(23, 59, 59, 999);
+        }
+
+        const statuses = await TaskStatus.find({
+          taskId: task._id,
+          date: { $gte: start, $lte: end },
+        }).populate("employeeId", "username");
+
+        const doneEmployees = [];
+        const notDoneEmployees = [];
+        let employeeStatus = "Not Done";
+
+        for (const s of statuses) {
+          const username = s.employeeId?.username || "Unknown";
+
+          if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
+          else notDoneEmployees.push({ _id: s.employeeId._id, username });
+
+          if (s.employeeId._id.toString() === req.user.id) {
+            employeeStatus = s.status;
+          }
+        }
+
+        const assignedWithoutStatus = task.assignedTo
+          .filter((emp) => !statuses.some((s) => s.employeeId._id.toString() === emp._id.toString()))
+          .map((emp) => ({ _id: emp._id, username: emp.username }));
+
+        notDoneEmployees.push(...assignedWithoutStatus);
+
+        return {
+          ...task.toObject(),
+          employeeStatus,
+          doneEmployees,
+          notDoneEmployees,
+          date: start,
+        };
+      })
+    );
+    const filteredTasks = enrichedTasks.filter((t) => t !== null);
+    res.status(200).json(filteredTasks);
+  } catch (error) {
+    console.error("Get Tasks Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 
 // export const getTasks = async (req, res) => {
 //   try {
@@ -181,154 +264,7 @@ export const createTask = async (req, res) => {
 // };
 
 //this is for 23-10-2025
-export const getTasks = async (req, res) => {
-  try {
-    const { date, shift, department, employeeId } = req.query;
 
-    // Filter tasks depending on user role
-    const filter = {};
-    if (req.user.accountType === "employee") {
-      filter.assignedTo = req.user.id;
-      if (shift) filter.shift = shift;
-    } else {
-      if (shift) filter.shift = shift;
-      if (department) filter.department = department;
-      if (employeeId) filter.assignedTo = employeeId;
-    }
-
-    const tasks = await Task.find(filter).populate("assignedTo", "username department");
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const enrichedTasks = await Promise.all(
-      tasks.map(async (task) => {
-        const taskCreatedDate = new Date(task.createdAt);
-        taskCreatedDate.setHours(0, 0, 0, 0);
-
-        let start, end;
-
-        if (date) {
-          const selectedDate = new Date(date);
-          selectedDate.setHours(0, 0, 0, 0);
-
-          if (selectedDate < taskCreatedDate || selectedDate > today) return null;
-
-          start = selectedDate;
-          end = new Date(selectedDate);
-          end.setHours(23, 59, 59, 999);
-        } else {
-          start = taskCreatedDate > today ? today : taskCreatedDate;
-          end = new Date(start);
-          end.setHours(23, 59, 59, 999);
-        }
-
-        // ✅ Fetch all TaskStatus for this task in date range
-        const statuses = await TaskStatus.find({
-          taskId: task._id,
-          date: { $gte: start, $lte: end },
-        }).populate("employeeId", "username");
-
-        const doneEmployees = [];
-        const notDoneEmployees = [];
-        let employeeStatus = "Not Done";
-
-        for (const s of statuses) {
-          const username = s.employeeId?.username || "Unknown";
-
-          if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
-          else notDoneEmployees.push({ _id: s.employeeId._id, username });
-
-          if (s.employeeId._id.toString() === req.user.id) {
-            employeeStatus = s.status;
-          }
-        }
-
-        // Add any assigned employees without status (not done by default)
-        const assignedWithoutStatus = task.assignedTo
-          .filter((emp) => !statuses.some((s) => s.employeeId._id.toString() === emp._id.toString()))
-          .map((emp) => ({ _id: emp._id, username: emp.username }));
-
-        notDoneEmployees.push(...assignedWithoutStatus);
-
-        return {
-          ...task.toObject(),
-          employeeStatus,
-          doneEmployees,
-          notDoneEmployees,
-          date: start,
-        };
-      })
-    );
-
-    const filteredTasks = enrichedTasks.filter((t) => t !== null);
-
-    res.status(200).json(filteredTasks);
-  } catch (error) {
-    console.error("Get Tasks Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
-
-// export const updateTaskStatus = async (req, res) => {
-//   try {
-//     if (req.user.accountType !== "employee") {
-//       return res.status(403).json({ message: "Only employees can update status" });
-//     }
-//     const { taskId } = req.params;
-//     const { status } = req.body;
-
-//     if (!["Done", "Not Done"].includes(status)) {
-//       return res.status(400).json({ message: "Invalid status value" });
-//     }
-
-//     const task = await Task.findById(taskId);
-//     if (!task) return res.status(404).json({ message: "Task not found" });
-
-//     if (!task.assignedTo.includes(req.user.id)) {
-//       return res.status(403).json({ message: "You are not assigned to this task" });
-//     }
-
-//     // const now = new Date();
-//     // const istOffset = 5.5 * 60;  
-//     // const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-//     // const istTime = new Date(utc + istOffset * 60000);
-//     // const today = new Date(istTime.toISOString().split("T")[0]);
-//     // today.setHours(0, 0, 0, 0);
-
-//    const today = getShiftDate();
-//     let taskStatus = await TaskStatus.findOne({
-//       taskId,
-//       employeeId: req.user.id,
-//       date: today,
-//     });
-
-//     if (!taskStatus) {
-//       taskStatus = new TaskStatus({
-//         taskId,
-//         employeeId: req.user.id,
-//         date: today,
-//         status,
-//       });
-//     } else {
-//       taskStatus.status = status;
-//       taskStatus.updatedAt = new Date();
-//     }
-
-//     await taskStatus.save();
-
-//     res.status(200).json({
-//       message: "Status updated successfully for today",
-//       updatedStatus: taskStatus,
-//     });
-//   } catch (error) {
-//     console.error("Update Task Status Error:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
-
-
-//this is 23-10-2025
 export const updateTaskStatus = async (req, res) => {
   try {
     // Only employees can update their own task status
@@ -394,6 +330,66 @@ export const updateTaskStatus = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee") {
+//       return res.status(403).json({ message: "Only employees can update status" });
+//     }
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const task = await Task.findById(taskId);
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+
+//     if (!task.assignedTo.includes(req.user.id)) {
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+//     }
+
+//     // const now = new Date();
+//     // const istOffset = 5.5 * 60;  
+//     // const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//     // const istTime = new Date(utc + istOffset * 60000);
+//     // const today = new Date(istTime.toISOString().split("T")[0]);
+//     // today.setHours(0, 0, 0, 0);
+
+//    const today = getShiftDate();
+//     let taskStatus = await TaskStatus.findOne({
+//       taskId,
+//       employeeId: req.user.id,
+//       date: today,
+//     });
+
+//     if (!taskStatus) {
+//       taskStatus = new TaskStatus({
+//         taskId,
+//         employeeId: req.user.id,
+//         date: today,
+//         status,
+//       });
+//     } else {
+//       taskStatus.status = status;
+//       taskStatus.updatedAt = new Date();
+//     }
+
+//     await taskStatus.save();
+
+//     res.status(200).json({
+//       message: "Status updated successfully for today",
+//       updatedStatus: taskStatus,
+//     });
+//   } catch (error) {
+//     console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
+//this is 23-10-2025
+
 
 
 export const updateTask = async (req, res) => {
