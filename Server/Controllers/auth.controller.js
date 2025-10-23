@@ -4,19 +4,60 @@ import User from "../Modals/User.modal.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
+// export const signup = async (req, res) => {
+//   try {
+//     //   if (!req.user || req.user.accountType !== "admin") {
+//     //   return res.status(403).json({ message: "Only admin can create new users" });
+//     // }
+//     const { username, password, accountType, department } = req.body;
+
+//     if (!username || !password || !department) {
+//       return res.status(400).json({ message: "Username, password, and department are required" });
+//     }
+
+//     if (!["employee", "admin"].includes(accountType)) {
+//       return res.status(400).json({ message: "Invalid account type" });
+//     }
+
+//     const existingUser = await User.findOne({ username });
+//     if (existingUser) {
+//       return res.status(400).json({ message: "User already exists" });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const newUser = new User({
+//       username,
+//       password: hashedPassword,
+//       accountType,
+//       department,  
+//     });
+
+//     await newUser.save();
+
+//     res.status(201).json({
+//       message: "User registered successfully",
+//       user: {
+//         id: newUser._id,
+//         username: newUser.username,
+//         accountType: newUser.accountType,
+//         department: newUser.department,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Signup Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
+//this is for flow of only admin can create account anyone can't
 export const signup = async (req, res) => {
   try {
-    //   if (!req.user || req.user.accountType !== "admin") {
-    //   return res.status(403).json({ message: "Only admin can create new users" });
-    // }
     const { username, password, accountType, department } = req.body;
 
     if (!username || !password || !department) {
       return res.status(400).json({ message: "Username, password, and department are required" });
-    }
-
-    if (!["employee", "admin"].includes(accountType)) {
-      return res.status(400).json({ message: "Invalid account type" });
     }
 
     const existingUser = await User.findOne({ username });
@@ -24,13 +65,27 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
+    const adminExists = await User.exists({ accountType: "admin" });
+
+    // If an admin exists, only allow logged-in admins to create users
+    if (adminExists) {
+      if (!req.user || req.user.accountType !== "admin") {
+        return res.status(403).json({ message: "Only admin can create new users" });
+      }
+    }
+
+    let finalAccountType = "employee";
+    if (!adminExists && accountType === "admin") {
+      finalAccountType = "admin";
+    }
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newUser = new User({
       username,
       password: hashedPassword,
-      accountType,
-      department,  
+      accountType: finalAccountType,
+      department,
     });
 
     await newUser.save();
@@ -49,6 +104,7 @@ export const signup = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 export const login = async (req, res) => {
   try {

@@ -24,7 +24,15 @@ function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/signup" element={<Signup />} />
+        <Route
+          path="/signup"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <Signup />
+            </ProtectedRoute>
+          }
+        />
+
         <Route path="/login" element={<Login />} />
 
         <Route
@@ -49,12 +57,14 @@ function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/AllTasks"
-        element={
-          <ProtectedRoute>
+
+        <Route
+          path="/AllTasks"
+          element={
+            <ProtectedRoute>
               <AllTasks />
-          </ProtectedRoute>
-        } 
+            </ProtectedRoute>
+          }
         />
 
         <Route path="*" element={<Navigate to="/login" replace />} />
@@ -62,5 +72,6 @@ function App() {
     </Router>
   );
 }
+
 
 export default App;
