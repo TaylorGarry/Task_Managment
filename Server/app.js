@@ -25,7 +25,7 @@ const app = express();
 // ];
 
 app.use(cors({
-  origin: ["http://localhost:5173", "https://task-managment-5.onrender.com"],
+  origin: ["http://localhost:5173", "https://sweet-faun-a1e735.netlify.app"],
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true, 
