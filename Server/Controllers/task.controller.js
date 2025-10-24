@@ -4,20 +4,44 @@ import TaskStatus from "../Modals/TaskStatus.modal.js";
 import XLSX from "xlsx-js-style";
 
 
+// const getShiftDate = () => {
+//   const now = new Date();
+
+//   // Convert to US time (UTC-4)
+//   const usOffset = -4 * 60; // minutes
+//   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//   const usTime = new Date(utc + usOffset * 60000);
+
+//   // Define shift hours
+//   const shiftStartHour = 16; // 4 PM
+//   const shiftEndHour = 10;   // 10 AM (next day)
+
+//   let shiftDate = new Date(usTime);
+
+//   if (usTime.getHours() < shiftEndHour) {
+//     shiftDate.setDate(shiftDate.getDate() - 1);
+//   }
+
+//   shiftDate.setHours(0, 0, 0, 0);
+
+//   return shiftDate;
+// };
+
 const getShiftDate = () => {
   const now = new Date();
 
   // Convert to US time (UTC-4)
-  const usOffset = -4 * 60; // minutes
+  const usOffset = -4 * 60; // UTC-4 in minutes
   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
   const usTime = new Date(utc + usOffset * 60000);
 
-  // Define shift hours
-  const shiftStartHour = 16; // 4 PM
-  const shiftEndHour = 10;   // 10 AM (next day)
+  // Updated shift hours
+  const shiftStartHour = 12; // ⏰ 12 PM (noon) US time (was 16)
+  const shiftEndHour = 10;   // 10 AM next day
 
   let shiftDate = new Date(usTime);
 
+  // If current US time is before 10 AM, count as previous shift
   if (usTime.getHours() < shiftEndHour) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
