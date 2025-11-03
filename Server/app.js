@@ -13,6 +13,7 @@ const allowedOrigins = [
   "http://localhost:5173",
   "https://sweet-faun-a1e735.netlify.app",
   "https://mydevtm.com",
+  "https://crm.terranovasolution.in"
 ];
 
 // ✅ Allowed IPs (from .env)
