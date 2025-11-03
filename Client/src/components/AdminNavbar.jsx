@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Link, Navigate } from "react-router-dom";
+import { Link, Navigate, Outlet } from "react-router-dom";
 import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
@@ -77,7 +77,6 @@ const AdminNavbar = () => {
 const handleExport = async () => {
   try {
     setExporting(true);
-    // dispatch thunk and unwrap to get the blob + filename
     const result = await dispatch(exportTaskStatusExcel()).unwrap(); // { blob, filename }
 
     if (!result || !result.blob) {
@@ -101,9 +100,8 @@ const handleExport = async () => {
     setExporting(false);
   }
 };
-
-
   return (
+    <>
     <nav className="fixed top-0 left-0 w-full bg-gray-800 text-white z-50 shadow-lg">
       <div className="flex justify-between items-center p-2">
         <h1 className="text-lg font-bold text-white">Task Management</h1>
@@ -115,7 +113,9 @@ const handleExport = async () => {
           <Link to="/admin/tasks" className="hover:underline text-white">
             Task Status
           </Link>
-
+          <Link to="/admin/defaulter" className="hover:underline text-white">
+            Defaulter
+          </Link>
           {user?.accountType === "admin" && (
             <>
               <button
@@ -228,7 +228,6 @@ const handleExport = async () => {
         </div>
       )}
 
-      {/* Profile Popup */}
       {showProfilePopup && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center">
           <div className="bg-white p-6 rounded-2xl shadow-xl w-80 relative text-black">
@@ -270,6 +269,9 @@ const handleExport = async () => {
         </div>
       )}
     </nav>
+        <Outlet />
+     
+    </>
   );
 };
 

@@ -54,10 +54,11 @@ const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 //this is for flow of only admin can create account anyone can't
 export const signup = async (req, res) => {
   try {
-    const { username, password, accountType, department } = req.body;
+    const { username, password, accountType, department, shiftLabel } = req.body;
 
-    if (!username || !password || !department) {
-      return res.status(400).json({ message: "Username, password, and department are required" });
+    // ✅ Only admins can create new users
+    if (req.user.accountType !== "admin") {
+      return res.status(403).json({ message: "Only admin can create users" });
     }
 
     const existingUser = await User.findOne({ username });
@@ -65,42 +66,50 @@ export const signup = async (req, res) => {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    const adminExists = await User.exists({ accountType: "admin" });
+    // ✅ Map shiftLabel → shift info
+    const shiftMapping = {
+      "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+      "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+      "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+      "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+      "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+    };
 
-    // If an admin exists, only allow logged-in admins to create users
-    if (adminExists) {
-      if (!req.user || req.user.accountType !== "admin") {
-        return res.status(403).json({ message: "Only admin can create new users" });
-      }
+    const selected = shiftMapping[shiftLabel];
+    if (!selected) {
+      return res.status(400).json({ message: "Invalid shift label" });
     }
 
-    let finalAccountType = "employee";
-    if (!adminExists && accountType === "admin") {
-      finalAccountType = "admin";
-    }
-
+    // ✅ Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // ✅ Create user
     const newUser = new User({
       username,
       password: hashedPassword,
-      accountType: finalAccountType,
+      accountType,
       department,
+      shift: selected.shift,
+      shiftStartHour: selected.shiftStartHour,
+      shiftEndHour: selected.shiftEndHour,
     });
 
     await newUser.save();
 
     res.status(201).json({
-      message: "User registered successfully",
+      message: "User created successfully",
       user: {
         id: newUser._id,
         username: newUser.username,
         accountType: newUser.accountType,
         department: newUser.department,
+        shift: newUser.shift,
+        shiftStartHour: newUser.shiftStartHour,
+        shiftEndHour: newUser.shiftEndHour,
       },
     });
   } catch (error) {
-    console.error("Signup Error:", error);
+    console.error("Signup error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
