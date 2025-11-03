@@ -26,29 +26,29 @@ const Navbar = () => {
     navigate("/login");
   };
 
-  const handleUpdateProfile = async () => {
-    try {
-      setLoading(true);
-      const token = user?.token;
-      const res = await axios.post(
-        `${API_URL}/update-profile`,
-        { username, password },
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
+  // const handleUpdateProfile = async () => {
+  //   try {
+  //     setLoading(true);
+  //     const token = user?.token;
+  //     const res = await axios.post(
+  //       `${API_URL}/update-profile`,
+  //       { username, password },
+  //       { headers: { Authorization: `Bearer ${token}` } }
+  //     );
 
-      if (res.data.user) {
-        const updatedUser = { ...user, ...res.data.user };
-        localStorage.setItem("user", JSON.stringify(updatedUser));
-        toast.success("Profile updated successfully!");
-        setShowProfilePopup(false);
-      }
-    } catch (err) {
-      console.error("Profile update failed:", err);
-      toast.error(err.response?.data?.message || "Failed to update profile");
-    } finally {
-      setLoading(false);
-    }
-  };
+  //     if (res.data.user) {
+  //       const updatedUser = { ...user, ...res.data.user };
+  //       localStorage.setItem("user", JSON.stringify(updatedUser));
+  //       toast.success("Profile updated successfully!");
+  //       setShowProfilePopup(false);
+  //     }
+  //   } catch (err) {
+  //     console.error("Profile update failed:", err);
+  //     toast.error(err.response?.data?.message || "Failed to update profile");
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   return (
    <>
@@ -71,12 +71,12 @@ const Navbar = () => {
           >
             Today
           </button>
-          <button
+          {/* <button
             onClick={() => navigate("/AllTasks")}
             className="flex items-center gap-2 bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full text-gray-800 font-medium hover:bg-sky-50 transition-all cursor-pointer"
           >
             All Days
-          </button>
+          </button> */}
 
           <div className="relative">
             <button
@@ -106,12 +106,6 @@ const Navbar = () => {
 
             {showProfileMenu && (
               <div className="absolute right-0 mt-2 w-40 bg-white border border-[#EAEAEA] rounded-lg shadow-md z-20">
-                <button
-                  onClick={() => setShowProfilePopup(true)}
-                  className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-sky-50 rounded-lg"
-                >
-                  Profile
-                </button>
                 <button
                   onClick={handleLogout}
                   className="block w-full text-left px-4 py-2 text-gray-700 hover:bg-sky-50 rounded-lg"

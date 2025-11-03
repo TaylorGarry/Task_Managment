@@ -8,7 +8,9 @@ import {
   assignTask,
   updateTaskStatus,
   getAllTasks,
-  exportTaskStatusExcel,  
+  exportTaskStatusExcel,
+  Defaulter,
+  getEmployeeDefaulters,  
 } from "../Controllers/task.controller.js";
 
 const router = express.Router();
@@ -23,4 +25,6 @@ router.put("/update/:id", authMiddleware, updateTask);
 router.put("/status/:taskId", authMiddleware, updateTaskStatus);
 router.get("/AllTasks", authMiddleware, getAllTasks);
 router.get("/export-status", authMiddleware, exportTaskStatusExcel);
+router.get("/defaulter", authMiddleware, Defaulter);
+router.get("/employee-defaulters/:employeeId", getEmployeeDefaulters);
 export default router;

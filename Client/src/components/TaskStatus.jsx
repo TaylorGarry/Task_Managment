@@ -9,9 +9,13 @@ const TaskStatus = () => {
   const { tasks, loading } = useSelector((state) => state.tasks);
   const { employees, user } = useSelector((state) => state.auth);
 
-  const todayDate = new Date().toISOString().split("T")[0];
+  // today's date
+  const today = new Date().toISOString().split("T")[0];
+
+  // ✅ two date states instead of one
   const [filters, setFilters] = useState({
-    date: todayDate,
+    startDate: today,
+    endDate: today,
     department: "",
     shift: "",
     employee: "",
@@ -24,7 +28,8 @@ const TaskStatus = () => {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    if (name === "date" && value > todayDate) return;
+    // Prevent selecting future dates
+    if ((name === "startDate" || name === "endDate") && value > today) return;
 
     setFilters((prev) => ({
       ...prev,
@@ -38,32 +43,7 @@ const TaskStatus = () => {
     ? employees.filter((e) => e.department === filters.department)
     : employees;
 
-  const formatLocalDate = (dateStr) => {
-    const d = new Date(dateStr);
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  };
-
-  const filteredTasks = tasks.filter((task) => {
-    if (user.accountType === "employee") {
-      if (!task.assignedTo.some((e) => e._id.toString() === user._id.toString()))
-        return false;
-    }
-    if (filters.date && task.date) {
-      if (formatLocalDate(task.date) !== filters.date) return false;
-    }
-    if (filters.department && task.department !== filters.department) return false;
-    if (filters.shift && task.shift !== filters.shift) return false;
-    if (
-      filters.employee &&
-      !task.assignedTo.some((e) => e._id.toString() === filters.employee.toString())
-    )
-      return false;
-
-    return true;
-  });
+  // ✅ Removed single-date filter logic, now handled by backend
 
   return (
     <div className="p-6 mt-16 relative min-h-[70vh]">
@@ -81,14 +61,26 @@ const TaskStatus = () => {
       <h2 className="text-2xl font-bold mb-6 text-gray-800">Task Status</h2>
 
       <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        {/* From Date */}
         <input
           type="date"
-          name="date"
-          value={filters.date}
+          name="startDate"
+          value={filters.startDate}
           onChange={handleFilterChange}
-          max={todayDate}
+          max={today}
           className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
         />
+        {/* To Date */}
+        <input
+          type="date"
+          name="endDate"
+          value={filters.endDate}
+          onChange={handleFilterChange}
+          max={today}
+          className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]"
+        />
+
+        {/* Department */}
         <select
           name="department"
           value={filters.department}
@@ -102,6 +94,8 @@ const TaskStatus = () => {
             </option>
           ))}
         </select>
+
+        {/* Shift */}
         <select
           name="shift"
           value={filters.shift}
@@ -113,6 +107,8 @@ const TaskStatus = () => {
           <option value="Mid">Mid</option>
           <option value="End">End</option>
         </select>
+
+        {/* Employee */}
         <select
           name="employee"
           value={filters.employee}
@@ -130,9 +126,9 @@ const TaskStatus = () => {
 
       {!loading && (
         <>
-          {filteredTasks.length > 0 ? (
+          {tasks.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredTasks.map((task) => (
+              {tasks.map((task) => (
                 <TaskCard key={task._id} task={task} />
               ))}
             </div>
@@ -146,6 +142,5 @@ const TaskStatus = () => {
     </div>
   );
 };
-
 
 export default TaskStatus;
