@@ -3,6 +3,7 @@ import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
 import XLSX from "xlsx-js-style";
 import fs from "fs";
+import NodeCache from "node-cache";
 
 // const getShiftDate = () => {
 //   const now = new Date();
@@ -227,32 +228,157 @@ export const createTask = async (req, res) => {
 //   }
 // };
 
+//this is working one currently=====>>>>>>>
+// export const getTasks = async (req, res) => {
+//   try {
+//     const { startDate, endDate, shift, department, employeeId } = req.query;
+
+//     // 🔹 Helper: Convert current UTC time to IST
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60; // +5:30 IST offset in minutes
+//       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//       return new Date(utc + istOffset * 60000);
+//     };
+
+//     // 🔹 Helper: Get current "shift date" (before 10 AM → previous day)
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       const hour = ist.getHours();
+
+//       const shiftDate = new Date(ist);
+//       if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+
+//       shiftDate.setHours(0, 0, 0, 0);
+//       return shiftDate;
+//     };
+
+//     // 🧭 Role-based filters
+//     const filter = {};
+//     if (req.user.accountType === "employee") {
+//       filter.assignedTo = req.user.id;
+//       if (shift) filter.shift = shift;
+//     } else {
+//       if (shift) filter.shift = shift;
+//       if (department) filter.department = department;
+//       if (employeeId) filter.assignedTo = employeeId;
+//     }
+
+//     const tasks = await Task.find(filter).populate("assignedTo", "username department");
+
+//     // 🔹 Determine start and end dates
+//     const todayShiftDate = getShiftDate();
+//     const start = startDate ? new Date(startDate) : new Date(todayShiftDate);
+//     const end = endDate ? new Date(endDate) : new Date(todayShiftDate);
+
+//     start.setHours(0, 0, 0, 0);
+//     end.setHours(23, 59, 59, 999);
+
+//     // 🔹 Build date range array
+//     const dateRange = [];
+//     const tempDate = new Date(start);
+//     while (tempDate <= end) {
+//       dateRange.push(new Date(tempDate));
+//       tempDate.setDate(tempDate.getDate() + 1);
+//     }
+
+//     // 🔹 Enrich tasks with status per day
+//     const enrichedTasks = [];
+
+//     for (const task of tasks) {
+//       const taskCreatedDate = new Date(task.createdAt);
+//       taskCreatedDate.setHours(0, 0, 0, 0);
+
+//       for (const date of dateRange) {
+//         // ⛔ Skip if date is before the task was created
+//         if (date < taskCreatedDate) continue;
+
+//         const nextDay = new Date(date);
+//         nextDay.setHours(23, 59, 59, 999);
+
+//         const statuses = await TaskStatus.find({
+//           taskId: task._id,
+//           date: { $gte: date, $lte: nextDay },
+//         }).populate("employeeId", "username");
+
+//         const doneEmployees = [];
+//         const notDoneEmployees = [];
+//         let employeeStatus = "Not Done";
+
+//         for (const s of statuses) {
+//           const username = s.employeeId?.username || "Unknown";
+//           if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
+//           else notDoneEmployees.push({ _id: s.employeeId._id, username });
+
+//           if (s.employeeId._id.toString() === req.user.id) {
+//             employeeStatus = s.status;
+//           }
+//         }
+
+//         // Employees who haven’t updated yet
+//         const assignedWithoutStatus = task.assignedTo
+//           .filter(
+//             (emp) =>
+//               !statuses.some((s) => s.employeeId._id.toString() === emp._id.toString())
+//           )
+//           .map((emp) => ({ _id: emp._id, username: emp.username }));
+
+//         notDoneEmployees.push(...assignedWithoutStatus);
+
+//         enrichedTasks.push({
+//           ...task.toObject(),
+//           employeeStatus,
+//           doneEmployees,
+//           notDoneEmployees,
+//           date, // store the date for which this entry is shown
+//         });
+//       }
+//     }
+
+//     res.status(200).json(enrichedTasks);
+//   } catch (error) {
+//     console.error("Get Tasks Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
+
+//this is for fast response======>>>>>>>>>
+const cache = new NodeCache({ stdTTL: 60 }); // Cache results for 60 seconds
 
 export const getTasks = async (req, res) => {
   try {
-    const { startDate, endDate, shift, department, employeeId } = req.query;
+    const { startDate, endDate, shift, department, employeeId, page = 1, limit = 20 } = req.query;
 
-    // 🔹 Helper: Convert current UTC time to IST
+    // 🔹 Cache Key
+    const cacheKey = `tasks_${req.user.id}_${startDate}_${endDate}_${shift}_${department}_${employeeId}_${page}_${limit}`;
+
+    // 🔹 Serve from Cache if exists
+    const cachedData = cache.get(cacheKey);
+    if (cachedData) {
+      return res.status(200).json(cachedData);
+    }
+
+    // 🔹 Helper: Convert UTC → IST
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60; // +5:30 IST offset in minutes
+      const istOffset = 5.5 * 60;
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       return new Date(utc + istOffset * 60000);
     };
 
-    // 🔹 Helper: Get current "shift date" (before 10 AM → previous day)
+    // 🔹 Helper: Shift date (before 10 AM → previous day)
     const getShiftDate = () => {
       const ist = getISTime();
       const hour = ist.getHours();
-
       const shiftDate = new Date(ist);
       if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
-
       shiftDate.setHours(0, 0, 0, 0);
       return shiftDate;
     };
 
-    // 🧭 Role-based filters
+    // 🧭 Role-based filter
     const filter = {};
     if (req.user.accountType === "employee") {
       filter.assignedTo = req.user.id;
@@ -263,25 +389,57 @@ export const getTasks = async (req, res) => {
       if (employeeId) filter.assignedTo = employeeId;
     }
 
-    const tasks = await Task.find(filter).populate("assignedTo", "username department");
+    // 🔹 Pagination setup
+    const skip = (Number(page) - 1) * Number(limit);
 
-    // 🔹 Determine start and end dates
+    const [tasks, totalTasks] = await Promise.all([
+      Task.find(filter)
+        .populate("assignedTo", "username department")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(Number(limit))
+        .lean(),
+      Task.countDocuments(filter),
+    ]);
+
+    if (!tasks.length) {
+      const emptyResponse = { data: [], total: 0, page, totalPages: 0 };
+      cache.set(cacheKey, emptyResponse);
+      return res.status(200).json(emptyResponse);
+    }
+
+    // 🔹 Determine start/end range
     const todayShiftDate = getShiftDate();
     const start = startDate ? new Date(startDate) : new Date(todayShiftDate);
     const end = endDate ? new Date(endDate) : new Date(todayShiftDate);
-
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
-    // 🔹 Build date range array
-    const dateRange = [];
-    const tempDate = new Date(start);
-    while (tempDate <= end) {
-      dateRange.push(new Date(tempDate));
-      tempDate.setDate(tempDate.getDate() + 1);
+    // 🔹 Fetch all TaskStatuses in one query
+    const allStatuses = await TaskStatus.find({
+      taskId: { $in: tasks.map((t) => t._id) },
+      date: { $gte: start, $lte: end },
+    })
+      .populate("employeeId", "username")
+      .lean();
+
+    // 🔹 Group statuses by taskId + date
+    const statusMap = new Map();
+    for (const s of allStatuses) {
+      const key = `${s.taskId}_${new Date(s.date).toDateString()}`;
+      if (!statusMap.has(key)) statusMap.set(key, []);
+      statusMap.get(key).push(s);
     }
 
-    // 🔹 Enrich tasks with status per day
+    // 🔹 Build date range
+    const dateRange = [];
+    const tmpDate = new Date(start);
+    while (tmpDate <= end) {
+      dateRange.push(new Date(tmpDate));
+      tmpDate.setDate(tmpDate.getDate() + 1);
+    }
+
+    // 🔹 Enrich tasks (your original flow kept)
     const enrichedTasks = [];
 
     for (const task of tasks) {
@@ -289,16 +447,10 @@ export const getTasks = async (req, res) => {
       taskCreatedDate.setHours(0, 0, 0, 0);
 
       for (const date of dateRange) {
-        // ⛔ Skip if date is before the task was created
         if (date < taskCreatedDate) continue;
 
-        const nextDay = new Date(date);
-        nextDay.setHours(23, 59, 59, 999);
-
-        const statuses = await TaskStatus.find({
-          taskId: task._id,
-          date: { $gte: date, $lte: nextDay },
-        }).populate("employeeId", "username");
+        const key = `${task._id}_${date.toDateString()}`;
+        const statuses = statusMap.get(key) || [];
 
         const doneEmployees = [];
         const notDoneEmployees = [];
@@ -309,38 +461,43 @@ export const getTasks = async (req, res) => {
           if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
           else notDoneEmployees.push({ _id: s.employeeId._id, username });
 
-          if (s.employeeId._id.toString() === req.user.id) {
-            employeeStatus = s.status;
-          }
+          if (s.employeeId._id.toString() === req.user.id) employeeStatus = s.status;
         }
 
-        // Employees who haven’t updated yet
         const assignedWithoutStatus = task.assignedTo
           .filter(
-            (emp) =>
-              !statuses.some((s) => s.employeeId._id.toString() === emp._id.toString())
+            (emp) => !statuses.some((s) => s.employeeId._id.toString() === emp._id.toString())
           )
           .map((emp) => ({ _id: emp._id, username: emp.username }));
 
         notDoneEmployees.push(...assignedWithoutStatus);
 
         enrichedTasks.push({
-          ...task.toObject(),
+          ...task,
           employeeStatus,
           doneEmployees,
           notDoneEmployees,
-          date, // store the date for which this entry is shown
+          date,
         });
       }
     }
 
-    res.status(200).json(enrichedTasks);
+    const response = {
+      data: enrichedTasks,
+      total: totalTasks,
+      page: Number(page),
+      totalPages: Math.ceil(totalTasks / Number(limit)),
+    };
+
+    // 🔹 Cache response for short duration
+    cache.set(cacheKey, response);
+
+    res.status(200).json(response);
   } catch (error) {
     console.error("Get Tasks Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 
 
@@ -963,7 +1120,7 @@ export const exportTaskStatusExcel = async (req, res) => {
     if (req.user.accountType !== "admin")
       return res.status(403).json({ message: "Only admin can export tasks" });
 
-    const { department, shift, employeeId } = req.query;
+    const { department, shift } = req.query;
 
     const getISTime = () => {
       const now = new Date();
