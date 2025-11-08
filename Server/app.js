@@ -5,24 +5,29 @@ import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/task.routes.js";
 import reviewRoutes from "./routes/review.routes.js";
 import taskStatusRoutes from "./routes/taskStatus.routes.js";
+// import remarkRoutes from "./routes/remark.routes.js";
 
 dotenv.config();
 const app = express();
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://sweet-faun-a1e735.netlify.app",
-  "https://mydevtm.com",
+  // "https://sweet-faun-a1e735.netlify.app",
+  // "https://mydevtm.com",
   "https://crm.terranovasolution.in",
   "https://crm.fdbs.in"
 ];
 
-// ✅ Allowed IPs (from .env)
-// const allowedIPs = process.env.ALLOWED_IPS
-//   ? process.env.ALLOWED_IPS.split(",").map((ip) => ip.trim())
-//   : [];
+// ✅ Allowed IPs — hardcoded or from .env
+const allowedIPs = [
+  "182.71.112.82",
+  "182.75.147.210",
+  "14.97.83.226",
+  "127.0.0.1", // local
+  "::1"         // IPv6 localhost
+];
 
-// ✅ CORS middleware
+// ✅ CORS setup
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -40,38 +45,41 @@ app.use(
 );
 
 // ✅ IP Whitelist Middleware
-// app.use((req, res, next) => {
-//   const clientIp =
-//     req.headers["x-forwarded-for"]?.split(",")[0] ||
-//     req.socket.remoteAddress?.replace("::ffff:", "");
+app.use((req, res, next) => {
+  const clientIp =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket.remoteAddress?.replace("::ffff:", "");
 
-//   if (allowedIPs.length > 0 && !allowedIPs.includes(clientIp)) {
-//     console.log(`🚫 Blocked IP: ${clientIp}`);
-//     return res
-//       .status(403)
-//       .json({ success: false, message: "Access denied: IP not allowed" });
-//   }
+  if (!allowedIPs.includes(clientIp)) {
+    console.log(`🚫 Blocked IP: ${clientIp}`);
+    return res.status(403).json({
+      success: false,
+      message: "Access denied: IP not allowed",
+    });
+  }
 
-//   console.log(`✅ Allowed IP: ${clientIp}`);
-//   next();
-// });
+  console.log(`✅ Allowed IP: ${clientIp}`);
+  next();
+});
 
+// ✅ Routes
 app.use(express.json());
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
+// app.use("/api/remarks", remarkRoutes);
 
+// ✅ Global error handler
 app.use((err, req, res, next) => {
   if (err.message.includes("CORS")) {
-    return res
-      .status(403)
-      .json({ message: "CORS not allowed for this origin" });
+    return res.status(403).json({ message: "CORS not allowed for this origin" });
   }
   console.error("Server Error:", err.message);
-  return res
-    .status(500)
-    .json({ message: "Internal Server Error", error: err.message });
+  return res.status(500).json({
+    message: "Internal Server Error",
+    error: err.message,
+  });
 });
 
 export default app;
