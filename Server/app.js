@@ -10,21 +10,25 @@ import taskStatusRoutes from "./routes/taskStatus.routes.js";
 dotenv.config();
 const app = express();
 
+// ✅ Trust proxy for correct client IP detection (important for production)
+app.set("trust proxy", true);
+
+// ✅ Allowed Origins (for frontend access)
 const allowedOrigins = [
   "http://localhost:5173",
+  "https://crm.terranovasolution.in",
+  "https://crm.fdbs.in",
   // "https://sweet-faun-a1e735.netlify.app",
   // "https://mydevtm.com",
-  "https://crm.terranovasolution.in",
-  "https://crm.fdbs.in"
 ];
 
-// ✅ Allowed IPs — hardcoded or from .env
+// ✅ Allowed IPs (only these can call the backend)
 const allowedIPs = [
   "182.71.112.82",
   "182.75.147.210",
   "14.97.83.226",
-  "127.0.0.1", // local
-  "::1"         // IPv6 localhost
+  "127.0.0.1", // localhost IPv4
+  "::1",       // localhost IPv6
 ];
 
 // ✅ CORS setup
@@ -62,15 +66,25 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ Routes
+// ✅ Express JSON Middleware
 app.use(express.json());
+
+// ✅ API Routes
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
 // app.use("/api/remarks", remarkRoutes);
 
-// ✅ Global error handler
+// ✅ Debug route (to verify IP in production)
+app.get("/check-ip", (req, res) => {
+  const clientIp =
+    req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+    req.socket.remoteAddress?.replace("::ffff:", "");
+  res.json({ detectedIP: clientIp });
+});
+
+// ✅ Global Error Handler
 app.use((err, req, res, next) => {
   if (err.message.includes("CORS")) {
     return res.status(403).json({ message: "CORS not allowed for this origin" });
