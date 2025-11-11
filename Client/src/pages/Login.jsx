@@ -31,9 +31,16 @@ const Login = () => {
   };
 
   return (
-    <div className="flex justify-center items-center h-screen bg-gray-100">
-      <div className="bg-white p-8 rounded shadow-md w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center">Login</h2>
+    <div
+      className="flex justify-center items-center h-screen bg-cover bg-center relative"
+      style={{
+        backgroundImage: "url('/travel-insurance.jpeg')",
+      }}
+    >
+      <div className="absolute inset-0 bg-black/40"></div>
+
+      <div className="relative bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
+        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <input
             type="text"
@@ -46,10 +53,10 @@ const Login = () => {
               type={showPassword ? "text" : "password"}
               placeholder="Password"
               {...register("password", { required: true })}
-              className="w-full p-2 border rounded pr-10"  
+              className="w-full p-2 border rounded pr-10"
             />
             <span
-              className="absolute right-3 top-1/2 -translate-y-1/2 z-10 cursor-pointer text-gray-500"
+              className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-gray-500"
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -59,21 +66,17 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full p-2 rounded text-white ${
-              loading ? "bg-blue-300 cursor-not-allowed" : "bg-blue-500 hover:bg-blue-600"
-            }`}
+            className={`w-full p-2 rounded text-white ${loading
+              ? "bg-blue-300 cursor-not-allowed"
+              : "bg-blue-500 hover:bg-blue-600"
+              }`}
           >
             {loading ? "Logging in..." : "Login"}
           </button>
         </form>
-        {/* <p className="mt-4 text-center">
-          Don't have an account?{" "}
-          <Link to="/signup" className="text-blue-500 underline">
-            Sign Up
-          </Link> 
-        </p> */}
       </div>
     </div>
+
   );
 };
 
