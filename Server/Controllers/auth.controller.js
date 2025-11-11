@@ -4,69 +4,19 @@ import User from "../Modals/User.modal.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
-// export const signup = async (req, res) => {
-//   try {
-//     //   if (!req.user || req.user.accountType !== "admin") {
-//     //   return res.status(403).json({ message: "Only admin can create new users" });
-//     // }
-//     const { username, password, accountType, department } = req.body;
-
-//     if (!username || !password || !department) {
-//       return res.status(400).json({ message: "Username, password, and department are required" });
-//     }
-
-//     if (!["employee", "admin"].includes(accountType)) {
-//       return res.status(400).json({ message: "Invalid account type" });
-//     }
-
-//     const existingUser = await User.findOne({ username });
-//     if (existingUser) {
-//       return res.status(400).json({ message: "User already exists" });
-//     }
-
-//     const hashedPassword = await bcrypt.hash(password, 10);
-
-//     const newUser = new User({
-//       username,
-//       password: hashedPassword,
-//       accountType,
-//       department,  
-//     });
-
-//     await newUser.save();
-
-//     res.status(201).json({
-//       message: "User registered successfully",
-//       user: {
-//         id: newUser._id,
-//         username: newUser.username,
-//         accountType: newUser.accountType,
-//         department: newUser.department,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Signup Error:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
-
-
-//this is for flow of only admin can create account anyone can't
 export const signup = async (req, res) => {
   try {
-    const { username, password, accountType, department, shiftLabel } = req.body;
+    const { username, password, accountType, department, shiftLabel, isCoreTeam } = req.body;
 
-    // ✅ Only admins can create new users
-    if (req.user.accountType !== "admin") {
+    if (req.user?.accountType !== "admin")
       return res.status(403).json({ message: "Only admin can create users" });
-    }
 
-    const existingUser = await User.findOne({ username });
-    if (existingUser) {
+    if (!username || !password || !department || (!isCoreTeam && !shiftLabel))
+      return res.status(400).json({ message: "All fields are required" });
+
+    if (await User.exists({ username }))
       return res.status(400).json({ message: "User already exists" });
-    }
 
-    // ✅ Map shiftLabel → shift info
     const shiftMapping = {
       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
@@ -75,34 +25,31 @@ export const signup = async (req, res) => {
       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
     };
 
-    const selected = shiftMapping[shiftLabel];
-    if (!selected) {
+    const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
+    if (!isCoreTeam && !selectedShift)
       return res.status(400).json({ message: "Invalid shift label" });
-    }
 
-    // ✅ Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Create user
-    const newUser = new User({
+    const newUser = await User.create({
       username,
       password: hashedPassword,
       accountType,
       department,
-      shift: selected.shift,
-      shiftStartHour: selected.shiftStartHour,
-      shiftEndHour: selected.shiftEndHour,
+      isCoreTeam: accountType === "employee" && !!isCoreTeam,
+      shift: selectedShift?.shift || null,
+      shiftStartHour: selectedShift?.shiftStartHour || null,
+      shiftEndHour: selectedShift?.shiftEndHour || null,
     });
-
-    await newUser.save();
 
     res.status(201).json({
       message: "User created successfully",
       user: {
         id: newUser._id,
-        username: newUser.username,
-        accountType: newUser.accountType,
-        department: newUser.department,
+        username,
+        accountType,
+        department,
+        isCoreTeam: newUser.isCoreTeam,
         shift: newUser.shift,
         shiftStartHour: newUser.shiftStartHour,
         shiftEndHour: newUser.shiftEndHour,
@@ -115,23 +62,59 @@ export const signup = async (req, res) => {
 };
 
 
+export const createCoreTeamUser = async (req, res) => {
+  try {
+    const { username, password, accountType, department } = req.body;
+
+    if (req.user?.accountType !== "admin")
+      return res.status(403).json({ message: "Only admin can create users" });
+
+    if (!username || !password || !department)
+      return res.status(400).json({ message: "Username, password, and department are required" });
+
+    if (await User.exists({ username }))
+      return res.status(400).json({ message: "User already exists" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    const newUser = await User.create({
+      username,
+      password: hashedPassword,
+      accountType: accountType || "employee",
+      department,
+      isCoreTeam: true,
+    });
+
+    res.status(201).json({
+      message: "Core team user created successfully",
+      user: {
+        id: newUser._id,
+        username,
+        accountType: newUser.accountType,
+        department,
+        isCoreTeam: newUser.isCoreTeam,
+      },
+    });
+  } catch (error) {
+    console.error("Create Core Team User Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+
 export const login = async (req, res) => {
   try {
     const { username, password } = req.body;
 
-    if (!username || !password) {
+    if (!username || !password)
       return res.status(400).json({ message: "Username and password are required" });
-    }
 
-    const user = await User.findOne({ username });
-    if (!user) {
+    const user = await User.findOne({ username }).lean();
+    if (!user)
       return res.status(404).json({ message: "User not found" });
-    }
 
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) {
+    if (!(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ message: "Invalid credentials" });
-    }
 
     const token = jwt.sign(
       { id: user._id, accountType: user.accountType },
@@ -147,6 +130,7 @@ export const login = async (req, res) => {
         username: user.username,
         accountType: user.accountType,
         department: user.department,
+        isCoreTeam: user.isCoreTeam,
       },
     });
   } catch (error) {
@@ -167,7 +151,11 @@ export const logout = async (req, res) => {
 
 export const getAllEmployees = async (req, res) => {
   try {
-    const employees = await User.find({ accountType: "employee" }).select("_id username department");
+    const employees = await User.find(
+      { accountType: "employee" },
+      "_id username department isCoreTeam shiftStartHour shiftEndHour"
+    ).lean();
+
     res.status(200).json(employees);
   } catch (error) {
     console.error("Get Employees Error:", error);
@@ -177,19 +165,14 @@ export const getAllEmployees = async (req, res) => {
 
 export const updateProfile = async (req, res) => {
   try {
-    if (!req.user || !req.user.id) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
+    const userId = req.user?.id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
-    const userId = req.user.id;
     const { username, password } = req.body;
     const updateFields = {};
 
-    delete req.body.accountType;
-    delete req.body.department;
-
     if (username) {
-      const existingUser = await User.findOne({ username });
+      const existingUser = await User.findOne({ username }).lean();
       if (existingUser && existingUser._id.toString() !== userId) {
         return res.status(400).json({ message: "Username already taken" });
       }
@@ -197,19 +180,16 @@ export const updateProfile = async (req, res) => {
     }
 
     if (password) {
-      const hashedPassword = await bcrypt.hash(password, 10);
-      updateFields.password = hashedPassword;
+      updateFields.password = await bcrypt.hash(password, 10);
     }
 
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateFields },
-      { new: true }
-    ).select("-password");
+      { new: true, select: "-password" }
+    ).lean();
 
-    if (!updatedUser) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    if (!updatedUser) return res.status(404).json({ message: "User not found" });
 
     res.json({
       message: "Profile updated successfully",
@@ -217,6 +197,66 @@ export const updateProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Update Profile Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+export const updateUserByAdmin = async (req, res) => {
+  try {
+    if (!req.user?.accountType || req.user.accountType !== "admin") {
+      return res.status(403).json({ message: "Only admin can update users" });
+    }
+
+    const userId = req.params.id;
+    const { username, accountType, department, shiftLabel, isCoreTeam } = req.body;
+
+    const updateData = {};
+
+    if (username) {
+      const existingUser = await User.findOne({ username }).lean();
+      if (existingUser && existingUser._id.toString() !== userId) {
+        return res.status(400).json({ message: "Username already exists" });
+      }
+      updateData.username = username;
+    }
+
+    if (accountType) updateData.accountType = accountType;
+    if (department) updateData.department = department;
+    if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
+
+    if (!isCoreTeam) {
+      const shiftMapping = {
+        "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+        "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+        "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+        "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+        "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+      };
+      const selected = shiftMapping[shiftLabel];
+      if (!selected) return res.status(400).json({ message: "Invalid shift label" });
+
+      updateData.shift = selected.shift;
+      updateData.shiftStartHour = selected.shiftStartHour;
+      updateData.shiftEndHour = selected.shiftEndHour;
+    } else {
+      updateData.shift = null;
+      updateData.shiftStartHour = null;
+      updateData.shiftEndHour = null;
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, select: "-password" }
+    ).lean();
+
+    if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+    res.status(200).json({
+      message: "User updated successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update User Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

@@ -41,7 +41,7 @@ const Defaulter = () => {
   const handleViewAll = async (employeeId, employeeName) => {
     try {
       setModalLoading(true);
-      setModalOpen(true); // ✅ open modal immediately (so loader is visible)
+      setModalOpen(true); 
 
       const token = localStorage.getItem("token");
       const res = await fetch(`http://localhost:4000/api/v1/tasks/employee-defaulters/${employeeId}`, {
@@ -87,16 +87,15 @@ const Defaulter = () => {
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-20">
             <div className="flex space-x-2">
-              <div className="w-4 h-4 bg-gray-800 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-              <div className="w-4 h-4 bg-gray-800 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-              <div className="w-4 h-4 bg-gray-800 rounded-full animate-bounce"></div>
+              <div className="w-4 h-4 bg-[#EAEAEA] rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+              <div className="w-4 h-4 bg-[#EAEAEA] rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+              <div className="w-4 h-4 bg-[#EAEAEA] rounded-full animate-bounce"></div>
             </div>
           </div>
         )}
 
         <h2 className="text-2xl font-bold mb-6 text-gray-800">Defaulter Report</h2>
 
-        {/* Filters */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-4 mb-6">
           <input type="date" name="startDate" value={filters.startDate} onChange={handleFilterChange} max={today} className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]" />
           <input type="date" name="endDate" value={filters.endDate} onChange={handleFilterChange} max={today} className="border p-2 rounded w-full sm:w-1/4 cursor-pointer border-[#EAEAEA]" />
@@ -124,7 +123,6 @@ const Defaulter = () => {
           </select>
         </div>
 
-        {/* Table */}
         {!loading && (
           <>
             {defaulters?.length > 0 ? (
@@ -181,7 +179,6 @@ const Defaulter = () => {
                 </h3>
 
                 <div className="flex items-center gap-3">
-                  {/* ✅ Excel Export Button */}
                   <button
                     onClick={async () => {
                       if (employeeDefaults.length === 0)

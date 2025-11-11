@@ -26,30 +26,7 @@ const Navbar = () => {
     navigate("/login");
   };
 
-  // const handleUpdateProfile = async () => {
-  //   try {
-  //     setLoading(true);
-  //     const token = user?.token;
-  //     const res = await axios.post(
-  //       `${API_URL}/update-profile`,
-  //       { username, password },
-  //       { headers: { Authorization: `Bearer ${token}` } }
-  //     );
-
-  //     if (res.data.user) {
-  //       const updatedUser = { ...user, ...res.data.user };
-  //       localStorage.setItem("user", JSON.stringify(updatedUser));
-  //       toast.success("Profile updated successfully!");
-  //       setShowProfilePopup(false);
-  //     }
-  //   } catch (err) {
-  //     console.error("Profile update failed:", err);
-  //     toast.error(err.response?.data?.message || "Failed to update profile");
-  //   } finally {
-  //     setLoading(false);
-  //   }
-  // };
-
+  
   return (
    <>
   <Toaster position="top-right" />
@@ -71,12 +48,7 @@ const Navbar = () => {
           >
             Today
           </button>
-          {/* <button
-            onClick={() => navigate("/AllTasks")}
-            className="flex items-center gap-2 bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full text-gray-800 font-medium hover:bg-sky-50 transition-all cursor-pointer"
-          >
-            All Days
-          </button> */}
+         
 
           <div className="relative">
             <button
@@ -132,12 +104,6 @@ const Navbar = () => {
             className="flex items-center gap-2 bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full text-gray-800 font-medium hover:bg-sky-50 transition-all"
           >
             Today
-          </button>
-          <button
-            onClick={() => navigate("/AllTasks")}
-            className="flex items-center gap-2 bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full text-gray-800 font-medium hover:bg-sky-50 transition-all"
-          >
-            All Days
           </button>
           <div className="border-t border-[#EAEAEA] mt-2 pt-2">
             <button

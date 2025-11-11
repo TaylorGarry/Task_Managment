@@ -10,7 +10,11 @@ import {
   getAllTasks,
   exportTaskStatusExcel,
   Defaulter,
-  getEmployeeDefaulters,  
+  getEmployeeDefaulters,
+  createCoreTeamTask,
+  getCoreTeamTasks,
+  updateTaskStatusCoreTeam,
+  
 } from "../Controllers/task.controller.js";
 
 const router = express.Router();
@@ -21,10 +25,14 @@ router.put("/assign/:taskId", authMiddleware, assignTask);
 
 router.get("/", authMiddleware, getTasks);
 router.put("/update/:id", authMiddleware, updateTask);
+router.put("/status/core/:taskId", authMiddleware, updateTaskStatusCoreTeam);
 
 router.put("/status/:taskId", authMiddleware, updateTaskStatus);
 router.get("/AllTasks", authMiddleware, getAllTasks);
 router.get("/export-status", authMiddleware, exportTaskStatusExcel);
 router.get("/defaulter", authMiddleware, Defaulter);
 router.get("/employee-defaulters/:employeeId", getEmployeeDefaulters);
+router.post("/create/coretask", authMiddleware, createCoreTeamTask);
+router.get("/coreteamTask", authMiddleware, getCoreTeamTasks);
+
 export default router;
