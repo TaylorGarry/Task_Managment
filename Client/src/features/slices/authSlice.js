@@ -2,9 +2,14 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 // const API_URL = "https://task-managment-4.onrender.com/api/v1"; 
-// const API_URL = "http://localhost:4000/api/v1"
+const API_URL = "http://localhost:4000/api/v1"
 // const API_URL = "https://task-managment-5.onrender.com/api/v1";
-const API_URL = "https://task-managment-fdbs.onrender.com/api/v1";
+// const API_URL = "https://task-managment-fdbs.onrender.com/api/v1";
+
+const getToken = () => {
+  const user = JSON.parse(localStorage.getItem("user"));
+  return user?.token;
+};
 
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
@@ -22,25 +27,6 @@ export const loginUser = createAsyncThunk(
   }
 );
 
-// export const signupUser = createAsyncThunk(
-//   "auth/signupUser",
-//   async (userData, thunkAPI) => {
-//     try {
-//       const res = await axios.post(`${API_URL}/signup`, userData);
-//       localStorage.setItem(
-//         "user",
-//         JSON.stringify({ ...res.data.user, token: res.data.token || null })
-//       );
-//       return { ...res.data.user, token: res.data.token || null };
-//     } catch (err) {
-//       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-//     }
-//   }
-// );
-
-
-//for admin only create account fixes 
-// Thunk
 export const signupUser = createAsyncThunk(
   "auth/signupUser",
   async (userData, thunkAPI) => {
@@ -60,13 +46,29 @@ export const signupUser = createAsyncThunk(
   }
 );
 
-export const logoutUser = createAsyncThunk(
-  "auth/logoutUser",
-  async () => {
-    localStorage.removeItem("user");
-    await axios.post(`${API_URL}/logout`);
+export const createCoreTeamUser = createAsyncThunk(
+  "auth/createCoreTeamUser",
+  async (userData, thunkAPI) => {
+    try {
+      const state = thunkAPI.getState();
+      const token = state.auth.user?.token;
+      if (!token) throw new Error("No admin token found");
+
+      const res = await axios.post(`${API_URL}/createcoreUser`, userData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return { user: res.data.user, createdByAdmin: true };
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
   }
 );
+
+export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
+  localStorage.removeItem("user");
+  await axios.post(`${API_URL}/logout`);
+});
 
 export const fetchEmployees = createAsyncThunk(
   "auth/fetchEmployees",
@@ -80,7 +82,7 @@ export const fetchEmployees = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return res.data;  
+      return res.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
@@ -108,6 +110,25 @@ export const updateProfile = createAsyncThunk(
   }
 );
 
+export const updateUserByAdmin = createAsyncThunk(
+  "auth/updateUserByAdmin",
+  async ({ userId, updateData }, thunkAPI) => {
+    try {
+      const state = thunkAPI.getState();
+      const token = state.auth.user?.token;
+      if (!token) throw new Error("No admin token found");
+
+      const res = await axios.put(`${API_URL}/update/${userId}`, updateData, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return res.data.user;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -115,6 +136,8 @@ const authSlice = createSlice({
     employees: [],
     loading: false,
     error: null,
+    status: null,
+    message: null,
   },
   reducers: {},
   extraReducers: (builder) => {
@@ -131,26 +154,45 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-      // Slice
-.addCase(signupUser.pending, (state) => {
-  state.loading = true;
-  state.error = null;
-})
-.addCase(signupUser.fulfilled, (state, action) => {
-  state.loading = false;
-  if (!action.payload.createdByAdmin) {
-    state.user = { ...action.payload.user, token: action.payload.user.token || null };
-    localStorage.setItem("user", JSON.stringify(state.user));
-  }
-})
-.addCase(signupUser.rejected, (state, action) => {
-  state.loading = false;
-  state.error = action.payload;
-})
+
+      .addCase(signupUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(signupUser.fulfilled, (state, action) => {
+        state.loading = false;
+        if (!action.payload.createdByAdmin) {
+          state.user = {
+            ...action.payload.user,
+            token: action.payload.user.token || null,
+          };
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
+      })
+      .addCase(signupUser.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      .addCase(createCoreTeamUser.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(createCoreTeamUser.fulfilled, (state) => {
+        state.loading = false;
+        state.status = "succeeded";
+        state.message = "Core team user created successfully";
+      })
+      .addCase(createCoreTeamUser.rejected, (state, action) => {
+        state.loading = false;
+        state.status = "failed";
+        state.error = action.payload;
+      })
 
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
       })
+
       .addCase(fetchEmployees.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -163,6 +205,7 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
+
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -173,6 +216,24 @@ const authSlice = createSlice({
       })
       .addCase(updateProfile.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+
+      .addCase(updateUserByAdmin.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateUserByAdmin.fulfilled, (state, action) => {
+        state.loading = false;
+        state.status = "succeeded";
+        state.message = "User updated successfully";
+        const updatedUser = action.payload;
+        const index = state.employees.findIndex((u) => u._id === updatedUser._id);
+        if (index !== -1) state.employees[index] = updatedUser;
+      })
+      .addCase(updateUserByAdmin.rejected, (state, action) => {
+        state.loading = false;
+        state.status = "failed";
         state.error = action.payload;
       });
   },

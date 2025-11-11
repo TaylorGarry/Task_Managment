@@ -1,7 +1,6 @@
 import Review from "../Modals/Review.modal.js";
 import Task from "../Modals/Task.modal.js";
 
-// ✅ Add a review (Employee)
 export const addReview = async (req, res) => {
   try {
     const { taskId, comment, issue } = req.body;
@@ -33,7 +32,6 @@ export const addReview = async (req, res) => {
   }
 };
 
-// ✅ Get all reviews for a task (Admin only)
 export const getReviewsByTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin") {
@@ -50,7 +48,6 @@ export const getReviewsByTask = async (req, res) => {
   }
 };
 
-// ✅ Mark review as resolved (Admin)
 export const resolveReview = async (req, res) => {
   try {
     if (req.user.accountType !== "admin") {

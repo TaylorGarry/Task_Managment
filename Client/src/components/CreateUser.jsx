@@ -13,7 +13,6 @@ const CreateUser = () => {
     department: "",
   });
 
-  // Reset form and success/error when component unmounts or after success
   useEffect(() => {
     if (success) {
       setForm({
@@ -25,7 +24,7 @@ const CreateUser = () => {
 
       const timer = setTimeout(() => {
         dispatch(resetState());
-      }, 3000); // remove success message after 3s
+      }, 3000);  
 
       return () => clearTimeout(timer);
     }
