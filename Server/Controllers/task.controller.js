@@ -312,7 +312,7 @@ export const updateTaskStatus = async (req, res) => {
 
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60;
+      const istOffset = 5.5 * 60;  
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       return new Date(utc + istOffset * 60000);
     };
@@ -344,40 +344,34 @@ export const updateTaskStatus = async (req, res) => {
       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
     }
 
-    const windowStart = new Date(empShiftStart);
-    const windowEnd = new Date(empShiftEnd);
+    const allowedWindows = {
+      Start: {
+        start: new Date(empShiftStart),
+        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), 
+      },
+      Mid: {
+        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),  
+        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),    
+      },
+      End: {
+        start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),   
+      },
+    };
 
-    let startWindowStart = new Date(windowStart);
-    let startWindowEnd = new Date(startWindowStart);
-    startWindowEnd.setHours(startWindowStart.getHours() + 3);  
+    const currentShift = task.shift;
+    const allowedWindow = allowedWindows[currentShift];
 
-    let midWindowStart = new Date(startWindowEnd);
-    let midWindowEnd = new Date(midWindowStart);
-    midWindowEnd.setHours(midWindowStart.getHours() + 5);  
-
-    let endWindowStart = new Date(midWindowEnd);
-    let endWindowEnd = new Date(endWindowStart);
-    endWindowEnd.setHours(endWindowStart.getHours() + 1);  
-
-    let allowedStart, allowedEnd;
-
-    if (task.shift === "Start") {
-      allowedStart = startWindowStart;
-      allowedEnd = startWindowEnd;
-    } else if (task.shift === "Mid") {
-      allowedStart = midWindowStart;
-      allowedEnd = midWindowEnd;
-    } else if (task.shift === "End") {
-      allowedStart = endWindowStart;
-      allowedEnd = endWindowEnd;
+    if (!allowedWindow) {
+      return res.status(400).json({ message: "Invalid shift type" });
     }
 
-    if (istTime < allowedStart || istTime > allowedEnd) {
+    if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
       return res.status(403).json({
-        message: `You can only update ${task.shift} shift tasks between ${allowedStart.toLocaleTimeString(
+        message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
           "en-IN",
           { hour: "2-digit", minute: "2-digit", hour12: true }
-        )} and ${allowedEnd.toLocaleTimeString("en-IN", {
+        )} and ${allowedWindow.end.toLocaleTimeString("en-IN", {
           hour: "2-digit",
           minute: "2-digit",
           hour12: true,
