@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/remarks`;
+const API_URL = `${import.meta.env.VITE_API_URL || "https://localhost:4000"}/api/remarks`;
 
 const getToken = (getState) =>
   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;

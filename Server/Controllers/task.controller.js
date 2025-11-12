@@ -4,6 +4,7 @@ import TaskStatus from "../Modals/TaskStatus.modal.js";
 import XLSX from "xlsx-js-style";
 import fs from "fs";
 import Remark from "../Modals/Remark.modal.js";
+import mongoose from "mongoose";
 
 
 const getISTime = () => {
@@ -862,7 +863,22 @@ export const exportTaskStatusExcel = async (req, res) => {
 
 export const Defaulter = async (req, res) => {
   try {
-    const { department, shift, employeeId, startDate, endDate } = req.query;
+    const { department, shift, employeeId, startDate, endDate, page = 1, limit = 30 } = req.query;
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = parseInt(limit);
+
+    const getISTime = () => {
+      const now = new Date();
+      const istOffset = 5.5 * 60;
+      return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
+    };
+
+    const getShiftDate = () => {
+      const ist = getISTime();
+      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+      ist.setHours(0, 0, 0, 0);
+      return ist;
+    };
 
     const filter = {};
     if (req.user.accountType === "employee") {
@@ -874,118 +890,103 @@ export const Defaulter = async (req, res) => {
       if (employeeId) filter.assignedTo = employeeId;
     }
 
-    const getISTime = () => {
-      const now = new Date();
-      const istOffset = 5.5 * 60;
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      return new Date(utc + istOffset * 60000);
-    };
-
-    const getShiftDate = () => {
-      const ist = getISTime();
-      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
-      ist.setHours(0, 0, 0, 0);
-      return ist;
-    };
-
     const tasks = await Task.find(filter)
       .populate("assignedTo", "username department shiftStartHour shiftEndHour")
-      .populate("createdBy", "username");
+      .lean();
 
+    if (!tasks.length) {
+      return res.status(200).json({
+        success: true,
+        totalDefaulters: 0,
+        overallTotalDefaults: 0,
+        data: [],
+        totalPages: 0,
+        currentPage: pageNum
+      });
+    }
+
+    const taskIds = tasks.map(t => t._id);
     const start = startDate ? new Date(startDate) : getShiftDate();
     const end = endDate ? new Date(endDate) : getShiftDate();
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
+    const statuses = await TaskStatus.find({
+      taskId: { $in: taskIds },
+      date: { $gte: start, $lte: end },
+    })
+      .select("taskId employeeId status date updatedAt")
+      .lean();
+
+    const statusMap = new Map();
+    statuses.forEach(s => {
+      const key = `${s.taskId}_${s.employeeId}_${new Date(s.date).toDateString()}`;
+      const existing = statusMap.get(key);
+      if (!existing || new Date(s.updatedAt) > new Date(existing.updatedAt)) {
+        statusMap.set(key, s);
+      }
+    });
+
     const defaulterMap = new Map();
     const employeeDefaultSets = new Map();
+    const nowIst = getISTime();
 
     const computeShiftWindow = (emp, date, taskShift) => {
       const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
       const empShiftStart = new Date(date);
       empShiftStart.setHours(startHour, 0, 0, 0);
-
-      const firstShiftEnd = new Date(empShiftStart);
-      firstShiftEnd.setHours(firstShiftEnd.getHours() + 3);
-
-      const midShiftEnd = new Date(firstShiftEnd);
-      midShiftEnd.setHours(midShiftEnd.getHours() + 5);
-
-      const lastShiftEnd = new Date(midShiftEnd);
-      lastShiftEnd.setHours(lastShiftEnd.getHours() + 1);
-
-      if (midShiftEnd.getHours() < startHour) midShiftEnd.setDate(midShiftEnd.getDate() + 1);
-      if (lastShiftEnd.getHours() < startHour) lastShiftEnd.setDate(lastShiftEnd.getDate() + 1);
-
-      if (taskShift === "Start") return { windowStart: empShiftStart, windowEnd: firstShiftEnd };
-      if (taskShift === "Mid") return { windowStart: firstShiftEnd, windowEnd: midShiftEnd };
-      return { windowStart: midShiftEnd, windowEnd: lastShiftEnd };
+      const durations = { Start: 3, Mid: 5, End: 1 };
+      const windowEnd = new Date(empShiftStart);
+      windowEnd.setHours(windowEnd.getHours() + (durations[taskShift] || 3));
+      return { windowStart: empShiftStart, windowEnd };
     };
 
     for (const task of tasks) {
-      const taskCreated = new Date(task.createdAt);
-      taskCreated.setHours(0, 0, 0, 0);
-      const loopStart = start > taskCreated ? new Date(start) : new Date(taskCreated);
+      for (const emp of task.assignedTo) {
+        if (employeeId && emp._id.toString() !== employeeId.toString()) continue;
+        const { windowStart, windowEnd } = computeShiftWindow(emp, start, task.shift);
+        if (nowIst < windowStart || nowIst <= windowEnd) continue;
 
-      for (let d = new Date(loopStart); d <= end; d.setDate(d.getDate() + 1)) {
-        const dayStart = new Date(d);
-        dayStart.setHours(0, 0, 0, 0);
-        const dayEnd = new Date(d);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        for (const emp of task.assignedTo) {
-          if (employeeId && emp._id.toString() !== employeeId.toString()) continue;
-
-          const latestStatus = await TaskStatus.findOne({
-            taskId: task._id,
+        const statusKey = `${task._id}_${emp._id}_${start.toDateString()}`;
+        const latestStatus = statusMap.get(statusKey);
+        if ((latestStatus?.status || "Not Done") !== "Done") {
+          const key = `${emp._id}_${start.toDateString()}`;
+          const existing = defaulterMap.get(key) || {
+            date: new Date(start),
             employeeId: emp._id,
-            date: { $gte: dayStart, $lte: dayEnd },
-          })
-            .sort({ updatedAt: -1 })
-            .lean();
+            employeeName: emp.username,
+            notDoneTasksToday: 0,
+          };
+          existing.notDoneTasksToday += 1;
+          defaulterMap.set(key, existing);
 
-          const empStatus = latestStatus ? latestStatus.status : "Not Done";
-          const { windowStart, windowEnd } = computeShiftWindow(emp, dayStart, task.shift);
-          const nowIst = getISTime();
-
-          if (nowIst < windowStart || nowIst <= windowEnd) continue;
-
-          if (empStatus !== "Done") {
-            const key = `${emp._id}_${dayStart.toDateString()}`;
-            const existing = defaulterMap.get(key) || {
-              date: new Date(dayStart),
-              employeeId: emp._id,
-              employeeName: emp.username,
-              notDoneTasksToday: 0,
-            };
-            existing.notDoneTasksToday += 1;
-            defaulterMap.set(key, existing);
-
-            const taskDateKey = `${task._id}_${dayStart.toISOString().split("T")[0]}`;
-            const setForEmp = employeeDefaultSets.get(emp._id.toString()) || new Set();
-            setForEmp.add(taskDateKey);
-            employeeDefaultSets.set(emp._id.toString(), setForEmp);
-          }
+          const setForEmp = employeeDefaultSets.get(emp._id.toString()) || new Set();
+          setForEmp.add(`${task._id}_${emp._id}`);
+          employeeDefaultSets.set(emp._id.toString(), setForEmp);
         }
       }
     }
 
-    const data = Array.from(defaulterMap.values()).map((entry) => {
-      const empIdStr = entry.employeeId.toString();
-      const totalSet = employeeDefaultSets.get(empIdStr) || new Set();
+    const allData = Array.from(defaulterMap.values()).map(entry => {
+      const totalSet = employeeDefaultSets.get(entry.employeeId.toString()) || new Set();
       return { ...entry, totalDefaultsTillDate: totalSet.size };
     });
 
-    const overallTotalDefaults = Array.from(employeeDefaultSets.values()).reduce(
-      (sum, s) => sum + (s.size || 0),
-      0
-    );
+    allData.sort((a, b) => b.date - a.date);
+    const totalDefaulters = allData.length;
+    const totalPages = Math.ceil(totalDefaulters / pageSize);
+    const startIndex = (pageNum - 1) * pageSize;
+    const paginatedData = allData.slice(startIndex, startIndex + pageSize);
+
+    const overallTotalDefaults = Array.from(employeeDefaultSets.values()).reduce((sum, s) => sum + (s.size || 0), 0);
 
     res.status(200).json({
       success: true,
-      totalDefaulters: data.length,
+      totalDefaulters,
       overallTotalDefaults,
-      data,
+      data: paginatedData,
+      totalPages,
+      currentPage: pageNum,
     });
   } catch (error) {
     res.status(500).json({ message: "Server error", error: error.message });
@@ -995,17 +996,17 @@ export const Defaulter = async (req, res) => {
 export const getEmployeeDefaulters = async (req, res) => {
   try {
     const { employeeId } = req.params;
-    const { exportExcel } = req.query;
+    const { page = 1, limit = 30 } = req.query;
+    const pageNum = Math.max(1, parseInt(page));
+    const pageSize = parseInt(limit);
 
     const employee = await User.findById(employeeId).lean();
-    if (!employee)
-      return res.status(404).json({ success: false, message: "Employee not found" });
+    if (!employee) return res.status(404).json({ success: false, message: "Employee not found" });
 
     const getISTime = () => {
       const now = new Date();
       const istOffset = 5.5 * 60;
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      return new Date(utc + istOffset * 60000);
+      return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
     };
 
     const getShiftDate = () => {
@@ -1015,139 +1016,60 @@ export const getEmployeeDefaulters = async (req, res) => {
       return now;
     };
 
-    const computeShiftWindow = (emp, date, taskShift) => {
-      const startHour = emp.shiftStartHour ?? 0;
-      const shiftStart = new Date(date);
-      shiftStart.setHours(startHour, 0, 0, 0);
-
-      const firstShiftEnd = new Date(shiftStart);
-      firstShiftEnd.setHours(firstShiftEnd.getHours() + 3);
-
-      const midShiftEnd = new Date(firstShiftEnd);
-      midShiftEnd.setHours(midShiftEnd.getHours() + 5);
-
-      const lastShiftEnd = new Date(midShiftEnd);
-      lastShiftEnd.setHours(lastShiftEnd.getHours() + 1);
-
-      if (taskShift === "Start") return { windowStart: shiftStart, windowEnd: firstShiftEnd };
-      if (taskShift === "Mid") return { windowStart: firstShiftEnd, windowEnd: midShiftEnd };
-      return { windowStart: midShiftEnd, windowEnd: lastShiftEnd };
-    };
-
     const endDate = getShiftDate();
     const startDate = new Date(endDate);
     startDate.setFullYear(endDate.getFullYear() - 1);
 
-    const tasks = await Task.find({ assignedTo: employeeId })
-      .select("title shift department priority createdAt")
-      .lean();
+    const tasks = await Task.find({ assignedTo: employeeId }).select("_id title shift department priority createdAt").lean();
+    if (!tasks.length) return res.json({ success: true, totalDefaults: 0, data: [], totalPages: 0, currentPage: pageNum });
 
-    if (!tasks.length)
-      return res.json({
-        success: true,
-        message: "No tasks assigned to this employee",
-        totalDefaults: 0,
-        data: [],
-      });
+    const taskIds = tasks.map(t => t._id);
+
+    const pipeline = [
+      { $match: { employeeId: new mongoose.Types.ObjectId(employeeId), taskId: { $in: taskIds }, date: { $gte: startDate, $lte: endDate } } },
+      { $sort: { updatedAt: -1 } },
+      { $group: { _id: { taskId: "$taskId", date: "$date" }, status: { $first: "$status" } } },
+      { $project: { taskId: "$_id.taskId", date: "$_id.date", status: 1 } }
+    ];
+
+    const statuses = await TaskStatus.aggregate(pipeline);
+    const statusMap = new Map();
+    statuses.forEach(s => statusMap.set(`${s.taskId}_${s.date.toISOString().split("T")[0]}`, s.status));
 
     const nowIst = getISTime();
-    const defaults = [];
 
-    for (const task of tasks) {
-      const taskStart = new Date(task.createdAt);
-      taskStart.setHours(0, 0, 0, 0);
-      const loopStart = startDate > taskStart ? new Date(startDate) : new Date(taskStart);
-
-      for (let d = new Date(loopStart); d <= endDate; d.setDate(d.getDate() + 1)) {
-        const dayStart = new Date(d);
-        const dayEnd = new Date(d);
-        dayEnd.setHours(23, 59, 59, 999);
-
-        const latestStatus = await TaskStatus.findOne({
-          taskId: task._id,
-          employeeId,
-          date: { $gte: dayStart, $lte: dayEnd },
-        })
-          .sort({ updatedAt: -1 })
-          .lean();
-
-        const status = latestStatus?.status || "Not Done";
-        const { windowStart, windowEnd } = computeShiftWindow(employee, dayStart, task.shift);
-
-        if (nowIst > windowEnd && status !== "Done") {
-          defaults.push({
-            date: new Date(dayStart),
-            title: task.title,
-            shift: task.shift,
-            department: task.department,
-            priority: task.priority,
-          });
+    const defaults = tasks.flatMap(task => {
+      const loopStart = startDate > task.createdAt ? startDate : task.createdAt;
+      const daysDiff = Math.ceil((endDate - loopStart) / (1000 * 60 * 60 * 24));
+      return Array.from({ length: daysDiff + 1 }, (_, i) => {
+        const d = new Date(loopStart);
+        d.setDate(loopStart.getDate() + i);
+        const key = `${task._id}_${d.toISOString().split("T")[0]}`;
+        if ((statusMap.get(key) || "Not Done") !== "Done") {
+          return { date: new Date(d), title: task.title, shift: task.shift, department: task.department, priority: task.priority };
         }
-      }
-    }
+        return null;
+      }).filter(Boolean);
+    });
 
-    if (!defaults.length)
-      return res.json({
-        success: true,
-        message: "No defaults found for this employee",
-        totalDefaults: 0,
-        data: [],
-      });
+    defaults.sort((a, b) => b.date - a.date);
 
-    if (exportExcel === "true") {
-      const grouped = defaults.reduce((acc, d) => {
-        const key = `${d.date.toLocaleString("default", { month: "short" })} ${d.date.getFullYear()}`;
-        (acc[key] ||= []).push(d);
-        return acc;
-      }, {});
-
-      const wb = XLSX.utils.book_new();
-
-      for (const [month, records] of Object.entries(grouped)) {
-        const data = [
-          ["S.No", "Date", "Task", "Department", "Shift", "Priority"],
-          ...records.map((r, i) => [
-            i + 1,
-            r.date.toLocaleDateString("en-GB"),
-            r.title,
-            r.department,
-            r.shift,
-            r.priority,
-          ]),
-          [],
-          [`Total Defaults for ${month}`, records.length, "", "", "", ""],
-        ];
-
-        const ws = XLSX.utils.aoa_to_sheet(data);
-        ws["!cols"] = [
-          { wch: 6 },
-          { wch: 15 },
-          { wch: 40 },
-          { wch: 18 },
-          { wch: 10 },
-          { wch: 10 },
-        ];
-        XLSX.utils.book_append_sheet(wb, ws, month);
-      }
-
-      const fileName = `Employee_Defaults_${employee.username}_${Date.now()}.xlsx`;
-      const filePath = `./${fileName}`;
-      XLSX.writeFile(wb, filePath);
-      return res.download(filePath, fileName, err => {
-        if (err) console.error("Excel download error:", err);
-        fs.unlinkSync(filePath);
-      });
-    }
+    const totalDefaults = defaults.length;
+    const totalPages = Math.ceil(totalDefaults / pageSize);
+    const startIndex = (pageNum - 1) * pageSize;
+    const paginatedData = defaults.slice(startIndex, startIndex + pageSize);
 
     res.json({
       success: true,
       employeeName: employee.username,
-      totalDefaults: defaults.length,
-      data: defaults.sort((a, b) => b.date - a.date),
+      totalDefaults,
+      totalPages,
+      currentPage: pageNum,
+      limit: pageSize,
+      data: paginatedData
     });
   } catch (err) {
-    console.error("Error fetching employee defaulters:", err);
-    res.status(500).json({ success: false, message: "Server error", error: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
