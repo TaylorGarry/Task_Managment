@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
 
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://crm.terranovasolution.in",
+  "https://crm.terranovasolutions.in",
   "https://crm.fdbs.in",
 ];
 
