@@ -15,6 +15,7 @@ const shiftOptions = [
   { label: "5pm-2am", value: "5pm-2am" },
   { label: "6pm-3am", value: "6pm-3am" },
   { label: "8pm-5am", value: "8pm-5am" },
+  { label: "11pm-8am", value: "11pm-8am"}
 ];
 
 const getShiftLabel = (start, end) => {

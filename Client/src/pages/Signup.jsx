@@ -29,6 +29,7 @@ const Signup = () => {
     { label: "5 PM - 2 AM", shiftLabel: "5pm-2am" },
     { label: "6 PM - 3 AM", shiftLabel: "6pm-3am" },
     { label: "8 PM - 5 AM", shiftLabel: "8pm-5am" },
+    { label: "11 PM - 8 AM", shiftLabel: "11pm-8am"},
   ];
 
   const onSubmit = async (data) => {

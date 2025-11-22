@@ -9,7 +9,7 @@ const taskStatusSchema = new mongoose.Schema(
     date: { type: Date, required: true },
     status: { type: String, enum: ["Not Done", "Done"], default: "Not Done" },
   },
-  { timestamps: true, collection: "taskstatuses" } // ✅ ensure exact name
+  { timestamps: true, collection: "taskstatuses" }  
 );
 
 taskStatusSchema.index({ taskId: 1, employeeId: 1, date: 1 });

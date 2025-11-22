@@ -21,6 +21,8 @@
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",
     "node-cache": "^5.1.2",
+    "node-cron": "^4.2.1",
+    "socket.io": "^4.8.1",
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0"
   },

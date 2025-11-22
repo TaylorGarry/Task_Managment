@@ -197,7 +197,7 @@ const TaskCard = ({ task, onOpenChat }) => {
         </div>
 
         <div className="mt-4 flex justify-end gap-2 items-center">
-          {task.isCoreTeamTask && (
+          
             <button
               onClick={() => onOpenChat(task)}
               className="flex items-center justify-center bg-sky-100 hover:bg-sky-200 p-2 rounded-lg transition"
@@ -205,7 +205,7 @@ const TaskCard = ({ task, onOpenChat }) => {
             >
               <MessageCircle className="w-5 h-5 text-yellow-600 cursor-pointer" />
             </button>
-          )}
+          
           <button
             onClick={() => setIsEditOpen(true)}
             className="flex items-center gap-1 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition"

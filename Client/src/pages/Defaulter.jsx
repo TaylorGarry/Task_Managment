@@ -41,15 +41,16 @@ const Defaulter = () => {
   const handleViewAll = async (employeeId, employeeName) => {
     try {
       setModalLoading(true);
-      setModalOpen(true); 
+      setModalOpen(true);
 
       const token = localStorage.getItem("token");
-      const res = await fetch(`http://localhost:4000/api/v1/tasks/employee-defaulters/${employeeId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
+      const res = await fetch(
+        `https://api.terranovasolutions.in/api/v1/tasks/employee-defaulters/${employeeId}`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+        }
+      );
       const data = await res.json();
-
       if (data.success) {
         setSelectedEmployee(data.employeeName);
         setEmployeeDefaults(data.data || []);

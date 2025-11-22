@@ -1,11 +1,10 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = `${import.meta.env.VITE_API_URL || "https://localhost:4000"}/api/remarks`;
+const API_URL = `${import.meta.env.VITE_API_URL || "https://api.terranovasolutions.in"}/api/remarks`;
 
 const getToken = (getState) =>
   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;
-
 
 export const fetchRemarks = createAsyncThunk(
   "remarks/fetchRemarks",
@@ -15,7 +14,8 @@ export const fetchRemarks = createAsyncThunk(
       const res = await axios.get(`${API_URL}/${taskId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      return res.data;
+
+      return res.data;  
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to fetch remarks"
@@ -26,12 +26,13 @@ export const fetchRemarks = createAsyncThunk(
 
 export const addRemark = createAsyncThunk(
   "remarks/addRemark",
-  async ({ taskId, message }, { rejectWithValue, getState }) => {
+  async ({ taskId, message, receiverId = null }, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
+
       const res = await axios.post(
-        `${API_URL}/${taskId}`, 
-        { message },  
+        `${API_URL}/${taskId}`,
+        { message, receiverId },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -39,7 +40,8 @@ export const addRemark = createAsyncThunk(
           },
         }
       );
-      return res.data;
+
+      return res.data.remark;  
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to add remark"
@@ -48,12 +50,12 @@ export const addRemark = createAsyncThunk(
   }
 );
 
-
 export const updateRemark = createAsyncThunk(
   "remarks/updateRemark",
   async ({ remarkId, message }, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
+
       const res = await axios.put(
         `${API_URL}/${remarkId}`,
         { message },
@@ -64,7 +66,8 @@ export const updateRemark = createAsyncThunk(
           },
         }
       );
-      return res.data;
+
+      return res.data.remark;  
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to update remark"
@@ -72,7 +75,6 @@ export const updateRemark = createAsyncThunk(
     }
   }
 );
-
 
 const remarkSlice = createSlice({
   name: "remarks",
@@ -87,6 +89,7 @@ const remarkSlice = createSlice({
       state.error = null;
     },
   },
+
   extraReducers: (builder) => {
     builder
       .addCase(fetchRemarks.pending, (state) => {
@@ -106,11 +109,10 @@ const remarkSlice = createSlice({
         state.error = null;
       })
       .addCase(addRemark.fulfilled, (state, action) => {
-  state.remarks.push(action.payload);
+        state.remarks.push(action.payload);
 
-  state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-})
-
+        state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      })
       .addCase(addRemark.rejected, (state, action) => {
         state.error = action.payload;
       })

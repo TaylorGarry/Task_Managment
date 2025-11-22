@@ -33,6 +33,8 @@ const EmployeeDashboard = () => {
       dispatch(fetchTasks(filters));
     }
   }, [dispatch, filters, isCoreTeam]);
+
+
   useEffect(() => {
     if (selectedTask?._id && isChatOpen) {
       dispatch(fetchRemarks(selectedTask._id));
@@ -176,14 +178,14 @@ const EmployeeDashboard = () => {
             tasks.map((task) => (
               <div key={task._id} className="relative">
                 <TaskCard task={task} onStatusChange={handleStatusChange} />
-                {isCoreTeam && (
+                 
                   <button
                     onClick={() => openChat(task)}
                     className="absolute top-3 right-3 bg-sky-100 hover:bg-sky-200 p-2 rounded-full transition"
                   >
                     <MessageCircle className="w-5 h-5 text-sky-600 cursor-pointer" />
                   </button>
-                )}
+                
               </div>
             ))
           )}
@@ -213,9 +215,17 @@ const EmployeeDashboard = () => {
                 <div key={r._id} className={`flex w-full ${isMine ? 'justify-end' : 'justify-start'}`}>
                   <div className={`p-3 max-w-[70%] break-words ${isMine ? 'bg-sky-500 text-white rounded-xl rounded-tl-none' : 'bg-gray-200 text-gray-700 rounded-xl rounded-tr-none'}`}>
                     {r.message}
-                    <div className={`text-xs mt-1 ${isMine ? 'text-white/80 text-right' : 'text-gray-500 text-left'}`}>
-                      {new Date(r.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                    </div>
+                    <div className="flex justify-between mt-1 text-[11px]">
+                          <span className="font-medium text-gray-600">
+                            {r.senderId?.username}
+                          </span>
+                          <span className={`${isMine ? "text-white/80" : "text-gray-500"}`}>
+                            {new Date(r.createdAt).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                        </div>
                   </div>
                 </div>
               );

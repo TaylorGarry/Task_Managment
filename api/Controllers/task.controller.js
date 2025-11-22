@@ -861,6 +861,139 @@ export const exportTaskStatusExcel = async (req, res) => {
   }
 };
 
+// export const Defaulter = async (req, res) => {
+//   try {
+//     const { department, shift, employeeId, startDate, endDate, page = 1, limit = 30 } = req.query;
+//     const pageNum = Math.max(1, parseInt(page));
+//     const pageSize = parseInt(limit);
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;
+//       return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+//       ist.setHours(0, 0, 0, 0);
+//       return ist;
+//     };
+
+//     const filter = {};
+//     if (req.user.accountType === "employee") {
+//       filter.assignedTo = req.user.id;
+//       if (shift) filter.shift = shift;
+//     } else {
+//       if (department) filter.department = department;
+//       if (shift) filter.shift = shift;
+//       if (employeeId) filter.assignedTo = employeeId;
+//     }
+
+//     const tasks = await Task.find(filter)
+//       .populate("assignedTo", "username department shiftStartHour shiftEndHour")
+//       .lean();
+
+//     if (!tasks.length) {
+//       return res.status(200).json({
+//         success: true,
+//         totalDefaulters: 0,
+//         overallTotalDefaults: 0,
+//         data: [],
+//         totalPages: 0,
+//         currentPage: pageNum
+//       });
+//     }
+
+//     const taskIds = tasks.map(t => t._id);
+//     const start = startDate ? new Date(startDate) : getShiftDate();
+//     const end = endDate ? new Date(endDate) : getShiftDate();
+//     start.setHours(0, 0, 0, 0);
+//     end.setHours(23, 59, 59, 999);
+
+//     const statuses = await TaskStatus.find({
+//       taskId: { $in: taskIds },
+//       date: { $gte: start, $lte: end },
+//     })
+//       .select("taskId employeeId status date updatedAt")
+//       .lean();
+
+//     const statusMap = new Map();
+//     statuses.forEach(s => {
+//       const key = `${s.taskId}_${s.employeeId}_${new Date(s.date).toDateString()}`;
+//       const existing = statusMap.get(key);
+//       if (!existing || new Date(s.updatedAt) > new Date(existing.updatedAt)) {
+//         statusMap.set(key, s);
+//       }
+//     });
+
+//     const defaulterMap = new Map();
+//     const employeeDefaultSets = new Map();
+//     const nowIst = getISTime();
+
+//     const computeShiftWindow = (emp, date, taskShift) => {
+//       const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
+//       const empShiftStart = new Date(date);
+//       empShiftStart.setHours(startHour, 0, 0, 0);
+//       const durations = { Start: 3, Mid: 5, End: 1 };
+//       const windowEnd = new Date(empShiftStart);
+//       windowEnd.setHours(windowEnd.getHours() + (durations[taskShift] || 3));
+//       return { windowStart: empShiftStart, windowEnd };
+//     };
+
+//     for (const task of tasks) {
+//       for (const emp of task.assignedTo) {
+//         if (employeeId && emp._id.toString() !== employeeId.toString()) continue;
+//         const { windowStart, windowEnd } = computeShiftWindow(emp, start, task.shift);
+//         if (nowIst < windowStart || nowIst <= windowEnd) continue;
+
+//         const statusKey = `${task._id}_${emp._id}_${start.toDateString()}`;
+//         const latestStatus = statusMap.get(statusKey);
+//         if ((latestStatus?.status || "Not Done") !== "Done") {
+//           const key = `${emp._id}_${start.toDateString()}`;
+//           const existing = defaulterMap.get(key) || {
+//             date: new Date(start),
+//             employeeId: emp._id,
+//             employeeName: emp.username,
+//             notDoneTasksToday: 0,
+//           };
+//           existing.notDoneTasksToday += 1;
+//           defaulterMap.set(key, existing);
+
+//           const setForEmp = employeeDefaultSets.get(emp._id.toString()) || new Set();
+//           setForEmp.add(`${task._id}_${emp._id}`);
+//           employeeDefaultSets.set(emp._id.toString(), setForEmp);
+//         }
+//       }
+//     }
+
+//     const allData = Array.from(defaulterMap.values()).map(entry => {
+//       const totalSet = employeeDefaultSets.get(entry.employeeId.toString()) || new Set();
+//       return { ...entry, totalDefaultsTillDate: totalSet.size };
+//     });
+
+//     allData.sort((a, b) => b.date - a.date);
+//     const totalDefaulters = allData.length;
+//     const totalPages = Math.ceil(totalDefaulters / pageSize);
+//     const startIndex = (pageNum - 1) * pageSize;
+//     const paginatedData = allData.slice(startIndex, startIndex + pageSize);
+
+//     const overallTotalDefaults = Array.from(employeeDefaultSets.values()).reduce((sum, s) => sum + (s.size || 0), 0);
+
+//     res.status(200).json({
+//       success: true,
+//       totalDefaulters,
+//       overallTotalDefaults,
+//       data: paginatedData,
+//       totalPages,
+//       currentPage: pageNum,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
 export const Defaulter = async (req, res) => {
   try {
     const { department, shift, employeeId, startDate, endDate, page = 1, limit = 30 } = req.query;
@@ -871,13 +1004,6 @@ export const Defaulter = async (req, res) => {
       const now = new Date();
       const istOffset = 5.5 * 60;
       return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
-    };
-
-    const getShiftDate = () => {
-      const ist = getISTime();
-      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
-      ist.setHours(0, 0, 0, 0);
-      return ist;
     };
 
     const filter = {};
@@ -906,8 +1032,8 @@ export const Defaulter = async (req, res) => {
     }
 
     const taskIds = tasks.map(t => t._id);
-    const start = startDate ? new Date(startDate) : getShiftDate();
-    const end = endDate ? new Date(endDate) : getShiftDate();
+    const start = startDate ? new Date(startDate) : new Date();
+    const end = endDate ? new Date(endDate) : new Date();
     start.setHours(0, 0, 0, 0);
     end.setHours(23, 59, 59, 999);
 
@@ -918,6 +1044,7 @@ export const Defaulter = async (req, res) => {
       .select("taskId employeeId status date updatedAt")
       .lean();
 
+    // Map for latest status per task + employee + shiftDate
     const statusMap = new Map();
     statuses.forEach(s => {
       const key = `${s.taskId}_${s.employeeId}_${new Date(s.date).toDateString()}`;
@@ -931,28 +1058,42 @@ export const Defaulter = async (req, res) => {
     const employeeDefaultSets = new Map();
     const nowIst = getISTime();
 
-    const computeShiftWindow = (emp, date, taskShift) => {
+    const computeShiftWindow = (emp, shiftType) => {
+      // Determine shiftDate based on employee shift start
+      const shiftDate = new Date(nowIst);
       const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
-      const empShiftStart = new Date(date);
-      empShiftStart.setHours(startHour, 0, 0, 0);
-      const durations = { Start: 3, Mid: 5, End: 1 };
-      const windowEnd = new Date(empShiftStart);
-      windowEnd.setHours(windowEnd.getHours() + (durations[taskShift] || 3));
-      return { windowStart: empShiftStart, windowEnd };
+
+      // If early morning shift (<10AM) and current time < 10AM, shift belongs to previous day
+      if (startHour < 10 && nowIst.getHours() < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+      shiftDate.setHours(startHour, 0, 0, 0);
+
+      const allowedWindows = {
+        Start: { start: new Date(shiftDate), end: new Date(shiftDate.getTime() + 2 * 60 * 60 * 1000) },
+        Mid: { start: new Date(shiftDate.getTime() + 3 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 6 * 60 * 60 * 1000) },
+        End: { start: new Date(shiftDate.getTime() + 8.5 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 10 * 60 * 60 * 1000) },
+      };
+
+      return allowedWindows[shiftType] || null;
     };
 
     for (const task of tasks) {
       for (const emp of task.assignedTo) {
         if (employeeId && emp._id.toString() !== employeeId.toString()) continue;
-        const { windowStart, windowEnd } = computeShiftWindow(emp, start, task.shift);
-        if (nowIst < windowStart || nowIst <= windowEnd) continue;
 
-        const statusKey = `${task._id}_${emp._id}_${start.toDateString()}`;
+        const shiftWindow = computeShiftWindow(emp, task.shift);
+        if (!shiftWindow) continue;
+
+        // Only count as defaulter if shift window has passed
+        if (nowIst <= shiftWindow.end) continue;
+
+        const shiftDateKey = shiftWindow.start.toDateString();
+        const statusKey = `${task._id}_${emp._id}_${shiftDateKey}`;
         const latestStatus = statusMap.get(statusKey);
+
         if ((latestStatus?.status || "Not Done") !== "Done") {
-          const key = `${emp._id}_${start.toDateString()}`;
+          const key = `${emp._id}_${shiftDateKey}`;
           const existing = defaulterMap.get(key) || {
-            date: new Date(start),
+            date: new Date(shiftWindow.start),
             employeeId: emp._id,
             employeeName: emp.username,
             notDoneTasksToday: 0,
@@ -961,7 +1102,7 @@ export const Defaulter = async (req, res) => {
           defaulterMap.set(key, existing);
 
           const setForEmp = employeeDefaultSets.get(emp._id.toString()) || new Set();
-          setForEmp.add(`${task._id}_${emp._id}`);
+          setForEmp.add(`${task._id}_${emp._id}_${shiftDateKey}`);
           employeeDefaultSets.set(emp._id.toString(), setForEmp);
         }
       }
