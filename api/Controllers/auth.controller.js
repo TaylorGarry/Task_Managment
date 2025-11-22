@@ -23,6 +23,7 @@ export const signup = async (req, res) => {
       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+      "11pm-8am": {shift: "Start", shiftStartHour: 11, shiftEndHour: 8},
     };
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
@@ -230,6 +231,7 @@ export const updateUserByAdmin = async (req, res) => {
         "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
         "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
         "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+        "11pm-8am": {shift: "Start", shiftStartHour: 11, shiftEndHour: 19},
       };
       const selected = shiftMapping[shiftLabel];
       if (!selected) return res.status(400).json({ message: "Invalid shift label" });

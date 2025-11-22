@@ -1,6 +1,6 @@
 import "dotenv/config";
 import app from "./app.js";
-import connectDB from "./DB/connnection.js"; // ✅ make sure the file name is correct
+import connectDB from "./DB/connnection.js";  
 import Task from "./Modals/Task.modal.js";
 import TaskStatus from "./Modals/TaskStatus.modal.js";
 

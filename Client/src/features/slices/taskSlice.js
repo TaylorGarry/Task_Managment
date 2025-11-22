@@ -1,9 +1,11 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/v1/tasks";
-// const API_URL = "https://task-managment-5.onrender.com/api/v1/tasks"
-// const API_URL = "https://task-managment-fdbs.onrender.com/api/v1/tasks";
+// const API_URL = "http://localhost:4000/api/v1/tasks";
+// const API_URL = "https://crm.terranovasolution.in/api/v1/tasks";
+const API_URL = "https://api.terranovasolutions.in/api/v1/tasks";
+// const API_URL = "https://crm.fdbs.in/api/v1/tasks";
+
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));

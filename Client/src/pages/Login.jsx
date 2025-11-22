@@ -40,7 +40,14 @@ const Login = () => {
       <div className="absolute inset-0 bg-black/40"></div>
 
       <div className="relative bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
-        <h2 className="text-2xl font-bold mb-6 text-center text-gray-800">Login</h2>
+        <div className="mb-6 text-center bg-transparent">
+          <h1 className="text-2xl font-bold">
+            <span className="text-[#0066cc]">TerraNova</span>
+            <span className="text-[#ffcc00]"> Solution</span>
+          </h1>
+        </div>
+
+
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
           <input
             type="text"
@@ -66,7 +73,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full p-2 rounded text-white ${loading
+            className={`w-full p-2 rounded text-white cursor-pointer ${loading
               ? "bg-blue-300 cursor-not-allowed"
               : "bg-blue-500 hover:bg-blue-600"
               }`}
