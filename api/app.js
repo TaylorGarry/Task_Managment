@@ -1,8 +1,6 @@
 import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import path from "path";
-import { fileURLToPath } from "url";
 
 import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/task.routes.js";
@@ -14,12 +12,9 @@ dotenv.config();
 const app = express();
 app.set("trust proxy", true);
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const allowedOrigins = [
   "http://localhost:5173",
-  "https://crm.terranovasolution.in",
+  "https://crm.terranovasolutions.in",
   "https://crm.fdbs.in",
 ];
 
@@ -63,32 +58,69 @@ app.use((req, res, next) => {
 
 app.use(express.json());
 
+// ---------------------- API ROUTES ----------------------
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
 app.use("/api/remarks", remarkRoutes);
 
+// ---------------------- ROOT & IP CHECK ROUTES ----------------------
+app.get("/", (req, res) => {
+  res.json({ 
+    status: "SUCCESS", 
+    message: "Task Management API is running!",
+    version: "1.0.0",
+    timestamp: new Date().toISOString(),
+    endpoints: [
+      "/api/v1/login",
+      "/api/v1/signup", 
+      "/api/v1/tasks",
+      "/api/v1/review",
+      "/api/v1/task-status",
+      "/api/remarks"
+    ]
+  });
+});
+
 app.get("/check-ip", (req, res) => {
   const clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket.remoteAddress?.replace("::ffff:", "");
-  res.json({ detectedIP: clientIp });
+  res.json({ 
+    detectedIP: clientIp,
+    allowedIPs: allowedIPs,
+    message: "Use this IP to add to allowedIPs array if needed"
+  });
 });
 
-app.use(express.static(path.join(__dirname, "dist")));
-
-app.get(/.*/, (req, res) => {
-  res.sendFile(path.join(__dirname, "dist", "index.html"));
+// ---------------------- 404 HANDLER ----------------------
+app.use("*", (req, res) => {
+  res.status(404).json({ 
+    error: "API endpoint not found",
+    path: req.originalUrl,
+    available_endpoints: [
+      "GET /",
+      "GET /check-ip", 
+      "POST /api/v1/login",
+      "POST /api/v1/signup",
+      "GET /api/v1/tasks",
+      "POST /api/v1/tasks",
+      "GET /api/remarks",
+      "POST /api/remarks"
+    ]
+  });
 });
 
+// ---------------------- ERROR HANDLER ----------------------
 app.use((err, req, res, next) => {
+  console.error("Error:", err.message);
   if (err.message.includes("CORS")) {
     return res.status(403).json({ message: "CORS not allowed for this origin" });
   }
-  return res.status(500).json({
+  res.status(500).json({
     message: "Internal Server Error",
-    error: err.message,
+    error: process.env.NODE_ENV === 'production' ? 'Something went wrong!' : err.message,
   });
 });
 
