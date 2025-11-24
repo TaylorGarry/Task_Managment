@@ -1,7 +1,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = `${import.meta.env.VITE_API_URL || "https://api.terranovasolutions.in"}/api/remarks`;
+const API_URL = `${import.meta.env.VITE_API_URL || " https://task-managment-7.onrender.com"}/api/remarks`;
 
 const getToken = (getState) =>
   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;

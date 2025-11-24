@@ -45,7 +45,7 @@ const Defaulter = () => {
 
       const token = localStorage.getItem("token");
       const res = await fetch(
-        `https://api.terranovasolutions.in/api/v1/tasks/employee-defaulters/${employeeId}`,
+        ` https://task-managment-7.onrender.com/api/v1/tasks/employee-defaulters/${employeeId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }

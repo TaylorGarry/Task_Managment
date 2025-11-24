@@ -2,9 +2,9 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 // const API_URL = "http://localhost:4000/api/v1"
-// const API_URL = "https://task-managment-4.onrender.com/api/v1"; 
+const API_URL = " https://task-managment-7.onrender.com/api/v1"; 
 // const API_URL = "https://crm.terranovasolution.in/api/v1";
-const API_URL = "https://api.terranovasolutions.in/api/v1";
+// const API_URL = "https://api.terranovasolutions.in/api/v1";
 // const API_URL = "https://crm.fdbs.in/api/v1";
 // const API_URL = "https://terranovasolution.in/api/v1";
 
