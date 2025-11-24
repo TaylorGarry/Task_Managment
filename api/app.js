@@ -95,7 +95,7 @@ app.get("/check-ip", (req, res) => {
 });
 
 // ---------------------- 404 HANDLER ----------------------
-app.use("*", (req, res) => {
+app.use((req, res) => {
   res.status(404).json({ 
     error: "API endpoint not found",
     path: req.originalUrl,
