@@ -14,14 +14,13 @@ export const addRemark = async (req, res) => {
 
     const sender = req.user;
 
-    // Fetch assigned employees
     const task = await Task.findById(taskId).select("assignedTo");
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
     let finalReceiverId = null;
-    const assignedList = task.assignedTo.map(id => String(id)); // always array
+    const assignedList = task.assignedTo.map(id => String(id));  
 
     // ----------------------
     // ADMIN LOGIC

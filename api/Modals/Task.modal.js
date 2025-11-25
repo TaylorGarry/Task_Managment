@@ -25,7 +25,7 @@ const taskSchema = new mongoose.Schema(
     statusUnlocked: { type: Boolean, default: false },
     isCoreTeamTask: { type: Boolean, default: false },
   },
-  { timestamps: true, collection: "tasks" } // ✅ force correct collection
+  { timestamps: true, collection: "tasks" } 
 );
 
 taskSchema.index({ assignedTo: 1 });
