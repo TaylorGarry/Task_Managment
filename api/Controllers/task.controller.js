@@ -287,6 +287,137 @@ export const getCoreTeamTasks = async (req, res) => {
   }
 };
 
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee") {
+//       return res.status(403).json({ message: "Only employees can update status" });
+//     }
+
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const [task, employee] = await Promise.all([
+//       Task.findById(taskId).lean(),
+//       User.findById(req.user.id).lean(),
+//     ]);
+
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+//     if (!employee) return res.status(404).json({ message: "Employee not found" });
+//     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+//     }
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;  
+//       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//       return new Date(utc + istOffset * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       const hour = ist.getHours();
+//       const shiftDate = new Date(ist);
+//       if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+//       shiftDate.setHours(0, 0, 0, 0);
+//       return shiftDate;
+//     };
+
+//     const istTime = getISTime();
+//     const effectiveDate = getShiftDate();
+
+//     const empShiftStart = new Date(effectiveDate);
+//     empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
+
+//     const empShiftEnd = new Date(empShiftStart);
+//     empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
+
+//     if (employee.shiftEndHour < employee.shiftStartHour) {
+//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+//     }
+
+//     if (employee.shiftStartHour < 6 && istTime.getHours() < 10) {
+//       empShiftStart.setDate(empShiftStart.getDate() + 1);
+//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+//     }
+
+//     const allowedWindows = {
+//       Start: {
+//         start: new Date(empShiftStart),
+//         end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), 
+//       },
+//       Mid: {
+//         start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),  
+//         end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),    
+//       },
+//       End: {
+//         start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+//         end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),   
+//       },
+//     };
+
+//     const currentShift = task.shift;
+//     const allowedWindow = allowedWindows[currentShift];
+
+//     if (!allowedWindow) {
+//       return res.status(400).json({ message: "Invalid shift type" });
+//     }
+
+//     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
+//       return res.status(403).json({
+//         message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
+//           "en-IN",
+//           { hour: "2-digit", minute: "2-digit", hour12: true }
+//         )} and ${allowedWindow.end.toLocaleTimeString("en-IN", {
+//           hour: "2-digit",
+//           minute: "2-digit",
+//           hour12: true,
+//         })} IST.`,
+//       });
+//     }
+
+//     let taskStatus = await TaskStatus.findOne({
+//       taskId,
+//       employeeId: req.user.id,
+//       date: effectiveDate,
+//     });
+
+//     if (taskStatus) {
+//       taskStatus.status = status;
+//       taskStatus.updatedAt = new Date();
+//       await taskStatus.save();
+//     } else {
+//       taskStatus = await TaskStatus.create({
+//         taskId,
+//         employeeId: req.user.id,
+//         date: effectiveDate,
+//         status,
+//         updatedAt: new Date(),
+//       });
+//     }
+
+//     await taskStatus.populate("employeeId", "username");
+
+//     res.status(200).json({
+//       message: "Status updated successfully",
+//       updatedStatus: {
+//         taskId: taskStatus.taskId,
+//         employeeId: taskStatus.employeeId._id,
+//         username: taskStatus.employeeId.username,
+//         status: taskStatus.status,
+//         date: taskStatus.date,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const updateTaskStatus = async (req, res) => {
   try {
     if (req.user.accountType !== "employee") {
@@ -313,16 +444,20 @@ export const updateTaskStatus = async (req, res) => {
 
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60;  
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      return new Date(utc + istOffset * 60000);
+      const istOffset = 5.5 * 60 * 60 * 1000; // ✅ FIXED: milliseconds
+      return new Date(now.getTime() + istOffset);
     };
 
     const getShiftDate = () => {
       const ist = getISTime();
       const hour = ist.getHours();
       const shiftDate = new Date(ist);
-      if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+      
+      // ✅ FIXED: Better date logic for early morning shifts
+      if (hour < 6) {
+        // 12am-6am belongs to previous day
+        shiftDate.setDate(shiftDate.getDate() - 1);
+      }
       shiftDate.setHours(0, 0, 0, 0);
       return shiftDate;
     };
@@ -330,33 +465,30 @@ export const updateTaskStatus = async (req, res) => {
     const istTime = getISTime();
     const effectiveDate = getShiftDate();
 
+    // ✅ FIXED: Simplified shift time calculation
     const empShiftStart = new Date(effectiveDate);
     empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
 
     const empShiftEnd = new Date(empShiftStart);
+    if (employee.shiftEndHour < employee.shiftStartHour) {
+      // Shift crosses midnight
+      empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+    }
     empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
 
-    if (employee.shiftEndHour < employee.shiftStartHour) {
-      empShiftEnd.setDate(empShiftEnd.getDate() + 1);
-    }
-
-    if (employee.shiftStartHour < 6 && istTime.getHours() < 10) {
-      empShiftStart.setDate(empShiftStart.getDate() + 1);
-      empShiftEnd.setDate(empShiftEnd.getDate() + 1);
-    }
-
+    // ✅ FIXED: Simplified time windows
     const allowedWindows = {
       Start: {
         start: new Date(empShiftStart),
-        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), 
+        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), // 2 hours
       },
       Mid: {
-        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),  
-        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),    
+        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000), // 3 hours after start
+        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),   // 6 hours after start
       },
       End: {
-        start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
-        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),   
+        start: new Date(empShiftStart.getTime() + 8 * 60 * 60 * 1000), // 8 hours after start
+        end: new Date(empShiftEnd), // Until shift end
       },
     };
 

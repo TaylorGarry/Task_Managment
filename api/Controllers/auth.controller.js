@@ -4,6 +4,64 @@ import User from "../Modals/User.modal.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
+// export const signup = async (req, res) => {
+//   try {
+//     const { username, password, accountType, department, shiftLabel, isCoreTeam } = req.body;
+
+//     if (req.user?.accountType !== "admin")
+//       return res.status(403).json({ message: "Only admin can create users" });
+
+//     if (!username || !password || !department || (!isCoreTeam && !shiftLabel))
+//       return res.status(400).json({ message: "All fields are required" });
+
+//     if (await User.exists({ username }))
+//       return res.status(400).json({ message: "User already exists" });
+
+//     const shiftMapping = {
+//       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+//       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+//       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+//       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+//       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+//       "11pm-8am": {shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
+//     };
+
+//     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
+//     if (!isCoreTeam && !selectedShift)
+//       return res.status(400).json({ message: "Invalid shift label" });
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const newUser = await User.create({
+//       username,
+//       password: hashedPassword,
+//       accountType,
+//       department,
+//       isCoreTeam: accountType === "employee" && !!isCoreTeam,
+//       shift: selectedShift?.shift || null,
+//       shiftStartHour: selectedShift?.shiftStartHour || null,
+//       shiftEndHour: selectedShift?.shiftEndHour || null,
+//     });
+
+//     res.status(201).json({
+//       message: "User created successfully",
+//       user: {
+//         id: newUser._id,
+//         username,
+//         accountType,
+//         department,
+//         isCoreTeam: newUser.isCoreTeam,
+//         shift: newUser.shift,
+//         shiftStartHour: newUser.shiftStartHour,
+//         shiftEndHour: newUser.shiftEndHour,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Signup error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const signup = async (req, res) => {
   try {
     const { username, password, accountType, department, shiftLabel, isCoreTeam } = req.body;
@@ -11,8 +69,12 @@ export const signup = async (req, res) => {
     if (req.user?.accountType !== "admin")
       return res.status(403).json({ message: "Only admin can create users" });
 
-    if (!username || !password || !department || (!isCoreTeam && !shiftLabel))
-      return res.status(400).json({ message: "All fields are required" });
+    // ✅ IMPROVED: Better validation for core team vs regular employees
+    if (!username || !password || !department || !accountType)
+      return res.status(400).json({ message: "Username, password, department, and account type are required" });
+
+    if (accountType === "employee" && !isCoreTeam && !shiftLabel)
+      return res.status(400).json({ message: "Shift label is required for non-core team employees" });
 
     if (await User.exists({ username }))
       return res.status(400).json({ message: "User already exists" });
@@ -23,11 +85,12 @@ export const signup = async (req, res) => {
       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
-      "11pm-8am": {shift: "Start", shiftStartHour: 11, shiftEndHour: 8},
+      "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
     };
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
-    if (!isCoreTeam && !selectedShift)
+    
+    if (accountType === "employee" && !isCoreTeam && !selectedShift)
       return res.status(400).json({ message: "Invalid shift label" });
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -61,7 +124,6 @@ export const signup = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const createCoreTeamUser = async (req, res) => {
   try {
