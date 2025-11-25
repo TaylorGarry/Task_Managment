@@ -444,7 +444,7 @@ export const updateTaskStatus = async (req, res) => {
 
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60 * 60 * 1000; // ✅ FIXED: milliseconds
+      const istOffset = 5.5 * 60 * 60 * 1000;
       return new Date(now.getTime() + istOffset);
     };
 
@@ -453,9 +453,8 @@ export const updateTaskStatus = async (req, res) => {
       const hour = ist.getHours();
       const shiftDate = new Date(ist);
       
-      // ✅ FIXED: Better date logic for early morning shifts
+      // Early morning shifts (12am-6am) belong to previous day
       if (hour < 6) {
-        // 12am-6am belongs to previous day
         shiftDate.setDate(shiftDate.getDate() - 1);
       }
       shiftDate.setHours(0, 0, 0, 0);
@@ -465,7 +464,7 @@ export const updateTaskStatus = async (req, res) => {
     const istTime = getISTime();
     const effectiveDate = getShiftDate();
 
-    // ✅ FIXED: Simplified shift time calculation
+    // ✅ FIXED: Calculate shift times based on actual shift hours
     const empShiftStart = new Date(effectiveDate);
     empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
 
@@ -476,28 +475,57 @@ export const updateTaskStatus = async (req, res) => {
     }
     empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
 
-    // ✅ FIXED: Simplified time windows
-    const allowedWindows = {
-      Start: {
-        start: new Date(empShiftStart),
-        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), // 2 hours
-      },
-      Mid: {
-        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000), // 3 hours after start
-        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),   // 6 hours after start
-      },
-      End: {
-        start: new Date(empShiftStart.getTime() + 8 * 60 * 60 * 1000), // 8 hours after start
-        end: new Date(empShiftEnd), // Until shift end
-      },
+    // ✅ FIXED: Better time window calculation based on shift type
+    const getTimeWindows = (shiftType, shiftStart, shiftEnd) => {
+      const windows = {
+        Start: {
+          start: new Date(shiftStart),
+          end: new Date(shiftStart.getTime() + 2 * 60 * 60 * 1000), // First 2 hours
+        },
+        Mid: {
+          start: new Date(shiftStart.getTime() + 3 * 60 * 60 * 1000), // After 3 hours
+          end: new Date(shiftStart.getTime() + 6 * 60 * 60 * 1000),   // Until 6 hours
+        },
+        End: {
+          start: new Date(shiftEnd.getTime() - 2 * 60 * 60 * 1000), // Last 2 hours
+          end: new Date(shiftEnd),
+        },
+      };
+
+      // ✅ SPECIAL FIX: For overnight Start shifts (11pm-8am)
+      if (shiftType === "Start" && employee.shiftStartHour >= 22) { // 10pm or later
+        windows.Start.start = new Date(shiftStart);
+        windows.Start.end = new Date(shiftStart.getTime() + 2 * 60 * 60 * 1000);
+        
+        // If the end time crosses midnight, adjust it
+        if (windows.Start.end.getDate() !== shiftStart.getDate()) {
+          windows.Start.end = new Date(shiftStart);
+          windows.Start.end.setHours(1, 0, 0, 0); // Until 1am next day
+          windows.Start.end.setDate(windows.Start.end.getDate() + 1);
+        }
+      }
+
+      return windows[shiftType];
     };
 
     const currentShift = task.shift;
-    const allowedWindow = allowedWindows[currentShift];
+    const allowedWindow = getTimeWindows(currentShift, empShiftStart, empShiftEnd);
 
     if (!allowedWindow) {
       return res.status(400).json({ message: "Invalid shift type" });
     }
+
+    // ✅ Debug log to see what's happening
+    console.log("Shift Debug:", {
+      employee: employee.username,
+      shift: `${employee.shiftStartHour}-${employee.shiftEndHour}`,
+      shiftType: currentShift,
+      currentTime: istTime.toLocaleString("en-IN"),
+      allowedWindow: {
+        start: allowedWindow.start.toLocaleString("en-IN"),
+        end: allowedWindow.end.toLocaleString("en-IN")
+      }
+    });
 
     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
       return res.status(403).json({
