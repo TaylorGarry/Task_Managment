@@ -2,7 +2,6 @@ import Task from "../Modals/Task.modal.js";
 import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
 import XLSX from "xlsx-js-style";
-import fs from "fs";
 import Remark from "../Modals/Remark.modal.js";
 import mongoose from "mongoose";
 
@@ -418,165 +417,6 @@ export const updateTaskStatus = async (req, res) => {
   }
 };
 
-// export const updateTaskStatus = async (req, res) => {
-//   try {
-//     if (req.user.accountType !== "employee") {
-//       return res.status(403).json({ message: "Only employees can update status" });
-//     }
-
-//     const { taskId } = req.params;
-//     const { status } = req.body;
-
-//     if (!["Done", "Not Done"].includes(status)) {
-//       return res.status(400).json({ message: "Invalid status value" });
-//     }
-
-//     const [task, employee] = await Promise.all([
-//       Task.findById(taskId).lean(),
-//       User.findById(req.user.id).lean(),
-//     ]);
-
-//     if (!task) return res.status(404).json({ message: "Task not found" });
-//     if (!employee) return res.status(404).json({ message: "Employee not found" });
-//     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
-//       return res.status(403).json({ message: "You are not assigned to this task" });
-//     }
-
-//     const getISTime = () => {
-//       const now = new Date();
-//       const istOffset = 5.5 * 60 * 60 * 1000;
-//       return new Date(now.getTime() + istOffset);
-//     };
-
-//     const getShiftDate = () => {
-//       const ist = getISTime();
-//       const hour = ist.getHours();
-//       const shiftDate = new Date(ist);
-      
-//       // Early morning shifts (12am-6am) belong to previous day
-//       if (hour < 6) {
-//         shiftDate.setDate(shiftDate.getDate() - 1);
-//       }
-//       shiftDate.setHours(0, 0, 0, 0);
-//       return shiftDate;
-//     };
-
-//     const istTime = getISTime();
-//     const effectiveDate = getShiftDate();
-
-//     // ✅ FIXED: Calculate shift times based on actual shift hours
-//     const empShiftStart = new Date(effectiveDate);
-//     empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
-
-//     const empShiftEnd = new Date(empShiftStart);
-//     if (employee.shiftEndHour < employee.shiftStartHour) {
-//       // Shift crosses midnight
-//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
-//     }
-//     empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
-
-//     // ✅ FIXED: Better time window calculation based on shift type
-//     const getTimeWindows = (shiftType, shiftStart, shiftEnd) => {
-//       const windows = {
-//         Start: {
-//           start: new Date(shiftStart),
-//           end: new Date(shiftStart.getTime() + 2 * 60 * 60 * 1000), // First 2 hours
-//         },
-//         Mid: {
-//           start: new Date(shiftStart.getTime() + 3 * 60 * 60 * 1000), // After 3 hours
-//           end: new Date(shiftStart.getTime() + 6 * 60 * 60 * 1000),   // Until 6 hours
-//         },
-//         End: {
-//           start: new Date(shiftEnd.getTime() - 2 * 60 * 60 * 1000), // Last 2 hours
-//           end: new Date(shiftEnd),
-//         },
-//       };
-
-//       // ✅ SPECIAL FIX: For overnight Start shifts (11pm-8am)
-//       if (shiftType === "Start" && employee.shiftStartHour >= 22) { // 10pm or later
-//         windows.Start.start = new Date(shiftStart);
-//         windows.Start.end = new Date(shiftStart.getTime() + 2 * 60 * 60 * 1000);
-        
-//         // If the end time crosses midnight, adjust it
-//         if (windows.Start.end.getDate() !== shiftStart.getDate()) {
-//           windows.Start.end = new Date(shiftStart);
-//           windows.Start.end.setHours(1, 0, 0, 0); // Until 1am next day
-//           windows.Start.end.setDate(windows.Start.end.getDate() + 1);
-//         }
-//       }
-
-//       return windows[shiftType];
-//     };
-
-//     const currentShift = task.shift;
-//     const allowedWindow = getTimeWindows(currentShift, empShiftStart, empShiftEnd);
-
-//     if (!allowedWindow) {
-//       return res.status(400).json({ message: "Invalid shift type" });
-//     }
-
-//     // ✅ Debug log to see what's happening
-//     console.log("Shift Debug:", {
-//       employee: employee.username,
-//       shift: `${employee.shiftStartHour}-${employee.shiftEndHour}`,
-//       shiftType: currentShift,
-//       currentTime: istTime.toLocaleString("en-IN"),
-//       allowedWindow: {
-//         start: allowedWindow.start.toLocaleString("en-IN"),
-//         end: allowedWindow.end.toLocaleString("en-IN")
-//       }
-//     });
-
-//     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
-//       return res.status(403).json({
-//         message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
-//           "en-IN",
-//           { hour: "2-digit", minute: "2-digit", hour12: true }
-//         )} and ${allowedWindow.end.toLocaleTimeString("en-IN", {
-//           hour: "2-digit",
-//           minute: "2-digit",
-//           hour12: true,
-//         })} IST.`,
-//       });
-//     }
-
-//     let taskStatus = await TaskStatus.findOne({
-//       taskId,
-//       employeeId: req.user.id,
-//       date: effectiveDate,
-//     });
-
-//     if (taskStatus) {
-//       taskStatus.status = status;
-//       taskStatus.updatedAt = new Date();
-//       await taskStatus.save();
-//     } else {
-//       taskStatus = await TaskStatus.create({
-//         taskId,
-//         employeeId: req.user.id,
-//         date: effectiveDate,
-//         status,
-//         updatedAt: new Date(),
-//       });
-//     }
-
-//     await taskStatus.populate("employeeId", "username");
-
-//     res.status(200).json({
-//       message: "Status updated successfully",
-//       updatedStatus: {
-//         taskId: taskStatus.taskId,
-//         employeeId: taskStatus.employeeId._id,
-//         username: taskStatus.employeeId.username,
-//         status: taskStatus.status,
-//         date: taskStatus.date,
-//       },
-//     });
-//   } catch (error) {
-//     console.error("Update Task Status Error:", error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {
@@ -827,199 +667,199 @@ export const getAllTasks = async (req, res) => {
   }
 };
 
-export const exportTaskStatusExcel = async (req, res) => {
-  try {
-    if (req.user.accountType !== "admin")
-      return res.status(403).json({ message: "Only admin can export tasks" });
+// export const exportTaskStatusExcel = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "admin")
+//       return res.status(403).json({ message: "Only admin can export tasks" });
 
-    const { department, shift } = req.query;
+//     const { department, shift } = req.query;
 
-    const getISTime = () => {
-      const now = new Date();
-      const offset = 5.5 * 60;
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      return new Date(utc + offset * 60000);
-    };
+//     const getISTime = () => {
+//       const now = new Date();
+//       const offset = 5.5 * 60;
+//       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//       return new Date(utc + offset * 60000);
+//     };
 
-    const getShiftDate = () => {
-      const ist = getISTime();
-      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
-      ist.setHours(0, 0, 0, 0);
-      return ist;
-    };
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+//       ist.setHours(0, 0, 0, 0);
+//       return ist;
+//     };
 
-    const currentShiftDate = getShiftDate();
-    const end = new Date(currentShiftDate);
-    const start = new Date(currentShiftDate);
-    start.setFullYear(start.getFullYear() - 1);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
+//     const currentShiftDate = getShiftDate();
+//     const end = new Date(currentShiftDate);
+//     const start = new Date(currentShiftDate);
+//     start.setFullYear(start.getFullYear() - 1);
+//     start.setHours(0, 0, 0, 0);
+//     end.setHours(23, 59, 59, 999);
 
-    const statuses = await Task.aggregate([
-      {
-        $match: {
-          createdAt: { $lte: end },
-          ...(department && { department }),
-          ...(shift && { shift }),
-        },
-      },
-      {
-        $lookup: {
-          from: "users",
-          localField: "assignedTo",
-          foreignField: "_id",
-          as: "employees",
-        },
-      },
-      { $unwind: "$employees" },
-      {
-        $lookup: {
-          from: "taskstatuses",
-          let: { taskId: "$_id", empId: "$employees._id" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ["$taskId", "$$taskId"] },
-                    { $eq: ["$employeeId", "$$empId"] },
-                    { $lte: ["$date", end] },
-                  ],
-                },
-              },
-            },
-            { $sort: { updatedAt: -1 } },
-            { $limit: 1 },
-          ],
-          as: "latestStatusDoc",
-        },
-      },
-      {
-        $addFields: {
-          latestStatus: { $arrayElemAt: ["$latestStatusDoc", 0] },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          Task: "$title",
-          Shift: "$shift",
-          Department: "$department",
-          Employee: "$employees.username",
-          Date: {
-            $dateToString: {
-              format: "%Y-%m-%d",
-              date: { $ifNull: ["$latestStatus.date", "$createdAt"] },
-            },
-          },
-          RawTime: { $ifNull: ["$latestStatus.updatedAt", "$updatedAt"] },
-          Status: {
-            $cond: {
-              if: { $ifNull: ["$latestStatus.status", false] },
-              then: "$latestStatus.status",
-              else: "Not Done",
-            },
-          },
-        },
-      },
-    ]);
+//     const statuses = await Task.aggregate([
+//       {
+//         $match: {
+//           createdAt: { $lte: end },
+//           ...(department && { department }),
+//           ...(shift && { shift }),
+//         },
+//       },
+//       {
+//         $lookup: {
+//           from: "users",
+//           localField: "assignedTo",
+//           foreignField: "_id",
+//           as: "employees",
+//         },
+//       },
+//       { $unwind: "$employees" },
+//       {
+//         $lookup: {
+//           from: "taskstatuses",
+//           let: { taskId: "$_id", empId: "$employees._id" },
+//           pipeline: [
+//             {
+//               $match: {
+//                 $expr: {
+//                   $and: [
+//                     { $eq: ["$taskId", "$$taskId"] },
+//                     { $eq: ["$employeeId", "$$empId"] },
+//                     { $lte: ["$date", end] },
+//                   ],
+//                 },
+//               },
+//             },
+//             { $sort: { updatedAt: -1 } },
+//             { $limit: 1 },
+//           ],
+//           as: "latestStatusDoc",
+//         },
+//       },
+//       {
+//         $addFields: {
+//           latestStatus: { $arrayElemAt: ["$latestStatusDoc", 0] },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           Task: "$title",
+//           Shift: "$shift",
+//           Department: "$department",
+//           Employee: "$employees.username",
+//           Date: {
+//             $dateToString: {
+//               format: "%Y-%m-%d",
+//               date: { $ifNull: ["$latestStatus.date", "$createdAt"] },
+//             },
+//           },
+//           RawTime: { $ifNull: ["$latestStatus.updatedAt", "$updatedAt"] },
+//           Status: {
+//             $cond: {
+//               if: { $ifNull: ["$latestStatus.status", false] },
+//               then: "$latestStatus.status",
+//               else: "Not Done",
+//             },
+//           },
+//         },
+//       },
+//     ]);
 
-    const istNow = getISTime();
-    const effectiveDate = new Date(istNow);
-    const hour = istNow.getHours();
-    if (hour < 10) effectiveDate.setDate(effectiveDate.getDate() - 1);
-    effectiveDate.setHours(0, 0, 0, 0);
+//     const istNow = getISTime();
+//     const effectiveDate = new Date(istNow);
+//     const hour = istNow.getHours();
+//     if (hour < 10) effectiveDate.setDate(effectiveDate.getDate() - 1);
+//     effectiveDate.setHours(0, 0, 0, 0);
 
-    for (const s of statuses) {
-      if (new Date(s.Date) > effectiveDate)
-        s.Date = effectiveDate.toISOString().split("T")[0];
+//     for (const s of statuses) {
+//       if (new Date(s.Date) > effectiveDate)
+//         s.Date = effectiveDate.toISOString().split("T")[0];
 
-      s.Time = s.RawTime
-        ? new Date(s.RawTime).toLocaleTimeString("en-IN", {
-            hour: "2-digit",
-            minute: "2-digit",
-            hour12: true,
-            timeZone: "Asia/Kolkata",
-          })
-        : "--";
-      delete s.RawTime;
-    }
+//       s.Time = s.RawTime
+//         ? new Date(s.RawTime).toLocaleTimeString("en-IN", {
+//             hour: "2-digit",
+//             minute: "2-digit",
+//             hour12: true,
+//             timeZone: "Asia/Kolkata",
+//           })
+//         : "--";
+//       delete s.RawTime;
+//     }
 
-    const monthGroups = {};
-    for (const s of statuses) {
-      const d = new Date(s.Date);
-      if (d >= start && d <= end) {
-        const key = `${d.toLocaleString("default", { month: "long" })} ${d.getFullYear()}`;
-        (monthGroups[key] ??= []).push(s);
-      }
-    }
+//     const monthGroups = {};
+//     for (const s of statuses) {
+//       const d = new Date(s.Date);
+//       if (d >= start && d <= end) {
+//         const key = `${d.toLocaleString("default", { month: "long" })} ${d.getFullYear()}`;
+//         (monthGroups[key] ??= []).push(s);
+//       }
+//     }
 
-    const workbook = XLSX.utils.book_new();
-    const headerStyle = {
-      font: { bold: true, color: { rgb: "FFFFFF" } },
-      fill: { fgColor: { rgb: "4472C4" } },
-      alignment: { horizontal: "center" },
-    };
+//     const workbook = XLSX.utils.book_new();
+//     const headerStyle = {
+//       font: { bold: true, color: { rgb: "FFFFFF" } },
+//       fill: { fgColor: { rgb: "4472C4" } },
+//       alignment: { horizontal: "center" },
+//     };
 
-    for (const [month, data] of Object.entries(monthGroups)) {
-      const styledData = [
-        {
-          Task: { v: "Task", s: headerStyle },
-          Shift: { v: "Shift", s: headerStyle },
-          Department: { v: "Department", s: headerStyle },
-          Employee: { v: "Employee", s: headerStyle },
-          Date: { v: "Date", s: headerStyle },
-          Time: { v: "Updated Time", s: headerStyle },
-          Status: { v: "Status", s: headerStyle },
-        },
-        ...data.map((item) => ({
-          Task: { v: item.Task },
-          Shift: { v: item.Shift },
-          Department: { v: item.Department },
-          Employee: { v: item.Employee },
-          Date: { v: item.Date },
-          Time: { v: item.Time },
-          Status: {
-            v: item.Status,
-            s: {
-              font: {
-                color: {
-                  rgb: item.Status.toLowerCase() === "done" ? "008000" : "FF0000",
-                },
-                bold: true,
-              },
-            },
-          },
-        })),
-      ];
+//     for (const [month, data] of Object.entries(monthGroups)) {
+//       const styledData = [
+//         {
+//           Task: { v: "Task", s: headerStyle },
+//           Shift: { v: "Shift", s: headerStyle },
+//           Department: { v: "Department", s: headerStyle },
+//           Employee: { v: "Employee", s: headerStyle },
+//           Date: { v: "Date", s: headerStyle },
+//           Time: { v: "Updated Time", s: headerStyle },
+//           Status: { v: "Status", s: headerStyle },
+//         },
+//         ...data.map((item) => ({
+//           Task: { v: item.Task },
+//           Shift: { v: item.Shift },
+//           Department: { v: item.Department },
+//           Employee: { v: item.Employee },
+//           Date: { v: item.Date },
+//           Time: { v: item.Time },
+//           Status: {
+//             v: item.Status,
+//             s: {
+//               font: {
+//                 color: {
+//                   rgb: item.Status.toLowerCase() === "done" ? "008000" : "FF0000",
+//                 },
+//                 bold: true,
+//               },
+//             },
+//           },
+//         })),
+//       ];
 
-      const worksheet = XLSX.utils.json_to_sheet(styledData, { skipHeader: true });
-      worksheet["!cols"] = ["Task", "Shift", "Department", "Employee", "Date", "Time", "Status"].map(
-        (key) => ({
-          wch: Math.max(
-            key.length,
-            ...data.map((row) => (row[key] ? row[key].toString().length : 0))
-          ) + 5,
-        })
-      );
+//       const worksheet = XLSX.utils.json_to_sheet(styledData, { skipHeader: true });
+//       worksheet["!cols"] = ["Task", "Shift", "Department", "Employee", "Date", "Time", "Status"].map(
+//         (key) => ({
+//           wch: Math.max(
+//             key.length,
+//             ...data.map((row) => (row[key] ? row[key].toString().length : 0))
+//           ) + 5,
+//         })
+//       );
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, month);
-    }
+//       XLSX.utils.book_append_sheet(workbook, worksheet, month);
+//     }
 
-    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-    const fileName = `Task_Status_Last_12_Months_${Date.now()}.xlsx`;
+//     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+//     const fileName = `Task_Status_Last_12_Months_${Date.now()}.xlsx`;
 
-    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
-    res.setHeader(
-      "Content-Type",
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    );
-    res.send(buffer);
-  } catch (error) {
-    console.error("Export Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
+//     res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+//     res.setHeader(
+//       "Content-Type",
+//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//     );
+//     res.send(buffer);
+//   } catch (error) {
+//     console.error("Export Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
 
 // export const Defaulter = async (req, res) => {
 //   try {
@@ -1153,6 +993,218 @@ export const exportTaskStatusExcel = async (req, res) => {
 //   }
 // };
 
+
+export const exportTaskStatusExcel = async (req, res) => {
+  try {
+    if (req.user.accountType !== "admin")
+      return res.status(403).json({ message: "Only admin can export tasks" });
+
+    const { department, shift } = req.query;
+
+    const getISTime = () => {
+      const now = new Date();
+      const offset = 5.5 * 60;
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      return new Date(utc + offset * 60000);
+    };
+
+    const getShiftDate = () => {
+      const ist = getISTime();
+      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+      ist.setHours(0, 0, 0, 0);
+      return ist;
+    };
+
+    const currentShiftDate = getShiftDate();
+    const end = new Date(currentShiftDate);
+    const start = new Date(currentShiftDate);
+    start.setFullYear(start.getFullYear() - 1);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
+    const statuses = await Task.aggregate([
+      {
+        $match: {
+          createdAt: { $lte: end },
+          ...(department && { department }),
+          ...(shift && { shift }),
+        },
+      },
+      {
+        $lookup: {
+          from: "users",
+          localField: "assignedTo",
+          foreignField: "_id",
+          as: "employees",
+        },
+      },
+      { $unwind: "$employees" },
+      {
+        $lookup: {
+          from: "taskstatuses",
+          let: { taskId: "$_id", empId: "$employees._id" },
+          pipeline: [
+            {
+              $match: {
+                $expr: {
+                  $and: [
+                    { $eq: ["$taskId", "$$taskId"] },
+                    { $eq: ["$employeeId", "$$empId"] },
+                    { $lte: ["$date", end] },
+                  ],
+                },
+              },
+            },
+            { $sort: { updatedAt: -1 } },
+            { $limit: 1 },
+          ],
+          as: "latestStatusDoc",
+        },
+      },
+      {
+        $addFields: {
+          latestStatus: { $arrayElemAt: ["$latestStatusDoc", 0] },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          Task: "$title",
+          Shift: "$shift",
+          Department: "$department",
+          Employee: "$employees.username",
+
+          Date: {
+            $dateToString: {
+              format: "%Y-%m-%d",
+              date: { $ifNull: ["$latestStatus.date", "$createdAt"] },
+            },
+          },
+
+          RawTime: { $ifNull: ["$latestStatus.updatedAt", "$updatedAt"] },
+
+          Status: {
+            $cond: {
+              if: { $ifNull: ["$latestStatus.status", false] },
+              then: "$latestStatus.status",
+              else: "Not Done",
+            },
+          },
+        },
+      },
+    ]);
+
+    // Shift-correct date logic
+    const istNow = getISTime();
+    const effectiveDate = new Date(istNow);
+    if (istNow.getHours() < 10) effectiveDate.setDate(effectiveDate.getDate() - 1);
+    effectiveDate.setHours(0, 0, 0, 0);
+
+    // FIX: Ensure tasks with NO status still included
+    const cleaned = [];
+    for (const s of statuses) {
+      const realDate = new Date(s.Date);
+
+      // If task created after shift cutoff => assign previous shift date
+      if (realDate > effectiveDate) {
+        s.Date = effectiveDate.toISOString().split("T")[0];
+      }
+
+      // Add readable time
+      s.Time = s.RawTime
+        ? new Date(s.RawTime).toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+            timeZone: "Asia/Kolkata",
+          })
+        : "--";
+
+      delete s.RawTime;
+
+      const finalDate = new Date(s.Date);
+      if (finalDate >= start && finalDate <= end) {
+        cleaned.push(s); // ALWAYS pushes — no missing rows
+      }
+    }
+
+    // Group by month
+    const monthGroups = {};
+    for (const s of cleaned) {
+      const d = new Date(s.Date);
+      const key = `${d.toLocaleString("default", { month: "long" })} ${d.getFullYear()}`;
+      (monthGroups[key] ??= []).push(s);
+    }
+
+    // Excel generation
+    const workbook = XLSX.utils.book_new();
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { fgColor: { rgb: "4472C4" } },
+      alignment: { horizontal: "center" },
+    };
+
+    for (const [month, data] of Object.entries(monthGroups)) {
+      const styledData = [
+        {
+          Task: { v: "Task", s: headerStyle },
+          Shift: { v: "Shift", s: headerStyle },
+          Department: { v: "Department", s: headerStyle },
+          Employee: { v: "Employee", s: headerStyle },
+          Date: { v: "Date", s: headerStyle },
+          Time: { v: "Updated Time", s: headerStyle },
+          Status: { v: "Status", s: headerStyle },
+        },
+        ...data.map((item) => ({
+          Task: { v: item.Task },
+          Shift: { v: item.Shift },
+          Department: { v: item.Department },
+          Employee: { v: item.Employee },
+          Date: { v: item.Date },
+          Time: { v: item.Time },
+          Status: {
+            v: item.Status,
+            s: {
+              font: {
+                color: {
+                  rgb: item.Status.toLowerCase() === "done" ? "008000" : "FF0000",
+                },
+                bold: true,
+              },
+            },
+          },
+        })),
+      ];
+
+      const worksheet = XLSX.utils.json_to_sheet(styledData, { skipHeader: true });
+
+      worksheet["!cols"] = ["Task", "Shift", "Department", "Employee", "Date", "Time", "Status"].map(
+        (key) => ({
+          wch: Math.max(
+            key.length,
+            ...data.map((row) => (row[key] ? row[key].toString().length : 0))
+          ) + 5,
+        })
+      );
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, month);
+    }
+
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+    const fileName = `Task_Status_Last_12_Months_${Date.now()}.xlsx`;
+
+    res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(buffer);
+
+  } catch (error) {
+    console.error("Export Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 export const Defaulter = async (req, res) => {
   try {
