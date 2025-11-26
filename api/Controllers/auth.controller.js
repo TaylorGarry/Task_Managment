@@ -69,7 +69,6 @@ export const signup = async (req, res) => {
     if (req.user?.accountType !== "admin")
       return res.status(403).json({ message: "Only admin can create users" });
 
-    // ✅ IMPROVED: Better validation for core team vs regular employees
     if (!username || !password || !department || !accountType)
       return res.status(400).json({ message: "Username, password, department, and account type are required" });
 
@@ -85,7 +84,7 @@ export const signup = async (req, res) => {
       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
-      "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+      "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
     };
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
