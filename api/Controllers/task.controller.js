@@ -1270,23 +1270,60 @@ export const Defaulter = async (req, res) => {
     const employeeDefaultSets = new Map();
     const nowIst = getISTime();
 
+    // const computeShiftWindow = (emp, shiftType) => {
+    //   // Determine shiftDate based on employee shift start
+    //   const shiftDate = new Date(nowIst);
+    //   const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
+
+    //   // If early morning shift (<10AM) and current time < 10AM, shift belongs to previous day
+    //   if (startHour < 10 && nowIst.getHours() < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+    //   shiftDate.setHours(startHour, 0, 0, 0);
+
+    //   const allowedWindows = {
+    //     Start: { start: new Date(shiftDate), end: new Date(shiftDate.getTime() + 2 * 60 * 60 * 1000) },
+    //     Mid: { start: new Date(shiftDate.getTime() + 3 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 6 * 60 * 60 * 1000) },
+    //     End: { start: new Date(shiftDate.getTime() + 8.5 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 10 * 60 * 60 * 1000) },
+    //   };
+
+    //   return allowedWindows[shiftType] || null;
+    // };
+
     const computeShiftWindow = (emp, shiftType) => {
-      // Determine shiftDate based on employee shift start
-      const shiftDate = new Date(nowIst);
-      const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
+  const now = getISTime();
 
-      // If early morning shift (<10AM) and current time < 10AM, shift belongs to previous day
-      if (startHour < 10 && nowIst.getHours() < 10) shiftDate.setDate(shiftDate.getDate() - 1);
-      shiftDate.setHours(startHour, 0, 0, 0);
+  const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
+  const endHour = typeof emp.shiftEndHour === "number" ? emp.shiftEndHour : 2;
 
-      const allowedWindows = {
-        Start: { start: new Date(shiftDate), end: new Date(shiftDate.getTime() + 2 * 60 * 60 * 1000) },
-        Mid: { start: new Date(shiftDate.getTime() + 3 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 6 * 60 * 60 * 1000) },
-        End: { start: new Date(shiftDate.getTime() + 8.5 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 10 * 60 * 60 * 1000) },
-      };
+  const shiftDate = new Date(now);
 
-      return allowedWindows[shiftType] || null;
-    };
+  const shiftCrossesMidnight = startHour > endHour;
+
+  // 🔥 CASE 1: Shift starts at early morning (00:00 - 05:59)
+  if (startHour >= 0 && startHour < 6) {
+    shiftDate.setDate(shiftDate.getDate() - 1);
+  }
+
+  // 🔥 CASE 2: Shift crosses midnight
+  else if (shiftCrossesMidnight && now.getHours() < endHour) {
+    shiftDate.setDate(shiftDate.getDate() - 1);
+  }
+
+  // 🔥 CASE 3: Evening or night shifts (>= 18)
+  else if (startHour >= 18 && now.getHours() < startHour) {
+    shiftDate.setDate(shiftDate.getDate() - 1);
+  }
+
+  shiftDate.setHours(startHour, 0, 0, 0);
+
+  const allowedWindows = {
+    Start: { start: new Date(shiftDate), end: new Date(shiftDate.getTime() + 2 * 60 * 60 * 1000) },
+    Mid:   { start: new Date(shiftDate.getTime() + 3 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 6 * 60 * 60 * 1000) },
+    End:   { start: new Date(shiftDate.getTime() + 8.5 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 10 * 60 * 60 * 1000) }
+  };
+
+  return allowedWindows[shiftType] || null;
+};
+
 
     for (const task of tasks) {
       for (const emp of task.assignedTo) {
