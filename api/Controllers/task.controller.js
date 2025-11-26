@@ -1288,7 +1288,7 @@ export const Defaulter = async (req, res) => {
     //   return allowedWindows[shiftType] || null;
     // };
 
-    const computeShiftWindow = (emp, shiftType) => {
+  const computeShiftWindow = (emp, shiftType) => {
   const now = getISTime();
 
   const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
@@ -1298,19 +1298,30 @@ export const Defaulter = async (req, res) => {
 
   const shiftCrossesMidnight = startHour > endHour;
 
-  // 🔥 CASE 1: Shift starts at early morning (00:00 - 05:59)
-  if (startHour >= 0 && startHour < 6) {
-    shiftDate.setDate(shiftDate.getDate() - 1);
-  }
+  // Normal date calculation (same as before)
+  if (startHour >= 0 && startHour < 6) shiftDate.setDate(shiftDate.getDate() - 1);
+  else if (shiftCrossesMidnight && now.getHours() < endHour) shiftDate.setDate(shiftDate.getDate() - 1);
+  else if (startHour >= 18 && now.getHours() < startHour) shiftDate.setDate(shiftDate.getDate() - 1);
 
-  // 🔥 CASE 2: Shift crosses midnight
-  else if (shiftCrossesMidnight && now.getHours() < endHour) {
-    shiftDate.setDate(shiftDate.getDate() - 1);
+  // -------------------------------
+  //  ⭐ NEW RULE (your requirement)
+  //  From 2 PM today → to 2 PM next day
+  //  ALWAYS show previous day's defaulters
+  // -------------------------------
+  const hour = now.getHours();
+  if (hour >= 14 || hour < 14) {
+    // If time is between 2 PM today and 2 PM tomorrow
+    if (!(hour < 14)) { 
+      // from 14:00 today until 23:59 → previous day
+      shiftDate.setDate(shiftDate.getDate() - 1);
+    }
   }
-
-  // 🔥 CASE 3: Evening or night shifts (>= 18)
-  else if (startHour >= 18 && now.getHours() < startHour) {
-    shiftDate.setDate(shiftDate.getDate() - 1);
+  if (hour < 14) {
+    // next day before 2 PM → still previous day
+    const diffHours = (now - shiftDate) / (1000 * 60 * 60);
+    if (diffHours < 24) {
+      shiftDate.setDate(shiftDate.getDate() - 1);
+    }
   }
 
   shiftDate.setHours(startHour, 0, 0, 0);
@@ -1323,6 +1334,7 @@ export const Defaulter = async (req, res) => {
 
   return allowedWindows[shiftType] || null;
 };
+
 
 
     for (const task of tasks) {
