@@ -107,6 +107,9 @@ const AdminNavbar = () => {
           <h1 className="text-lg font-bold text-[#155DFC]">Task Management</h1>
 
           <div className="hidden md:flex items-center gap-4">
+             <Link to="/admin/adminDashboard" className="hover:underline text-[#155DFC] font-semibold">
+              Admin
+            </Link>
             <Link to="/admin/assign-task" className="hover:underline text-[#155DFC] font-semibold">
               Assign Task
             </Link>
@@ -121,7 +124,7 @@ const AdminNavbar = () => {
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+                  className="flex items-center gap-2 bg-[#00B579] hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all cursor-pointer"
                 >
                   <FiDownload />
                   {exporting ? "Exporting..." : "Export Excel"}
@@ -129,7 +132,7 @@ const AdminNavbar = () => {
 
                 <button
                   onClick={() => navigate("/signup")}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all"
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all cursor-pointer"
                 >
                   Create User
                 </button>

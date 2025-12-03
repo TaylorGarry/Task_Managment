@@ -3,11 +3,13 @@ import {
   Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, TablePagination,
   Button, Dialog, DialogTitle, DialogContent,
-  DialogActions, TextField, MenuItem, CircularProgress
+  DialogActions, TextField, MenuItem, CircularProgress,
+  IconButton, InputAdornment
 } from "@mui/material";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees, updateUserByAdmin } from "../features/slices/authSlice.js";
 import toast from "react-hot-toast";
+import { Visibility, VisibilityOff } from "@mui/icons-material";
 
 const shiftOptions = [
   { label: "1am-10am", value: "1am-10am" },
@@ -41,7 +43,11 @@ const ManageEmployee = () => {
     department: "",
     shiftLabel: "",
     isCoreTeam: false,
+    password: "",
+    confirmPassword: ""
   });
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [loadedOnce, setLoadedOnce] = useState(false);
@@ -67,10 +73,24 @@ const ManageEmployee = () => {
         user.shiftLabel ||
         getShiftLabel(user.shiftStartHour, user.shiftEndHour),
       isCoreTeam: user.isCoreTeam || false,
+      password: "",
+      confirmPassword: ""
     });
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
-  const handleCloseDialog = () => setSelectedUser(null);
+  const handleCloseDialog = () => {
+    setSelectedUser(null);
+    setFormData({
+      username: "",
+      department: "",
+      shiftLabel: "",
+      isCoreTeam: false,
+      password: "",
+      confirmPassword: ""
+    });
+  };
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -82,6 +102,23 @@ const ManageEmployee = () => {
 
   const handleSave = async () => {
     try {
+      if (formData.password || formData.confirmPassword) {
+        if (!formData.password || !formData.confirmPassword) {
+          toast.error("Both password fields are required for password reset");
+          return;
+        }
+        
+        if (formData.password !== formData.confirmPassword) {
+          toast.error("Passwords do not match");
+          return;
+        }
+        
+        if (formData.password.length < 6) {
+          toast.error("Password must be at least 6 characters long");
+          return;
+        }
+      }
+
       let shiftStartHour = null;
       let shiftEndHour = null;
 
@@ -105,21 +142,38 @@ const ManageEmployee = () => {
         shiftEndHour,
       };
 
-      const updatedUser = await dispatch(
+      if (formData.password) {
+        updateData.password = formData.password;
+        updateData.confirmPassword = formData.confirmPassword;
+      }
+
+      const result = await dispatch(
         updateUserByAdmin({ userId: selectedUser._id, updateData })
       ).unwrap();
 
-      toast.success("Employee updated successfully!");
+      if (formData.password) {
+        toast.success("Employee updated and password reset successfully!");
+      } else {
+        toast.success("Employee updated successfully!");
+      }
 
       setLocalEmployees((prev) =>
-        prev.map((u) => (u._id === selectedUser._id ? { ...u, ...updatedUser } : u))
+        prev.map((u) => (u._id === selectedUser._id ? { ...u, ...result.user } : u))
       );
 
-      setSelectedUser(null);
+      handleCloseDialog();
     } catch (err) {
       console.error("Update failed:", err);
-      toast.error("Failed to update employee");
+      toast.error(err || "Failed to update employee");
     }
+  };
+
+  const togglePasswordVisibility = () => {
+    setShowPassword(!showPassword);
+  };
+
+  const toggleConfirmPasswordVisibility = () => {
+    setShowConfirmPassword(!showConfirmPassword);
   };
 
   if (loading && localEmployees.length === 0)
@@ -131,8 +185,6 @@ const ManageEmployee = () => {
 
   return (
     <div className="p-6 mt-10">
-
-
       <Paper elevation={3}>
         <TableContainer>
           <Table>
@@ -188,7 +240,7 @@ const ManageEmployee = () => {
         />
       </Paper>
 
-      <Dialog open={!!selectedUser} onClose={handleCloseDialog} fullWidth>
+      <Dialog open={!!selectedUser} onClose={handleCloseDialog} fullWidth maxWidth="sm">
         <DialogTitle>Edit Employee</DialogTitle>
         <DialogContent>
           <div className="flex flex-col gap-4 mt-2">
@@ -198,6 +250,7 @@ const ManageEmployee = () => {
               value={formData.username}
               onChange={handleChange}
               fullWidth
+              margin="normal"
             />
             <TextField
               label="Department"
@@ -205,6 +258,7 @@ const ManageEmployee = () => {
               value={formData.department}
               onChange={handleChange}
               fullWidth
+              margin="normal"
             />
             <TextField
               select
@@ -213,6 +267,7 @@ const ManageEmployee = () => {
               value={formData.shiftLabel}
               onChange={handleChange}
               fullWidth
+              margin="normal"
             >
               {shiftOptions.map((shift) => (
                 <MenuItem key={shift.value} value={shift.value}>
@@ -221,7 +276,7 @@ const ManageEmployee = () => {
               ))}
             </TextField>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 mb-4">
               <label className="font-medium">Core Team:</label>
               <input
                 type="checkbox"
@@ -230,13 +285,74 @@ const ManageEmployee = () => {
                 onChange={handleChange}
               />
             </div>
+
+            <div className="mt-4 pt-4 border-t">
+              <h3 className="text-lg font-semibold mb-3 text-gray-700">Reset Password</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                Leave blank to keep current password
+              </p>
+              
+              <TextField
+                label="New Password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                value={formData.password}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={togglePasswordVisibility} edge="end">
+                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              
+              <TextField
+                label="Confirm New Password"
+                name="confirmPassword"
+                type={showConfirmPassword ? "text" : "password"}
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                fullWidth
+                margin="normal"
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton onClick={toggleConfirmPasswordVisibility} edge="end">
+                        {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
+              
+              {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+                <p className="text-red-500 text-sm mt-1">Passwords do not match</p>
+              )}
+              
+              {formData.password && formData.password.length < 6 && (
+                <p className="text-red-500 text-sm mt-1">Password must be at least 6 characters</p>
+              )}
+            </div>
           </div>
         </DialogContent>
 
         <DialogActions>
           <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button variant="contained" color="primary" onClick={handleSave}>
-            Save
+          <Button 
+            variant="contained" 
+            color="primary" 
+            onClick={handleSave}
+            disabled={
+              (formData.password || formData.confirmPassword) && 
+              (formData.password !== formData.confirmPassword || formData.password.length < 6)
+            }
+          >
+            Save Changes
           </Button>
         </DialogActions>
       </Dialog>

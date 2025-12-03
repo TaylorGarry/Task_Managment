@@ -11,6 +11,7 @@ import AdminNavbar from "./components/AdminNavbar.jsx";
 import AllTasks from "./pages/AllTasks.jsx";
 import Defaulter from "./pages/Defaulter.jsx";
 import ManageEmployee from "./components/ManageEmployee.jsx";
+import AdminDashboard from "./components/AdminDashboard.jsx";
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
@@ -48,6 +49,7 @@ function App() {
         <Route path="tasks" element={<TaskStatus />} />
         <Route path="defaulter" element={<Defaulter />} />
         <Route path="manage-employee" element={<ManageEmployee />} />
+        <Route path="adminDashboard" element={<AdminDashboard />} />
         <Route index element={<Navigate to="assign-task" replace />} />
       </Route>
 

@@ -1,21 +1,458 @@
+// // import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+// // import axios from "axios";
+
+// // // const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/remarks`;
+// // const API_URL = `${import.meta.env.VITE_API_URL || " http://localhost:4000"}/api/remarks`;
+
+// // const getToken = (getState) =>
+// //   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;
+
+// // export const fetchRemarks = createAsyncThunk(
+// //   "remarks/fetchRemarks",
+// //   async (taskId, { rejectWithValue, getState }) => {
+// //     try {
+// //       const token = getToken(getState);
+// //       const res = await axios.get(`${API_URL}/${taskId}`, {
+// //         headers: { Authorization: `Bearer ${token}` },
+// //       });
+
+// //       return res.data;  
+// //     } catch (error) {
+// //       return rejectWithValue(
+// //         error.response?.data?.message || "Failed to fetch remarks"
+// //       );
+// //     }
+// //   }
+// // );
+
+// // export const addRemark = createAsyncThunk(
+// //   "remarks/addRemark",
+// //   async ({ taskId, message, receiverId = null }, { rejectWithValue, getState }) => {
+// //     try {
+// //       const token = getToken(getState);
+
+// //       const res = await axios.post(
+// //         `${API_URL}/${taskId}`,
+// //         { message, receiverId },
+// //         {
+// //           headers: {
+// //             Authorization: `Bearer ${token}`,
+// //             "Content-Type": "application/json",
+// //           },
+// //         }
+// //       );
+
+// //       return res.data.remark;  
+// //     } catch (error) {
+// //       return rejectWithValue(
+// //         error.response?.data?.message || "Failed to add remark"
+// //       );
+// //     }
+// //   }
+// // );
+
+// // export const updateRemark = createAsyncThunk(
+// //   "remarks/updateRemark",
+// //   async ({ remarkId, message }, { rejectWithValue, getState }) => {
+// //     try {
+// //       const token = getToken(getState);
+
+// //       const res = await axios.put(
+// //         `${API_URL}/${remarkId}`,
+// //         { message },
+// //         {
+// //           headers: {
+// //             Authorization: `Bearer ${token}`,
+// //             "Content-Type": "application/json",
+// //           },
+// //         }
+// //       );
+
+// //       return res.data.remark;  
+// //     } catch (error) {
+// //       return rejectWithValue(
+// //         error.response?.data?.message || "Failed to update remark"
+// //       );
+// //     }
+// //   }
+// // );
+
+// // const remarkSlice = createSlice({
+// //   name: "remarks",
+// //   initialState: {
+// //     remarks: [],
+// //     loading: false,
+// //     error: null,
+// //   },
+// //   reducers: {
+// //     clearRemarks: (state) => {
+// //       state.remarks = [];
+// //       state.error = null;
+// //     },
+// //   },
+
+// //   extraReducers: (builder) => {
+// //     builder
+// //       .addCase(fetchRemarks.pending, (state) => {
+// //         state.loading = true;
+// //         state.error = null;
+// //       })
+// //       .addCase(fetchRemarks.fulfilled, (state, action) => {
+// //         state.loading = false;
+// //         state.remarks = action.payload;
+// //       })
+// //       .addCase(fetchRemarks.rejected, (state, action) => {
+// //         state.loading = false;
+// //         state.error = action.payload;
+// //       })
+
+// //       .addCase(addRemark.pending, (state) => {
+// //         state.error = null;
+// //       })
+// //       .addCase(addRemark.fulfilled, (state, action) => {
+// //         state.remarks.push(action.payload);
+
+// //         state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+// //       })
+// //       .addCase(addRemark.rejected, (state, action) => {
+// //         state.error = action.payload;
+// //       })
+
+// //       .addCase(updateRemark.pending, (state) => {
+// //         state.error = null;
+// //       })
+// //       .addCase(updateRemark.fulfilled, (state, action) => {
+// //         const index = state.remarks.findIndex((r) => r._id === action.payload._id);
+// //         if (index !== -1) state.remarks[index] = action.payload;
+// //       })
+// //       .addCase(updateRemark.rejected, (state, action) => {
+// //         state.error = action.payload;
+// //       });
+// //   },
+// // });
+
+// // export const { clearRemarks } = remarkSlice.actions;
+// // export default remarkSlice.reducer;
+
+
+// import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+// import axios from "axios";
+
+// const API_URL = `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/remarks`;
+
+// const getToken = (getState) =>
+//   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;
+
+// export const fetchRemarks = createAsyncThunk(
+//   "remarks/fetchRemarks",
+//   async (taskId, { rejectWithValue, getState }) => {
+//     try {
+//       const token = getToken(getState);
+//       const res = await axios.get(`${API_URL}/${taskId}`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       return res.data;  
+//     } catch (error) {
+//       return rejectWithValue(
+//         error.response?.data?.message || "Failed to fetch remarks"
+//       );
+//     }
+//   }
+// );
+
+// export const addRemark = createAsyncThunk(
+//   "remarks/addRemark",
+//   async ({ taskId, message, receiverId = null, sendToAll = false }, { rejectWithValue, getState }) => {
+//     try {
+//       const token = getToken(getState);
+
+//       const res = await axios.post(
+//         `${API_URL}/${taskId}`,
+//         { message, receiverId, sendToAll },
+//         {
+//           headers: {
+//             Authorization: `Bearer ${token}`,
+//             "Content-Type": "application/json",
+//           },
+//         }
+//       );
+
+//       // Handle multiple remarks if sent to all
+//       if (res.data.sentToAll && Array.isArray(res.data.remarks)) {
+//         return {
+//           remarks: res.data.remarks,
+//           sentToAll: true,
+//           message: res.data.message
+//         };
+//       }
+      
+//       return {
+//         remark: res.data.remarks || res.data.remark,
+//         sentToAll: false
+//       };
+//     } catch (error) {
+//       return rejectWithValue(
+//         error.response?.data?.message || "Failed to add remark"
+//       );
+//     }
+//   }
+// );
+
+// export const updateRemark = createAsyncThunk(
+//   "remarks/updateRemark",
+//   async ({ remarkId, message }, { rejectWithValue, getState }) => {
+//     try {
+//       const token = getToken(getState);
+
+//       const res = await axios.put(
+//         `${API_URL}/${remarkId}`,
+//         { message },
+//         {
+//           headers: {
+//             Authorization: `Bearer ${token}`,
+//             "Content-Type": "application/json",
+//           },
+//         }
+//       );
+
+//       return res.data.remark;  
+//     } catch (error) {
+//       return rejectWithValue(
+//         error.response?.data?.message || "Failed to update remark"
+//       );
+//     }
+//   }
+// );
+
+// const remarkSlice = createSlice({
+//   name: "remarks",
+//   initialState: {
+//     remarks: [],
+//     loading: false,
+//     error: null,
+//   },
+//   reducers: {
+//     clearRemarks: (state) => {
+//       state.remarks = [];
+//       state.error = null;
+//     },
+//     addRemarkToState: (state, action) => {
+//       state.remarks.push(action.payload);
+//       state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+//     },
+//     addRemarksToState: (state, action) => {
+//       state.remarks.push(...action.payload);
+//       state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+//     },
+//   },
+
+//   extraReducers: (builder) => {
+//     builder
+//       .addCase(fetchRemarks.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchRemarks.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.remarks = action.payload;
+//       })
+//       .addCase(fetchRemarks.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       .addCase(addRemark.pending, (state) => {
+//         state.error = null;
+//       })
+//       .addCase(addRemark.fulfilled, (state, action) => {
+//         if (action.payload.sentToAll && Array.isArray(action.payload.remarks)) {
+//           state.remarks.push(...action.payload.remarks);
+//         } else {
+//           state.remarks.push(action.payload.remark);
+//         }
+        
+//         state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+//       })
+//       .addCase(addRemark.rejected, (state, action) => {
+//         state.error = action.payload;
+//       })
+
+//       .addCase(updateRemark.pending, (state) => {
+//         state.error = null;
+//       })
+//       .addCase(updateRemark.fulfilled, (state, action) => {
+//         const index = state.remarks.findIndex((r) => r._id === action.payload._id);
+//         if (index !== -1) state.remarks[index] = action.payload;
+//       })
+//       .addCase(updateRemark.rejected, (state, action) => {
+//         state.error = action.payload;
+//       });
+//   },
+// });
+
+// export const { clearRemarks, addRemarkToState, addRemarksToState } = remarkSlice.actions;
+// export default remarkSlice.reducer;
+
+// import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
+// import axios from "axios";
+
+// // const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/remarks`;
+// const API_URL = `${import.meta.env.VITE_API_URL || " http://localhost:4000"}/api/remarks`;
+
+// const getToken = (getState) =>
+//   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;
+
+// export const fetchRemarks = createAsyncThunk(
+//   "remarks/fetchRemarks",
+//   async (taskId, { rejectWithValue, getState }) => {
+//     try {
+//       const token = getToken(getState);
+//       const res = await axios.get(`${API_URL}/${taskId}`, {
+//         headers: { Authorization: `Bearer ${token}` },
+//       });
+
+//       return res.data;  
+//     } catch (error) {
+//       return rejectWithValue(
+//         error.response?.data?.message || "Failed to fetch remarks"
+//       );
+//     }
+//   }
+// );
+
+// export const addRemark = createAsyncThunk(
+//   "remarks/addRemark",
+//   async ({ taskId, message, receiverId = null }, { rejectWithValue, getState }) => {
+//     try {
+//       const token = getToken(getState);
+
+//       const res = await axios.post(
+//         `${API_URL}/${taskId}`,
+//         { message, receiverId },
+//         {
+//           headers: {
+//             Authorization: `Bearer ${token}`,
+//             "Content-Type": "application/json",
+//           },
+//         }
+//       );
+
+//       return res.data.remark;  
+//     } catch (error) {
+//       return rejectWithValue(
+//         error.response?.data?.message || "Failed to add remark"
+//       );
+//     }
+//   }
+// );
+
+// export const updateRemark = createAsyncThunk(
+//   "remarks/updateRemark",
+//   async ({ remarkId, message }, { rejectWithValue, getState }) => {
+//     try {
+//       const token = getToken(getState);
+
+//       const res = await axios.put(
+//         `${API_URL}/${remarkId}`,
+//         { message },
+//         {
+//           headers: {
+//             Authorization: `Bearer ${token}`,
+//             "Content-Type": "application/json",
+//           },
+//         }
+//       );
+
+//       return res.data.remark;  
+//     } catch (error) {
+//       return rejectWithValue(
+//         error.response?.data?.message || "Failed to update remark"
+//       );
+//     }
+//   }
+// );
+
+// const remarkSlice = createSlice({
+//   name: "remarks",
+//   initialState: {
+//     remarks: [],
+//     loading: false,
+//     error: null,
+//   },
+//   reducers: {
+//     clearRemarks: (state) => {
+//       state.remarks = [];
+//       state.error = null;
+//     },
+//   },
+
+//   extraReducers: (builder) => {
+//     builder
+//       .addCase(fetchRemarks.pending, (state) => {
+//         state.loading = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchRemarks.fulfilled, (state, action) => {
+//         state.loading = false;
+//         state.remarks = action.payload;
+//       })
+//       .addCase(fetchRemarks.rejected, (state, action) => {
+//         state.loading = false;
+//         state.error = action.payload;
+//       })
+
+//       .addCase(addRemark.pending, (state) => {
+//         state.error = null;
+//       })
+//       .addCase(addRemark.fulfilled, (state, action) => {
+//         state.remarks.push(action.payload);
+
+//         state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+//       })
+//       .addCase(addRemark.rejected, (state, action) => {
+//         state.error = action.payload;
+//       })
+
+//       .addCase(updateRemark.pending, (state) => {
+//         state.error = null;
+//       })
+//       .addCase(updateRemark.fulfilled, (state, action) => {
+//         const index = state.remarks.findIndex((r) => r._id === action.payload._id);
+//         if (index !== -1) state.remarks[index] = action.payload;
+//       })
+//       .addCase(updateRemark.rejected, (state, action) => {
+//         state.error = action.payload;
+//       });
+//   },
+// });
+
+// export const { clearRemarks } = remarkSlice.actions;
+// export default remarkSlice.reducer;
+
+
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = `${import.meta.env.VITE_API_URL || " https://task-managment-7.onrender.com"}/api/remarks`;
+const API_URL = `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/remarks`;
 
 const getToken = (getState) =>
   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;
 
+// =============================
+// FETCH REMARKS
+// =============================
 export const fetchRemarks = createAsyncThunk(
   "remarks/fetchRemarks",
   async (taskId, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
+
       const res = await axios.get(`${API_URL}/${taskId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return res.data;  
+      return res.data;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to fetch remarks"
@@ -24,15 +461,18 @@ export const fetchRemarks = createAsyncThunk(
   }
 );
 
+// =============================
+// ADD REMARK
+// =============================
 export const addRemark = createAsyncThunk(
   "remarks/addRemark",
-  async ({ taskId, message, receiverId = null }, { rejectWithValue, getState }) => {
+  async ({ taskId, message, receiverId = null, sendToAll = false }, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
 
       const res = await axios.post(
         `${API_URL}/${taskId}`,
-        { message, receiverId },
+        { message, receiverId, sendToAll },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -41,7 +481,17 @@ export const addRemark = createAsyncThunk(
         }
       );
 
-      return res.data.remark;  
+      if (res.data.sentToAll && Array.isArray(res.data.remarks)) {
+        return {
+          remarks: res.data.remarks,
+          sentToAll: true,
+        };
+      }
+
+      return {
+        remark: res.data.remark,
+        sentToAll: false,
+      };
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to add remark"
@@ -50,6 +500,9 @@ export const addRemark = createAsyncThunk(
   }
 );
 
+// =============================
+// UPDATE (EDIT) REMARK
+// =============================
 export const updateRemark = createAsyncThunk(
   "remarks/updateRemark",
   async ({ remarkId, message }, { rejectWithValue, getState }) => {
@@ -57,7 +510,7 @@ export const updateRemark = createAsyncThunk(
       const token = getToken(getState);
 
       const res = await axios.put(
-        `${API_URL}/${remarkId}`,
+        `${API_URL}/update/${remarkId}`,
         { message },
         {
           headers: {
@@ -67,7 +520,7 @@ export const updateRemark = createAsyncThunk(
         }
       );
 
-      return res.data.remark;  
+      return res.data.remark;
     } catch (error) {
       return rejectWithValue(
         error.response?.data?.message || "Failed to update remark"
@@ -76,6 +529,31 @@ export const updateRemark = createAsyncThunk(
   }
 );
 
+// =============================
+// DELETE REMARK
+// =============================
+export const deleteRemark = createAsyncThunk(
+  "remarks/deleteRemark",
+  async (remarkId, { rejectWithValue, getState }) => {
+    try {
+      const token = getToken(getState);
+
+      await axios.delete(`${API_URL}/${remarkId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return remarkId;
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || "Failed to delete remark"
+      );
+    }
+  }
+);
+
+// =============================
+// SLICE
+// =============================
 const remarkSlice = createSlice({
   name: "remarks",
   initialState: {
@@ -88,10 +566,19 @@ const remarkSlice = createSlice({
       state.remarks = [];
       state.error = null;
     },
+    addRemarkToState: (state, action) => {
+      state.remarks.push(action.payload);
+      state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    },
+    addRemarksToState: (state, action) => {
+      state.remarks.push(...action.payload);
+      state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    },
   },
 
   extraReducers: (builder) => {
     builder
+      // FETCH
       .addCase(fetchRemarks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -105,30 +592,31 @@ const remarkSlice = createSlice({
         state.error = action.payload;
       })
 
-      .addCase(addRemark.pending, (state) => {
-        state.error = null;
-      })
+      // ADD
       .addCase(addRemark.fulfilled, (state, action) => {
-        state.remarks.push(action.payload);
+        if (action.payload.sentToAll && Array.isArray(action.payload.remarks)) {
+          state.remarks.push(...action.payload.remarks);
+        } else {
+          state.remarks.push(action.payload.remark);
+        }
 
         state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       })
-      .addCase(addRemark.rejected, (state, action) => {
-        state.error = action.payload;
-      })
 
-      .addCase(updateRemark.pending, (state) => {
-        state.error = null;
-      })
+      // UPDATE
       .addCase(updateRemark.fulfilled, (state, action) => {
         const index = state.remarks.findIndex((r) => r._id === action.payload._id);
         if (index !== -1) state.remarks[index] = action.payload;
       })
-      .addCase(updateRemark.rejected, (state, action) => {
-        state.error = action.payload;
+
+      // DELETE
+      .addCase(deleteRemark.fulfilled, (state, action) => {
+        state.remarks = state.remarks.filter((r) => r._id !== action.payload);
       });
   },
 });
 
-export const { clearRemarks } = remarkSlice.actions;
+export const { clearRemarks, addRemarkToState, addRemarksToState } =
+  remarkSlice.actions;
+
 export default remarkSlice.reducer;
