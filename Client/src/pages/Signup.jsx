@@ -6,6 +6,7 @@ import { Eye, EyeOff } from "lucide-react";
 import { toast } from "react-toastify";
 import { signupUser, createCoreTeamUser } from "../features/slices/authSlice.js";
 import AdminNavbar from "../components/AdminNavbar.jsx";
+import { Toaster } from "react-hot-toast";
 
 const Signup = () => {
   const { register, handleSubmit, reset, watch, setValue } = useForm();
@@ -74,6 +75,7 @@ const Signup = () => {
 
   return (
     <>
+    <Toaster />
       <AdminNavbar />
       <div className="flex justify-center items-center h-screen bg-gray-100">
         <div className="bg-white p-8 rounded-2xl mt-10 shadow-md w-full max-w-md">
@@ -159,7 +161,7 @@ const Signup = () => {
             <button
               type="submit"
               disabled={creatingUser}
-              className={`w-full p-2 rounded text-white ${
+              className={`w-full p-2 rounded text-white cursor-pointer ${
                 creatingUser
                   ? "bg-blue-300 cursor-not-allowed"
                   : "bg-blue-500 hover:bg-blue-600"

@@ -163,7 +163,6 @@ export const createCoreTeamUser = async (req, res) => {
   }
 };
 
-
 export const login = async (req, res) => {
   try {
     const { username, password } = req.body;
@@ -200,7 +199,6 @@ export const login = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const logout = async (req, res) => {
   try {
@@ -262,6 +260,8 @@ export const updateProfile = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
 export const updateUserByAdmin = async (req, res) => {
   try {
     if (!req.user?.accountType || req.user.accountType !== "admin") {
@@ -269,10 +269,11 @@ export const updateUserByAdmin = async (req, res) => {
     }
 
     const userId = req.params.id;
-    const { username, accountType, department, shiftLabel, isCoreTeam } = req.body;
+    const { username, accountType, department, shiftLabel, isCoreTeam, password, confirmPassword } = req.body;
 
     const updateData = {};
 
+    // Check if username is being updated
     if (username) {
       const existingUser = await User.findOne({ username }).lean();
       if (existingUser && existingUser._id.toString() !== userId) {
@@ -281,31 +282,59 @@ export const updateUserByAdmin = async (req, res) => {
       updateData.username = username;
     }
 
+    // Update other fields
     if (accountType) updateData.accountType = accountType;
     if (department) updateData.department = department;
     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
 
-    if (!isCoreTeam) {
+    // Handle shift updates for non-core team employees
+    if (!isCoreTeam && shiftLabel) {
       const shiftMapping = {
         "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
         "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
         "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
         "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
         "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
-        "11pm-8am": {shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
+        "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
       };
+      
       const selected = shiftMapping[shiftLabel];
       if (!selected) return res.status(400).json({ message: "Invalid shift label" });
 
       updateData.shift = selected.shift;
       updateData.shiftStartHour = selected.shiftStartHour;
       updateData.shiftEndHour = selected.shiftEndHour;
-    } else {
+    } else if (isCoreTeam) {
+      // Clear shift data for core team members
       updateData.shift = null;
       updateData.shiftStartHour = null;
       updateData.shiftEndHour = null;
     }
 
+    // Handle password reset
+    if (password) {
+      // Validate password and confirmPassword
+      if (!confirmPassword) {
+        return res.status(400).json({ message: "Confirm password is required" });
+      }
+      
+      if (password !== confirmPassword) {
+        return res.status(400).json({ message: "Passwords do not match" });
+      }
+      
+      if (password.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters long" });
+      }
+      
+      // Hash the new password
+      const hashedPassword = await bcrypt.hash(password, 10);
+      updateData.password = hashedPassword;
+      
+      // Optionally, you might want to add a field to track password reset
+      updateData.passwordLastReset = new Date();
+    }
+
+    // Update the user
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateData },
@@ -314,12 +343,83 @@ export const updateUserByAdmin = async (req, res) => {
 
     if (!updatedUser) return res.status(404).json({ message: "User not found" });
 
-    res.status(200).json({
+    // Prepare response data
+    const responseData = {
       message: "User updated successfully",
       user: updatedUser,
-    });
+      passwordReset: password ? true : false
+    };
+
+    // If password was reset, add a specific message
+    if (password) {
+      responseData.message = "User updated and password reset successfully";
+    }
+
+    res.status(200).json(responseData);
   } catch (error) {
     console.error("Update User Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// export const updateUserByAdmin = async (req, res) => {
+//   try {
+//     if (!req.user?.accountType || req.user.accountType !== "admin") {
+//       return res.status(403).json({ message: "Only admin can update users" });
+//     }
+
+//     const userId = req.params.id;
+//     const { username, accountType, department, shiftLabel, isCoreTeam } = req.body;
+
+//     const updateData = {};
+
+//     if (username) {
+//       const existingUser = await User.findOne({ username }).lean();
+//       if (existingUser && existingUser._id.toString() !== userId) {
+//         return res.status(400).json({ message: "Username already exists" });
+//       }
+//       updateData.username = username;
+//     }
+
+//     if (accountType) updateData.accountType = accountType;
+//     if (department) updateData.department = department;
+//     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
+
+//     if (!isCoreTeam) {
+//       const shiftMapping = {
+//         "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+//         "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+//         "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+//         "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+//         "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+//         "11pm-8am": {shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
+//       };
+//       const selected = shiftMapping[shiftLabel];
+//       if (!selected) return res.status(400).json({ message: "Invalid shift label" });
+
+//       updateData.shift = selected.shift;
+//       updateData.shiftStartHour = selected.shiftStartHour;
+//       updateData.shiftEndHour = selected.shiftEndHour;
+//     } else {
+//       updateData.shift = null;
+//       updateData.shiftStartHour = null;
+//       updateData.shiftEndHour = null;
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(
+//       userId,
+//       { $set: updateData },
+//       { new: true, select: "-password" }
+//     ).lean();
+
+//     if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+//     res.status(200).json({
+//       message: "User updated successfully",
+//       user: updatedUser,
+//     });
+//   } catch (error) {
+//     console.error("Update User Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
