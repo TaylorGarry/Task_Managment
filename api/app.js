@@ -38,23 +38,50 @@ const allowedIPs = [
   "182.75.147.210",
   "14.97.83.226",
   "127.0.0.1",
+  "103.21.187.189",
+  "2401:4900:8397:695a:2091:8fff:fe38:b7f4",
   "::1",
 ];
 
+// app.use((req, res, next) => {
+//   const clientIpRaw =
+//     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+//     req.socket.remoteAddress;
+//   const clientIp = clientIpRaw?.replace("::ffff:", "");
+//   if (allowedIPs.includes(clientIp)) {
+//     next();
+//   } else {
+//     return res.status(403).json({
+//       success: false,
+//       message: `Access denied: IP ${clientIp} not allowed`,
+//     });
+//   }
+// });
+
 app.use((req, res, next) => {
-  const clientIpRaw =
+  let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket.remoteAddress;
-  const clientIp = clientIpRaw?.replace("::ffff:", "");
-  if (allowedIPs.includes(clientIp)) {
-    next();
-  } else {
-    return res.status(403).json({
-      success: false,
-      message: `Access denied: IP ${clientIp} not allowed`,
-    });
+
+  // Normalize IPv6 (remove ::ffff: and unnecessary formatting)
+  clientIp = clientIp.replace("::ffff:", "").toLowerCase();
+
+  // Some servers return IPv6 with zone info like "fe80::1%eth0"
+  if (clientIp.includes("%")) {
+    clientIp = clientIp.split("%")[0];
   }
+
+  // Check allowed list
+  if (allowedIPs.includes(clientIp)) {
+    return next();
+  }
+
+  return res.status(403).json({
+    success: false,
+    message: `Access denied: IP ${clientIp} not allowed`,
+  });
 });
+
 
 app.use(express.json());
 
