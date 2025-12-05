@@ -897,13 +897,15 @@ export const updateTaskStatus = async (req, res) => {
 
     if (!task) return res.status(404).json({ message: "Task not found" });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
+
     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
+    // ------------------ TIME HANDLING -------------------
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60;  
+      const istOffset = 5.5 * 60;
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       return new Date(utc + istOffset * 60000);
     };
@@ -938,15 +940,15 @@ export const updateTaskStatus = async (req, res) => {
     const allowedWindows = {
       Start: {
         start: new Date(empShiftStart),
-        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), 
+        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000),
       },
       Mid: {
-        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),  
-        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),    
+        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),
+        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),
       },
       End: {
         start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
-        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),   
+        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),
       },
     };
 
@@ -1038,6 +1040,9 @@ export const updateTaskStatus = async (req, res) => {
 
     await taskStatus.populate("employeeId", "username");
 
+    // 🔥 FIX DATE ALWAYS AS DATE OBJECT
+    taskStatus.date = new Date(taskStatus.date);
+
     res.status(200).json({
       message: "Status updated successfully",
       updatedStatus: {
@@ -1053,7 +1058,6 @@ export const updateTaskStatus = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {
