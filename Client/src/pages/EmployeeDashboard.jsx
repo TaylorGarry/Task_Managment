@@ -57,6 +57,91 @@ const EmployeeDashboard = () => {
   };
 
   const handleStatusChange = async (taskId, status) => {
+    // Find the task
+    const task = tasks.find(t => t._id === taskId);
+    
+    // Validate status
+    if (status === "") {
+      toast.error("Please select a valid status");
+      return;
+    }
+    
+    // Check if task can be updated
+    if (task) {
+      // Check if task is missed (time window passed and not updated)
+      const isTaskMissed = (task.employeeStatus === "" || !task.employeeStatus) && 
+                          task.canUpdate === false;
+      
+      // For Mid shift: check if Start shift is missed
+      let isBlocked = false;
+      let blockReason = "";
+      
+      if (task.shift === "Mid") {
+        // Find Start shift task for same title and date
+        const startTask = tasks.find(t => 
+          t.shift === "Start" && 
+          t.title === task.title && 
+          t.date?.toDateString() === task.date?.toDateString()
+        );
+        
+        if (startTask) {
+          const isStartMissed = (startTask.employeeStatus === "" || !startTask.employeeStatus) && 
+                               startTask.canUpdate === false;
+          if (isStartMissed) {
+            isBlocked = true;
+            blockReason = "Cannot update Mid shift because Start shift was not updated.";
+          }
+        }
+      }
+      
+      // For End shift: check if Start OR Mid shift is missed
+      if (task.shift === "End") {
+        // Find Start shift task
+        const startTask = tasks.find(t => 
+          t.shift === "Start" && 
+          t.title === task.title && 
+          t.date?.toDateString() === task.date?.toDateString()
+        );
+        
+        // Find Mid shift task
+        const midTask = tasks.find(t => 
+          t.shift === "Mid" && 
+          t.title === task.title && 
+          t.date?.toDateString() === task.date?.toDateString()
+        );
+        
+        const isStartMissed = startTask && 
+          (startTask.employeeStatus === "" || !startTask.employeeStatus) && 
+          startTask.canUpdate === false;
+        
+        const isMidMissed = midTask && 
+          (midTask.employeeStatus === "" || !midTask.employeeStatus) && 
+          midTask.canUpdate === false;
+        
+        if (isStartMissed && isMidMissed) {
+          isBlocked = true;
+          blockReason = "Cannot update End shift because both Start and Mid shifts were not updated.";
+        } else if (isStartMissed) {
+          isBlocked = true;
+          blockReason = "Cannot update End shift because Start shift was not updated.";
+        } else if (isMidMissed) {
+          isBlocked = true;
+          blockReason = "Cannot update End shift because Mid shift was not updated.";
+        }
+      }
+      
+      // If task is missed or blocked, show error and return
+      if (isTaskMissed || isBlocked) {
+        if (isTaskMissed) {
+          toast.error(`${task.shift} shift time window has passed. Can update tomorrow.`);
+        } else {
+          toast.error(blockReason);
+        }
+        return;
+      }
+    }
+    
+    // If we get here, proceed with API call
     try {
       let updatedStatus;
 
@@ -80,7 +165,10 @@ const EmployeeDashboard = () => {
 
       toast.success("Task status updated successfully!");
     } catch (err) {
-      toast.error(err || "Failed to update status, please try again.");
+      // The backend will also validate and return error messages
+      // Show the backend error message if available
+      const errorMessage = err?.message || err || "Failed to update status, please try again.";
+      toast.error(errorMessage);
     }
   };
 
@@ -203,7 +291,11 @@ const EmployeeDashboard = () => {
           ) : (
             tasks.map((task) => (
               <div key={task._id} className="relative">
-                <TaskCard task={task} onStatusChange={handleStatusChange} />
+                <TaskCard 
+                  task={task} 
+                  onStatusChange={handleStatusChange} 
+                  allTasks={tasks} // Pass all tasks for dependency checking
+                />
                 <button
                   onClick={() => openChat(task)}
                   className="absolute top-3 right-3 bg-white hover:bg-gray-50 border border-gray-200 w-10 h-10 rounded-full flex items-center justify-center text-gray-600 hover:text-blue-600 shadow-md hover:shadow-lg transform hover:scale-105 transition-all duration-200 cursor-pointer"

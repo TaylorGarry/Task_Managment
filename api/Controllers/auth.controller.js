@@ -273,7 +273,6 @@ export const updateUserByAdmin = async (req, res) => {
 
     const updateData = {};
 
-    // Check if username is being updated
     if (username) {
       const existingUser = await User.findOne({ username }).lean();
       if (existingUser && existingUser._id.toString() !== userId) {
@@ -282,12 +281,10 @@ export const updateUserByAdmin = async (req, res) => {
       updateData.username = username;
     }
 
-    // Update other fields
     if (accountType) updateData.accountType = accountType;
     if (department) updateData.department = department;
     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
 
-    // Handle shift updates for non-core team employees
     if (!isCoreTeam && shiftLabel) {
       const shiftMapping = {
         "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
@@ -305,15 +302,12 @@ export const updateUserByAdmin = async (req, res) => {
       updateData.shiftStartHour = selected.shiftStartHour;
       updateData.shiftEndHour = selected.shiftEndHour;
     } else if (isCoreTeam) {
-      // Clear shift data for core team members
       updateData.shift = null;
       updateData.shiftStartHour = null;
       updateData.shiftEndHour = null;
     }
 
-    // Handle password reset
     if (password) {
-      // Validate password and confirmPassword
       if (!confirmPassword) {
         return res.status(400).json({ message: "Confirm password is required" });
       }
@@ -326,15 +320,12 @@ export const updateUserByAdmin = async (req, res) => {
         return res.status(400).json({ message: "Password must be at least 6 characters long" });
       }
       
-      // Hash the new password
       const hashedPassword = await bcrypt.hash(password, 10);
       updateData.password = hashedPassword;
       
-      // Optionally, you might want to add a field to track password reset
       updateData.passwordLastReset = new Date();
     }
 
-    // Update the user
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       { $set: updateData },
@@ -343,14 +334,11 @@ export const updateUserByAdmin = async (req, res) => {
 
     if (!updatedUser) return res.status(404).json({ message: "User not found" });
 
-    // Prepare response data
     const responseData = {
       message: "User updated successfully",
       user: updatedUser,
       passwordReset: password ? true : false
     };
-
-    // If password was reset, add a specific message
     if (password) {
       responseData.message = "User updated and password reset successfully";
     }

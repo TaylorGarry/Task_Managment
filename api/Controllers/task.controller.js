@@ -23,7 +23,6 @@ const getShiftDate = () => {
   shiftDate.setHours(0, 0, 0, 0);
   return shiftDate;
 };
-
 export const createTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin")
@@ -61,7 +60,7 @@ export const createTask = async (req, res) => {
       taskId: newTask._id,
       employeeId: emp._id,
       date: today,
-      status: "Not Done",
+      status: "", // Initialize as empty string
     }));
     await TaskStatus.insertMany(statuses);
 
@@ -71,24 +70,72 @@ export const createTask = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+// export const createTask = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "admin")
+//       return res.status(403).json({ message: "Only admin can create tasks" });
+
+//     const { title, description, shift, department, assignedTo, deadline, priority } = req.body;
+
+//     if (!title || !shift || !department)
+//       return res.status(400).json({ message: "Title, shift, and department are required" });
+
+//     let employees = [];
+//     if (assignedTo?.length) {
+//       employees = await User.find({ _id: { $in: assignedTo }, department, accountType: "employee" });
+//     } else {
+//       employees = await User.find({ department, accountType: "employee" });
+//     }
+
+//     if (employees.length === 0)
+//       return res.status(404).json({ message: "No valid employees found in department" });
+
+//     const newTask = await Task.create({
+//       title,
+//       description,
+//       shift,
+//       department,
+//       assignedTo: employees.map((e) => e._id),
+//       createdBy: req.user.id,
+//       deadline,
+//       priority,
+//       statusUnlocked: false,
+//     });
+
+//     const today = getShiftDate();
+//     const statuses = employees.map((emp) => ({
+//       taskId: newTask._id,
+//       employeeId: emp._id,
+//       date: today,
+//       status: "",
+//     }));
+//     await TaskStatus.insertMany(statuses);
+
+//     res.status(201).json({ message: "Task created successfully", task: newTask });
+//   } catch (error) {
+//     console.error("Create Task Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
 export const getTasks = async (req, res) => {
   try {
     const { startDate, endDate, shift, department, employeeId } = req.query;
 
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60;
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      return new Date(utc + istOffset * 60000);
+      return new Date(utc + 5.5 * 60 * 60000);
     };
 
     const getShiftDate = () => {
       const ist = getISTime();
-      const hour = ist.getHours();
-      const shiftDate = new Date(ist);
-      if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
-      shiftDate.setHours(0, 0, 0, 0);
-      return shiftDate;
+      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+      ist.setHours(0, 0, 0, 0);
+      return ist;
     };
 
     const filter = {};
@@ -105,9 +152,7 @@ export const getTasks = async (req, res) => {
       .populate("assignedTo", "username department")
       .lean();
 
-    if (!tasks.length) {
-      return res.status(200).json([]);
-    }
+    if (!tasks.length) return res.status(200).json([]);
 
     const todayShiftDate = getShiftDate();
     const start = startDate ? new Date(startDate) : new Date(todayShiftDate);
@@ -116,13 +161,12 @@ export const getTasks = async (req, res) => {
     end.setHours(23, 59, 59, 999);
 
     const dateRange = [];
-    const temp = new Date(start);
-    while (temp <= end) {
-      dateRange.push(new Date(temp));
-      temp.setDate(temp.getDate() + 1);
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      dateRange.push(new Date(d));
     }
 
     const taskIds = tasks.map((t) => t._id);
+    
     const allStatuses = await TaskStatus.find({
       taskId: { $in: taskIds },
       date: { $gte: start, $lte: end },
@@ -130,15 +174,54 @@ export const getTasks = async (req, res) => {
       .populate("employeeId", "username")
       .lean();
 
+    const startShiftTasks = await Task.find({
+      assignedTo: req.user.id,
+      shift: "Start",
+      department: { $in: [...new Set(tasks.map(t => t.department))] },
+      title: { $in: [...new Set(tasks.map(t => t.title))] }
+    }).lean();
+
+    const startTaskIds = startShiftTasks.map(t => t._id);
+    const startShiftStatuses = startTaskIds.length > 0 ? await TaskStatus.find({
+      taskId: { $in: startTaskIds },
+      employeeId: req.user.id,
+      date: { $gte: start, $lte: end }
+    }).lean() : [];
+
     const statusMap = new Map();
+    const startStatusMap = new Map();
+    for (const status of startShiftStatuses) {
+      const key = `${status.taskId}_${status.date.toISOString().split('T')[0]}`;
+      startStatusMap.set(key, status);
+    }
+
+    const startTaskLookup = new Map();
+    for (const task of startShiftTasks) {
+      const key = `${task.title}_${task.department}`;
+      if (!startTaskLookup.has(key)) {
+        startTaskLookup.set(key, task);
+      }
+    }
+
     for (const s of allStatuses) {
-      const dateKey = new Date(s.date).toDateString();
+      if (!s.employeeId) continue;
+      const dateKey = s.date.toISOString().split('T')[0];
       const key = `${s.taskId}_${dateKey}`;
       if (!statusMap.has(key)) statusMap.set(key, []);
       statusMap.get(key).push(s);
     }
 
+    const startShiftUpdatedDates = new Set();
+    for (const status of startShiftStatuses) {
+      if (status.status !== "") {
+        const dateKey = status.date.toISOString().split('T')[0];
+        startShiftUpdatedDates.add(dateKey);
+      }
+    }
+
     const enrichedTasks = [];
+    const userId = req.user.id.toString();
+
     for (const task of tasks) {
       const taskCreatedDate = new Date(task.createdAt);
       taskCreatedDate.setHours(0, 0, 0, 0);
@@ -146,33 +229,56 @@ export const getTasks = async (req, res) => {
       for (const date of dateRange) {
         if (date < taskCreatedDate) continue;
 
-        const key = `${task._id}_${date.toDateString()}`;
+        const dateKey = date.toISOString().split('T')[0];
+        const key = `${task._id}_${dateKey}`;
         const statuses = statusMap.get(key) || [];
 
+        let employeeStatus = "";
         const doneEmployees = [];
         const notDoneEmployees = [];
-        let employeeStatus = "Not Done";
+        const pendingEmployees = [];
 
         for (const s of statuses) {
-          const username = s.employeeId?.username || "Unknown";
-          if (s.status === "Done")
-            doneEmployees.push({ _id: s.employeeId._id, username });
-          else notDoneEmployees.push({ _id: s.employeeId._id, username });
+          if (!s.employeeId) continue;
 
-          if (s.employeeId._id.toString() === req.user.id)
-            employeeStatus = s.status;
+          const empId = s.employeeId._id;
+          const username = s.employeeId.username || "Unknown";
+
+          if (s.status === "Done") {
+            doneEmployees.push({ _id: empId, username });
+          } else if (s.status === "Not Done") {
+            notDoneEmployees.push({ _id: empId, username });
+          } else if (s.status === "") {
+            pendingEmployees.push({ _id: empId, username });
+          }
+
+          if (empId.toString() === userId) employeeStatus = s.status;
         }
 
         const assignedWithoutStatus = task.assignedTo
-          .filter(
-            (emp) =>
-              !statuses.some(
-                (s) => s.employeeId._id.toString() === emp._id.toString()
-              )
-          )
+          .filter((emp) => !statuses.some((s) => s.employeeId?._id.toString() === emp._id.toString()))
           .map((emp) => ({ _id: emp._id, username: emp.username }));
 
+        notDoneEmployees.push(...pendingEmployees);
         notDoneEmployees.push(...assignedWithoutStatus);
+
+        let canUpdate = true;
+        let blockReason = "";
+
+        if (task.shift === "Mid" || task.shift === "End") {
+          const lookupKey = `${task.title}_${task.department}`;
+          const startTask = startTaskLookup.get(lookupKey);
+          
+          if (startTask) {
+            const startTaskKey = `${startTask._id}_${dateKey}`;
+            const startStatus = startStatusMap.get(startTaskKey);
+            
+            if (!startStatus || startStatus.status === "") {
+              canUpdate = false;
+              blockReason = `Cannot update ${task.shift} shift because Start shift was not updated on ${date.toDateString()}.`;
+            }
+          }
+        }
 
         enrichedTasks.push({
           ...task,
@@ -180,6 +286,8 @@ export const getTasks = async (req, res) => {
           doneEmployees,
           notDoneEmployees,
           date,
+          canUpdate,
+          blockReason
         });
       }
     }
@@ -190,6 +298,122 @@ export const getTasks = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// export const getTasks = async (req, res) => {
+//   try {
+//     const { startDate, endDate, shift, department, employeeId } = req.query;
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//       return new Date(utc + 5.5 * 60 * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+//       ist.setHours(0, 0, 0, 0);
+//       return ist;
+//     };
+
+//     const filter = {};
+//     if (req.user.accountType === "employee") {
+//       filter.assignedTo = req.user.id;
+//       if (shift) filter.shift = shift;
+//     } else {
+//       if (shift) filter.shift = shift;
+//       if (department) filter.department = department;
+//       if (employeeId) filter.assignedTo = employeeId;
+//     }
+
+//     const tasks = await Task.find(filter)
+//       .populate("assignedTo", "username department")
+//       .lean();
+
+//     if (!tasks.length) return res.status(200).json([]);
+
+//     const todayShiftDate = getShiftDate();
+//     const start = startDate ? new Date(startDate) : new Date(todayShiftDate);
+//     const end = endDate ? new Date(endDate) : new Date(todayShiftDate);
+//     start.setHours(0, 0, 0, 0);
+//     end.setHours(23, 59, 59, 999);
+
+//     const dateRange = [];
+//     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+//       dateRange.push(new Date(d));
+//     }
+
+//     const taskIds = tasks.map((t) => t._id);
+//     const allStatuses = await TaskStatus.find({
+//       taskId: { $in: taskIds },
+//       date: { $gte: start, $lte: end },
+//     })
+//       .populate("employeeId", "username")
+//       .lean();
+
+//     const statusMap = new Map();
+//     for (const s of allStatuses) {
+//       if (!s.employeeId) continue;  
+//       const key = `${s.taskId}_${new Date(s.date).toDateString()}`;
+//       if (!statusMap.has(key)) statusMap.set(key, []);
+//       statusMap.get(key).push(s);
+//     }
+
+//     const enrichedTasks = [];
+//     for (const task of tasks) {
+//       const taskCreatedDate = new Date(task.createdAt);
+//       taskCreatedDate.setHours(0, 0, 0, 0);
+
+//       for (const date of dateRange) {
+//         if (date < taskCreatedDate) continue;
+
+//         const key = `${task._id}_${date.toDateString()}`;
+//         const statuses = statusMap.get(key) || [];
+
+//         let employeeStatus = "";
+//         const doneEmployees = [];
+//         const notDoneEmployees = [];
+
+//         for (const s of statuses) {
+//           if (!s.employeeId) continue;  
+
+//           const empId = s.employeeId._id;
+//           const username = s.employeeId.username || "Unknown";
+
+//           if (s.status === "Done") doneEmployees.push({ _id: empId, username });
+//           else notDoneEmployees.push({ _id: empId, username });
+
+//           if (empId.toString() === req.user.id) employeeStatus = s.status;
+//         }
+
+//         const assignedWithoutStatus = task.assignedTo
+//           .filter(
+//             (emp) =>
+//               !statuses.some(
+//                 (s) => s.employeeId?._id.toString() === emp._id.toString()
+//               )
+//           )
+//           .map((emp) => ({ _id: emp._id, username: emp.username }));
+
+//         notDoneEmployees.push(...assignedWithoutStatus);
+
+//         enrichedTasks.push({
+//           ...task,
+//           employeeStatus,
+//           doneEmployees,
+//           notDoneEmployees,
+//           date,
+//         });
+//       }
+//     }
+
+//     res.status(200).json(enrichedTasks);
+//   } catch (error) {
+//     console.error("Get Tasks Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const getCoreTeamTasks = async (req, res) => {
   try {
     const { department, employeeId } = req.query;
@@ -286,6 +510,137 @@ export const getCoreTeamTasks = async (req, res) => {
   }
 };
 
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee") {
+//       return res.status(403).json({ message: "Only employees can update status" });
+//     }
+
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const [task, employee] = await Promise.all([
+//       Task.findById(taskId).lean(),
+//       User.findById(req.user.id).lean(),
+//     ]);
+
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+//     if (!employee) return res.status(404).json({ message: "Employee not found" });
+//     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+//     }
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;  
+//       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//       return new Date(utc + istOffset * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       const hour = ist.getHours();
+//       const shiftDate = new Date(ist);
+//       if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+//       shiftDate.setHours(0, 0, 0, 0);
+//       return shiftDate;
+//     };
+
+//     const istTime = getISTime();
+//     const effectiveDate = getShiftDate();
+
+//     const empShiftStart = new Date(effectiveDate);
+//     empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
+
+//     const empShiftEnd = new Date(empShiftStart);
+//     empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
+
+//     if (employee.shiftEndHour < employee.shiftStartHour) {
+//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+//     }
+
+//     if (employee.shiftStartHour < 6 && istTime.getHours() < 10) {
+//       empShiftStart.setDate(empShiftStart.getDate() + 1);
+//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+//     }
+
+//     const allowedWindows = {
+//       Start: {
+//         start: new Date(empShiftStart),
+//         end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), 
+//       },
+//       Mid: {
+//         start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),  
+//         end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),    
+//       },
+//       End: {
+//         start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+//         end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),   
+//       },
+//     };
+
+//     const currentShift = task.shift;
+//     const allowedWindow = allowedWindows[currentShift];
+
+//     if (!allowedWindow) {
+//       return res.status(400).json({ message: "Invalid shift type" });
+//     }
+
+//     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
+//       return res.status(403).json({
+//         message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
+//           "en-IN",
+//           { hour: "2-digit", minute: "2-digit", hour12: true }
+//         )} and ${allowedWindow.end.toLocaleTimeString("en-IN", {
+//           hour: "2-digit",
+//           minute: "2-digit",
+//           hour12: true,
+//         })} IST.`,
+//       });
+//     }
+
+//     let taskStatus = await TaskStatus.findOne({
+//       taskId,
+//       employeeId: req.user.id,
+//       date: effectiveDate,
+//     });
+
+//     if (taskStatus) {
+//       taskStatus.status = status;
+//       taskStatus.updatedAt = new Date();
+//       await taskStatus.save();
+//     } else {
+//       taskStatus = await TaskStatus.create({
+//         taskId,
+//         employeeId: req.user.id,
+//         date: effectiveDate,
+//         status,
+//         updatedAt: new Date(),
+//       });
+//     }
+
+//     await taskStatus.populate("employeeId", "username");
+
+//     res.status(200).json({
+//       message: "Status updated successfully",
+//       updatedStatus: {
+//         taskId: taskStatus.taskId,
+//         employeeId: taskStatus.employeeId._id,
+//         username: taskStatus.employeeId.username,
+//         status: taskStatus.status,
+//         date: taskStatus.date,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const updateTaskStatus = async (req, res) => {
   try {
     if (req.user.accountType !== "employee") {
@@ -366,7 +721,112 @@ export const updateTaskStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid shift type" });
     }
 
+    if (currentShift === "Mid") {
+      const startShiftTasks = await Task.find({
+        assignedTo: req.user.id,
+        shift: "Start",
+        department: task.department
+      }).lean();
+
+      if (startShiftTasks.length > 0) {
+        let hasAnyStartUpdated = false;
+
+        for (const startShiftTask of startShiftTasks) {
+          const startShiftStatus = await TaskStatus.findOne({
+            taskId: startShiftTask._id,
+            employeeId: req.user.id,
+            date: effectiveDate
+          }).lean();
+
+          if (startShiftStatus && startShiftStatus.status !== "") {
+            hasAnyStartUpdated = true;
+            break;
+          }
+        }
+
+        if (!hasAnyStartUpdated) {
+          return res.status(403).json({
+            message: `Cannot update Mid shift. Start shift was not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
+          });
+        }
+      }
+    }
+
+    if (currentShift === "End") {
+      const startShiftTasks = await Task.find({
+        assignedTo: req.user.id,
+        shift: "Start",
+        department: task.department
+      }).lean();
+
+      let hasAnyStartUpdated = false;
+      if (startShiftTasks.length > 0) {
+        for (const startShiftTask of startShiftTasks) {
+          const startShiftStatus = await TaskStatus.findOne({
+            taskId: startShiftTask._id,
+            employeeId: req.user.id,
+            date: effectiveDate
+          });
+          
+          if (startShiftStatus && startShiftStatus.status !== "") {
+            hasAnyStartUpdated = true;
+            break;
+          }
+        }
+      }
+
+      const midShiftTasks = await Task.find({
+        assignedTo: req.user.id,
+        shift: "Mid",
+        department: task.department
+      }).lean();
+
+      let hasAnyMidUpdated = false;
+      if (midShiftTasks.length > 0) {
+        for (const midShiftTask of midShiftTasks) {
+          const midShiftStatus = await TaskStatus.findOne({
+            taskId: midShiftTask._id,
+            employeeId: req.user.id,
+            date: effectiveDate
+          });
+          
+          if (midShiftStatus && midShiftStatus.status !== "") {
+            hasAnyMidUpdated = true;
+            break;
+          }
+        }
+      }
+
+      if (!hasAnyStartUpdated && !hasAnyMidUpdated) {
+        return res.status(403).json({
+          message: `Cannot update End shift. Both Start and Mid shifts were not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
+        });
+      } else if (!hasAnyStartUpdated) {
+        return res.status(403).json({
+          message: `Cannot update End shift. Start shift was not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
+        });
+      } else if (!hasAnyMidUpdated) {
+        return res.status(403).json({
+          message: `Cannot update End shift. Mid shift was not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
+        });
+      }
+    }
+
     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
+      if (istTime > allowedWindow.end) {
+        const existingStatus = await TaskStatus.findOne({
+          taskId,
+          employeeId: req.user.id,
+          date: effectiveDate
+        });
+        
+        if (!existingStatus || existingStatus.status === "") {
+          return res.status(403).json({
+            message: `Cannot update ${currentShift} shift. Time window has passed. Can update tomorrow in scheduled time slot.`
+          });
+        }
+      }
+      
       return res.status(403).json({
         message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
           "en-IN",
@@ -416,7 +876,6 @@ export const updateTaskStatus = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {

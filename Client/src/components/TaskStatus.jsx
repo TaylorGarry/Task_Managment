@@ -698,7 +698,7 @@ const TaskStatus = () => {
 
                               <div className="flex justify-between items-center mt-3 pt-2 border-t border-opacity-20">
                                 <span className={`text-xs font-medium ${isMine ? "text-white/90" : "text-gray-600"}`}>
-                                  {msg.receiverId?.username || 
+                                  {msg.senderId?.username || 
                                    (msg.sendToAll ? "All" : "All")}
                                 </span>
                                 <span className={`text-xs ${isMine ? "text-white/80" : "text-gray-500"}`}>
