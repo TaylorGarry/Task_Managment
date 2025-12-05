@@ -661,13 +661,15 @@ export const updateTaskStatus = async (req, res) => {
 
     if (!task) return res.status(404).json({ message: "Task not found" });
     if (!employee) return res.status(404).json({ message: "Employee not found" });
+
     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
+    // ------------------ TIME HANDLING -------------------
     const getISTime = () => {
       const now = new Date();
-      const istOffset = 5.5 * 60;  
+      const istOffset = 5.5 * 60;
       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
       return new Date(utc + istOffset * 60000);
     };
@@ -702,15 +704,15 @@ export const updateTaskStatus = async (req, res) => {
     const allowedWindows = {
       Start: {
         start: new Date(empShiftStart),
-        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000), 
+        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000),
       },
       Mid: {
-        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),  
-        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),    
+        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),
+        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),
       },
       End: {
         start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
-        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),   
+        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),
       },
     };
 
@@ -721,112 +723,8 @@ export const updateTaskStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid shift type" });
     }
 
-    if (currentShift === "Mid") {
-      const startShiftTasks = await Task.find({
-        assignedTo: req.user.id,
-        shift: "Start",
-        department: task.department
-      }).lean();
-
-      if (startShiftTasks.length > 0) {
-        let hasAnyStartUpdated = false;
-
-        for (const startShiftTask of startShiftTasks) {
-          const startShiftStatus = await TaskStatus.findOne({
-            taskId: startShiftTask._id,
-            employeeId: req.user.id,
-            date: effectiveDate
-          }).lean();
-
-          if (startShiftStatus && startShiftStatus.status !== "") {
-            hasAnyStartUpdated = true;
-            break;
-          }
-        }
-
-        if (!hasAnyStartUpdated) {
-          return res.status(403).json({
-            message: `Cannot update Mid shift. Start shift was not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
-          });
-        }
-      }
-    }
-
-    if (currentShift === "End") {
-      const startShiftTasks = await Task.find({
-        assignedTo: req.user.id,
-        shift: "Start",
-        department: task.department
-      }).lean();
-
-      let hasAnyStartUpdated = false;
-      if (startShiftTasks.length > 0) {
-        for (const startShiftTask of startShiftTasks) {
-          const startShiftStatus = await TaskStatus.findOne({
-            taskId: startShiftTask._id,
-            employeeId: req.user.id,
-            date: effectiveDate
-          });
-          
-          if (startShiftStatus && startShiftStatus.status !== "") {
-            hasAnyStartUpdated = true;
-            break;
-          }
-        }
-      }
-
-      const midShiftTasks = await Task.find({
-        assignedTo: req.user.id,
-        shift: "Mid",
-        department: task.department
-      }).lean();
-
-      let hasAnyMidUpdated = false;
-      if (midShiftTasks.length > 0) {
-        for (const midShiftTask of midShiftTasks) {
-          const midShiftStatus = await TaskStatus.findOne({
-            taskId: midShiftTask._id,
-            employeeId: req.user.id,
-            date: effectiveDate
-          });
-          
-          if (midShiftStatus && midShiftStatus.status !== "") {
-            hasAnyMidUpdated = true;
-            break;
-          }
-        }
-      }
-
-      if (!hasAnyStartUpdated && !hasAnyMidUpdated) {
-        return res.status(403).json({
-          message: `Cannot update End shift. Both Start and Mid shifts were not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
-        });
-      } else if (!hasAnyStartUpdated) {
-        return res.status(403).json({
-          message: `Cannot update End shift. Start shift was not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
-        });
-      } else if (!hasAnyMidUpdated) {
-        return res.status(403).json({
-          message: `Cannot update End shift. Mid shift was not updated. All shifts are blocked for today. Can update tomorrow in scheduled time slot.`
-        });
-      }
-    }
-
+    // Time window restriction
     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
-      if (istTime > allowedWindow.end) {
-        const existingStatus = await TaskStatus.findOne({
-          taskId,
-          employeeId: req.user.id,
-          date: effectiveDate
-        });
-        
-        if (!existingStatus || existingStatus.status === "") {
-          return res.status(403).json({
-            message: `Cannot update ${currentShift} shift. Time window has passed. Can update tomorrow in scheduled time slot.`
-          });
-        }
-      }
-      
       return res.status(403).json({
         message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
           "en-IN",
@@ -839,6 +737,50 @@ export const updateTaskStatus = async (req, res) => {
       });
     }
 
+    // ------------------ SHIFT VALIDATION -------------------
+    const shiftOrder = ["Start", "Mid", "End"];
+    const currentShiftIndex = shiftOrder.indexOf(currentShift);
+
+    // Only check if NOT first shift
+    if (currentShiftIndex > 0) {
+      const userTasks = await Task.find({
+        assignedTo: req.user.id,
+        isActive: true,
+      }).lean();
+
+      // Check each previous shift
+      for (let i = 0; i < currentShiftIndex; i++) {
+        const previousShift = shiftOrder[i];
+
+        const previousShiftTasks = userTasks.filter(
+          (t) => t.shift === previousShift
+        );
+
+        // ❗ Skip if no tasks exist in previous shift
+        if (previousShiftTasks.length === 0) continue;
+
+        const previousTaskIds = previousShiftTasks.map((t) => t._id.toString());
+
+        const statuses = await TaskStatus.find({
+          taskId: { $in: previousTaskIds },
+          employeeId: req.user.id,
+          date: effectiveDate,
+        });
+
+        const allPrevDone = previousTaskIds.every((id) => {
+          const stat = statuses.find((s) => s.taskId.toString() === id);
+          return stat && stat.status !== ""; // must be updated
+        });
+
+        if (!allPrevDone) {
+          return res.status(403).json({
+            message: `Cannot update ${currentShift} tasks. Your ${previousShift} shift tasks are pending.`,
+          });
+        }
+      }
+    }
+
+    // ------------------ SAVE STATUS -------------------
     let taskStatus = await TaskStatus.findOne({
       taskId,
       employeeId: req.user.id,
@@ -861,6 +803,9 @@ export const updateTaskStatus = async (req, res) => {
 
     await taskStatus.populate("employeeId", "username");
 
+    // 🔥 FIX DATE ALWAYS AS DATE OBJECT
+    taskStatus.date = new Date(taskStatus.date);
+
     res.status(200).json({
       message: "Status updated successfully",
       updatedStatus: {
@@ -876,6 +821,7 @@ export const updateTaskStatus = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {
