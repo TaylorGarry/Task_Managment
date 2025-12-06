@@ -25,8 +25,9 @@ import mongoose from "mongoose";
 // };
 
 const getISTime = () => {
-  const nowUTC = new Date(Date.now());
-  return new Date(nowUTC.getTime() + (5.5 * 60 * 60 * 1000));
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  );
 };
 
 const getShiftDate = () => {
@@ -35,6 +36,7 @@ const getShiftDate = () => {
 
   const shiftDate = new Date(ist);
 
+  // Shift logic: before 10 AM IST → previous day
   if (hour < 10) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
