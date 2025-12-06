@@ -35,14 +35,12 @@ const getShiftDate = () => {
   const hour = ist.getHours();
 
   const shiftDate = new Date(ist);
-
-  // Shift logic: before 10 AM IST → previous day
   if (hour < 10) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
 
-  shiftDate.setHours(0, 0, 0, 0);
-  return shiftDate;
+  // Always store as YYYY-MM-DD string → prevents timezone bugs everywhere
+  return shiftDate.toISOString().split("T")[0];
 };
 
 
