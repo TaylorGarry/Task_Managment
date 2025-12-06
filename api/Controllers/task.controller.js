@@ -25,13 +25,12 @@ import mongoose from "mongoose";
 // };
 
 const getISTime = () => {
-  return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
-  );
+  const nowUTC = new Date(Date.now());
+  return new Date(nowUTC.getTime() + (5.5 * 60 * 60 * 1000));
 };
 
 const getShiftDate = () => {
-  const ist = getISTime();   
+  const ist = getISTime();
   const hour = ist.getHours();
 
   const shiftDate = new Date(ist);
@@ -39,10 +38,11 @@ const getShiftDate = () => {
   if (hour < 10) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
-  shiftDate.setHours(0, 0, 0, 0);
 
+  shiftDate.setHours(0, 0, 0, 0);
   return shiftDate;
 };
+
 
 
 export const createTask = async (req, res) => {
