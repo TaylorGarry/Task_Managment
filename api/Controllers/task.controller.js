@@ -24,27 +24,21 @@ import mongoose from "mongoose";
 //   return shiftDate;
 // };
 
-// Always return the accurate current IST DateTime
 const getISTime = () => {
   return new Date(
     new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
   );
 };
 
-// Return the correct SHIFT DATE (yesterday before 10 AM IST)
 const getShiftDate = () => {
-  const ist = getISTime();   // current IST
+  const ist = getISTime();   
   const hour = ist.getHours();
 
-  // Clone IST date
   const shiftDate = new Date(ist);
 
-  // Before 10 AM → shift considered previous day
   if (hour < 10) {
     shiftDate.setDate(shiftDate.getDate() - 1);
   }
-
-  // Normalize to start of the day in IST
   shiftDate.setHours(0, 0, 0, 0);
 
   return shiftDate;
