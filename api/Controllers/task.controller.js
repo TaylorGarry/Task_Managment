@@ -24,24 +24,31 @@ import mongoose from "mongoose";
 //   return shiftDate;
 // };
 
+// Keep the same name so no other file breaks
 const getISTime = () => {
+  // But internally use UTC so it works globally
   return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+    new Date().toLocaleString("en-US", { timeZone: "UTC" })
   );
 };
 
 const getShiftDate = () => {
-  const ist = getISTime();
-  const hour = ist.getHours();
+  const utc = getISTime(); // <-- same name, now returns UTC time
+  const hour = utc.getUTCHours();
 
-  const shiftDate = new Date(ist);
+  const shiftDate = new Date(utc);
+
+  // Shift rule: before 10 AM → previous day
   if (hour < 10) {
-    shiftDate.setDate(shiftDate.getDate() - 1);
+    shiftDate.setUTCDate(shiftDate.getUTCDate() - 1);
   }
 
-  // Always store as YYYY-MM-DD string → prevents timezone bugs everywhere
+  // Stable YYYY-MM-DD format
   return shiftDate.toISOString().split("T")[0];
 };
+
+export { getISTime, getShiftDate };
+
 
 
 
