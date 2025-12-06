@@ -6,23 +6,51 @@ import Remark from "../Modals/Remark.modal.js";
 import mongoose from "mongoose";
 
 
+// const getISTime = () => {
+//   const now = new Date();
+//   const istOffset = 5.5 * 60;  
+//   const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//   return new Date(utc + istOffset * 60000);
+// };
+
+// const getShiftDate = () => {
+//   const ist = getISTime();
+//   const hour = ist.getHours();
+
+//   const shiftDate = new Date(ist);
+//   if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+
+//   shiftDate.setHours(0, 0, 0, 0);
+//   return shiftDate;
+// };
+
+// Always return the accurate current IST DateTime
 const getISTime = () => {
-  const now = new Date();
-  const istOffset = 5.5 * 60;  
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  return new Date(utc + istOffset * 60000);
+  return new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
+  );
 };
 
+// Return the correct SHIFT DATE (yesterday before 10 AM IST)
 const getShiftDate = () => {
-  const ist = getISTime();
+  const ist = getISTime();   // current IST
   const hour = ist.getHours();
 
+  // Clone IST date
   const shiftDate = new Date(ist);
-  if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
 
+  // Before 10 AM → shift considered previous day
+  if (hour < 10) {
+    shiftDate.setDate(shiftDate.getDate() - 1);
+  }
+
+  // Normalize to start of the day in IST
   shiftDate.setHours(0, 0, 0, 0);
+
   return shiftDate;
 };
+
+
 export const createTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin")
@@ -71,7 +99,6 @@ export const createTask = async (req, res) => {
   }
 };
 
-
 // export const createTask = async (req, res) => {
 //   try {
 //     if (req.user.accountType !== "admin")
@@ -119,7 +146,6 @@ export const createTask = async (req, res) => {
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
 // };
-
 
 export const getTasks = async (req, res) => {
   try {
@@ -1059,7 +1085,6 @@ export const updateTaskStatus = async (req, res) => {
   }
 };
 
-
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {
     if (req.user.accountType !== "employee") {
@@ -1634,7 +1659,6 @@ export const getAllTasks = async (req, res) => {
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
 // };
-
 
 export const exportTaskStatusExcel = async (req, res) => {
   try {
