@@ -59,6 +59,7 @@ const allowedIPs = [
 // });
 
 app.use((req, res, next) => {
+  if (req.user?.accountType === "admin") return next(); 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket.remoteAddress;
