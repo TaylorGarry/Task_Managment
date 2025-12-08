@@ -43,45 +43,51 @@ const allowedIPs = [
   "::1",
 ];
 
-// app.use((req, res, next) => {
-//   const clientIpRaw =
-//     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-//     req.socket.remoteAddress;
-//   const clientIp = clientIpRaw?.replace("::ffff:", "");
-//   if (allowedIPs.includes(clientIp)) {
-//     next();
-//   } else {
-//     return res.status(403).json({
-//       success: false,
-//       message: `Access denied: IP ${clientIp} not allowed`,
-//     });
-//   }
-// });
+app.use(async (req, res, next) => {
+  if (req.path === "/api/v1/login") return next();
 
-app.use((req, res, next) => {
-  if (req.user?.accountType === "admin") return next(); 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket.remoteAddress;
 
-  // Normalize IPv6 (remove ::ffff: and unnecessary formatting)
   clientIp = clientIp.replace("::ffff:", "").toLowerCase();
+  if (clientIp.includes("%")) clientIp = clientIp.split("%")[0];
 
-  // Some servers return IPv6 with zone info like "fe80::1%eth0"
-  if (clientIp.includes("%")) {
-    clientIp = clientIp.split("%")[0];
-  }
+  if (req.user?.accountType === "admin") return next();
 
-  // Check allowed list
-  if (allowedIPs.includes(clientIp)) {
-    return next();
-  }
+  if (allowedIPs.includes(clientIp)) return next();
 
   return res.status(403).json({
     success: false,
     message: `Access denied: IP ${clientIp} not allowed`,
   });
 });
+
+
+// app.use((req, res, next) => {
+//   if (req.path === "/api/v1/login") return next(); 
+//   let clientIp =
+//     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+//     req.socket.remoteAddress;
+
+//   // Normalize IPv6 (remove ::ffff: and unnecessary formatting)
+//   clientIp = clientIp.replace("::ffff:", "").toLowerCase();
+
+//   // Some servers return IPv6 with zone info like "fe80::1%eth0"
+//   if (clientIp.includes("%")) {
+//     clientIp = clientIp.split("%")[0];
+//   }
+
+//   // Check allowed list
+//   if (allowedIPs.includes(clientIp)) {
+//     return next();
+//   }
+
+//   return res.status(403).json({
+//     success: false,
+//     message: `Access denied: IP ${clientIp} not allowed`,
+//   });
+// });
 
 
 app.use(express.json());
