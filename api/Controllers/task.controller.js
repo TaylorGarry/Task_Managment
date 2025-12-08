@@ -1868,6 +1868,85 @@ export const Defaulter = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+// export const getEmployeeDefaulters = async (req, res) => {
+//   try {
+//     const { employeeId } = req.params;
+//     const { page = 1, limit = 30 } = req.query;
+//     const pageNum = Math.max(1, parseInt(page));
+//     const pageSize = parseInt(limit);
+
+//     const employee = await User.findById(employeeId).lean();
+//     if (!employee) return res.status(404).json({ success: false, message: "Employee not found" });
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;
+//       return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const now = getISTime();
+//       if (now.getHours() < 10) now.setDate(now.getDate() - 1);
+//       now.setHours(0, 0, 0, 0);
+//       return now;
+//     };
+
+//     const endDate = getShiftDate();
+//     const startDate = new Date(endDate);
+//     startDate.setFullYear(endDate.getFullYear() - 1);
+
+//     const tasks = await Task.find({ assignedTo: employeeId }).select("_id title shift department priority createdAt").lean();
+//     if (!tasks.length) return res.json({ success: true, totalDefaults: 0, data: [], totalPages: 0, currentPage: pageNum });
+
+//     const taskIds = tasks.map(t => t._id);
+
+//     const pipeline = [
+//       { $match: { employeeId: new mongoose.Types.ObjectId(employeeId), taskId: { $in: taskIds }, date: { $gte: startDate, $lte: endDate } } },
+//       { $sort: { updatedAt: -1 } },
+//       { $group: { _id: { taskId: "$taskId", date: "$date" }, status: { $first: "$status" } } },
+//       { $project: { taskId: "$_id.taskId", date: "$_id.date", status: 1 } }
+//     ];
+
+//     const statuses = await TaskStatus.aggregate(pipeline);
+//     const statusMap = new Map();
+//     statuses.forEach(s => statusMap.set(`${s.taskId}_${s.date.toISOString().split("T")[0]}`, s.status));
+
+//     const nowIst = getISTime();
+
+//     const defaults = tasks.flatMap(task => {
+//       const loopStart = startDate > task.createdAt ? startDate : task.createdAt;
+//       const daysDiff = Math.ceil((endDate - loopStart) / (1000 * 60 * 60 * 24));
+//       return Array.from({ length: daysDiff + 1 }, (_, i) => {
+//         const d = new Date(loopStart);
+//         d.setDate(loopStart.getDate() + i);
+//         const key = `${task._id}_${d.toISOString().split("T")[0]}`;
+//         if ((statusMap.get(key) || "Not Done") !== "Done") {
+//           return { date: new Date(d), title: task.title, shift: task.shift, department: task.department, priority: task.priority };
+//         }
+//         return null;
+//       }).filter(Boolean);
+//     });
+
+//     defaults.sort((a, b) => b.date - a.date);
+
+//     const totalDefaults = defaults.length;
+//     const totalPages = Math.ceil(totalDefaults / pageSize);
+//     const startIndex = (pageNum - 1) * pageSize;
+//     const paginatedData = defaults.slice(startIndex, startIndex + pageSize);
+
+//     res.json({
+//       success: true,
+//       employeeName: employee.username,
+//       totalDefaults,
+//       totalPages,
+//       currentPage: pageNum,
+//       limit: pageSize,
+//       data: paginatedData
+//     });
+//   } catch (err) {
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
 export const getEmployeeDefaulters = async (req, res) => {
   try {
@@ -1894,60 +1973,101 @@ export const getEmployeeDefaulters = async (req, res) => {
 
     const endDate = getShiftDate();
     const startDate = new Date(endDate);
-    startDate.setFullYear(endDate.getFullYear() - 1);
+    startDate.setDate(startDate.getDate() - 30);
 
-    const tasks = await Task.find({ assignedTo: employeeId }).select("_id title shift department priority createdAt").lean();
-    if (!tasks.length) return res.json({ success: true, totalDefaults: 0, data: [], totalPages: 0, currentPage: pageNum });
+    const tasks = await Task.find(
+      { assignedTo: employeeId },
+      { _id: 1, title: 1, shift: 1, department: 1, priority: 1, createdAt: 1 }
+    ).lean();
+
+    if (!tasks.length)
+      return res.json({ success: true, totalDefaults: 0, data: [], totalPages: 0, currentPage: pageNum });
 
     const taskIds = tasks.map(t => t._id);
 
-    const pipeline = [
-      { $match: { employeeId: new mongoose.Types.ObjectId(employeeId), taskId: { $in: taskIds }, date: { $gte: startDate, $lte: endDate } } },
+    const statuses = await TaskStatus.aggregate([
+      {
+        $match: {
+          employeeId: new mongoose.Types.ObjectId(employeeId),
+          taskId: { $in: taskIds },
+          date: { $gte: startDate, $lte: endDate }
+        }
+      },
       { $sort: { updatedAt: -1 } },
-      { $group: { _id: { taskId: "$taskId", date: "$date" }, status: { $first: "$status" } } },
-      { $project: { taskId: "$_id.taskId", date: "$_id.date", status: 1 } }
-    ];
+      {
+        $group: {
+          _id: { taskId: "$taskId", date: "$date" },
+          status: { $first: "$status" }
+        }
+      },
+      {
+        $project: {
+          taskId: "$_id.taskId",
+          date: "$_id.date",
+          status: 1
+        }
+      }
+    ]);
 
-    const statuses = await TaskStatus.aggregate(pipeline);
     const statusMap = new Map();
-    statuses.forEach(s => statusMap.set(`${s.taskId}_${s.date.toISOString().split("T")[0]}`, s.status));
+    statuses.forEach(s =>
+      statusMap.set(`${s.taskId}_${s.date.toISOString().split("T")[0]}`, s.status)
+    );
 
-    const nowIst = getISTime();
+    const now = getISTime();
+    const currentHour = now.getHours();
 
-    const defaults = tasks.flatMap(task => {
-      const loopStart = startDate > task.createdAt ? startDate : task.createdAt;
-      const daysDiff = Math.ceil((endDate - loopStart) / (1000 * 60 * 60 * 24));
-      return Array.from({ length: daysDiff + 1 }, (_, i) => {
+    const result = [];
+
+    for (const task of tasks) {
+      let loopStart = task.createdAt > startDate ? task.createdAt : startDate;
+      loopStart.setHours(0, 0, 0, 0);
+
+      const days = Math.ceil((endDate - loopStart) / 86400000);
+
+      for (let i = 0; i <= days; i++) {
         const d = new Date(loopStart);
         d.setDate(loopStart.getDate() + i);
+
         const key = `${task._id}_${d.toISOString().split("T")[0]}`;
-        if ((statusMap.get(key) || "Not Done") !== "Done") {
-          return { date: new Date(d), title: task.title, shift: task.shift, department: task.department, priority: task.priority };
+        const status = statusMap.get(key);
+
+        if (d.toISOString().split("T")[0] === getShiftDate().toISOString().split("T")[0]) {
+          if (currentHour < 10) continue;
         }
-        return null;
-      }).filter(Boolean);
-    });
 
-    defaults.sort((a, b) => b.date - a.date);
+        if (!status || status !== "Done") {
+          result.push({
+            date: new Date(d),
+            title: task.title,
+            shift: task.shift,
+            department: task.department,
+            priority: task.priority
+          });
+        }
+      }
+    }
 
-    const totalDefaults = defaults.length;
-    const totalPages = Math.ceil(totalDefaults / pageSize);
-    const startIndex = (pageNum - 1) * pageSize;
-    const paginatedData = defaults.slice(startIndex, startIndex + pageSize);
+    result.sort((a, b) => b.date - a.date);
+
+    const total = result.length;
+    const totalPages = Math.ceil(total / pageSize);
+    const paginated = result.slice((pageNum - 1) * pageSize, (pageNum - 1) * pageSize + pageSize);
 
     res.json({
       success: true,
       employeeName: employee.username,
-      totalDefaults,
+      totalDefaults: total,
       totalPages,
       currentPage: pageNum,
       limit: pageSize,
-      data: paginatedData
+      data: paginated
     });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
+
 
 export const createCoreTeamTask = async (req, res) => {
   try {
