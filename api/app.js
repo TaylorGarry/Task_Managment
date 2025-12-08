@@ -208,15 +208,27 @@ const allowedIPs = [
 
 app.use(express.json());
 
-// Apply authMiddleware only for routes after login/signup
+
+// ✅ PUBLIC ROUTES: No auth, No IP check
+const publicRoutes = [
+  "/api/v1/login",
+  "/api/v1/signup",
+  "/api/v1/logout"
+];
+
+
+// ✅ 1️⃣ AUTH MIDDLEWARE FOR ALL OTHER ROUTES
 app.use((req, res, next) => {
-  if (req.path === "/api/v1/login" || req.path === "/api/v1/signup") return next();
+  if (publicRoutes.includes(req.path)) {
+    return next();
+  }
   return authMiddleware(req, res, next);
 });
 
-// IP restriction for non-admin users
+
+// ✅ 2️⃣ IP RESTRICTION FOR NON-ADMIN USERS
 app.use((req, res, next) => {
-  if (req.path === "/api/v1/login" || req.path === "/api/v1/signup") return next();
+  if (publicRoutes.includes(req.path)) return next(); // No IP check for login/signup/logout
 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -225,8 +237,11 @@ app.use((req, res, next) => {
   clientIp = clientIp.replace("::ffff:", "").toLowerCase();
   if (clientIp.includes("%")) clientIp = clientIp.split("%")[0];
 
-  if (req.user?.accountType === "admin") return next(); // Admins bypass IP check
-  if (allowedIPs.includes(clientIp)) return next();    // Employees allowed IP
+  // Admin can access from anywhere
+  if (req.user?.accountType === "admin") return next();
+
+  // Employees must be from allowedIPs
+  if (allowedIPs.includes(clientIp)) return next();
 
   return res.status(403).json({
     success: false,
@@ -234,57 +249,50 @@ app.use((req, res, next) => {
   });
 });
 
+
+// ROUTES
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
 app.use("/api/remarks", remarkRoutes);
 
+
+// BASE ROUTE
 app.get("/", (req, res) => {
-  res.json({ 
-    status: "SUCCESS", 
+  res.json({
+    status: "SUCCESS",
     message: "Task Management API is running!",
     version: "1.0.0",
     timestamp: new Date().toISOString(),
-    endpoints: [
-      "/api/v1/login",
-      "/api/v1/signup", 
-      "/api/v1/tasks",
-      "/api/v1/review",
-      "/api/v1/task-status",
-      "/api/remarks"
-    ]
   });
 });
 
+
+// IP CHECK ROUTE
 app.get("/check-ip", (req, res) => {
   const clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket.remoteAddress?.replace("::ffff:", "");
-  res.json({ 
+
+  res.json({
     detectedIP: clientIp,
     allowedIPs: allowedIPs,
-    message: "Use this IP to add to allowedIPs array if needed"
+    message: "Use this IP to add to allowedIPs array if needed",
   });
 });
 
+
+// 404 HANDLER
 app.use((req, res) => {
-  res.status(404).json({ 
+  res.status(404).json({
     error: "API endpoint not found",
     path: req.originalUrl,
-    available_endpoints: [
-      "GET /",
-      "GET /check-ip", 
-      "POST /api/v1/login",
-      "POST /api/v1/signup",
-      "GET /api/v1/tasks",
-      "POST /api/v1/tasks",
-      "GET /api/remarks",
-      "POST /api/remarks"
-    ]
   });
 });
 
+
+// GLOBAL ERROR HANDLER
 app.use((err, req, res, next) => {
   console.error("Error:", err.message);
   if (err.message.includes("CORS")) {
@@ -292,7 +300,7 @@ app.use((err, req, res, next) => {
   }
   res.status(500).json({
     message: "Internal Server Error",
-    error: process.env.NODE_ENV === 'production' ? 'Something went wrong!' : err.message,
+    error: process.env.NODE_ENV === "production" ? "Something went wrong!" : err.message,
   });
 });
 
