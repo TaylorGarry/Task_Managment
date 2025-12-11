@@ -121,6 +121,19 @@ const TaskCard = ({ task, onOpenChat }) => {
     }
   };
 
+  const formatAdminDate = (dateStr) => {
+  if (!dateStr) return "";
+  const clean = dateStr.split("T")[0];
+  const [year, month, day] = clean.split("-");
+  const d = new Date(`${year}-${month}-${day}T12:00:00`); 
+  // noon avoids timezone shift
+  return d.toLocaleDateString("en-US", {
+    month: "long",
+    day: "numeric",
+  });
+};
+
+
   const departments = [...new Set(employees.map((emp) => emp.department))];
 
   return (
@@ -154,11 +167,9 @@ const TaskCard = ({ task, onOpenChat }) => {
             <span>{task.department}</span>
             <span>{task.shift}</span>
             <span>
-              {new Date(task.date).toLocaleDateString("en-US", {
-                month: "long",
-                day: "numeric",
-              })}
-            </span>
+  {formatAdminDate(task.date)}
+</span>
+
           </div>
 
           <p className="text-gray-800 mb-3 text-sm">{task.description}</p>
