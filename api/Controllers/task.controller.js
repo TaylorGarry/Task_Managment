@@ -535,6 +535,208 @@ export const getCoreTeamTasks = async (req, res) => {
   }
 };
 
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee") {
+//       return res.status(403).json({ message: "Only employees can update status" });
+//     }
+
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const [task, employee] = await Promise.all([
+//       Task.findById(taskId).lean(),
+//       User.findById(req.user.id).lean(),
+//     ]);
+
+//     if (!task || !employee) {
+//       return res.status(404).json({ message: "Task or employee not found" });
+//     }
+
+//     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+//     }
+
+//     const istTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    
+//     const getEffectiveDate = () => {
+//       const date = new Date(istTime);
+//       if (date.getHours() < 10) {
+//         date.setDate(date.getDate() - 1);
+//       }
+//       date.setHours(0, 0, 0, 0);
+//       return date;
+//     };
+
+//     const effectiveDate = getEffectiveDate();
+    
+//     let taskDate = task.date ? new Date(task.date) : new Date(effectiveDate);
+//     taskDate.setHours(0, 0, 0, 0);
+
+//     const calculateShiftWindows = () => {
+//       const windows = {};
+//       const startHour = employee.shiftStartHour;
+      
+//       const startShiftStart = new Date(taskDate);
+//       startShiftStart.setHours(startHour, 0, 0, 0);
+      
+//       windows.Start = {
+//         start: new Date(startShiftStart),
+//         end: new Date(startShiftStart.getTime() + 2 * 60 * 60 * 1000)
+//       };
+
+//       windows.Mid = {
+//         start: new Date(startShiftStart.getTime() + 3 * 60 * 60 * 1000),
+//         end: new Date(startShiftStart.getTime() + 6 * 60 * 60 * 1000)
+//       };
+
+//       windows.End = {
+//         start: new Date(startShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+//         end: new Date(startShiftStart.getTime() + 10 * 60 * 60 * 1000)
+//       };
+
+//       const adjustOvernight = (window) => {
+//         if (window.end.getDate() !== taskDate.getDate()) {
+//           const nextDay = new Date(taskDate);
+//           nextDay.setDate(nextDay.getDate() + 1);
+//           if (window.start.getDate() === taskDate.getDate()) {
+//             window.end = nextDay;
+//             window.end.setHours(window.end.getHours(), 0, 0, 0);
+//           } else {
+//             window.start = nextDay;
+//             window.start.setHours(window.start.getHours(), 0, 0, 0);
+//             window.end = new Date(nextDay.getTime() + (window.end.getTime() - window.start.getTime()));
+//           }
+//         }
+//       };
+
+//       if (employee.shiftEndHour < employee.shiftStartHour) {
+//         adjustOvernight(windows.Start);
+//         adjustOvernight(windows.Mid);
+//         adjustOvernight(windows.End);
+//       }
+
+//       return windows;
+//     };
+
+//     const allowedWindows = calculateShiftWindows();
+//     const currentShift = task.shift;
+//     const allowedWindow = allowedWindows[currentShift];
+
+//     if (!allowedWindow) {
+//       return res.status(400).json({ message: "Invalid shift type" });
+//     }
+
+//     if (istTime < allowedWindow.start) {
+//       return res.status(403).json({
+//         message: `${currentShift} shift window hasn't started yet. Available from ${allowedWindow.start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`
+//       });
+//     }
+
+//     if (istTime > allowedWindow.end) {
+//       return res.status(403).json({
+//         message: `${currentShift} shift window has passed. It was available until ${allowedWindow.end.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`
+//       });
+//     }
+
+//     const shiftOrder = ["Start", "Mid", "End"];
+//     const currentShiftIndex = shiftOrder.indexOf(currentShift);
+
+//     const isSameDay = (date1, date2) => {
+//       if (!date1 || !date2) return false;
+//       const d1 = new Date(date1);
+//       const d2 = new Date(date2);
+//       d1.setHours(0, 0, 0, 0);
+//       d2.setHours(0, 0, 0, 0);
+//       return d1.getTime() === d2.getTime();
+//     };
+
+//     const allUserTasks = await Task.find({
+//       assignedTo: req.user.id,
+//       isActive: true
+//     }).lean();
+
+//     const todayTasks = allUserTasks.filter(t => 
+//       !t.date || isSameDay(t.date, taskDate)
+//     );
+
+//     const todayStatuses = await TaskStatus.find({
+//       employeeId: req.user.id,
+//       date: effectiveDate
+//     }).lean();
+
+//     const isTaskUpdatedToday = (taskId) => {
+//       return todayStatuses.some(s => 
+//         s.taskId.toString() === taskId.toString() && 
+//         s.status && 
+//         s.status !== ""
+//       );
+//     };
+
+//     if (currentShiftIndex > 0) {
+//       for (let i = 0; i < currentShiftIndex; i++) {
+//         const previousShift = shiftOrder[i];
+//         const previousShiftTasks = todayTasks.filter(t => t.shift === previousShift);
+        
+//         if (previousShiftTasks.length > 0) {
+//           const allPreviousUpdated = previousShiftTasks.every(t => isTaskUpdatedToday(t._id));
+          
+//           if (!allPreviousUpdated) {
+//             const notUpdatedTasks = previousShiftTasks.filter(t => !isTaskUpdatedToday(t._id));
+//             const taskTitles = notUpdatedTasks.map(t => t.title).join(", ");
+            
+//             return res.status(403).json({
+//               message: `Cannot update ${currentShift} shift tasks. You must complete all ${previousShift} shift tasks first. Pending: ${taskTitles}`
+//             });
+//           }
+//         }
+//       }
+//     }
+
+//     let taskStatus = await TaskStatus.findOne({
+//       taskId,
+//       employeeId: req.user.id,
+//       date: effectiveDate
+//     });
+
+//     if (taskStatus) {
+//       taskStatus.status = status;
+//       taskStatus.updatedAt = new Date();
+//       await taskStatus.save();
+//     } else {
+//       taskStatus = await TaskStatus.create({
+//         taskId,
+//         employeeId: req.user.id,
+//         date: effectiveDate,
+//         status,
+//         updatedAt: new Date()
+//       });
+//     }
+
+//     await taskStatus.populate("employeeId", "username");
+//     taskStatus.date = new Date(taskStatus.date);
+
+//     res.status(200).json({
+//       message: "Status updated successfully",
+//       updatedStatus: {
+//         taskId: taskStatus.taskId,
+//         employeeId: taskStatus.employeeId._id,
+//         username: taskStatus.employeeId.username,
+//         status: taskStatus.status,
+//         date: taskStatus.date,
+//       },
+//     });
+
+//   } catch (error) {
+//     console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const updateTaskStatus = async (req, res) => {
   try {
     if (req.user.accountType !== "employee") {
@@ -563,6 +765,7 @@ export const updateTaskStatus = async (req, res) => {
 
     const istTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
     
+    // Get the effective date for task tracking
     const getEffectiveDate = () => {
       const date = new Date(istTime);
       if (date.getHours() < 10) {
@@ -579,9 +782,12 @@ export const updateTaskStatus = async (req, res) => {
 
     const calculateShiftWindows = () => {
       const windows = {};
-      const startHour = employee.shiftStartHour;
+      const startHour = parseInt(employee.shiftStartHour) || 0;
       
-      const startShiftStart = new Date(taskDate);
+      // For window calculation, always use the task date as base
+      const baseDate = new Date(taskDate);
+      
+      const startShiftStart = new Date(baseDate);
       startShiftStart.setHours(startHour, 0, 0, 0);
       
       windows.Start = {
@@ -599,27 +805,6 @@ export const updateTaskStatus = async (req, res) => {
         end: new Date(startShiftStart.getTime() + 10 * 60 * 60 * 1000)
       };
 
-      const adjustOvernight = (window) => {
-        if (window.end.getDate() !== taskDate.getDate()) {
-          const nextDay = new Date(taskDate);
-          nextDay.setDate(nextDay.getDate() + 1);
-          if (window.start.getDate() === taskDate.getDate()) {
-            window.end = nextDay;
-            window.end.setHours(window.end.getHours(), 0, 0, 0);
-          } else {
-            window.start = nextDay;
-            window.start.setHours(window.start.getHours(), 0, 0, 0);
-            window.end = new Date(nextDay.getTime() + (window.end.getTime() - window.start.getTime()));
-          }
-        }
-      };
-
-      if (employee.shiftEndHour < employee.shiftStartHour) {
-        adjustOvernight(windows.Start);
-        adjustOvernight(windows.Mid);
-        adjustOvernight(windows.End);
-      }
-
       return windows;
     };
 
@@ -631,18 +816,85 @@ export const updateTaskStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid shift type" });
     }
 
-    if (istTime < allowedWindow.start) {
-      return res.status(403).json({
-        message: `${currentShift} shift window hasn't started yet. Available from ${allowedWindow.start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`
-      });
+    // SPECIAL FIX: Handle 1 AM shift workers updating yesterday's tasks
+    const shiftStartHour = parseInt(employee.shiftStartHour) || 0;
+    const shiftEndHour = parseInt(employee.shiftEndHour) || 0;
+    
+    let isWithinWindow = false;
+    
+    // Check if this is a 1 AM shift worker
+    if (shiftStartHour === 1 && shiftEndHour === 10) {
+      const currentHour = istTime.getHours();
+      const currentDate = new Date(istTime);
+      currentDate.setHours(0, 0, 0, 0);
+      
+      const taskDateOnly = new Date(taskDate);
+      taskDateOnly.setHours(0, 0, 0, 0);
+      
+      // Check if task is from yesterday
+      const yesterday = new Date(currentDate);
+      yesterday.setDate(yesterday.getDate() - 1);
+      
+      if (taskDateOnly.getTime() === yesterday.getTime()) {
+        // Task is from yesterday, employee is working overnight shift
+        // Allow based on current hour and shift type
+        if (currentShift === "Start") {
+          // Start shift: 1 AM to 3 AM
+          isWithinWindow = currentHour >= 1 && currentHour < 3;
+        } else if (currentShift === "Mid") {
+          // Mid shift: 4 AM to 7 AM
+          isWithinWindow = currentHour >= 4 && currentHour < 7;
+        } else if (currentShift === "End") {
+          // End shift: 9:30 AM to 11 AM
+          const currentMinute = istTime.getMinutes();
+          isWithinWindow = (currentHour === 9 && currentMinute >= 30) || 
+                          (currentHour === 10 && currentMinute <= 59);
+        }
+      } else {
+        // Task is for today, use normal time check
+        isWithinWindow = istTime >= allowedWindow.start && istTime <= allowedWindow.end;
+      }
+    } else {
+      // For all other shifts, use normal time check
+      isWithinWindow = istTime >= allowedWindow.start && istTime <= allowedWindow.end;
     }
 
-    if (istTime > allowedWindow.end) {
-      return res.status(403).json({
-        message: `${currentShift} shift window has passed. It was available until ${allowedWindow.end.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`
-      });
+    if (!isWithinWindow) {
+      // Create appropriate error message
+      let message = "";
+      const currentHour = istTime.getHours();
+      
+      if (shiftStartHour === 1 && shiftEndHour === 10) {
+        // Special message for 1 AM shift workers
+        if (currentShift === "Start") {
+          if (currentHour < 1) {
+            message = "Start shift begins at 1:00 AM IST";
+          } else if (currentHour >= 3) {
+            message = "Start shift ended at 3:00 AM IST";
+          }
+        } else if (currentShift === "Mid") {
+          if (currentHour < 4) {
+            message = "Mid shift begins at 4:00 AM IST";
+          } else if (currentHour >= 7) {
+            message = "Mid shift ended at 7:00 AM IST";
+          }
+        } else if (currentShift === "End") {
+          const currentMinute = istTime.getMinutes();
+          if (currentHour < 9 || (currentHour === 9 && currentMinute < 30)) {
+            message = "End shift begins at 9:30 AM IST";
+          } else if (currentHour > 10 || (currentHour === 11 && currentMinute > 0)) {
+            message = "End shift ended at 11:00 AM IST";
+          }
+        }
+      } else if (istTime < allowedWindow.start) {
+        message = `${currentShift} shift window hasn't started yet. Available from ${allowedWindow.start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`;
+      } else {
+        message = `${currentShift} shift window has passed. It was available until ${allowedWindow.end.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`;
+      }
+      return res.status(403).json({ message });
     }
 
+    // Rest of the function remains exactly the same
     const shiftOrder = ["Start", "Mid", "End"];
     const currentShiftIndex = shiftOrder.indexOf(currentShift);
 
