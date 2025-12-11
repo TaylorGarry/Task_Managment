@@ -4,6 +4,7 @@ import TaskStatus from "../Modals/TaskStatus.modal.js";
 import XLSX from "xlsx-js-style";
 import Remark from "../Modals/Remark.modal.js";
 import mongoose from "mongoose";
+import RosterModal from "../Modals/Roster.modal.js";
 
 
 // const getISTime = () => {
@@ -552,63 +553,77 @@ export const updateTaskStatus = async (req, res) => {
       User.findById(req.user.id).lean(),
     ]);
 
-    if (!task) return res.status(404).json({ message: "Task not found" });
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    if (!task || !employee) {
+      return res.status(404).json({ message: "Task or employee not found" });
+    }
 
     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
-    // ------------------ TIME HANDLING -------------------
-    const getISTime = () => {
-      const now = new Date();
-      const istOffset = 5.5 * 60;
-      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-      return new Date(utc + istOffset * 60000);
+    const istTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    
+    const getEffectiveDate = () => {
+      const date = new Date(istTime);
+      if (date.getHours() < 10) {
+        date.setDate(date.getDate() - 1);
+      }
+      date.setHours(0, 0, 0, 0);
+      return date;
     };
 
-    const getShiftDate = () => {
-      const ist = getISTime();
-      const hour = ist.getHours();
-      const shiftDate = new Date(ist);
-      if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
-      shiftDate.setHours(0, 0, 0, 0);
-      return shiftDate;
+    const effectiveDate = getEffectiveDate();
+    
+    let taskDate = task.date ? new Date(task.date) : new Date(effectiveDate);
+    taskDate.setHours(0, 0, 0, 0);
+
+    const calculateShiftWindows = () => {
+      const windows = {};
+      const startHour = employee.shiftStartHour;
+      
+      const startShiftStart = new Date(taskDate);
+      startShiftStart.setHours(startHour, 0, 0, 0);
+      
+      windows.Start = {
+        start: new Date(startShiftStart),
+        end: new Date(startShiftStart.getTime() + 2 * 60 * 60 * 1000)
+      };
+
+      windows.Mid = {
+        start: new Date(startShiftStart.getTime() + 3 * 60 * 60 * 1000),
+        end: new Date(startShiftStart.getTime() + 6 * 60 * 60 * 1000)
+      };
+
+      windows.End = {
+        start: new Date(startShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+        end: new Date(startShiftStart.getTime() + 10 * 60 * 60 * 1000)
+      };
+
+      const adjustOvernight = (window) => {
+        if (window.end.getDate() !== taskDate.getDate()) {
+          const nextDay = new Date(taskDate);
+          nextDay.setDate(nextDay.getDate() + 1);
+          if (window.start.getDate() === taskDate.getDate()) {
+            window.end = nextDay;
+            window.end.setHours(window.end.getHours(), 0, 0, 0);
+          } else {
+            window.start = nextDay;
+            window.start.setHours(window.start.getHours(), 0, 0, 0);
+            window.end = new Date(nextDay.getTime() + (window.end.getTime() - window.start.getTime()));
+          }
+        }
+      };
+
+      if (employee.shiftEndHour < employee.shiftStartHour) {
+        adjustOvernight(windows.Start);
+        adjustOvernight(windows.Mid);
+        adjustOvernight(windows.End);
+      }
+
+      return windows;
     };
 
-    const istTime = getISTime();
-    const effectiveDate = getShiftDate();
-
-    const empShiftStart = new Date(effectiveDate);
-    empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
-
-    const empShiftEnd = new Date(empShiftStart);
-    empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
-
-    if (employee.shiftEndHour < employee.shiftStartHour) {
-      empShiftEnd.setDate(empShiftEnd.getDate() + 1);
-    }
-
-    if (employee.shiftStartHour < 6 && istTime.getHours() < 10) {
-      empShiftStart.setDate(empShiftStart.getDate() + 1);
-      empShiftEnd.setDate(empShiftEnd.getDate() + 1);
-    }
-
-    const allowedWindows = {
-      Start: {
-        start: new Date(empShiftStart),
-        end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000),
-      },
-      Mid: {
-        start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),
-        end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),
-      },
-      End: {
-        start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
-        end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),
-      },
-    };
-
+    const allowedWindows = calculateShiftWindows();
     const currentShift = task.shift;
     const allowedWindow = allowedWindows[currentShift];
 
@@ -616,65 +631,76 @@ export const updateTaskStatus = async (req, res) => {
       return res.status(400).json({ message: "Invalid shift type" });
     }
 
-    if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
+    if (istTime < allowedWindow.start) {
       return res.status(403).json({
-        message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
-          "en-IN",
-          { hour: "2-digit", minute: "2-digit", hour12: true }
-        )} and ${allowedWindow.end.toLocaleTimeString("en-IN", {
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        })} IST.`,
+        message: `${currentShift} shift window hasn't started yet. Available from ${allowedWindow.start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`
       });
     }
 
-    // ------------------ SHIFT RESTRICTION OPTIMIZED ------------------
+    if (istTime > allowedWindow.end) {
+      return res.status(403).json({
+        message: `${currentShift} shift window has passed. It was available until ${allowedWindow.end.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} IST`
+      });
+    }
+
     const shiftOrder = ["Start", "Mid", "End"];
     const currentShiftIndex = shiftOrder.indexOf(currentShift);
 
+    const isSameDay = (date1, date2) => {
+      if (!date1 || !date2) return false;
+      const d1 = new Date(date1);
+      const d2 = new Date(date2);
+      d1.setHours(0, 0, 0, 0);
+      d2.setHours(0, 0, 0, 0);
+      return d1.getTime() === d2.getTime();
+    };
+
+    const allUserTasks = await Task.find({
+      assignedTo: req.user.id,
+      isActive: true
+    }).lean();
+
+    const todayTasks = allUserTasks.filter(t => 
+      !t.date || isSameDay(t.date, taskDate)
+    );
+
+    const todayStatuses = await TaskStatus.find({
+      employeeId: req.user.id,
+      date: effectiveDate
+    }).lean();
+
+    const isTaskUpdatedToday = (taskId) => {
+      return todayStatuses.some(s => 
+        s.taskId.toString() === taskId.toString() && 
+        s.status && 
+        s.status !== ""
+      );
+    };
+
     if (currentShiftIndex > 0) {
-      // Get all active tasks for this employee for today
-      const userTasks = await Task.find({
-        assignedTo: req.user.id,
-        isActive: true,
-      }).lean();
-
-      const previousShiftTaskIds = [];
       for (let i = 0; i < currentShiftIndex; i++) {
-        const prevShift = shiftOrder[i];
-        const tasks = userTasks.filter(t => t.shift === prevShift);
-        if (tasks.length > 0) {
-          previousShiftTaskIds.push(...tasks.map(t => t._id));
-        }
-      }
-
-      if (previousShiftTaskIds.length > 0) {
-        // Fetch all statuses for previous shifts in ONE DB call
-        const statuses = await TaskStatus.find({
-          taskId: { $in: previousShiftTaskIds },
-          employeeId: req.user.id,
-          date: effectiveDate,
-        });
-
-        const allPrevUpdated = previousShiftTaskIds.every(id => {
-          const st = statuses.find(s => s.taskId.toString() === id.toString());
-          return st && st.status !== "";
-        });
-
-        if (!allPrevUpdated) {
-          return res.status(403).json({
-            message: `You must complete your previous shift tasks before updating ${currentShift} shift.`,
-          });
+        const previousShift = shiftOrder[i];
+        const previousShiftTasks = todayTasks.filter(t => t.shift === previousShift);
+        
+        if (previousShiftTasks.length > 0) {
+          const allPreviousUpdated = previousShiftTasks.every(t => isTaskUpdatedToday(t._id));
+          
+          if (!allPreviousUpdated) {
+            const notUpdatedTasks = previousShiftTasks.filter(t => !isTaskUpdatedToday(t._id));
+            const taskTitles = notUpdatedTasks.map(t => t.title).join(", ");
+            
+            return res.status(403).json({
+              message: `Cannot update ${currentShift} shift tasks. You must complete all ${previousShift} shift tasks first. Pending: ${taskTitles}`
+            });
+          }
         }
       }
     }
 
-    // ------------------ UPDATE OR CREATE TASK STATUS ------------------
     let taskStatus = await TaskStatus.findOne({
       taskId,
       employeeId: req.user.id,
-      date: effectiveDate,
+      date: effectiveDate
     });
 
     if (taskStatus) {
@@ -687,13 +713,12 @@ export const updateTaskStatus = async (req, res) => {
         employeeId: req.user.id,
         date: effectiveDate,
         status,
-        updatedAt: new Date(),
+        updatedAt: new Date()
       });
     }
 
     await taskStatus.populate("employeeId", "username");
-
-    taskStatus.date = new Date(taskStatus.date); // ensure date object
+    taskStatus.date = new Date(taskStatus.date);
 
     res.status(200).json({
       message: "Status updated successfully",
@@ -705,11 +730,190 @@ export const updateTaskStatus = async (req, res) => {
         date: taskStatus.date,
       },
     });
+
   } catch (error) {
     console.error("Update Task Status Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+// export const updateTaskStatus = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "employee") {
+//       return res.status(403).json({ message: "Only employees can update status" });
+//     }
+
+//     const { taskId } = req.params;
+//     const { status } = req.body;
+
+//     if (!["Done", "Not Done"].includes(status)) {
+//       return res.status(400).json({ message: "Invalid status value" });
+//     }
+
+//     const [task, employee] = await Promise.all([
+//       Task.findById(taskId).lean(),
+//       User.findById(req.user.id).lean(),
+//     ]);
+
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+//     if (!employee) return res.status(404).json({ message: "Employee not found" });
+
+//     if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
+//       return res.status(403).json({ message: "You are not assigned to this task" });
+//     }
+
+//     // ------------------ TIME HANDLING -------------------
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;
+//       const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+//       return new Date(utc + istOffset * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const ist = getISTime();
+//       const hour = ist.getHours();
+//       const shiftDate = new Date(ist);
+//       if (hour < 10) shiftDate.setDate(shiftDate.getDate() - 1);
+//       shiftDate.setHours(0, 0, 0, 0);
+//       return shiftDate;
+//     };
+
+//     const istTime = getISTime();
+//     const effectiveDate = getShiftDate();
+
+//     const empShiftStart = new Date(effectiveDate);
+//     empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
+
+//     const empShiftEnd = new Date(empShiftStart);
+//     empShiftEnd.setHours(employee.shiftEndHour, 0, 0, 0);
+
+//     if (employee.shiftEndHour < employee.shiftStartHour) {
+//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+//     }
+
+//     if (employee.shiftStartHour < 6 && istTime.getHours() < 10) {
+//       empShiftStart.setDate(empShiftStart.getDate() + 1);
+//       empShiftEnd.setDate(empShiftEnd.getDate() + 1);
+//     }
+
+//     const allowedWindows = {
+//       Start: {
+//         start: new Date(empShiftStart),
+//         end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000),
+//       },
+//       Mid: {
+//         start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),
+//         end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),
+//       },
+//       End: {
+//         start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+//         end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),
+//       },
+//     };
+
+//     const currentShift = task.shift;
+//     const allowedWindow = allowedWindows[currentShift];
+
+//     if (!allowedWindow) {
+//       return res.status(400).json({ message: "Invalid shift type" });
+//     }
+
+//     if (istTime < allowedWindow.start || istTime > allowedWindow.end) {
+//       return res.status(403).json({
+//         message: `You can only update ${currentShift} shift tasks between ${allowedWindow.start.toLocaleTimeString(
+//           "en-IN",
+//           { hour: "2-digit", minute: "2-digit", hour12: true }
+//         )} and ${allowedWindow.end.toLocaleTimeString("en-IN", {
+//           hour: "2-digit",
+//           minute: "2-digit",
+//           hour12: true,
+//         })} IST.`,
+//       });
+//     }
+
+//     // ------------------ SHIFT RESTRICTION OPTIMIZED ------------------
+//     const shiftOrder = ["Start", "Mid", "End"];
+//     const currentShiftIndex = shiftOrder.indexOf(currentShift);
+
+//     if (currentShiftIndex > 0) {
+//       // Get all active tasks for this employee for today
+//       const userTasks = await Task.find({
+//         assignedTo: req.user.id,
+//         isActive: true,
+//       }).lean();
+
+//       const previousShiftTaskIds = [];
+//       for (let i = 0; i < currentShiftIndex; i++) {
+//         const prevShift = shiftOrder[i];
+//         const tasks = userTasks.filter(t => t.shift === prevShift);
+//         if (tasks.length > 0) {
+//           previousShiftTaskIds.push(...tasks.map(t => t._id));
+//         }
+//       }
+
+//       if (previousShiftTaskIds.length > 0) {
+//         // Fetch all statuses for previous shifts in ONE DB call
+//         const statuses = await TaskStatus.find({
+//           taskId: { $in: previousShiftTaskIds },
+//           employeeId: req.user.id,
+//           date: effectiveDate,
+//         });
+
+//         const allPrevUpdated = previousShiftTaskIds.every(id => {
+//           const st = statuses.find(s => s.taskId.toString() === id.toString());
+//           return st && st.status !== "";
+//         });
+
+//         if (!allPrevUpdated) {
+//           return res.status(403).json({
+//             message: `You must complete your previous shift tasks before updating ${currentShift} shift.`,
+//           });
+//         }
+//       }
+//     }
+
+//     // ------------------ UPDATE OR CREATE TASK STATUS ------------------
+//     let taskStatus = await TaskStatus.findOne({
+//       taskId,
+//       employeeId: req.user.id,
+//       date: effectiveDate,
+//     });
+
+//     if (taskStatus) {
+//       taskStatus.status = status;
+//       taskStatus.updatedAt = new Date();
+//       await taskStatus.save();
+//     } else {
+//       taskStatus = await TaskStatus.create({
+//         taskId,
+//         employeeId: req.user.id,
+//         date: effectiveDate,
+//         status,
+//         updatedAt: new Date(),
+//       });
+//     }
+
+//     await taskStatus.populate("employeeId", "username");
+
+//     taskStatus.date = new Date(taskStatus.date); // ensure date object
+
+//     res.status(200).json({
+//       message: "Status updated successfully",
+//       updatedStatus: {
+//         taskId: taskStatus.taskId,
+//         employeeId: taskStatus.employeeId._id,
+//         username: taskStatus.employeeId.username,
+//         status: taskStatus.status,
+//         date: taskStatus.date,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Update Task Status Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
 
 // export const updateTaskStatus = async (req, res) => {
 //   try {
@@ -1094,53 +1298,54 @@ export const assignTask = async (req, res) => {
   }
 };
 
-export const getAllTasks = async (req, res) => {
-  try {
-    const { date, shift } = req.query;
-    const filter = req.user.accountType === "employee" ? { assignedTo: req.user.id } : {};
+// export const getAllTasks = async (req, res) => {
+//   try {
+//     const { date, shift } = req.query;
+//     const filter = req.user.accountType === "employee" ? { assignedTo: req.user.id } : {};
 
-    const query = Task.find(filter).populate("assignedTo", "username department");
-    if (shift) query.where("shift").equals(shift);
-    if (date) {
-      const start = new Date(date);
-      start.setHours(0, 0, 0, 0);
-      const end = new Date(date);
-      end.setHours(23, 59, 59, 999);
-      query.where("createdAt").gte(start).lte(end);
-    }
+//     const query = Task.find(filter).populate("assignedTo", "username department");
+//     if (shift) query.where("shift").equals(shift);
+//     if (date) {
+//       const start = new Date(date);
+//       start.setHours(0, 0, 0, 0);
+//       const end = new Date(date);
+//       end.setHours(23, 59, 59, 999);
+//       query.where("createdAt").gte(start).lte(end);
+//     }
 
-    const tasks = await query.lean();
-    const taskIds = tasks.map(t => t._id);
-    const statuses = await TaskStatus.find({ taskId: { $in: taskIds } }).sort({ updatedAt: -1 }).lean();
+//     const tasks = await query.lean();
+//     const taskIds = tasks.map(t => t._id);
+//     const statuses = await TaskStatus.find({ taskId: { $in: taskIds } }).sort({ updatedAt: -1 }).lean();
 
-    const taskStatusMap = {};
-    for (const s of statuses) {
-      const tId = s.taskId.toString();
-      const eId = s.employeeId.toString();
-      if (!taskStatusMap[tId]) taskStatusMap[tId] = {};
-      if (!taskStatusMap[tId][eId]) taskStatusMap[tId][eId] = s.status;
-    }
+//     const taskStatusMap = {};
+//     for (const s of statuses) {
+//       const tId = s.taskId.toString();
+//       const eId = s.employeeId.toString();
+//       if (!taskStatusMap[tId]) taskStatusMap[tId] = {};
+//       if (!taskStatusMap[tId][eId]) taskStatusMap[tId][eId] = s.status;
+//     }
 
-    const result = tasks.map(task => {
-      const done = [];
-      const notDone = [];
-      let empStatus = "Not Done";
+//     const result = tasks.map(task => {
+//       const done = [];
+//       const notDone = [];
+//       let empStatus = "Not Done";
 
-      for (const emp of task.assignedTo) {
-        const status = taskStatusMap[task._id.toString()]?.[emp._id.toString()] || "Not Done";
-        (status === "Done" ? done : notDone).push({ _id: emp._id, username: emp.username });
-        if (emp._id.toString() === req.user.id) empStatus = status;
-      }
+//       for (const emp of task.assignedTo) {
+//         const status = taskStatusMap[task._id.toString()]?.[emp._id.toString()] || "Not Done";
+//         (status === "Done" ? done : notDone).push({ _id: emp._id, username: emp.username });
+//         if (emp._id.toString() === req.user.id) empStatus = status;
+//       }
 
-      return { ...task, employeeStatus: empStatus, doneEmployees: done, notDoneEmployees: notDone };
-    });
+//       return { ...task, employeeStatus: empStatus, doneEmployees: done, notDoneEmployees: notDone };
+//     });
 
-    res.status(200).json(result);
-  } catch (error) {
-    console.error("Get All Tasks Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
-  }
-};
+//     res.status(200).json(result);
+//   } catch (error) {
+//     console.error("Get All Tasks Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 
 // export const exportTaskStatusExcel = async (req, res) => {
 //   try {
@@ -1467,6 +1672,141 @@ export const getAllTasks = async (req, res) => {
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
 // };
+
+export const getAllTasks = async (req, res) => {
+  try {
+    const { date, shift } = req.query;
+    const filter = req.user.accountType === "employee" ? { assignedTo: req.user.id } : {};
+
+    // Get current IST time - FIXED
+    const getISTime = () => {
+      // Method 1: Use locale string (more reliable)
+      const now = new Date();
+      return new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+    };
+
+    const istTime = getISTime();
+    const today = new Date(istTime);
+    today.setHours(0, 0, 0, 0);
+    const query = Task.find(filter).populate("assignedTo", "username department shiftStartHour shiftEndHour");
+    
+    if (shift) {
+      query.where("shift").equals(shift);
+    }
+    const tasks = await query.lean();
+    const taskIds = tasks.map(t => t._id);
+    const statuses = await TaskStatus.find({ 
+      taskId: { $in: taskIds },
+      employeeId: req.user.id 
+    }).lean();
+
+    const taskStatusMap = {};
+    for (const s of statuses) {
+      const tId = s.taskId.toString();
+      taskStatusMap[tId] = s.status;
+    }
+
+    const employee = await User.findById(req.user.id).lean();
+    const result = tasks.map((task) => {
+      const userStatus = taskStatusMap[task._id.toString()] || "";
+      
+      let canUpdate = true;
+      let isMissed = false;
+      let missedReason = "";
+      let taskDate;
+      if (task.date) {
+        taskDate = new Date(task.date);
+      } else if (task.createdAt) {
+        taskDate = new Date(task.createdAt);
+      } else {
+        taskDate = new Date(today);
+      }
+      taskDate.setHours(0, 0, 0, 0);
+
+      const empShiftStart = new Date(taskDate);
+      empShiftStart.setHours(employee.shiftStartHour, 0, 0, 0);
+      const allowedWindows = {
+        Start: {
+          start: new Date(empShiftStart),
+          end: new Date(empShiftStart.getTime() + 2 * 60 * 60 * 1000),
+        },
+        Mid: {
+          start: new Date(empShiftStart.getTime() + 3 * 60 * 60 * 1000),
+          end: new Date(empShiftStart.getTime() + 6 * 60 * 60 * 1000),
+        },
+        End: {
+          start: new Date(empShiftStart.getTime() + 8.5 * 60 * 60 * 1000),
+          end: new Date(empShiftStart.getTime() + 10 * 60 * 60 * 1000),
+        },
+      };
+
+      const taskShift = task.shift;
+      const allowedWindow = allowedWindows[taskShift];
+
+      if (allowedWindow) {
+        // console.log(`${taskShift} shift window:`, {
+        //   start: allowedWindow.start.toLocaleString('en-IN'),
+        //   end: allowedWindow.end.toLocaleString('en-IN'),
+        //   currentTime: istTime.toLocaleString('en-IN')
+        // });
+        
+        const isWithinWindow = istTime >= allowedWindow.start && istTime <= allowedWindow.end;
+        if (userStatus === "") {
+          if (isWithinWindow) {
+            canUpdate = true;
+            isMissed = false;
+          } else {
+            canUpdate = false;
+            isMissed = true;
+            
+            if (istTime < allowedWindow.start) {
+              missedReason = `${taskShift} shift window hasn't started yet`;
+            } else {
+              missedReason = `${taskShift} shift time window has passed`;
+            }
+          }
+        } else {
+          canUpdate = false;  
+          isMissed = false;  
+        }
+      } else {
+        console.log("No allowed window found for shift:", taskShift);
+      }
+
+      const doneEmployees = [];
+      const notDoneEmployees = [];
+      
+      if (task.assignedTo && Array.isArray(task.assignedTo)) {
+        task.assignedTo.forEach(emp => {
+          if (emp._id.toString() === req.user.id) {
+            if (userStatus === "Done") {
+              doneEmployees.push({ _id: emp._id, username: emp.username });
+            } else {
+              notDoneEmployees.push({ _id: emp._id, username: emp.username });
+            }
+          } else {
+            notDoneEmployees.push({ _id: emp._id, username: emp.username });
+          }
+        });
+      }
+
+      return { 
+        ...task, 
+        employeeStatus: userStatus,
+        canUpdate: canUpdate,
+        isMissed: isMissed,
+        missedReason: missedReason,
+        doneEmployees: doneEmployees, 
+        notDoneEmployees: notDoneEmployees 
+      };
+    });
+
+    res.status(200).json(result);
+  } catch (error) {
+    console.error("Get All Tasks Error:", error);
+    res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
 
 export const exportTaskStatusExcel = async (req, res) => {
   try {
@@ -1868,6 +2208,436 @@ export const Defaulter = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// export const Defaulter = async (req, res) => {
+//   try {
+//     const { department, shift, employeeId, startDate, endDate, page = 1, limit = 30 } = req.query;
+//     const pageNum = Math.max(1, parseInt(page));
+//     const pageSize = parseInt(limit);
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;
+//       return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
+//     };
+
+//     const filter = {};
+//     if (req.user.accountType === "employee") {
+//       filter.assignedTo = req.user.id;
+//       if (shift) filter.shift = shift;
+//     } else {
+//       if (department) filter.department = department;
+//       if (shift) filter.shift = shift;
+//       if (employeeId) filter.assignedTo = employeeId;
+//     }
+
+//     // Fetch tasks with assigned employees
+//     const tasks = await Task.find(filter)
+//       .populate("assignedTo", "username department shiftStartHour shiftEndHour")
+//       .lean();
+
+//     if (!tasks.length) {
+//       return res.status(200).json({
+//         success: true,
+//         totalDefaulters: 0,
+//         overallTotalDefaults: 0,
+//         data: [],
+//         totalPages: 0,
+//         currentPage: pageNum
+//       });
+//     }
+
+//     const taskIds = tasks.map(t => t._id);
+//     const start = startDate ? new Date(startDate) : new Date();
+//     const end = endDate ? new Date(endDate) : new Date();
+//     start.setHours(0, 0, 0, 0);
+//     end.setHours(23, 59, 59, 999);
+
+//     // Fetch task statuses
+//     const statuses = await TaskStatus.find({
+//       taskId: { $in: taskIds },
+//       date: { $gte: start, $lte: end },
+//     })
+//       .select("taskId employeeId status date updatedAt")
+//       .lean();
+
+//     // Get all unique employee IDs from tasks
+//     const employeeIds = [];
+//     tasks.forEach(task => {
+//       if (task.assignedTo && Array.isArray(task.assignedTo)) {
+//         task.assignedTo.forEach(emp => {
+//           if (emp && emp._id) {
+//             employeeIds.push(emp._id.toString());
+//           }
+//         });
+//       }
+//     });
+
+//     // Get current date for roster lookup
+//     const nowIst = getISTime();
+//     const currentMonth = nowIst.getMonth() + 1;
+//     const currentYear = nowIst.getFullYear();
+
+//     // Fetch roster data for current month/year
+//     let rosterData = [];
+//     if (employeeIds.length > 0) {
+//       rosterData = await RosterModal.find({
+//         month: currentMonth,
+//         year: currentYear,
+//         "weeks.employees.name": { $exists: true }
+//       })
+//         .select("weeks.weekNumber weeks.startDate weeks.endDate weeks.employees.name weeks.employees.dailyStatus")
+//         .lean();
+
+//       // Also check previous month if we're at the beginning of month
+//       if (nowIst.getDate() <= 7) {
+//         let prevMonth = currentMonth - 1;
+//         let prevYear = currentYear;
+//         if (prevMonth === 0) {
+//           prevMonth = 12;
+//           prevYear = currentYear - 1;
+//         }
+        
+//         const prevRosterData = await Roster.find({
+//           month: prevMonth,
+//           year: prevYear,
+//           "weeks.employees.name": { $exists: true }
+//         })
+//           .select("weeks.weekNumber weeks.startDate weeks.endDate weeks.employees.name weeks.employees.dailyStatus")
+//           .lean();
+        
+//         rosterData = [...rosterData, ...prevRosterData];
+//       }
+//     }
+
+//     // Create a map of employee attendance by date
+//     const employeeAttendanceMap = new Map();
+    
+//     rosterData.forEach(roster => {
+//       roster.weeks.forEach(week => {
+//         const weekStartDate = new Date(week.startDate);
+//         week.employees.forEach(employee => {
+//           if (employee && employee.name && employee.dailyStatus) {
+//             // Find user by username to get the employee ID
+//             // This assumes username in User model matches name in Roster
+//             tasks.forEach(task => {
+//               task.assignedTo.forEach(emp => {
+//                 if (emp.username === employee.name) {
+//                   const empId = emp._id.toString();
+//                   employee.dailyStatus.forEach((dailyStatus, dayIndex) => {
+//                     if (dailyStatus && dailyStatus.status) {
+//                       const statusDate = new Date(weekStartDate);
+//                       statusDate.setDate(statusDate.getDate() + dayIndex);
+//                       const dateKey = statusDate.toISOString().split('T')[0];
+                      
+//                       const key = `${empId}_${dateKey}`;
+//                       employeeAttendanceMap.set(key, dailyStatus.status);
+//                     }
+//                   });
+//                 }
+//               });
+//             });
+//           }
+//         });
+//       });
+//     });
+
+//     // Map for latest status per task + employee + shiftDate
+//     const statusMap = new Map();
+//     statuses.forEach(s => {
+//       const date = new Date(s.date);
+//       const dateKey = date.toISOString().split('T')[0];
+//       const key = `${s.taskId}_${s.employeeId}_${dateKey}`;
+//       const existing = statusMap.get(key);
+//       if (!existing || new Date(s.updatedAt) > new Date(existing.updatedAt)) {
+//         statusMap.set(key, s);
+//       }
+//     });
+
+//     const defaulterMap = new Map();
+//     const employeeDefaultSets = new Map();
+//     const now = getISTime();
+
+//     const computeShiftWindow = (emp, shiftType) => {
+//       const startHour = typeof emp.shiftStartHour === "number" ? emp.shiftStartHour : 18;
+//       const endHour = typeof emp.shiftEndHour === "number" ? emp.shiftEndHour : 2;
+
+//       const shiftDate = new Date(now);
+
+//       const shiftCrossesMidnight = startHour > endHour;
+
+//       // Normal date calculation
+//       if (startHour >= 0 && startHour < 6) shiftDate.setDate(shiftDate.getDate() - 1);
+//       else if (shiftCrossesMidnight && now.getHours() < endHour) shiftDate.setDate(shiftDate.getDate() - 1);
+//       else if (startHour >= 18 && now.getHours() < startHour) shiftDate.setDate(shiftDate.getDate() - 1);
+
+//       // From 2 PM today → to 2 PM next day
+//       // ALWAYS show previous day's defaulters
+//       const hour = now.getHours();
+//       if (hour >= 14 || hour < 14) {
+//         if (!(hour < 14)) { 
+//           // from 14:00 today until 23:59 → previous day
+//           shiftDate.setDate(shiftDate.getDate() - 1);
+//         }
+//       }
+//       if (hour < 14) {
+//         // next day before 2 PM → still previous day
+//         const diffHours = (now - shiftDate) / (1000 * 60 * 60);
+//         if (diffHours < 24) {
+//           shiftDate.setDate(shiftDate.getDate() - 1);
+//         }
+//       }
+
+//       shiftDate.setHours(startHour, 0, 0, 0);
+
+//       const allowedWindows = {
+//         Start: { start: new Date(shiftDate), end: new Date(shiftDate.getTime() + 2 * 60 * 60 * 1000) },
+//         Mid:   { start: new Date(shiftDate.getTime() + 3 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 6 * 60 * 60 * 1000) },
+//         End:   { start: new Date(shiftDate.getTime() + 8.5 * 60 * 60 * 1000), end: new Date(shiftDate.getTime() + 10 * 60 * 60 * 1000) }
+//       };
+
+//       return allowedWindows[shiftType] || null;
+//     };
+
+//     for (const task of tasks) {
+//       for (const emp of task.assignedTo) {
+//         if (employeeId && emp._id.toString() !== employeeId.toString()) continue;
+
+//         const shiftWindow = computeShiftWindow(emp, task.shift);
+//         if (!shiftWindow) continue;
+
+//         // Only count as defaulter if shift window has passed
+//         if (now <= shiftWindow.end) continue;
+
+//         const shiftDate = new Date(shiftWindow.start);
+//         const shiftDateKey = shiftDate.toDateString();
+//         const shiftDateISO = shiftDate.toISOString().split('T')[0];
+        
+//         // Check if employee was on leave or week off on this date
+//         const attendanceKey = `${emp._id}_${shiftDateISO}`;
+//         const attendanceStatus = employeeAttendanceMap.get(attendanceKey);
+        
+//         // Skip defaulter count if employee was on leave (L) or week off (WO)
+//         if (attendanceStatus === "L" || attendanceStatus === "WO") {
+//           console.log(`Skipping defaulter for ${emp.username} on ${shiftDateISO}: ${attendanceStatus}`);
+//           continue;
+//         }
+
+//         const statusKey = `${task._id}_${emp._id}_${shiftDateKey}`;
+//         const latestStatus = statusMap.get(statusKey);
+
+//         if ((latestStatus?.status || "Not Done") !== "Done") {
+//           const key = `${emp._id}_${shiftDateKey}`;
+//           const existing = defaulterMap.get(key) || {
+//             date: new Date(shiftWindow.start),
+//             employeeId: emp._id,
+//             employeeName: emp.username,
+//             notDoneTasksToday: 0,
+//             attendanceStatus: attendanceStatus || "Present" // Add attendance status for debugging
+//           };
+//           existing.notDoneTasksToday += 1;
+//           defaulterMap.set(key, existing);
+
+//           const setForEmp = employeeDefaultSets.get(emp._id.toString()) || new Set();
+//           setForEmp.add(`${task._id}_${emp._id}_${shiftDateKey}`);
+//           employeeDefaultSets.set(emp._id.toString(), setForEmp);
+//         }
+//       }
+//     }
+
+//     const allData = Array.from(defaulterMap.values()).map(entry => {
+//       const totalSet = employeeDefaultSets.get(entry.employeeId.toString()) || new Set();
+//       return { 
+//         ...entry, 
+//         totalDefaultsTillDate: totalSet.size 
+//       };
+//     });
+
+//     allData.sort((a, b) => b.date - a.date);
+//     const totalDefaulters = allData.length;
+//     const totalPages = Math.ceil(totalDefaulters / pageSize);
+//     const startIndex = (pageNum - 1) * pageSize;
+//     const paginatedData = allData.slice(startIndex, startIndex + pageSize);
+
+//     const overallTotalDefaults = Array.from(employeeDefaultSets.values()).reduce((sum, s) => sum + (s.size || 0), 0);
+
+//     res.status(200).json({
+//       success: true,
+//       totalDefaulters,
+//       overallTotalDefaults,
+//       data: paginatedData,
+//       totalPages,
+//       currentPage: pageNum,
+//     });
+//   } catch (error) {
+//     console.error("Defaulter calculation error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };  
+
+// export const getEmployeeDefaulters = async (req, res) => {
+//   try {
+//     const { employeeId } = req.params;
+//     const { page = 1, limit = 30 } = req.query;
+//     const pageNum = Math.max(1, parseInt(page));
+//     const pageSize = parseInt(limit);
+
+//     const employee = await User.findById(employeeId).lean();
+//     if (!employee) return res.status(404).json({ success: false, message: "Employee not found" });
+
+//     const getISTime = () => {
+//       const now = new Date();
+//       const istOffset = 5.5 * 60;
+//       return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + istOffset * 60000);
+//     };
+
+//     const getShiftDate = () => {
+//       const now = getISTime();
+//       if (now.getHours() < 10) now.setDate(now.getDate() - 1);
+//       now.setHours(0, 0, 0, 0);
+//       return now;
+//     };
+
+//     const endDate = getShiftDate();
+//     const startDate = new Date(endDate);
+//     startDate.setDate(startDate.getDate() - 30);
+
+//     const tasks = await Task.find(
+//       { assignedTo: employeeId },
+//       { _id: 1, title: 1, shift: 1, department: 1, priority: 1, createdAt: 1 }
+//     ).lean();
+
+//     if (!tasks.length)
+//       return res.json({ success: true, totalDefaults: 0, data: [], totalPages: 0, currentPage: pageNum });
+
+//     const taskIds = tasks.map(t => t._id);
+
+//     const statuses = await TaskStatus.aggregate([
+//       {
+//         $match: {
+//           employeeId: new mongoose.Types.ObjectId(employeeId),
+//           taskId: { $in: taskIds },
+//           date: { $gte: startDate, $lte: endDate }
+//         }
+//       },
+//       { $sort: { updatedAt: -1 } },
+//       {
+//         $group: {
+//           _id: { taskId: "$taskId", date: "$date" },
+//           status: { $first: "$status" }
+//         }
+//       },
+//       {
+//         $project: {
+//           taskId: "$_id.taskId",
+//           date: "$_id.date",
+//           status: 1
+//         }
+//       }
+//     ]);
+
+//     // Fetch roster data for employee
+//     const currentMonth = new Date().getMonth() + 1;
+//     const currentYear = new Date().getFullYear();
+    
+//     let rosterData = await Roster.find({
+//       month: { $in: [currentMonth, currentMonth - 1 === 0 ? 12 : currentMonth - 1] },
+//       year: { $in: [currentYear, currentMonth - 1 === 0 ? currentYear - 1 : currentYear] },
+//       "weeks.employees.name": employee.username
+//     })
+//       .select("weeks.weekNumber weeks.startDate weeks.endDate weeks.employees.name weeks.employees.dailyStatus")
+//       .lean();
+
+//     // Create attendance map for this employee
+//     const employeeAttendanceMap = new Map();
+    
+//     rosterData.forEach(roster => {
+//       roster.weeks.forEach(week => {
+//         const weekStartDate = new Date(week.startDate);
+//         const employeeData = week.employees.find(emp => emp.name === employee.username);
+        
+//         if (employeeData && employeeData.dailyStatus) {
+//           employeeData.dailyStatus.forEach((dailyStatus, dayIndex) => {
+//             if (dailyStatus && dailyStatus.status) {
+//               const statusDate = new Date(weekStartDate);
+//               statusDate.setDate(statusDate.getDate() + dayIndex);
+//               const dateKey = statusDate.toISOString().split('T')[0];
+//               employeeAttendanceMap.set(dateKey, dailyStatus.status);
+//             }
+//           });
+//         }
+//       });
+//     });
+
+//     const statusMap = new Map();
+//     statuses.forEach(s => {
+//       const dateKey = s.date.toISOString().split('T')[0];
+//       statusMap.set(`${s.taskId}_${dateKey}`, s.status);
+//     });
+
+//     const now = getISTime();
+//     const currentHour = now.getHours();
+
+//     const result = [];
+
+//     for (const task of tasks) {
+//       let loopStart = task.createdAt > startDate ? task.createdAt : startDate;
+//       loopStart.setHours(0, 0, 0, 0);
+
+//       const days = Math.ceil((endDate - loopStart) / 86400000);
+
+//       for (let i = 0; i <= days; i++) {
+//         const d = new Date(loopStart);
+//         d.setDate(loopStart.getDate() + i);
+
+//         const dateKey = d.toISOString().split('T')[0];
+//         const key = `${task._id}_${dateKey}`;
+//         const status = statusMap.get(key);
+
+//         // Check if employee was on leave or week off on this date
+//         const attendanceStatus = employeeAttendanceMap.get(dateKey);
+//         if (attendanceStatus === "L" || attendanceStatus === "WO") {
+//           // Skip counting as defaulter if employee was on leave or week off
+//           continue;
+//         }
+
+//         if (d.toISOString().split('T')[0] === getShiftDate().toISOString().split('T')[0]) {
+//           if (currentHour < 10) continue;
+//         }
+
+//         if (!status || status !== "Done") {
+//           result.push({
+//             date: new Date(d),
+//             title: task.title,
+//             shift: task.shift,
+//             department: task.department,
+//             priority: task.priority,
+//             attendanceStatus: attendanceStatus || "Present"
+//           });
+//         }
+//       }
+//     }
+
+//     result.sort((a, b) => b.date - a.date);
+
+//     const total = result.length;
+//     const totalPages = Math.ceil(total / pageSize);
+//     const paginated = result.slice((pageNum - 1) * pageSize, (pageNum - 1) * pageSize + pageSize);
+
+//     res.json({
+//       success: true,
+//       employeeName: employee.username,
+//       totalDefaults: total,
+//       totalPages,
+//       currentPage: pageNum,
+//       limit: pageSize,
+//       data: paginated
+//     });
+//   } catch (err) {
+//     console.error("getEmployeeDefaulters error:", err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 // export const getEmployeeDefaulters = async (req, res) => {
 //   try {
 //     const { employeeId } = req.params;

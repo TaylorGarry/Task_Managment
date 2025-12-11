@@ -12,6 +12,7 @@ import AllTasks from "./pages/AllTasks.jsx";
 import Defaulter from "./pages/Defaulter.jsx";
 import ManageEmployee from "./components/ManageEmployee.jsx";
 import AdminDashboard from "./components/AdminDashboard.jsx";
+import RosterForm from "./utils/RosterForm.jsx";
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
@@ -50,6 +51,7 @@ function App() {
         <Route path="defaulter" element={<Defaulter />} />
         <Route path="manage-employee" element={<ManageEmployee />} />
         <Route path="adminDashboard" element={<AdminDashboard />} />
+        <Route path="roster" element={<RosterForm />} />
         <Route index element={<Navigate to="assign-task" replace />} />
       </Route>
 

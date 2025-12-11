@@ -1,149 +1,268 @@
 import React from "react";
-
 const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
-  const handleChange = (e) => {
-    const value = e.target.value;
-    // Don't call onStatusChange if dropdown is disabled
-    if (value === "" || shouldDisableDropdown || isShiftMissed(task)) {
-      return;
-    }
-    onStatusChange(task._id, value);
-  };
-
-  const isDone = task.employeeStatus === "Done";
-  const isNotUpdated = task.employeeStatus === "" || !task.employeeStatus;
-  
-  // Helper function to get date string safely
-  const getDateString = (date) => {
-    if (!date) return '';
+  const normalizeDate = (dateInput) => {
+    if (!dateInput) return '';
+    
     try {
-      const dateObj = new Date(date);
-      return dateObj.toDateString();
+      if (dateInput instanceof Date) {
+        return dateInput.toISOString().split('T')[0];
+      }
+      
+      if (typeof dateInput === 'string' && dateInput.includes('/')) {
+        const parts = dateInput.split('/');
+        if (parts.length === 3) {
+          const day = parts[0];
+          const month = parts[1];
+          const year = parts[2];
+          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+      }
+      
+      const d = new Date(dateInput);
+      if (!isNaN(d.getTime())) {
+        return d.toISOString().split('T')[0];
+      }
+      
+      return '';
     } catch (error) {
+      console.error('Date normalization error:', error, 'for:', dateInput);
       return '';
     }
   };
-  
-  const getRelatedTasks = () => {
-    const currentDateStr = getDateString(task.date);
-    if (!currentDateStr) return [];
+
+  const formatDisplayDate = (dateInput) => {
+    if (!dateInput) return "Today";
     
-    return allTasks.filter(t => 
-      t.title === task.title && 
-      getDateString(t.date) === currentDateStr
-    );
+    try {
+      let d;
+      
+      if (dateInput instanceof Date) {
+        d = dateInput;
+      } else if (typeof dateInput === 'string') {
+        if (dateInput.includes('/')) {
+          const parts = dateInput.split('/');
+          if (parts.length === 3) {
+            d = new Date(parts[2], parts[1] - 1, parts[0]);
+          } else if (parts.length === 3 && parts[0].length === 4) {
+            d = new Date(dateInput);
+          }
+        } else if (dateInput.includes('-')) {
+          d = new Date(dateInput);
+        }
+      }
+      
+      if (!d || isNaN(d.getTime())) {
+        d = new Date(dateInput);
+      }
+      
+      if (d && !isNaN(d.getTime())) {
+        const day = String(d.getDate()).padStart(2, '0');
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const year = d.getFullYear();
+        return `${day}/${month}/${year}`;
+      }
+      
+      return "Today";
+    } catch (e) {
+      console.error('Display date error:', e);
+      return "Today";
+    }
   };
+
+  const taskNormalizedDate = normalizeDate(task.date);
+  const taskDisplayDate = formatDisplayDate(task.date);
   
-  const relatedTasks = getRelatedTasks();
-  const startTask = relatedTasks.find(t => t.shift === "Start");
-  const midTask = relatedTasks.find(t => t.shift === "Mid");
-  const endTask = relatedTasks.find(t => t.shift === "End");
+  const relatedTasks = allTasks.filter(t => {
+    const tDate = normalizeDate(t.date);
+    const isSameDate = tDate === taskNormalizedDate && tDate !== '';
+    
+    return isSameDate;
+  });
   
-  const isShiftMissed = (shiftTask) => {
-    return shiftTask && 
-      (shiftTask.employeeStatus === "" || !shiftTask.employeeStatus) &&
-      shiftTask.canUpdate === false;
+  const startTasks = relatedTasks.filter(t => t.shift === "Start");
+  const midTasks = relatedTasks.filter(t => t.shift === "Mid");
+  const endTasks = relatedTasks.filter(t => t.shift === "End");
+
+  const isTaskMissed = (taskToCheck) => {
+    if (!taskToCheck) return false;
+    const hasNoStatus = !taskToCheck.employeeStatus || taskToCheck.employeeStatus === "";
+    const missed = hasNoStatus && taskToCheck.canUpdate === false;
+    return missed;
   };
-  
-  const isStartMissed = isShiftMissed(startTask);
-  const isMidMissed = isShiftMissed(midTask);
-  const isEndMissed = isShiftMissed(endTask);
-  
-  const getShouldDisableDropdown = () => {
-    if (isShiftMissed(task)) return true;
-    
-    if (task.shift === "Mid" && isStartMissed) return true;
-    
-    if (task.shift === "End" && (isStartMissed || isMidMissed)) return true;
-    
-    return false;
+
+  const canTaskBeUpdated = (taskToCheck) => {
+    if (!taskToCheck) return false;
+    return taskToCheck.canUpdate === true;
   };
-  
-  const shouldDisableDropdown = getShouldDisableDropdown();
-  const isTaskMissed = isShiftMissed(task);
-  const isTaskBlocked = shouldDisableDropdown && !isTaskMissed;
-  
-  const getBlockReason = () => {
-    if (task.shift === "Start" && isTaskMissed) {
-      return "Start shift time window has passed. All shifts are blocked for today.";
+
+  const areAllTasksInShiftHandled = (shiftTasks) => {
+    if (shiftTasks.length === 0) {
+      return true;
+    }
+    
+    const unhandledTasks = shiftTasks.filter(t => {
+      const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+      const isMissed = isTaskMissed(t);
+      return !hasStatus && !isMissed;
+    });
+    return unhandledTasks.length === 0;
+  };
+
+  const isCurrentTaskMissed = isTaskMissed(task);
+  const canCurrentTaskBeUpdated = canTaskBeUpdated(task);
+  const areAllStartTasksHandled = areAllTasksInShiftHandled(startTasks);
+  const areAllMidTasksHandled = areAllTasksInShiftHandled(midTasks);
+
+  const shouldBeBlocked = () => {
+    if (isCurrentTaskMissed) {
+      return false;
+    }
+    
+    if (!canCurrentTaskBeUpdated) {
+      return false;  
+    }
+    
+    if (task.shift === "Start") {
+      return false;
     }
     
     if (task.shift === "Mid") {
-      if (isStartMissed) return "Blocked because Start shift was not updated.";
-      if (isTaskMissed) return "Mid shift time window has passed. End shift is blocked for today.";
+      const blocked = startTasks.length > 0 && !areAllStartTasksHandled;
+      return blocked;
     }
     
     if (task.shift === "End") {
-      if (isStartMissed && isMidMissed) return "Blocked because both Start and Mid shifts were not updated.";
-      if (isStartMissed) return "Blocked because Start shift was not updated.";
-      if (isMidMissed) return "Blocked because Mid shift was not updated.";
-      if (isTaskMissed) return "End shift time window has passed.";
+      const startBlocked = startTasks.length > 0 && !areAllStartTasksHandled;
+      const midBlocked = midTasks.length > 0 && !areAllMidTasksHandled;
+      const blocked = startBlocked || midBlocked;
+      return blocked;
+    }
+    
+    return false;
+  };
+
+  const isBlocked = shouldBeBlocked();
+  const isDone = task.employeeStatus === "Done";
+  const isNotDone = task.employeeStatus === "Not Done";
+  const isNotUpdated = !task.employeeStatus;
+  
+  let displayState = "pending";
+  if (isDone) displayState = "done";
+  else if (isNotDone) displayState = "not-done";
+  else if (isCurrentTaskMissed) displayState = "missed";
+  else if (isBlocked) displayState = "blocked";
+  else if (!canCurrentTaskBeUpdated && isNotUpdated) displayState = "not-yet";
+  else if (isNotUpdated) displayState = "pending";
+
+
+  const getBlockReason = () => {
+    if (isCurrentTaskMissed) {
+      if (task.shift === "Start") {
+        return "Start shift time window has passed. All shifts are blocked for today.";
+      } else if (task.shift === "Mid") {
+        return "Mid shift time window has passed. End shift is blocked for today.";
+      } else {
+        return "End shift time window has passed.";
+      }
+    }
+    
+    if (isBlocked) {
+      if (task.shift === "Mid") {
+        const pendingStart = startTasks.filter(t => {
+          const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+          const isMissed = isTaskMissed(t);
+          return !hasStatus && !isMissed;
+        });
+        const missedStart = startTasks.filter(t => isTaskMissed(t));
+        
+        let reason = `Cannot update Mid shift. `;
+        if (pendingStart.length > 0) {
+          reason += `${pendingStart.length} Start shift task(s) pending completion. `;
+        }
+        if (missedStart.length > 0) {
+          reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
+        }
+        return reason.trim();
+        
+      } else if (task.shift === "End") {
+        const pendingStart = startTasks.filter(t => {
+          const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+          const isMissed = isTaskMissed(t);
+          return !hasStatus && !isMissed;
+        });
+        const pendingMid = midTasks.filter(t => {
+          const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+          const isMissed = isTaskMissed(t);
+          return !hasStatus && !isMissed;
+        });
+        const missedStart = startTasks.filter(t => isTaskMissed(t));
+        const missedMid = midTasks.filter(t => isTaskMissed(t));
+        
+        let reason = `Cannot update End shift. `;
+        
+        if (pendingStart.length > 0 && pendingMid.length > 0) {
+          reason += `${pendingStart.length} Start shift and ${pendingMid.length} Mid shift task(s) pending completion.`;
+        } else if (pendingStart.length > 0) {
+          reason += `${pendingStart.length} Start shift task(s) pending completion.`;
+        } else if (pendingMid.length > 0) {
+          reason += `${pendingMid.length} Mid shift task(s) pending completion.`;
+        }
+        
+        const missedMessages = [];
+        if (missedStart.length > 0) missedMessages.push(`${missedStart.length} Start shift task(s) missed`);
+        if (missedMid.length > 0) missedMessages.push(`${missedMid.length} Mid shift task(s) missed`);
+        
+        if (missedMessages.length > 0) {
+          reason += ` ${missedMessages.join(', ')} (time window passed).`;
+        }
+        
+        return reason.trim();
+      }
+    }
+    
+    if (!canCurrentTaskBeUpdated && isNotUpdated) {
+      return `Time window for ${task.shift} shift has not started yet.`;
     }
     
     return "";
   };
-  
-  const blockReason = getBlockReason();
+
+  const statusMessage = getBlockReason();
+
+  const handleChange = (e) => {
+    const value = e.target.value;
+    if (value === "" || isCurrentTaskMissed || isBlocked || !canCurrentTaskBeUpdated) return;
+    onStatusChange(task._id, value);
+  };
 
   const handleDropdownClick = (e) => {
-    if (shouldDisableDropdown || isTaskMissed) {
-      e.preventDefault();
-    }
+    if (isCurrentTaskMissed || isBlocked || !canCurrentTaskBeUpdated) e.preventDefault();
   };
-
+  
   const handleSelectClick = (e) => {
-    if (shouldDisableDropdown || isTaskMissed) {
-      e.stopPropagation();
-    }
-  };
-
-  const formatDisplayDate = (date) => {
-    if (!date) return 'Today';
-    try {
-      return new Date(date).toLocaleDateString('en-IN');
-    } catch (error) {
-      return 'Today';
-    }
+    if (isCurrentTaskMissed || isBlocked || !canCurrentTaskBeUpdated) e.stopPropagation();
   };
 
   return (
-    <div
-      className={`border ${
-        isDone ? "border-green-300 bg-green-50" : 
-        isTaskMissed ? "border-red-300 bg-red-50" :
-        isTaskBlocked ? "border-gray-200 bg-gray-100" :
-        isNotUpdated ? "border-gray-300 bg-gray-50" : 
-        "border-[#EAEAEA] bg-white"
-      } p-5 rounded-2xl shadow-sm transition-all duration-200`}
-    >
+    <div className={`border ${
+      displayState === "done" ? "border-green-300 bg-green-50" : 
+      displayState === "not-done" ? "border-orange-300 bg-orange-50" :
+      displayState === "missed" ? "border-red-300 bg-red-50" : 
+      displayState === "blocked" ? "border-gray-200 bg-gray-100" : 
+      displayState === "not-yet" ? "border-yellow-200 bg-yellow-50" :
+      displayState === "pending" ? "border-gray-300 bg-gray-50" : 
+      "border-[#EAEAEA] bg-white"
+    } p-5 rounded-2xl shadow-sm transition-all duration-200`}>
+      
       <div className="flex justify-between items-start mb-3">
-        <h3 className="text-lg font-semibold text-gray-800">
-          {task.title}
-        </h3>
+        <h3 className="text-lg font-semibold text-gray-800">{task.title}</h3>
         <div className="flex items-center space-x-2">
-          {isTaskMissed && (
-            <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full font-medium flex items-center">
-              <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-              </svg>
-              Missed
-            </span>
-          )}
-          {isNotUpdated && !isTaskMissed && !isTaskBlocked && (
-            <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">
-              Pending
-            </span>
-          )}
-          {isDone && (
-            <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">
-              Done
-            </span>
-          )}
-          {isTaskBlocked && (
-            <span className="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded-full font-medium">
-              Blocked
-            </span>
-          )}
+          {displayState === "missed" && <span className="text-xs px-2 py-1 bg-red-100 text-red-800 rounded-full font-medium">Missed</span>}
+          {displayState === "blocked" && <span className="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded-full font-medium">Blocked</span>}
+          {displayState === "not-yet" && <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">Not Yet</span>}
+          {displayState === "pending" && <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full">Pending</span>}
+          {displayState === "done" && <span className="text-xs px-2 py-1 bg-green-100 text-green-800 rounded-full">Done</span>}
+          {displayState === "not-done" && <span className="text-xs px-2 py-1 bg-orange-100 text-orange-800 rounded-full">Not Done</span>}
         </div>
       </div>
 
@@ -151,12 +270,11 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
         <div className="flex justify-between">
           <span className="font-semibold text-gray-700">Shift:</span>
           <span className={`font-medium ${
-            task.shift === "Start" ? "text-blue-600" :
-            task.shift === "Mid" ? "text-purple-600" :
+            task.shift === "Start" ? "text-blue-600" : 
+            task.shift === "Mid" ? "text-purple-600" : 
             "text-indigo-600"
           }`}>
-            {task.shift} Shift
-            {isTaskMissed && " (Missed)"}
+            {task.shift} Shift{displayState === "missed" && " (Missed)"}
           </span>
         </div>
         <div className="flex justify-between">
@@ -166,8 +284,8 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
         <div className="flex justify-between">
           <span className="font-semibold text-gray-700">Priority:</span>
           <span className={`font-medium ${
-            task.priority === "High" ? "text-red-600" :
-            task.priority === "Medium" ? "text-orange-600" :
+            task.priority === "High" ? "text-red-600" : 
+            task.priority === "Medium" ? "text-orange-600" : 
             "text-green-600"
           }`}>
             {task.priority}
@@ -175,31 +293,32 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
         </div>
         <div className="flex justify-between">
           <span className="font-semibold text-gray-700">Date:</span>
-          <span className="text-gray-500">
-            {formatDisplayDate(task.date)}
+          <span className="text-gray-500" title={`Normalized: ${taskNormalizedDate}`}>
+            {taskDisplayDate}
           </span>
         </div>
       </div>
 
-      {(isTaskMissed || isTaskBlocked) && (
-        <div className={`mb-3 p-2 rounded-lg ${
-          isTaskMissed ? "bg-red-50 border border-red-200" : "bg-gray-100 border border-gray-200"
+      {(displayState === "missed" || displayState === "blocked" || displayState === "not-yet") && statusMessage && (
+        <div className={`mb-3 p-3 rounded-lg ${
+          displayState === "missed" ? "bg-red-50 border border-red-200" : 
+          displayState === "blocked" ? "bg-gray-100 border border-gray-200" :
+          "bg-yellow-50 border border-yellow-200"
         }`}>
           <div className="flex items-start">
-            <svg className={`w-4 h-4 mr-2 mt-0.5 flex-shrink-0 ${
-              isTaskMissed ? "text-red-500" : "text-gray-500"
-            }`} fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
-              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
-            </svg>
             <div className={`text-xs ${
-              isTaskMissed ? "text-red-700" : "text-gray-700"
+              displayState === "missed" ? "text-red-700" : 
+              displayState === "blocked" ? "text-gray-700" :
+              "text-yellow-700"
             }`}>
               <span className="font-semibold">
-                {isTaskMissed ? "Missed:" : "Blocked:"}
-              </span> {blockReason}
-              <div className="mt-1 text-blue-500">
-                Can update tomorrow in scheduled time slot
-              </div>
+                {displayState === "missed" ? "Missed:" : 
+                 displayState === "blocked" ? "Blocked:" : 
+                 "Note:"}
+              </span> {statusMessage}
+              {displayState === "missed" && (
+                <div className="mt-1 text-blue-500">Can update tomorrow in scheduled time slot</div>
+              )}
             </div>
           </div>
         </div>
@@ -208,47 +327,35 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
       <div className="mt-4">
         <div className="flex justify-between items-center mb-1">
           <label className="font-semibold text-gray-700">Status:</label>
-          {(isTaskMissed || isTaskBlocked) && (
+          {(displayState === "missed" || displayState === "blocked" || displayState === "not-yet") && (
             <span className={`text-xs font-medium ${
-              isTaskMissed ? "text-red-500" : "text-gray-500"
+              displayState === "missed" ? "text-red-500" : 
+              displayState === "blocked" ? "text-gray-500" :
+              "text-yellow-500"
             }`}>
-              {isTaskMissed ? "Missed" : "Blocked"}
+              {displayState === "missed" ? "Missed" : 
+               displayState === "blocked" ? "Blocked" : 
+               "Not Yet"}
             </span>
           )}
         </div>
-        <div 
-          onClick={handleDropdownClick}
-          className="relative"
-        >
+        <div onClick={handleDropdownClick} className="relative">
           <select
             value={task.employeeStatus || ""}
             onChange={handleChange}
             onClick={handleSelectClick}
-            disabled={isTaskMissed || isTaskBlocked}
+            disabled={displayState === "missed" || displayState === "blocked" || displayState === "not-yet"}
             className={`w-full border ${
-              (isTaskMissed || isTaskBlocked) ? "border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed" :
-              isNotUpdated ? "border-gray-300 text-gray-700 cursor-pointer" : 
+              (displayState === "missed" || displayState === "blocked" || displayState === "not-yet") ? 
+              "border-gray-300 bg-gray-100 text-gray-500 cursor-not-allowed" : 
+              displayState === "pending" ? "border-gray-300 text-gray-700 cursor-pointer" : 
               "border-[#EAEAEA] text-gray-700 cursor-pointer"
             } rounded-lg px-3 py-2 text-sm focus:border-sky-400 focus:ring-1 focus:ring-sky-100 outline-none transition-all appearance-none`}
-            style={{ 
-              pointerEvents: (isTaskMissed || isTaskBlocked) ? 'none' : 'auto',
-              WebkitAppearance: 'none',
-              MozAppearance: 'none'
-            }}
           >
             <option value="">Select status</option>
             <option value="Not Done">Not Done</option>
             <option value="Done">Done</option>
           </select>
-          {(isTaskMissed || isTaskBlocked) && (
-            <div 
-              className="absolute inset-0 rounded-lg cursor-not-allowed" 
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-              }}
-            />
-          )}
         </div>
       </div>
     </div>

@@ -8,7 +8,6 @@ const Defaulter = () => {
   const dispatch = useDispatch();
   const { defaulters, loading } = useSelector((state) => state.tasks);
   const { employees } = useSelector((state) => state.auth);
-  const API_URL = "http://localhost:4000/api/v1/tasks";
   const today = new Date().toISOString().split("T")[0];
   const [filters, setFilters] = useState({
     startDate: today,

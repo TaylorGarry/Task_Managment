@@ -170,6 +170,7 @@ import reviewRoutes from "./routes/review.routes.js";
 import taskStatusRoutes from "./routes/taskStatus.routes.js";
 import remarkRoutes from "./routes/remark.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
+import rosterRoutes from "./routes/roster.routes.js";
 
 dotenv.config();
 const app = express();
@@ -256,6 +257,7 @@ app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
 app.use("/api/remarks", remarkRoutes);
+app.use("/api/v1/roster", rosterRoutes);
 
 
 // BASE ROUTE
