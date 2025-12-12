@@ -929,60 +929,8 @@ export const updateTaskStatus = async (req, res) => {
       }
     }
 
-    // REST OF THE FUNCTION REMAINS EXACTLY THE SAME
-    const shiftOrder = ["Start", "Mid", "End"];
-    const currentShiftIndex = shiftOrder.indexOf(currentShift);
-
-    const isSameDay = (date1, date2) => {
-      if (!date1 || !date2) return false;
-      const d1 = new Date(date1);
-      const d2 = new Date(date2);
-      d1.setHours(0, 0, 0, 0);
-      d2.setHours(0, 0, 0, 0);
-      return d1.getTime() === d2.getTime();
-    };
-
-    const allUserTasks = await Task.find({
-      assignedTo: req.user.id,
-      isActive: true
-    }).lean();
-
-    const todayTasks = allUserTasks.filter(t => 
-      !t.date || isSameDay(t.date, taskDate)
-    );
-
-    const todayStatuses = await TaskStatus.find({
-      employeeId: req.user.id,
-      date: effectiveDate
-    }).lean();
-
-    const isTaskUpdatedToday = (taskId) => {
-      return todayStatuses.some(s => 
-        s.taskId.toString() === taskId.toString() && 
-        s.status && 
-        s.status !== ""
-      );
-    };
-
-    if (currentShiftIndex > 0) {
-      for (let i = 0; i < currentShiftIndex; i++) {
-        const previousShift = shiftOrder[i];
-        const previousShiftTasks = todayTasks.filter(t => t.shift === previousShift);
-        
-        if (previousShiftTasks.length > 0) {
-          const allPreviousUpdated = previousShiftTasks.every(t => isTaskUpdatedToday(t._id));
-          
-          if (!allPreviousUpdated) {
-            const notUpdatedTasks = previousShiftTasks.filter(t => !isTaskUpdatedToday(t._id));
-            const taskTitles = notUpdatedTasks.map(t => t.title).join(", ");
-            
-            return res.status(403).json({
-              message: `Cannot update ${currentShift} shift tasks. You must complete all ${previousShift} shift tasks first. Pending: ${taskTitles}`
-            });
-          }
-        }
-      }
-    }
+    // REMOVED SHIFT DEPENDENCY CHECK - Employees can now update tasks in any order
+    // The code block that checked if previous shift tasks were completed has been removed
 
     let taskStatus = await TaskStatus.findOne({
       taskId,
