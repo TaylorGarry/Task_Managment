@@ -43,18 +43,24 @@ const Defaulter = () => {
       setModalOpen(true);
 
       const token = localStorage.getItem("token");
-      // const res = await fetch(
-      //   ` http://localhost:4000/api/v1/tasks/employee-defaulters/${employeeId}`,
-      //   {
-      //     headers: { Authorization: `Bearer ${token}` },
-      //   }
-      // );
       const res = await fetch(
-        ` https://task-managment-7.onrender.com/api/v1/tasks/employee-defaulters/${employeeId}`,
+        ` http://localhost:4000/api/v1/tasks/employee-defaulters/${employeeId}`,
         {
           headers: { Authorization: `Bearer ${token}` },
         }
       );
+      // const res = await fetch(
+      //   ` https://task-managment-7.onrender.com/api/v1/tasks/employee-defaulters/${employeeId}`,
+      //   {
+      //     headers: { Authorization: `Bearer ${token}` },
+      //   }
+      // );
+      // const res = await fetch(
+      //   ` https://fdbs-server-a9gqg.ondigitalocean.app/v1/tasks/employee-defaulters/${employeeId}`,
+      //   {
+      //     headers: { Authorization: `Bearer ${token}` },
+      //   }
+      // );
       const data = await res.json();
       if (data.success) {
         setSelectedEmployee(data.employeeName);

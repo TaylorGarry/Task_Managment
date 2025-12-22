@@ -14,6 +14,7 @@ const taskSchema = new mongoose.Schema(
       default: null,
       validate: {
         validator: function (value) {
+          if (this.createdByRole === "superAdmin") return true;
           if (this.isCoreTeamTask) return true;
           return value && ["Start", "Mid", "End"].includes(value);
         },

@@ -14,6 +14,9 @@ import {
   createCoreTeamTask,
   getCoreTeamTasks,
   updateTaskStatusCoreTeam,
+  getAdminTasks,
+  updateAdminTaskStatus,
+  getAdminAssignedTasks,
   
 } from "../Controllers/task.controller.js";
 
@@ -34,5 +37,10 @@ router.get("/defaulter", authMiddleware, Defaulter);
 router.get("/employee-defaulters/:employeeId", getEmployeeDefaulters);
 router.post("/create/coretask", authMiddleware, createCoreTeamTask);
 router.get("/coreteamTask", authMiddleware, getCoreTeamTasks);
+router.get("/admintask", authMiddleware, getAdminTasks);
+router.put("/admin/status/:taskId", authMiddleware, updateAdminTaskStatus);
+router.get('/admin-assigned-tasks', authMiddleware, getAdminAssignedTasks);
+
+
 
 export default router;
