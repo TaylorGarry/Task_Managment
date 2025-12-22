@@ -203,14 +203,12 @@ const allowedIPs = [
   "14.97.83.226",
   "127.0.0.1",
   "103.21.187.189",
-  "2401:4900:8397:695a:2091:8fff:fe38:b7f4",
   "::1",
 ];
 
 app.use(express.json());
 
 
-// ✅ PUBLIC ROUTES: No auth, No IP check
 const publicRoutes = [
   "/api/v1/login",
   "/api/v1/signup",
@@ -218,7 +216,6 @@ const publicRoutes = [
 ];
 
 
-// ✅ 1️⃣ AUTH MIDDLEWARE FOR ALL OTHER ROUTES
 app.use((req, res, next) => {
   if (publicRoutes.includes(req.path)) {
     return next();
@@ -227,9 +224,8 @@ app.use((req, res, next) => {
 });
 
 
-// ✅ 2️⃣ IP RESTRICTION FOR NON-ADMIN USERS
 app.use((req, res, next) => {
-  if (publicRoutes.includes(req.path)) return next(); // No IP check for login/signup/logout
+  if (publicRoutes.includes(req.path)) return next(); 
 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -238,10 +234,8 @@ app.use((req, res, next) => {
   clientIp = clientIp.replace("::ffff:", "").toLowerCase();
   if (clientIp.includes("%")) clientIp = clientIp.split("%")[0];
 
-  // Admin can access from anywhere
-  if (req.user?.accountType === "admin") return next();
+  if (req.user?.accountType === "admin" || req.user?.accountType === "superAdmin") return next();
 
-  // Employees must be from allowedIPs
   if (allowedIPs.includes(clientIp)) return next();
 
   return res.status(403).json({
@@ -251,7 +245,7 @@ app.use((req, res, next) => {
 });
 
 
-// ROUTES
+
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/review", reviewRoutes);
@@ -260,7 +254,6 @@ app.use("/api/remarks", remarkRoutes);
 app.use("/api/v1/roster", rosterRoutes);
 
 
-// BASE ROUTE
 app.get("/", (req, res) => {
   res.json({
     status: "SUCCESS",
@@ -270,8 +263,6 @@ app.get("/", (req, res) => {
   });
 });
 
-
-// IP CHECK ROUTE
 app.get("/check-ip", (req, res) => {
   const clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -285,7 +276,6 @@ app.get("/check-ip", (req, res) => {
 });
 
 
-// 404 HANDLER
 app.use((req, res) => {
   res.status(404).json({
     error: "API endpoint not found",
@@ -294,7 +284,6 @@ app.use((req, res) => {
 });
 
 
-// GLOBAL ERROR HANDLER
 app.use((err, req, res, next) => {
   console.error("Error:", err.message);
   if (err.message.includes("CORS")) {

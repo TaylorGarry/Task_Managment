@@ -7,8 +7,10 @@ import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar } from "react-icons/fi";
 import toast from "react-hot-toast";
 
-// const API_URL = "http://localhost:4000/api/v1";
-const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
+const API_URL = "http://localhost:4000/api/v1";
+// const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
+// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+
 
 const AdminNavbar = () => {
   const { user } = useSelector((state) => state.auth);
@@ -116,6 +118,12 @@ const AdminNavbar = () => {
             <Link to="/admin/adminDashboard" className="hover:underline text-[#155DFC] font-semibold">
               Admin
             </Link>
+            <Link to="/admin/admintask" className="hover:underline text-[#155DFC] font-semibold">
+              Your Task
+            </Link>
+            {/* <Link to="/admin/assigned-tasks" className="hover:underline text-[#155DFC] font-semibold">
+  Your Assigned Tasks
+</Link> */}
             <Link to="/admin/assign-task" className="hover:underline text-[#155DFC] font-semibold">
               Assign Task
             </Link>
@@ -125,7 +133,7 @@ const AdminNavbar = () => {
             <Link to="/admin/defaulter" className="hover:underline text-[#155DFC] font-semibold">
               Defaulter
             </Link>
-            {user?.accountType === "admin" && (
+            {["admin", "superAdmin"].includes(user?.accountType) && (
               <>
                 <button
                   onClick={handleExport}

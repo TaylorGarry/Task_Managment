@@ -64,33 +64,77 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 export const signup = async (req, res) => {
   try {
-    const { username, password, accountType, department, shiftLabel, isCoreTeam } = req.body;
+    const {
+      username,
+      password,
+      accountType,
+      department,
+      shiftLabel,
+      isCoreTeam,
+    } = req.body;
 
-    if (req.user?.accountType !== "admin")
-      return res.status(403).json({ message: "Only admin can create users" });
+    // 🔐 Admin OR Super Admin can create users
+    const isAdminOrSuperAdmin =
+      req.user?.accountType === "admin" ||
+      req.user?.accountType === "superAdmin";
 
-    if (!username || !password || !department || !accountType)
-      return res.status(400).json({ message: "Username, password, department, and account type are required" });
+    if (!isAdminOrSuperAdmin) {
+      return res
+        .status(403)
+        .json({ message: "Only admin or super admin can create users" });
+    }
 
-    if (accountType === "employee" && !isCoreTeam && !shiftLabel)
-      return res.status(400).json({ message: "Shift label is required for non-core team employees" });
+    // 🔍 Check if a super admin already exists
+    const superAdminExists = await User.exists({
+      accountType: "superAdmin",
+    });
 
-    if (await User.exists({ username }))
+    // 🔐 Super Admin creation rules
+    if (accountType === "superAdmin") {
+      // ❌ Block if super admin exists AND requester is not super admin
+      if (superAdminExists && req.user.accountType !== "superAdmin") {
+        return res.status(403).json({
+          message: "Only super admin can create another super admin",
+        });
+      }
+      // ✅ Allow admin ONLY if no super admin exists
+    }
+
+    // Basic validation
+    if (!username || !password || !department || !accountType) {
+      return res.status(400).json({
+        message:
+          "Username, password, department, and account type are required",
+      });
+    }
+
+    // Shift validation
+    if (accountType === "employee" && !isCoreTeam && !shiftLabel) {
+      return res.status(400).json({
+        message: "Shift label is required for non-core team employees",
+      });
+    }
+
+    // Prevent duplicate user
+    if (await User.exists({ username })) {
       return res.status(400).json({ message: "User already exists" });
+    }
 
+    // Shift mapping
     const shiftMapping = {
       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
-      "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
+      "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
     };
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
-    
-    if (accountType === "employee" && !isCoreTeam && !selectedShift)
+
+    if (accountType === "employee" && !isCoreTeam && !selectedShift) {
       return res.status(400).json({ message: "Invalid shift label" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -120,9 +164,14 @@ export const signup = async (req, res) => {
     });
   } catch (error) {
     console.error("Signup error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
+
+
 
 export const createCoreTeamUser = async (req, res) => {
   try {
@@ -209,11 +258,37 @@ export const logout = async (req, res) => {
   }
 };
 
+// export const getAllEmployees = async (req, res) => {
+//   try {
+//     const employees = await User.find(
+//       { accountType: "employee" },
+//       "_id username department isCoreTeam shiftStartHour shiftEndHour"
+//     ).lean();
+
+//     res.status(200).json(employees);
+//   } catch (error) {
+//     console.error("Get Employees Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
 export const getAllEmployees = async (req, res) => {
   try {
+    const requester = req.user; // assuming you have auth middleware that sets req.user
+    let query = {};
+
+    if (requester.accountType === "superAdmin") {
+      // super admin can see everyone except passwords
+      query = { accountType: { $in: ["employee", "admin", "superAdmin"] } };
+    } else {
+      // normal admin only sees employees
+      query = { accountType: "employee" };
+    }
+
     const employees = await User.find(
-      { accountType: "employee" },
-      "_id username department isCoreTeam shiftStartHour shiftEndHour"
+      query,
+      "_id username department accountType isCoreTeam shiftStartHour shiftEndHour"
     ).lean();
 
     res.status(200).json(employees);

@@ -228,7 +228,6 @@ export const updateRoster = async (req, res) => {
   }
 };
 
-
 export const exportRosterToExcel = async (req, res) => {
   try {
     const { month, year } = req.query;

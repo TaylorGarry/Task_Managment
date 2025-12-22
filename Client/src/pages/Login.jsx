@@ -41,9 +41,14 @@ const Login = () => {
 
       <div className="relative bg-white/90 backdrop-blur-sm p-8 rounded-2xl shadow-xl w-full max-w-md">
         <div className="mb-6 text-center bg-transparent">
-          <h1 className="text-2xl font-bold">
+          {/* <h1 className="text-2xl font-bold">
             <span className="text-[#0066cc]">TerraNova</span>
             <span className="text-[#ffcc00]"> Solution</span>
+          </h1> */}
+          <h1 className="text-2xl font-bold">
+             <span className="text-[#ffcc00]">FD</span>
+            <span className="text-[#0066cc] ml-1">BUSINESS</span>
+            <span className="text-[#ffcc00] ml-1">Service</span>
           </h1>
         </div>
 
