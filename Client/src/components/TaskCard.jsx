@@ -470,7 +470,7 @@ const TaskCard = ({ task, onOpenChat }) => {
     }
   };
 
-  // FIXED: Add +1 day to convert Dec 21 to Dec 22
+  
   const formatAdminDate = (dateInput) => {
     if (!dateInput) return "";
     
@@ -482,9 +482,9 @@ const TaskCard = ({ task, onOpenChat }) => {
         return "";
       }
       
-      // TEMPORARY FIX: Add +1 day
+      
       const correctedDate = new Date(dateObj);
-      correctedDate.setUTCDate(correctedDate.getUTCDate() + 1);
+      correctedDate.setUTCDate(correctedDate.getUTCDate());
       
       const month = correctedDate.getUTCMonth();
       const day = correctedDate.getUTCDate();

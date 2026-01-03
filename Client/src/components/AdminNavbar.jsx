@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Link, Navigate, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
@@ -127,6 +127,9 @@ const AdminNavbar = () => {
             <Link to="/admin/assign-task" className="hover:underline text-[#155DFC] font-semibold">
               Assign Task
             </Link>
+            <Link to="/admin/chat" className="hover:underline text-[#155DFC] font-semibold">
+              Chat
+            </Link>
             <Link to="/admin/tasks" className="hover:underline text-[#155DFC] font-semibold">
               Task Status
             </Link>
@@ -235,7 +238,13 @@ const AdminNavbar = () => {
               >
                 Assign Task
               </Link>
-
+              <Link
+                to="/admin/chat"
+                className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                onClick={() => setShowMobileMenu(false)}
+              >
+                Chat
+              </Link>
               <Link
                 to="/admin/tasks"
                 className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"

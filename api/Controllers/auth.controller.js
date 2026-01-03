@@ -275,14 +275,12 @@ export const logout = async (req, res) => {
 
 export const getAllEmployees = async (req, res) => {
   try {
-    const requester = req.user; // assuming you have auth middleware that sets req.user
+    const requester = req.user;  
     let query = {};
 
     if (requester.accountType === "superAdmin") {
-      // super admin can see everyone except passwords
       query = { accountType: { $in: ["employee", "admin", "superAdmin"] } };
     } else {
-      // normal admin only sees employees
       query = { accountType: "employee" };
     }
 
@@ -335,7 +333,6 @@ export const updateProfile = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const updateUserByAdmin = async (req, res) => {
   try {

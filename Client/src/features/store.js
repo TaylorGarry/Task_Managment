@@ -4,6 +4,8 @@ import taskReducer from "./slices/taskSlice.js";
 import reviewReducer from "./slices/reviewSlice.js";
 import remarkReducer from "./slices/remarkSlice.js";
 import rosterReducer from "./slices/rosterSlice.js";
+import chatReducer from "./slices/chatSlice.js";
+import messageReducer from "./slices/messageSlice.js";
 const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -11,6 +13,8 @@ const store = configureStore({
     reviews: reviewReducer,
     remarks: remarkReducer,
     roster: rosterReducer,
+    chat: chatReducer,
+    message: messageReducer,
   },
 });
 

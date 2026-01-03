@@ -101,6 +101,7 @@ import AdminDashboard from "./components/AdminDashboard.jsx";
 import RosterForm from "./utils/RosterForm.jsx";
 import AdminTask from "./pages/AdminTask.jsx";
 import AdminAssignedTasks from "./components/AdminAssignedTasks.jsx";
+import ChatUI from "./Chat/ChatUI.jsx";
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
@@ -153,6 +154,7 @@ function App() {
         <Route path="roster" element={<RosterForm />} />
         <Route path="admintask" element= {<AdminTask />} />
 <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
+<Route path="chat" element={<ChatUI />}/>  
          <Route index element={<Navigate to="tasks" replace />} />
       </Route>
 
