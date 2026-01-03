@@ -650,6 +650,7 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 const API_URL = "http://localhost:4000/api/v1/tasks";
+// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token || null;
@@ -700,13 +701,11 @@ export const createTask = createAsyncThunk(
   "tasks/createTask",
   async ({ data }, thunkAPI) => {
     try {
-      console.log("🔄 createTask called");
       const token = getToken();
       const res = await axios.post(`${API_URL}/create`, data, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
-      console.log("🧹 Clearing tasks cache");
       cache.tasks.data = null;
       cache.tasks.timestamp = null;
       
@@ -742,19 +741,13 @@ export const createCoreTask = createAsyncThunk(
 export const fetchTasks = createAsyncThunk(
   "tasks/fetchTasks",
   async (filters = {}, thunkAPI) => {
-    try {
-      console.log("🔄 fetchTasks called with filters:", filters);
-      console.log("📦 Cache check for 'tasks':", isCacheValid('tasks', filters));
-      
+    try {     
       if (isCacheValid('tasks', filters)) {
-        console.log("✅ Returning cached tasks data");
         return cache.tasks.data;
       }
       
-      console.log("📤 Fetching fresh tasks from API");
       const token = getToken();
       const user = JSON.parse(localStorage.getItem("user"));
-      console.log("👤 Current user:", user?.username, "ID:", user?.id);
 
       const query = new URLSearchParams({
         startDate: filters.startDate || "",
@@ -764,37 +757,19 @@ export const fetchTasks = createAsyncThunk(
         employeeId: filters.employee || "",
       }).toString();
 
-      console.log("🌐 API call:", `${API_URL}?${query}`);
       
       const res = await axios.get(`${API_URL}?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       
-      console.log("📊 API response - tasks count:", res.data.length);
       if (res.data.length > 0) {
-        console.log("📋 Sample task from /tasks endpoint:", {
-          id: res.data[0]?._id,
-          title: res.data[0]?.title,
-          doneEmployees: res.data[0]?.doneEmployees?.length || 0,
-          notDoneEmployees: res.data[0]?.notDoneEmployees?.length || 0,
-          date: res.data[0]?.date,
-          assignedTo: res.data[0]?.assignedTo?.length || 0
-        });
+        
       }
-      console.log("📋 ALL tasks from /tasks endpoint:", res.data.map(task => ({
-  id: task._id,
-  title: task.title,
-  date: task.date,
-  assignedTo: task.assignedTo?.map(emp => ({
-    name: emp.username,
-    type: emp.accountType
-  })) || []
-})));
+     
       
       cache.tasks.data = res.data;
       cache.tasks.timestamp = Date.now();
       cache.tasks.filters = filters;
-      console.log("💾 Cached tasks data");
       
       return res.data;
     } catch (err) {
@@ -918,7 +893,6 @@ export const updateTaskStatus = createAsyncThunk(
   "tasks/updateTaskStatus",
   async ({ id, status }, thunkAPI) => {
     try {
-      console.log("🔄 updateTaskStatus called for task:", id, "status:", status);
       const token = getToken();
       const res = await axios.put(
         `${API_URL}/status/${id}`,
@@ -926,11 +900,9 @@ export const updateTaskStatus = createAsyncThunk(
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      console.log("🧹 Clearing tasks cache after status update");
       cache.tasks.data = null;
       cache.tasks.timestamp = null;
       
-      console.log("✅ Status update response:", res.data.updatedStatus);
       return res.data.updatedStatus;
     } catch (err) {
       console.error("❌ updateTaskStatus error:", err);
@@ -1056,26 +1028,18 @@ export const fetchAdminTasks = createAsyncThunk(
   "tasks/fetchAdminTasks",
   async (filters = {}, thunkAPI) => {
     try {
-      console.log("🔄 fetchAdminTasks called with filters:", filters);
-      console.log("📦 Cache check for 'adminTasks':", isCacheValid('adminTasks', filters));
       
       if (isCacheValid('adminTasks', filters)) {
-        console.log("✅ Returning cached admin tasks data");
         return cache.adminTasks.data;
       }
       
-      console.log("📤 Fetching fresh admin tasks from API");
       const token = getToken();
       const user = JSON.parse(localStorage.getItem("user"));
-      console.log("👤 Current admin user:", user?.username, "ID:", user?.id);
-
       const query = new URLSearchParams({
         department: filters.department || "",
         employeeId: filters.employee || user?._id || "",
       }).toString();
 
-      console.log("🌐 API call for admin tasks:", `${API_URL}/admintask?${query}`);
-      
       const res = await axios.get(`${API_URL}/admintask?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -1083,23 +1047,10 @@ export const fetchAdminTasks = createAsyncThunk(
       let tasks = [];
       if (Array.isArray(res.data)) tasks = res.data;
       else if (res.data?.data && Array.isArray(res.data.data)) tasks = res.data.data;
-
-      console.log("📊 API response - admin tasks count:", tasks.length);
-      if (tasks.length > 0) {
-        console.log("📋 Sample admin task from /admintask endpoint:", {
-          id: tasks[0]?._id,
-          title: tasks[0]?.title,
-          doneEmployees: tasks[0]?.doneEmployees?.length || 0,
-          notDoneEmployees: tasks[0]?.notDoneEmployees?.length || 0,
-          date: tasks[0]?.date,
-          assignedTo: tasks[0]?.assignedTo?.length || 0
-        });
-      }
       
       cache.adminTasks.data = tasks;
       cache.adminTasks.timestamp = Date.now();
       cache.adminTasks.filters = filters;
-      console.log("💾 Cached admin tasks data");
       
       return tasks;
     } catch (err) {
@@ -1112,24 +1063,19 @@ export const updateAdminTaskStatus = createAsyncThunk(
   "tasks/updateAdminTaskStatus",
   async ({ id, status }, thunkAPI) => {
     try {
-      console.log("🚀 updateAdminTaskStatus called for task:", id, "status:", status);
       const token = getToken();
       const res = await axios.put(`${API_URL}/admin/status/${id}`, { status }, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // CRITICAL: Clear BOTH caches
-      console.log("🧹 Clearing BOTH caches (adminTasks and tasks)");
       cache.adminTasks.data = null;
       cache.adminTasks.timestamp = null;
-      cache.tasks.data = null;  // This line is crucial!
-      cache.tasks.timestamp = null;  // This line too!
+      cache.tasks.data = null;   
+      cache.tasks.timestamp = null;   
       
-      // Also invalidate the cache for current filters
       const state = thunkAPI.getState();
-      const currentFilters = {}; // Get current filters if you store them
+      const currentFilters = {};  
       
-      console.log("✅ Cache cleared, forcing fresh fetch");
 
       return res.data.updatedStatus;
     } catch (err) {
@@ -1142,34 +1088,18 @@ export const fetchAdminAssignedTasks = createAsyncThunk(
   "tasks/fetchAdminAssignedTasks",
   async (filters = {}, thunkAPI) => {
     try {
-      console.log("🔄 fetchAdminAssignedTasks called with filters:", filters);
       
       const token = getToken();
       const user = JSON.parse(localStorage.getItem("user"));
-      console.log("👤 Current user:", user?.username, "ID:", user?.id);
 
       const query = new URLSearchParams({
         department: filters.department || "",
         employeeId: filters.employee || user?._id || "",
       }).toString();
 
-      console.log("🌐 API call for admin assigned tasks:", `${API_URL}/admin-assigned-tasks?${query}`);
-      
       const res = await axios.get(`${API_URL}/admin-assigned-tasks?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("📊 API response - admin assigned tasks count:", res.data.length);
-      if (res.data.length > 0) {
-        console.log("📋 Sample admin assigned task:", {
-          id: res.data[0]?._id,
-          title: res.data[0]?.title,
-          doneEmployees: res.data[0]?.doneEmployees?.length || 0,
-          notDoneEmployees: res.data[0]?.notDoneEmployees?.length || 0,
-          date: res.data[0]?.date,
-        });
-      }
-      
       return res.data;
     } catch (err) {
       console.error("❌ fetchAdminAssignedTasks error:", err);
@@ -1193,7 +1123,6 @@ const taskSlice = createSlice({
   },
   reducers: {
     invalidateCache: (state) => {
-      console.log("🧹 invalidateCache reducer called");
       cache.tasks.data = null;
       cache.tasks.timestamp = null;
       cache.coreTasks.data = null;
@@ -1207,17 +1136,14 @@ const taskSlice = createSlice({
   extraReducers: (builder) => {
     builder
       .addCase(fetchTasks.pending, (state) => {
-        console.log("⏳ fetchTasks.pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchTasks.fulfilled, (state, action) => {
-        console.log("✅ fetchTasks.fulfilled - tasks count:", action.payload.length);
         state.loading = false;
         state.tasks = action.payload;
       })
       .addCase(fetchTasks.rejected, (state, action) => {
-        console.log("❌ fetchTasks.rejected:", action.payload);
         state.loading = false;
         state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
       })
@@ -1265,18 +1191,13 @@ const taskSlice = createSlice({
       })
 
       .addCase(updateTaskStatus.fulfilled, (state, action) => {
-        console.log("🔄 updateTaskStatus.fulfilled reducer called");
         const updatedStatus = action.payload;
-        console.log("📊 Updated status data:", updatedStatus);
         
         state.tasks = state.tasks.map((task) => {
           if (task._id === updatedStatus.taskId) {
-            console.log("✅ Found matching task in tasks state:", task.title);
             let doneEmployees = task.doneEmployees || [];
             let notDoneEmployees = task.notDoneEmployees || [];
 
-            console.log("📋 Before update - Done:", doneEmployees.length, "Not Done:", notDoneEmployees.length);
-            
             doneEmployees = doneEmployees.filter(
               (e) => e._id !== updatedStatus.employeeId
             );
@@ -1291,14 +1212,10 @@ const taskSlice = createSlice({
 
             if (updatedStatus.status === "Done") {
               doneEmployees.push(empObj);
-              console.log("➕ Added employee to Done list");
             } else {
               notDoneEmployees.push(empObj);
-              console.log("➕ Added employee to Not Done list");
             }
             
-            console.log("📋 After update - Done:", doneEmployees.length, "Not Done:", notDoneEmployees.length);
-
             return {
               ...task,
               doneEmployees,
@@ -1349,57 +1266,38 @@ const taskSlice = createSlice({
         });
       })
       .addCase(fetchAdminAssignedTasks.pending, (state) => {
-      console.log("⏳ fetchAdminAssignedTasks.pending");
       state.loading = true;
       state.error = null;
     })
     .addCase(fetchAdminAssignedTasks.fulfilled, (state, action) => {
-      console.log("✅ fetchAdminAssignedTasks.fulfilled - tasks count:", action.payload.length);
       state.loading = false;
       state.adminAssignedTasks = action.payload;
     })
     .addCase(fetchAdminAssignedTasks.rejected, (state, action) => {
-      console.log("❌ fetchAdminAssignedTasks.rejected:", action.payload);
       state.loading = false;
       state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
     })
       
       .addCase(fetchAdminTasks.pending, (state) => {
-        console.log("⏳ fetchAdminTasks.pending");
         state.loading = true;
         state.error = null;
       })
       .addCase(fetchAdminTasks.fulfilled, (state, action) => {
-        console.log("✅ fetchAdminTasks.fulfilled - admin tasks count:", action.payload.length);
         state.loading = false;
         state.adminTasks = action.payload;
       })
       .addCase(fetchAdminTasks.rejected, (state, action) => {
-        console.log("❌ fetchAdminTasks.rejected:", action.payload);
         state.loading = false;
         state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
       })
 
       .addCase(updateAdminTaskStatus.fulfilled, (state, action) => {
-  console.log("🔄 updateAdminTaskStatus.fulfilled reducer called");
   const updatedStatus = action.payload;
   const employeeId = updatedStatus.employeeId;
+
   
-  console.log("📊 Updated status data:", updatedStatus);
-  console.log("👤 Employee ID:", employeeId);
-  
-  // Log ALL tasks to see what's in state
-  console.log("📋 ALL tasks in state.tasks:", state.tasks.map(task => ({
-    id: task._id,
-    title: task.title,
-    date: task.date
-  })));
-  
-  // Check if the task exists in tasks state
   const taskExists = state.tasks.some(task => task._id === updatedStatus.taskId);
-  console.log("❓ Does task exist in tasks state?", taskExists);
   
-  // ... rest of your code
 });
   },
 });
