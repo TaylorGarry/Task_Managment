@@ -27,24 +27,19 @@ import RosterModal from "../Modals/Roster.modal.js";
 
 // Keep the same name so no other file breaks
 const getISTime = () => {
-  // But internally use UTC so it works globally
   return new Date(
     new Date().toLocaleString("en-US", { timeZone: "UTC" })
   );
 };
 
 const getShiftDate = () => {
-  const utc = getISTime(); // <-- same name, now returns UTC time
+  const utc = getISTime();  
   const hour = utc.getUTCHours();
 
   const shiftDate = new Date(utc);
-
-  // Shift rule: before 10 AM → previous day
   if (hour < 10) {
     shiftDate.setUTCDate(shiftDate.getUTCDate() - 1);
   }
-
-  // Stable YYYY-MM-DD format
   return shiftDate.toISOString().split("T")[0];
 };
 
@@ -53,8 +48,6 @@ export { getISTime, getShiftDate };
 export const createTask = async (req, res) => {
   try {
     const { accountType, id: userId } = req.user;
-
-    // 🔐 Only admin or super admin can create tasks
     if (accountType !== "admin" && accountType !== "superAdmin") {
       return res.status(403).json({ message: "Only admin or super admin can create tasks" });
     }
@@ -1479,8 +1472,8 @@ export const getEmployeeDefaulters = async (req, res) => {
 };
 export const createCoreTeamTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin")
-      return res.status(403).json({ message: "Only admin can create core team tasks" });
+    if (req.user.accountType !== "admin" && accountType !== "superAdmin")
+      return res.status(403).json({ message: "Only admin and Super Admin can create core team tasks" });
 
     const { title, description, department, assignedTo, priority, initialRemark } = req.body;
     if (!title || !department)
@@ -1531,7 +1524,7 @@ export const createCoreTeamTask = async (req, res) => {
 };
 export const getAdminTasks = async (req, res) => {
   try {
-    const { department, employeeId } = req.query; // optional filtering
+    const { department, employeeId } = req.query; 
     const { accountType, id: userId } = req.user;
 
     if (!["admin", "superAdmin"].includes(accountType)) {
@@ -1539,22 +1532,20 @@ export const getAdminTasks = async (req, res) => {
     }
 
     const filter = {
-      assignedTo: userId, // only fetch tasks assigned to current user
+      assignedTo: userId,  
     };
     if (department) filter.department = department;
 
-    // NO DATE FILTER - fetch all tasks assigned to admin
     const tasks = await Task.find(filter)
       .populate("assignedTo", "username accountType department")
       .lean();
 
-    const effectiveDate = getShiftDate(); // Get TODAY'S date
+    const effectiveDate = getShiftDate();  
     const taskIds = tasks.map(t => t._id);
 
-    // Fetch TODAY'S status for these tasks
     const allStatuses = await TaskStatus.find({
       taskId: { $in: taskIds },
-      date: effectiveDate, // Check status for TODAY
+      date: effectiveDate,  
     }).populate("employeeId", "username").lean();
 
     const enrichedTasks = tasks.map(task => {
@@ -1575,13 +1566,12 @@ export const getAdminTasks = async (req, res) => {
              s.employeeId._id.toString() === userId
       )?.status || "";
 
-      // Return with TODAY'S date (makes it recurring)
       return {
         ...task,
         doneEmployees,
         notDoneEmployees,
         employeeStatus: currentUserStatus,
-        date: effectiveDate, // Always show TODAY'S date
+        date: effectiveDate,  
       };
     });
 
@@ -1613,8 +1603,6 @@ export const updateAdminTaskStatus = async (req, res) => {
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
-
-    // Check if logged-in user is assigned to this task
     const isAssigned = task.assignedTo.some(
       (e) => e._id.toString() === userId.toString()
     );
@@ -1622,11 +1610,7 @@ export const updateAdminTaskStatus = async (req, res) => {
     if (!isAssigned) {
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
-
-    // Get IST time (same logic as employee update)
     const istTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    
-    // Use the SAME getEffectiveDate function as employee update
     const getEffectiveDate = () => {
       const date = new Date(istTime);
       if (date.getHours() < 10) {
@@ -1635,7 +1619,6 @@ export const updateAdminTaskStatus = async (req, res) => {
       date.setHours(0, 0, 0, 0);
       return date;
     };
-
     const effectiveDate = getEffectiveDate();
     const assignedEmployee = task.assignedTo.find(
       (e) => e._id.toString() === userId.toString()
@@ -1648,13 +1631,10 @@ export const updateAdminTaskStatus = async (req, res) => {
       console.log("Admin updating task for 1 AM shift worker");
       const currentDate = new Date(istTime);
       currentDate.setHours(0, 0, 0, 0);
-      
       const taskDateOnly = new Date(taskDate);
       taskDateOnly.setHours(0, 0, 0, 0);
-      
       const yesterday = new Date(currentDate);
       yesterday.setDate(yesterday.getDate() - 1);
-      
       if (taskDateOnly.getTime() === yesterday.getTime()) {
         const today = new Date(currentDate);
         taskDate = new Date(today);
@@ -1702,7 +1682,7 @@ export const updateAdminTaskStatus = async (req, res) => {
 };
 export const getAdminAssignedTasks = async (req, res) => {
   try {
-    const { department, employeeId } = req.query; // optional filtering
+    const { department, employeeId } = req.query;  
     const { accountType, id: userId } = req.user;
 
     if (!["admin", "superAdmin"].includes(accountType)) {
@@ -1710,7 +1690,7 @@ export const getAdminAssignedTasks = async (req, res) => {
     }
 
     const filter = {
-      assignedTo: userId, // only fetch tasks assigned to the current user
+      assignedTo: userId,  
     };
     if (department) filter.department = department;
 
@@ -1720,8 +1700,6 @@ export const getAdminAssignedTasks = async (req, res) => {
 
     const effectiveDate = getShiftDate();
     const taskIds = tasks.map(t => t._id);
-
-    // Fetch all task statuses for this date
     const allStatuses = await TaskStatus.find({
       taskId: { $in: taskIds },
       date: effectiveDate,
