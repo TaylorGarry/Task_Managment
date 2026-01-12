@@ -31,20 +31,16 @@ const getISTime = () => {
     new Date().toLocaleString("en-US", { timeZone: "UTC" })
   );
 };
-
 const getShiftDate = () => {
   const utc = getISTime();  
   const hour = utc.getUTCHours();
-
   const shiftDate = new Date(utc);
   if (hour < 10) {
     shiftDate.setUTCDate(shiftDate.getUTCDate() - 1);
   }
   return shiftDate.toISOString().split("T")[0];
 };
-
 export { getISTime, getShiftDate };
-
 export const createTask = async (req, res) => {
   try {
     const { accountType, id: userId } = req.user;
@@ -295,7 +291,6 @@ export const getTasks = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 export const getCoreTeamTasks = async (req, res) => {
   try {
     const { department, employeeId } = req.query;
@@ -758,8 +753,8 @@ export const updateTask = async (req, res) => {
 };
 export const deleteTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin") {
-      return res.status(403).json({ message: "Only admin can delete tasks" });
+    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
+      return res.status(403).json({ message: "Only admin and super Admin can delete tasks" });
     }
 
     const { id } = req.params;
@@ -785,8 +780,8 @@ export const deleteTask = async (req, res) => {
 };
 export const assignTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin")
-      return res.status(403).json({ message: "Only admin can assign tasks" });
+    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin")
+      return res.status(403).json({ message: "Only admin and super Admin can assign tasks" });
 
     const { taskId } = req.params;
     const { assignedTo } = req.body;
@@ -822,7 +817,6 @@ export const assignTask = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 export const getAllTasks = async (req, res) => {
   try {
     const { date, shift } = req.query;
@@ -949,12 +943,10 @@ export const getAllTasks = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
-export const exportTaskStatusExcel = async (req, res) => {
+export const exportTaskStatusExcel = async (req, res) => {  
   try {
-    if (req.user.accountType !== "admin")
+    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin")
       return res.status(403).json({ message: "Only admin can export tasks" });
-
     const { department, shift } = req.query;
 
     const getISTime = () => {
@@ -1161,7 +1153,6 @@ export const exportTaskStatusExcel = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 export const Defaulter = async (req, res) => {
   try {
     const { department, shift, employeeId, startDate, endDate, page = 1, limit = 30 } = req.query;
@@ -1350,7 +1341,6 @@ export const Defaulter = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 export const getEmployeeDefaulters = async (req, res) => {
   try {
     const { employeeId } = req.params;
