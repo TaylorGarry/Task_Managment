@@ -1460,7 +1460,7 @@ export const getEmployeeDefaulters = async (req, res) => {
 };
 export const createCoreTeamTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin" &&  accountType !== "superAdmin") 
+    if (req.user.accountType !== "admin" &&  req.user.accountType !== "superAdmin") 
       return res.status(403).json({ message: "Only admin and Super Admin can create core team task" });
 
     const { title, description, department, assignedTo, priority, initialRemark } = req.body;
