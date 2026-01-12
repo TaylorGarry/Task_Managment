@@ -177,8 +177,8 @@ export const createCoreTeamUser = async (req, res) => {
   try {
     const { username, password, accountType, department } = req.body;
 
-    if (req.user?.accountType !== "admin")
-      return res.status(403).json({ message: "Only admin can create users" });
+    if (req.user?.accountType !== "admin" && req.user.accountType !== "superAdmin")
+      return res.status(403).json({ message: "Only admin and super Admin can create users" });
 
     if (!username || !password || !department)
       return res.status(400).json({ message: "Username, password, and department are required" });
