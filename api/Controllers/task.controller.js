@@ -671,7 +671,7 @@ export const updateTaskStatusCoreTeam = async (req, res) => {
 };
 export const updateTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin") {
+    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
       return res.status(403).json({ message: "Only admin can update tasks" });
     }
 
@@ -752,23 +752,20 @@ export const updateTask = async (req, res) => {
   }
 };
 export const deleteTask = async (req, res) => {
+  //added super admin feature which admin has
   try {
     if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
       return res.status(403).json({ message: "Only admin and super Admin can delete tasks" });
     }
-
     const { id } = req.params;
-
     const task = await Task.findById(id).select("_id").lean();
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
-
     await Promise.all([
       Task.findByIdAndDelete(id),
       TaskStatus.deleteMany({ taskId: id }),
     ]);
-
     res.status(200).json({
       message: "Task and all related statuses deleted successfully",
       deletedTaskId: id,
@@ -779,15 +776,16 @@ export const deleteTask = async (req, res) => {
   }
 };
 export const assignTask = async (req, res) => {
+  //added super admin feature which admin has
   try {
     if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin")
-      return res.status(403).json({ message: "Only admin and super Admin can assign tasks" });
+      return res.status(403).json({ message: "Only admin and super Admin can assign task" });
 
     const { taskId } = req.params;
     const { assignedTo } = req.body;
 
     const task = await Task.findById(taskId);
-    if (!task) return res.status(404).json({ message: "Task not found" });
+    if (!task) return res.status(404).json({ message: "Task not found " });
 
     const employees = await User.find({
       _id: { $in: assignedTo },
@@ -1462,8 +1460,8 @@ export const getEmployeeDefaulters = async (req, res) => {
 };
 export const createCoreTeamTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin" && accountType !== "superAdmin")
-      return res.status(403).json({ message: "Only admin and Super Admin can create core team tasks" });
+    if (req.user.accountType !== "admin" &&  accountType !== "superAdmin") 
+      return res.status(403).json({ message: "Only admin and Super Admin can create core team task" });
 
     const { title, description, department, assignedTo, priority, initialRemark } = req.body;
     if (!title || !department)
