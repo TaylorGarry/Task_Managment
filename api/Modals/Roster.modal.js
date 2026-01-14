@@ -4,7 +4,7 @@ const dailyStatusSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   status: { 
     type: String, 
-    enum: ["P", "WO", "L", "", null], 
+    enum: ["P", "WO", "L", "NCNS", "UL","LWP","BL","", null], 
     default: "P" 
   }
 });
