@@ -377,8 +377,6 @@ export const updateRoster = async (req, res) => {
         message: "month, year, weekNumber, employeeId and updates are required",
       });
     }
-
-    // Find the roster
     const roster = await Roster.findOne({ month, year });
     if (!roster) {
       return res.status(403).json({ 
@@ -386,8 +384,6 @@ export const updateRoster = async (req, res) => {
         message: "Roster not found" 
       });
     }
-
-    // Find the week
     const week = roster.weeks.find((w) => w.weekNumber === weekNumber);
     if (!week) {
       return res.status(403).json({ 
@@ -395,28 +391,26 @@ export const updateRoster = async (req, res) => {
         message: "Week not found in roster" 
       });
     }
-
-    // Check if it's a previous week
     const currentDate = new Date();
+    const weekStartDate = new Date(week.startDate);
     const weekEndDate = new Date(week.endDate);
-    
-    // Set week end date to end of day (23:59:59.999)
+    weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
-    
-    // Debug logs
-    console.log('Current Date:', currentDate);
-    console.log('Week End Date (EOD):', weekEndDate);
-    console.log('Is Past Week?', currentDate > weekEndDate);
-
-    // BLOCK ALL UPDATES FOR PREVIOUS WEEKS
     if (currentDate > weekEndDate) {
       return res.status(403).json({
         success: false,
         message: "Cannot update previous week rosters. Previous weeks are locked for all users."
       });
     }
-
-    // Find the employee
+    const isCurrentWeek = currentDate >= weekStartDate && currentDate <= weekEndDate;
+    if (isCurrentWeek) {
+      if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
+        return res.status(403).json({
+          success: false,
+          message: "Only HR and Super Admin can edit current week roster"
+        });
+      }
+    }
     const employee = week.employees.id(employeeId);
     if (!employee) {
       return res.status(403).json({ 
@@ -424,8 +418,6 @@ export const updateRoster = async (req, res) => {
         message: "Employee not found in this week" 
       });
     }
-
-    // Define allowed fields for update
     const allowedFields = [
       "name",
       "userId",
@@ -436,7 +428,6 @@ export const updateRoster = async (req, res) => {
       "dailyStatus",
     ];
 
-    // Validate that shift hours are provided if being updated
     if (updates.shiftStartHour !== undefined || updates.shiftEndHour !== undefined) {
       if (updates.shiftStartHour === undefined || updates.shiftEndHour === undefined) {
         return res.status(400).json({
@@ -445,8 +436,6 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
-
-    // Validate shift hour values if being updated
     let shiftStartHour = employee.shiftStartHour;
     let shiftEndHour = employee.shiftEndHour;
 
@@ -459,7 +448,6 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
-
     if (updates.shiftEndHour !== undefined) {
       shiftEndHour = parseInt(updates.shiftEndHour);
       if (isNaN(shiftEndHour) || shiftEndHour < 0 || shiftEndHour > 23) {
@@ -469,8 +457,6 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
-
-    // Validate WO count if dailyStatus is being updated
     if (updates.dailyStatus && Array.isArray(updates.dailyStatus)) {
       const woCount = updates.dailyStatus.filter(d => d && d.status === "WO").length;
       if (woCount > 2) {
@@ -480,41 +466,32 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
-
-    // Update allowed fields
     Object.keys(updates).forEach((field) => {
       if (allowedFields.includes(field)) {
-        // Skip shift hour fields as they're already processed
         if (field !== "shiftStartHour" && field !== "shiftEndHour") {
           employee[field] = updates[field];
         }
       }
     });
-
-    // Ensure shift hours are always set
     employee.shiftStartHour = shiftStartHour;
     employee.shiftEndHour = shiftEndHour;
-
-    // Validate that both shift hours exist
     if (employee.shiftStartHour === undefined || employee.shiftEndHour === undefined) {
       return res.status(400).json({
         success: false,
         message: "Both shiftStartHour and shiftEndHour are required for all employees"
       });
     }
-
     roster.updatedBy = user._id;
     await roster.save();
-
     return res.status(200).json({
       success: true,
       message: "Employee updated successfully",
       employee,
       roster,
       updatedBy: user.username,
-      accountType: user.accountType
+      accountType: user.accountType,
+      weekType: isCurrentWeek ? "current" : "future"
     });
-
   } catch (error) {
     console.error("Update roster error:", error);
     return res.status(500).json({ 
@@ -817,7 +794,7 @@ export const exportRosterToExcel = async (req, res) => {
         });
       }
       
-      // Add all summary headers - even if they might be empty
+      
       const summaryHeaders = [
         "Total WO",
         "Total L", 
@@ -842,7 +819,7 @@ export const exportRosterToExcel = async (req, res) => {
           emp.shiftEndHour !== undefined ? emp.shiftEndHour : ""
         ];
         
-        // Initialize all counters to 0
+        
         let totalWO = 0;
         let totalL = 0;
         let totalP = 0;
@@ -856,7 +833,7 @@ export const exportRosterToExcel = async (req, res) => {
           emp.dailyStatus.forEach((ds) => {
             const status = ds.status || "";
             
-            // For empty cells, push empty string instead of null/undefined
+            
             if (status === "" || status === null) {
               row.push("");
               totalEmpty++;
@@ -891,7 +868,7 @@ export const exportRosterToExcel = async (req, res) => {
             }
           });
         } else {
-          // If no dailyStatus, add empty cells for all days
+          
           const dayCount = week.employees[0]?.dailyStatus?.length || 0;
           for (let i = 0; i < dayCount; i++) {
             row.push("");
@@ -899,7 +876,7 @@ export const exportRosterToExcel = async (req, res) => {
           }
         }
         
-        // Add summary counts to row - always add all 8 values
+       
         row.push(totalWO);
         row.push(totalL);
         row.push(totalP);
@@ -912,19 +889,19 @@ export const exportRosterToExcel = async (req, res) => {
         data.push(row);
       });
 
-      // Add summary row at the bottom
+     
       if (week.employees.length > 0) {
         const summaryRow = ["", "", "", "", "Summary"];
         
-        // Calculate day count properly
+       
         const dayCount = week.employees[0]?.dailyStatus?.length || 0;
         
-        // Add empty cells for date columns
+        
         for (let i = 0; i < dayCount; i++) {
           summaryRow.push("");
         }
         
-        // Calculate totals for all status types - initialize to 0
+        
         const totals = {
           WO: 0, L: 0, P: 0, NCNS: 0, UL: 0, LWP: 0, BL: 0, Empty: 0
         };
@@ -952,7 +929,7 @@ export const exportRosterToExcel = async (req, res) => {
           }
         });
         
-        // Add total counts to summary row - always add all 8 values
+       
         summaryRow.push(`WO: ${totals.WO}`);
         summaryRow.push(`L: ${totals.L}`);
         summaryRow.push(`P: ${totals.P}`);
@@ -967,23 +944,23 @@ export const exportRosterToExcel = async (req, res) => {
 
       const worksheet = XLSX.utils.aoa_to_sheet(data);
       
-      // Ensure all cells are properly formatted
+      
       const range = XLSX.utils.decode_range(worksheet['!ref']);
       
-      // Style header row - FIXED: Make sure all headers are styled
+      
       for (let C = range.s.c; C <= range.e.c; ++C) {
         const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
         
-        // Create header cell if it doesn't exist
+      
         if (!worksheet[cellAddress]) {
           worksheet[cellAddress] = { v: header[C] || "" };
         }
         
         let bgColor = "4472C4";  
-        // Last 8 columns are summary columns
-        const summaryStartCol = range.e.c - 7;  // Adjusted calculation
+       
+        const summaryStartCol = range.e.c - 7;  
         if (C >= summaryStartCol && C <= range.e.c) {  
-          bgColor = "FF9900";  // Orange for summary headers
+          bgColor = "FF9900";  
         }
         
         worksheet[cellAddress].s = {
@@ -999,14 +976,14 @@ export const exportRosterToExcel = async (req, res) => {
         };
       }
 
-      // Style data rows
+      
       for (let R = 1; R <= range.e.r; ++R) {
         const isSummaryRow = (R === range.e.r);
         
         for (let C = range.s.c; C <= range.e.c; ++C) {
           const cellAddress = XLSX.utils.encode_cell({ r: R, c: C });
           
-          // Ensure cell exists
+          
           if (!worksheet[cellAddress]) {
             worksheet[cellAddress] = { v: "" };
           }
@@ -1022,52 +999,52 @@ export const exportRosterToExcel = async (req, res) => {
           };
           
           const dayCount = week.employees[0]?.dailyStatus?.length || 0;
-          const summaryStartCol = 5 + dayCount;  // First 5 columns + day columns
+          const summaryStartCol = 5 + dayCount; 
           
           if (!isSummaryRow) {
-            // Employee data row
+            
             if (C >= 5 && C < summaryStartCol) { 
-              // Date status cells
+             
               const status = worksheet[cellAddress].v;
               if (status === "P") {
-                cellStyle.fill = { fgColor: { rgb: "C6EFCE" } };  // Green for Present
+                cellStyle.fill = { fgColor: { rgb: "C6EFCE" } }; 
               } else if (status === "WO") {
-                cellStyle.fill = { fgColor: { rgb: "FFC7CE" } };  // Red for Week Off
+                cellStyle.fill = { fgColor: { rgb: "FFC7CE" } }; 
               } else if (status === "L") {
-                cellStyle.fill = { fgColor: { rgb: "FFEB9C" } };  // Yellow for Leave
+                cellStyle.fill = { fgColor: { rgb: "FFEB9C" } }; 
               } else if (status === "NCNS") {
-                cellStyle.fill = { fgColor: { rgb: "E7E6E6" } };  // Gray for No Call No Show
+                cellStyle.fill = { fgColor: { rgb: "E7E6E6" } }; 
               } else if (status === "UL") {
-                cellStyle.fill = { fgColor: { rgb: "B4C6E7" } };  // Blue for Unpaid Leave
+                cellStyle.fill = { fgColor: { rgb: "B4C6E7" } };  
               } else if (status === "LWP") {
-                cellStyle.fill = { fgColor: { rgb: "F8CBAD" } };  // Orange for Leave Without Pay
+                cellStyle.fill = { fgColor: { rgb: "F8CBAD" } };  
               } else if (status === "BL") {
-                cellStyle.fill = { fgColor: { rgb: "D9D9D9" } };  // Dark Gray for Balance Leave
+                cellStyle.fill = { fgColor: { rgb: "D9D9D9" } };  
               } else if (status === "" || status === null) {
-                cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  // White for Empty
+                cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  
               } else {
-                cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  // Default white
+                cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  
               }
             } 
-            // Summary columns for employee rows
+            
             else if (C >= summaryStartCol) {  
-              cellStyle.fill = { fgColor: { rgb: "FFF2CC" } };  // Light yellow
+              cellStyle.fill = { fgColor: { rgb: "FFF2CC" } };  
               cellStyle.font = { bold: true };
               
-              // Ensure zero values are displayed as 0, not empty
+              
               if (worksheet[cellAddress].v === undefined || worksheet[cellAddress].v === "") {
                 worksheet[cellAddress].v = 0;
               }
             }
           } 
-          // Summary row styling
+         
           else if (isSummaryRow) {
             cellStyle.font = { bold: true };
-            cellStyle.fill = { fgColor: { rgb: "F2F2F2" } }; // Light gray
+            cellStyle.fill = { fgColor: { rgb: "F2F2F2" } }; 
             
-            // Summary columns in summary row
+            
             if (C >= summaryStartCol) {
-              cellStyle.fill = { fgColor: { rgb: "DDEBF7" } }; // Light blue
+              cellStyle.fill = { fgColor: { rgb: "DDEBF7" } }; 
             }
           }
           
@@ -1075,23 +1052,22 @@ export const exportRosterToExcel = async (req, res) => {
         }
       }
 
-      // Set column widths - ensure all columns have proper width
       const dateCols = week.employees[0]?.dailyStatus?.length || 0;
       const colWidths = [
-        { wch: 20 },  // Name
-        { wch: 15 },  // Transport
-        { wch: 15 },  // CAB Route
-        { wch: 15 },  // Shift Start Hour
-        { wch: 15 },  // Shift End Hour
-        ...Array(dateCols).fill({ wch: 12 }),  // Date columns (reduced from 15 to 12)
-        { wch: 12 },  // Total WO
-        { wch: 12 },  // Total L
-        { wch: 12 },  // Total P
-        { wch: 12 },  // Total NCNS
-        { wch: 12 },  // Total UL
-        { wch: 12 },  // Total LWP
-        { wch: 12 },  // Total BL
-        { wch: 12 }   // Total Empty
+        { wch: 20 },  
+        { wch: 15 },  
+        { wch: 15 },  
+        { wch: 15 }, 
+        { wch: 15 },  
+        ...Array(dateCols).fill({ wch: 12 }),  
+        { wch: 12 },  
+        { wch: 12 },  
+        { wch: 12 },  
+        { wch: 12 },  
+        { wch: 12 },  
+        { wch: 12 },  
+        { wch: 12 },  
+        { wch: 12 }    
       ];
       
       worksheet['!cols'] = colWidths;
