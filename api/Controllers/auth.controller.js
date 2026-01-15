@@ -73,34 +73,29 @@ export const signup = async (req, res) => {
       isCoreTeam,
     } = req.body;
 
-    // 🔐 Admin OR Super Admin can create users
     const isAdminOrSuperAdmin =
       req.user?.accountType === "admin" ||
-      req.user?.accountType === "superAdmin";
+      req.user?.accountType === "superAdmin" || 
+      req.user?.accountType === "HR";
 
     if (!isAdminOrSuperAdmin) {
       return res
         .status(403)
-        .json({ message: "Only admin or super admin can create users" });
+        .json({ message: "Only admin, super admin and HR can create users" });
     }
 
-    // 🔍 Check if a super admin already exists
     const superAdminExists = await User.exists({
       accountType: "superAdmin",
     });
 
-    // 🔐 Super Admin creation rules
     if (accountType === "superAdmin") {
-      // ❌ Block if super admin exists AND requester is not super admin
       if (superAdminExists && req.user.accountType !== "superAdmin") {
         return res.status(403).json({
           message: "Only super admin can create another super admin",
         });
       }
-      // ✅ Allow admin ONLY if no super admin exists
     }
 
-    // Basic validation
     if (!username || !password || !department || !accountType) {
       return res.status(400).json({
         message:
@@ -108,19 +103,16 @@ export const signup = async (req, res) => {
       });
     }
 
-    // Shift validation
     if (accountType === "employee" && !isCoreTeam && !shiftLabel) {
       return res.status(400).json({
         message: "Shift label is required for non-core team employees",
       });
     }
 
-    // Prevent duplicate user
     if (await User.exists({ username })) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // Shift mapping
     const shiftMapping = {
       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
@@ -279,7 +271,7 @@ export const getAllEmployees = async (req, res) => {
     let query = {};
 
     if (requester.accountType === "superAdmin") {
-      query = { accountType: { $in: ["employee", "admin", "superAdmin"] } };
+      query = { accountType: { $in: ["employee", "admin", "superAdmin", "HR"] } };
     } else {
       query = { accountType: "employee" };
     }
