@@ -66,7 +66,7 @@ const userSchema = new mongoose.Schema(
 
     accountType: {
       type: String,
-      enum: ["employee", "admin", "superAdmin"],
+      enum: ["employee", "admin", "superAdmin", "HR"],
       default: "employee",
     },
 
