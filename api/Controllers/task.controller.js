@@ -943,8 +943,8 @@ export const getAllTasks = async (req, res) => {
 };
 export const exportTaskStatusExcel = async (req, res) => {  
   try {
-    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin")
-      return res.status(403).json({ message: "Only admin can export tasks" });
+    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin" && req.user.accountType !== "HR")
+      return res.status(403).json({ message: "Only admin, superAdmin and HR can export tasks" });
     const { department, shift } = req.query;
 
     const getISTime = () => {
