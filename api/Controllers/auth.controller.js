@@ -336,8 +336,8 @@ export const updateProfile = async (req, res) => {
 
 export const updateUserByAdmin = async (req, res) => {
   try {
-    if (!req.user?.accountType || req.user.accountType !== "admin") {
-      return res.status(403).json({ message: "Only admin can update users" });
+    if (!req.user?.accountType || req.user.accountType !== "admin" && req.user.accountType !== "superAdmin" ) {
+      return res.status(403).json({ message: "Only admin and superAdmin can update users" });
     }
 
     const userId = req.params.id;
