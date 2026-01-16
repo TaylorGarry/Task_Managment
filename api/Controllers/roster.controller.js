@@ -12,8 +12,8 @@ export const addRosterWeek = async (req, res) => {
       endDate, 
       employees, 
       action = "create",
-      rosterStartDate, // NEW: Overall roster start date
-      rosterEndDate    // NEW: Overall roster end date
+      rosterStartDate, // Overall roster start date
+      rosterEndDate    // Overall roster end date
     } = req.body;
     
     const createdBy = req.user._id;  
@@ -25,7 +25,7 @@ export const addRosterWeek = async (req, res) => {
       });
     }
 
-    // NEW: Validate overall roster dates
+    // Validate overall roster dates
     if (!rosterStartDate || !rosterEndDate) {
       return res.status(400).json({ 
         success: false,
@@ -83,15 +83,20 @@ export const addRosterWeek = async (req, res) => {
 
     let roster = await Roster.findOne({ month, year });
     if (!roster) {
-      // NEW: Include rosterStartDate and rosterEndDate when creating new roster
+      // Create new roster with dates
       roster = new Roster({
         month,
         year,
-        rosterStartDate: new Date(rosterStartDate), // NEW
-        rosterEndDate: new Date(rosterEndDate),     // NEW
+        rosterStartDate: new Date(rosterStartDate),
+        rosterEndDate: new Date(rosterEndDate),
         weeks: [],
         createdBy,
       });
+    } else {
+      // FIX: Update roster dates for existing roster too
+      roster.rosterStartDate = new Date(rosterStartDate);
+      roster.rosterEndDate = new Date(rosterEndDate);
+      roster.updatedBy = createdBy; // Also update updatedBy here
     }
 
     const existingWeekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
@@ -138,7 +143,11 @@ export const addRosterWeek = async (req, res) => {
       console.log("Created new week");
     }
 
-    roster.updatedBy = createdBy;
+    // Only set updatedBy here if not already set above
+    if (!roster.updatedBy) {
+      roster.updatedBy = createdBy;
+    }
+    
     await roster.save();
     
     console.log("Roster saved successfully");
