@@ -28,17 +28,19 @@ import RosterModal from "../Modals/Roster.modal.js";
 // Keep the same name so no other file breaks
 const getISTime = () => {
   return new Date(
-    new Date().toLocaleString("en-US", { timeZone: "UTC" })
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" })
   );
 };
+
 const getShiftDate = () => {
-  const utc = getISTime();  
-  const hour = utc.getUTCHours();
-  const shiftDate = new Date(utc);
-  if (hour < 10) {
-    shiftDate.setUTCDate(shiftDate.getUTCDate() - 1);
+  const istNow = getISTime();
+  const shiftDate = new Date(istNow);
+  if (istNow.getHours() < 12) {
+    shiftDate.setDate(shiftDate.getDate() - 1);
   }
-  return shiftDate.toISOString().split("T")[0];
+  shiftDate.setHours(0, 0, 0, 0);
+
+  return shiftDate;  
 };
 export { getISTime, getShiftDate };
 export const createTask = async (req, res) => {
@@ -59,11 +61,9 @@ export const createTask = async (req, res) => {
     let usersToAssign = [];
 
     if (assignedTo?.length) {
-      // Super admin can assign to anyone
       if (accountType === "superAdmin") {
         usersToAssign = await User.find({ _id: { $in: assignedTo } });
       } else {
-        // Admin can only assign to employees
         usersToAssign = await User.find({
           _id: { $in: assignedTo },
           department,
@@ -71,12 +71,9 @@ export const createTask = async (req, res) => {
         });
       }
     } else {
-      // If no assignedTo specified
       if (accountType === "superAdmin") {
-        // Super admin assigns to all users in the department
         usersToAssign = await User.find({ department });
       } else {
-        // Admin assigns to all employees in the department
         usersToAssign = await User.find({ department, accountType: "employee" });
       }
     }
@@ -88,17 +85,15 @@ export const createTask = async (req, res) => {
     const newTask = await Task.create({
       title,
       description,
-      shift: accountType === "superAdmin" ? shift || null : shift, // super admin can skip shift
+      shift: accountType === "superAdmin" ? shift || null : shift,  
       department,
       assignedTo: usersToAssign.map((u) => u._id),
       createdBy: userId,
       deadline,
       priority,
       statusUnlocked: false,
-      isCoreTeamTask: false, // keep previous behavior
+      isCoreTeamTask: false,  
     });
-
-    // Initialize task statuses
     const today = getShiftDate();
     const statuses = usersToAssign.map((u) => ({
       taskId: newTask._id,
@@ -303,6 +298,21 @@ export const getCoreTeamTasks = async (req, res) => {
       if (employeeId) filter.assignedTo = employeeId;
     }
 
+    const getISTime = () => {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      return new Date(utc + 5.5 * 60 * 60000);
+    };
+
+    const getShiftDate = () => {
+      const ist = getISTime();
+      if (ist.getHours() < 10) ist.setDate(ist.getDate() - 1);
+      ist.setHours(0, 0, 0, 0);
+      return ist;
+    };
+
+    const today = getShiftDate();
+
     const tasks = await Task.find(filter)
       .populate("assignedTo", "username department")
       .populate("createdBy", "username")
@@ -339,18 +349,23 @@ export const getCoreTeamTasks = async (req, res) => {
     }
 
     const enrichedTasks = [];
+
     for (const task of tasks) {
       const remarks = remarkMap.get(task._id) || [];
       const statuses = statusMap.get(task._id) || [];
 
       const doneEmployees = [];
       const notDoneEmployees = [];
-      let employeeStatus = "Not Done";
+      let employeeStatus = "";
 
       for (const s of statuses) {
         const username = s.employeeId?.username || "Unknown";
-        if (s.status === "Done") doneEmployees.push({ _id: s.employeeId._id, username });
-        else notDoneEmployees.push({ _id: s.employeeId._id, username });
+
+        if (s.status === "Done") {
+          doneEmployees.push({ _id: s.employeeId._id, username });
+        } else {
+          notDoneEmployees.push({ _id: s.employeeId._id, username });
+        }
 
         if (
           req.user.accountType === "employee" &&
@@ -377,6 +392,10 @@ export const getCoreTeamTasks = async (req, res) => {
         employeeStatus,
         doneEmployees,
         notDoneEmployees,
+
+        // ✅ REQUIRED FOR FRONTEND
+        date: today,
+        canUpdate: true, // ✅ NO SHIFT RESTRICTION FOR CORE TEAM
       });
     }
 
@@ -622,7 +641,17 @@ export const updateTaskStatus = async (req, res) => {
 };
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {
+    console.log("========== CORE TEAM STATUS UPDATE API HIT ==========");
+    console.log("Request Params:", req.params);
+    console.log("Request Body:", req.body);
+    console.log("Request User:", {
+      id: req.user.id,
+      accountType: req.user.accountType,
+      isCoreTeam: req.user.isCoreTeam,
+    });
+
     if (req.user.accountType !== "employee") {
+      console.log("❌ Access denied: Not an employee");
       return res.status(403).json({ message: "Only employees can update status" });
     }
 
@@ -630,6 +659,7 @@ export const updateTaskStatusCoreTeam = async (req, res) => {
     const { status } = req.body;
 
     if (!["Done", "Not Done"].includes(status)) {
+      console.log("❌ Invalid status value:", status);
       return res.status(400).json({ message: "Invalid status value" });
     }
 
@@ -638,21 +668,75 @@ export const updateTaskStatusCoreTeam = async (req, res) => {
       User.findById(req.user.id).lean(),
     ]);
 
-    if (!task) return res.status(404).json({ message: "Task not found" });
-    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    console.log("Fetched Task:", task);
+    console.log("Fetched Employee:", employee);
 
-    const isCoreTeam = req.user.isCoreTeam;
-    if (!isCoreTeam && !task.assignedTo.some((id) => id.toString() === req.user.id)) {
+    if (!task) {
+      console.log("❌ Task not found");
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    if (!employee) {
+      console.log("❌ Employee not found");
+      return res.status(404).json({ message: "Employee not found" });
+    }
+
+    // Assignment check
+    const isAssigned =
+      task.assignedTo?.some((id) => id.toString() === req.user.id);
+
+    console.log("Is Core Team User:", req.user.isCoreTeam);
+    console.log("Is Assigned to Task:", isAssigned);
+
+    if (!req.user.isCoreTeam && !isAssigned) {
+      console.log("❌ User not assigned to this task");
       return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
-    const effectiveDate = new Date().toISOString().split("T")[0];
+    // ================= DATE DEBUGGING =================
+    const today = getShiftDate();
 
+    console.log("========== DATE DEBUG ==========");
+    console.log("getShiftDate() raw value:", today);
+    console.log("getShiftDate() ISO:", today);
+    // console.log("getShiftDate() Local String:", today.toString());
+    // console.log("getShiftDate() Timestamp:", today.getTime());
+    console.log("================================");
+
+    // Check existing status BEFORE update
+    const existingStatus = await TaskStatus.findOne({
+      taskId,
+      employeeId: req.user.id,
+      date: today,
+    }).lean();
+
+    console.log("Existing TaskStatus (before update):", existingStatus);
+
+    // ================= UPDATE =================
     const taskStatus = await TaskStatus.findOneAndUpdate(
-      { taskId, employeeId: req.user.id, date: effectiveDate },
-      { $set: { status, updatedAt: new Date() } },
+      {
+        taskId,
+        employeeId: req.user.id,
+        date: today,
+      },
+      {
+        $set: {
+          status,
+          updatedAt: new Date(),
+        },
+      },
       { upsert: true, new: true }
     ).populate("employeeId", "username");
+
+    console.log("Updated / Inserted TaskStatus:", {
+      taskId: taskStatus.taskId,
+      employeeId: taskStatus.employeeId?._id,
+      status: taskStatus.status,
+      date: taskStatus.date,
+      updatedAt: taskStatus.updatedAt,
+    });
+
+    console.log("========== CORE TEAM STATUS UPDATE SUCCESS ==========");
 
     res.status(200).json({
       message: "Status updated successfully (Core Team)",
@@ -665,10 +749,11 @@ export const updateTaskStatusCoreTeam = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Core Team Update Task Status Error:", error);
+    console.error("❌ Core Team Update Task Status Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 export const updateTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {

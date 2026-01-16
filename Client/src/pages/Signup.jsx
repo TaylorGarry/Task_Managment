@@ -308,7 +308,6 @@ const Signup = () => {
               </span>
             </div>
 
-            {/* Account Type */}
             <select
               {...register("accountType")}
               className="w-full p-2 border rounded cursor-pointer"
@@ -317,7 +316,6 @@ const Signup = () => {
               <option value="employee">Employee</option>
               <option value="admin">Admin</option>
 
-              {/* TEMP: Admin allowed to create Super Admin */}
               <option value="superAdmin">Super Admin</option>
             </select>
 
@@ -329,7 +327,6 @@ const Signup = () => {
               disabled={creatingUser}
             />
 
-            {/* Shift only for employees */}
             {accountType === "employee" && !isCoreTeam && (
               <select
                 {...register("shiftLabel", { required: true })}
@@ -344,7 +341,6 @@ const Signup = () => {
               </select>
             )}
 
-            {/* Core Team Toggle */}
             {accountType === "employee" && (
               <div className="flex items-center justify-between py-2">
                 <label className="text-sm text-gray-700 font-medium">

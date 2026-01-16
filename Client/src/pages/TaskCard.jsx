@@ -1,73 +1,75 @@
 import React from "react";
 const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
+
+
   const normalizeDate = (dateInput) => {
-    if (!dateInput) return '';
-    
-    try {
-      if (dateInput instanceof Date) {
-        return dateInput.toISOString().split('T')[0];
+  if (!dateInput) return "";
+
+  try {
+    let d;
+
+    // Parse input
+    if (dateInput instanceof Date) {
+      d = dateInput;
+    } else if (typeof dateInput === "string") {
+      // Handle DD/MM/YYYY
+      if (dateInput.includes("/")) {
+        const [day, month, year] = dateInput.split("/");
+        return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
       }
-      
-      if (typeof dateInput === 'string' && dateInput.includes('/')) {
-        const parts = dateInput.split('/');
-        if (parts.length === 3) {
-          const day = parts[0];
-          const month = parts[1];
-          const year = parts[2];
-          return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        }
-      }
-      
-      const d = new Date(dateInput);
-      if (!isNaN(d.getTime())) {
-        return d.toISOString().split('T')[0];
-      }
-      
-      return '';
-    } catch (error) {
-      console.error('Date normalization error:', error, 'for:', dateInput);
-      return '';
+      d = new Date(dateInput);
     }
-  };
+
+    if (!d || isNaN(d.getTime())) return "";
+
+    // 🔑 Convert UTC → IST
+    const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+
+    const year = ist.getFullYear();
+    const month = String(ist.getMonth() + 1).padStart(2, "0");
+    const day = String(ist.getDate()).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  } catch (error) {
+    console.error("Date normalization error:", error, "for:", dateInput);
+    return "";
+  }
+};
+
 
   const formatDisplayDate = (dateInput) => {
-    if (!dateInput) return "Today";
-    
-    try {
-      let d;
-      
-      if (dateInput instanceof Date) {
-        d = dateInput;
-      } else if (typeof dateInput === 'string') {
-        if (dateInput.includes('/')) {
-          const parts = dateInput.split('/');
-          if (parts.length === 3) {
-            d = new Date(parts[2], parts[1] - 1, parts[0]);
-          } else if (parts.length === 3 && parts[0].length === 4) {
-            d = new Date(dateInput);
-          }
-        } else if (dateInput.includes('-')) {
-          d = new Date(dateInput);
-        }
-      }
-      
-      if (!d || isNaN(d.getTime())) {
-        d = new Date(dateInput);
-      }
-      
-      if (d && !isNaN(d.getTime())) {
-        const day = String(d.getDate()).padStart(2, '0');
-        const month = String(d.getMonth() + 1).padStart(2, '0');
-        const year = d.getFullYear();
+  if (!dateInput) return "Today";
+
+  try {
+    let d;
+
+    if (dateInput instanceof Date) {
+      d = dateInput;
+    } else if (typeof dateInput === "string") {
+      // Handle DD/MM/YYYY
+      if (dateInput.includes("/")) {
+        const [day, month, year] = dateInput.split("/");
         return `${day}/${month}/${year}`;
       }
-      
-      return "Today";
-    } catch (e) {
-      console.error('Display date error:', e);
-      return "Today";
+      d = new Date(dateInput);
     }
-  };
+
+    if (!d || isNaN(d.getTime())) return "Today";
+
+    // 🔑 Convert to IST
+    const ist = new Date(d.getTime() + 5.5 * 60 * 60 * 1000);
+
+    const day = String(ist.getDate()).padStart(2, "0");
+    const month = String(ist.getMonth() + 1).padStart(2, "0");
+    const year = ist.getFullYear();
+
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    console.error("Display date error:", e, "for:", dateInput);
+    return "Today";
+  }
+};
+
 
   const taskNormalizedDate = normalizeDate(task.date);
   const taskDisplayDate = formatDisplayDate(task.date);
@@ -243,6 +245,17 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
     if (isCurrentTaskMissed || isBlocked || !canCurrentTaskBeUpdated) e.stopPropagation();
   };
 
+    console.log("TASK CARD DEBUG:", {
+  id: task._id,
+  date: task.date,
+  normalizedDate: taskNormalizedDate,
+  shift: task.shift,
+  canUpdate: task.canUpdate,
+  isBlocked,
+  isCurrentTaskMissed,
+  employeeStatus: task.employeeStatus,
+  isCoreTeamTask: task.isCoreTeamTask,
+});
   return (
     <div className={`border ${
       displayState === "done" ? "border-green-300 bg-green-50" : 

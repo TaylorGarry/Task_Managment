@@ -461,7 +461,7 @@ const RosterForm = () => {
       toast.success("Employee updated successfully");
     } catch (err) {
       console.error(err);
-      toast.error(err?.message || "Only HR and Super Admin can edit current week roster");
+      toast.error(err || "Only HR and Super Admin can edit current week roster");
     }
   };
 

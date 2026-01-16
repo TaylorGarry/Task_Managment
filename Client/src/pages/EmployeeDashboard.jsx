@@ -173,248 +173,120 @@ const EmployeeDashboard = () => {
   // };
 
 const handleStatusChange = async (taskId, status) => {
-  console.log('=== handleStatusChange called ===');
-  console.log('taskId:', taskId, 'status:', status);
-  
   const task = tasks.find(t => t._id === taskId);
-  
+
+  console.log("TASK:", {
+    id: task?._id,
+    isCoreTeamTask: task?.isCoreTeamTask,
+    shift: task?.shift,
+    date: task?.date,
+    canUpdate: task?.canUpdate,
+  });
   if (!task) {
-    console.error('Task not found:', taskId);
     toast.error("Task not found");
     return;
   }
 
-  if (status === "") {
+  if (!status) {
     toast.error("Please select a valid status");
     return;
   }
 
-  console.log('Current task:', {
-    title: task.title,
-    shift: task.shift,
-    date: task.date,
-    employeeStatus: task.employeeStatus,
-    canUpdate: task.canUpdate
-  });
-
-  // Helper to normalize dates
-  const normalizeDate = (dateInput) => {
-    if (!dateInput) return '';
-    
+  /* =====================================================
+     ✅ CORE TEAM — NO RESTRICTIONS (CRITICAL FIX)
+     ===================================================== */
+  if (isCoreTeam) {
     try {
-      if (dateInput instanceof Date) {
-        return dateInput.toISOString().split('T')[0];
-      }
-      
-      if (typeof dateInput === 'string') {
-        // Try to parse different formats
-        const d = new Date(dateInput);
-        if (!isNaN(d.getTime())) {
-          return d.toISOString().split('T')[0];
-        }
-      }
-      
-      return '';
-    } catch (error) {
-      console.error('Date normalization error:', error);
-      return '';
+      await dispatch(
+        updateTaskStatusCoreTeam({ id: taskId, status })
+      ).unwrap();
+
+      toast.success("Task status updated successfully!");
+    } catch (err) {
+      toast.error(err?.message || "Failed to update status");
     }
-  };
+    return; // ⬅️ VERY IMPORTANT
+  }
 
-  const taskNormalizedDate = normalizeDate(task.date);
-  console.log('Task normalized date:', taskNormalizedDate);
+  /* =====================================================
+     ⬇️ NORMAL EMPLOYEE LOGIC (UNCHANGED)
+     ===================================================== */
 
-  // Get all tasks for the same normalized date
-  const sameDayTasks = tasks.filter(t => {
-    const tDate = normalizeDate(t.date);
-    return tDate === taskNormalizedDate && tDate !== '';
-  });
+  const normalizeDate = (dateInput) => {
+  if (!dateInput) return "";
 
-  console.log('Same day tasks:', sameDayTasks.map(t => ({
-    title: t.title,
-    shift: t.shift,
-    status: t.employeeStatus,
-    date: t.date,
-    canUpdate: t.canUpdate
-  })));
+  const d = new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
 
-  // Group tasks by shift
+  const local = new Date(
+    d.getTime() - d.getTimezoneOffset() * 60000
+  );
+
+  return local.toISOString().split("T")[0];
+};
+
+
+  const taskDate = normalizeDate(task.date);
+
+  const sameDayTasks = tasks.filter(
+    t => normalizeDate(t.date) === taskDate
+  );
+
   const startTasks = sameDayTasks.filter(t => t.shift === "Start");
   const midTasks = sameDayTasks.filter(t => t.shift === "Mid");
 
-  console.log('Start tasks:', startTasks.length, 'Mid tasks:', midTasks.length);
-
-  // Check if current task is missed
-  const isTaskMissed = (task.employeeStatus === "" || !task.employeeStatus) &&
-                       task.canUpdate === false;
+  const isTaskMissed =
+    (!task.employeeStatus || task.employeeStatus === "") &&
+    task.canUpdate === false;
 
   if (isTaskMissed) {
-    console.log('Task is missed');
     toast.error(`${task.shift} shift time window has passed. Can update tomorrow.`);
     return;
   }
 
-  // Check if current task can be updated (time window is open)
-  const canTaskBeUpdated = task.canUpdate === true;
-  
-  if (!canTaskBeUpdated) {
-    console.log('Task time window is not open');
+  if (!task.canUpdate) {
     toast.error(`${task.shift} shift time window is not currently open.`);
     return;
   }
 
-  // CRITICAL FIX: Check if all tasks in previous shifts are "handled"
-  // A task is "handled" if it either:
-  // 1. Has a status (Done/Not Done), OR
-  // 2. Is missed (time window passed)
-  const areAllTasksInShiftHandled = (shiftTasks) => {
-    if (shiftTasks.length === 0) {
-      console.log('No tasks in shift, returning true');
-      return true;
-    }
-    
-    const unhandledTasks = shiftTasks.filter(t => {
-      const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-      const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-      return !hasStatus && !isMissed; // Unhandled = no status AND not missed
-    });
-    
-    console.log(`Shift handled check: ${shiftTasks.length} tasks, ${unhandledTasks.length} unhandled`);
-    unhandledTasks.forEach(t => console.log(`  - Unhandled: ${t.title} (status: ${t.employeeStatus || 'empty'}, canUpdate: ${t.canUpdate})`));
-    
-    return unhandledTasks.length === 0;
-  };
+  const areAllTasksHandled = (tasksInShift) =>
+    tasksInShift.every(t =>
+      t.employeeStatus ||
+      ((!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false)
+    );
 
-  let isBlocked = false;
   let blockReason = "";
 
-  // Mid shift: Check ALL Start shift tasks
-  if (task.shift === "Mid") {
-    if (startTasks.length > 0) {
-      const allStartHandled = areAllTasksInShiftHandled(startTasks);
-      console.log(`Mid shift check: Start tasks exist (${startTasks.length}), all handled: ${allStartHandled}`);
-      
-      if (!allStartHandled) {
-        isBlocked = true;
-        
-        // Count only pending (not missed) tasks
-        const pendingStart = startTasks.filter(t => {
-          const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-          const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-          return !hasStatus && !isMissed;
-        });
-        
-        const missedStart = startTasks.filter(t => 
-          (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
-        );
-        
-        let reason = `Cannot update Mid shift. `;
-        if (pendingStart.length > 0) {
-          reason += `${pendingStart.length} Start shift task(s) pending completion. `;
-        }
-        if (missedStart.length > 0) {
-          reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
-        }
-        blockReason = reason.trim();
-      }
-    } else {
-      console.log('Mid shift: No Start tasks, can update');
-    }
+  if (task.shift === "Mid" && startTasks.length && !areAllTasksHandled(startTasks)) {
+    blockReason = "Cannot update Mid shift. Start shift tasks pending.";
   }
 
-  // End shift: Check ALL Start AND Mid shift tasks
-  if (task.shift === "End") {
-    const allStartHandled = areAllTasksInShiftHandled(startTasks);
-    const allMidHandled = areAllTasksInShiftHandled(midTasks);
-    
-    console.log(`End shift check: Start handled: ${allStartHandled}, Mid handled: ${allMidHandled}`);
-    
-    if (startTasks.length > 0 && !allStartHandled) {
-      isBlocked = true;
-      
-      // Count only pending (not missed) Start tasks
-      const pendingStart = startTasks.filter(t => {
-        const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-        const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-        return !hasStatus && !isMissed;
-      });
-      
-      const missedStart = startTasks.filter(t => 
-        (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
-      );
-      
-      let reason = `Cannot update End shift. `;
-      if (pendingStart.length > 0) {
-        reason += `${pendingStart.length} Start shift task(s) pending completion. `;
-      }
-      if (missedStart.length > 0) {
-        reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
-      }
-      blockReason = reason.trim();
-      
-    } else if (midTasks.length > 0 && !allMidHandled) {
-      isBlocked = true;
-      
-      // Count only pending (not missed) Mid tasks
-      const pendingMid = midTasks.filter(t => {
-        const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-        const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-        return !hasStatus && !isMissed;
-      });
-      
-      const missedMid = midTasks.filter(t => 
-        (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
-      );
-      
-      let reason = `Cannot update End shift. `;
-      if (pendingMid.length > 0) {
-        reason += `${pendingMid.length} Mid shift task(s) pending completion. `;
-      }
-      if (missedMid.length > 0) {
-        reason += `${missedMid.length} Mid shift task(s) missed (time window passed).`;
-      }
-      blockReason = reason.trim();
-    }
+  if (
+    task.shift === "End" &&
+    (
+      (startTasks.length && !areAllTasksHandled(startTasks)) ||
+      (midTasks.length && !areAllTasksHandled(midTasks))
+    )
+  ) {
+    blockReason = "Cannot update End shift. Previous shift tasks pending.";
   }
 
-  if (isBlocked) {
-    console.log('Task is blocked:', blockReason);
+  if (blockReason) {
     toast.error(blockReason);
     return;
   }
 
-  console.log('Proceeding with API call...');
-
-  // Proceed with API call
   try {
-    let updatedStatus;
+    await dispatch(
+      updateTaskStatus({ id: taskId, status })
+    ).unwrap();
 
-    if (isCoreTeam) {
-      updatedStatus = await dispatch(
-        updateTaskStatusCoreTeam({ id: taskId, status })
-      ).unwrap();
-      dispatch({
-        type: "tasks/updateTaskStatusCoreTeam/fulfilled",
-        payload: updatedStatus,
-      });
-    } else {
-      updatedStatus = await dispatch(
-        updateTaskStatus({ id: taskId, status })
-      ).unwrap();
-      dispatch({
-        type: "tasks/updateTaskStatus/fulfilled",
-        payload: updatedStatus,
-      });
-    }
-
-    console.log('API call successful:', updatedStatus);
     toast.success("Task status updated successfully!");
   } catch (err) {
-    console.error('API call failed:', err);
-    const errorMessage = err?.message || err || "Failed to update status, please try again.";
-    toast.error(errorMessage);
+    toast.error(err?.message || "Failed to update status");
   }
 };
+
 
   const openChat = (task) => {
     setSelectedTask(task);
@@ -538,7 +410,8 @@ const handleStatusChange = async (taskId, status) => {
                 <TaskCard 
                   task={task} 
                   onStatusChange={handleStatusChange} 
-                  allTasks={tasks} // Pass all tasks for dependency checking
+                  allTasks={tasks} 
+                  isCoreTeam={isCoreTeam}
                 />
                 <button
                   onClick={() => openChat(task)}

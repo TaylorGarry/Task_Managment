@@ -472,38 +472,39 @@ const TaskCard = ({ task, onOpenChat }) => {
 
   
   const formatAdminDate = (dateInput) => {
-    if (!dateInput) return "";
-    
-    try {
-      const dateObj = new Date(dateInput);
-      
-      if (isNaN(dateObj.getTime())) {
-        console.warn("Invalid date input:", dateInput);
-        return "";
-      }
-      
-      
-      const correctedDate = new Date(dateObj);
-      correctedDate.setUTCDate(correctedDate.getUTCDate());
-      
-      const month = correctedDate.getUTCMonth();
-      const day = correctedDate.getUTCDate();
-      
-      const monthNames = [
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December"
-      ];
-      
-      return `${monthNames[month]} ${day}`;
-    } catch (error) {
-      console.error("Error formatting date:", error);
+  if (!dateInput) return "";
+
+  try {
+    const dateObj = new Date(dateInput);
+    console.log("Date Object from admin task card::>>>", dateObj);
+
+    if (isNaN(dateObj.getTime())) {
+      console.warn("Invalid date input:", dateInput);
       return "";
     }
-  };
 
-  // Get the date to display
+    const month = dateObj.getMonth();
+    const day = dateObj.getDate();
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    console.log(
+      `Final date printed after function finished::: ${monthNames[month]} ${day}`
+    );
+
+    return `${monthNames[month]} ${day}`;
+
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "";
+  }
+};
+
+
   const getDisplayDate = () => {
-    // Order of preference: displayDate -> date -> createdAt
     return task.displayDate || task.date || task.createdAt;
   };
 
@@ -540,7 +541,6 @@ const TaskCard = ({ task, onOpenChat }) => {
             <span>{task.department}</span>
             <span>{task.shift}</span>
             <span>
-              {/* Now shows Dec 22 instead of Dec 21 */}
               {formatAdminDate(getDisplayDate())}
             </span>
           </div>

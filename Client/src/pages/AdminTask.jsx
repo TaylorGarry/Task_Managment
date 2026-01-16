@@ -31,14 +31,12 @@ const AdminTask = () => {
   try {
     await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
     
-    // Force refresh by changing filters slightly to bypass cache
     const today = new Date().toISOString().split('T')[0];
     
-    // Fetch with a slight variation to bypass cache
     dispatch(fetchTasks({ 
       startDate: today, 
       endDate: today,
-      _cacheBust: Date.now() // Add timestamp to bypass cache
+      _cacheBust: Date.now()  
     }));
     
     toast.success("Task status updated successfully!");

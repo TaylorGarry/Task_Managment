@@ -38,7 +38,6 @@ const AdminAssignedTasks = () => {
     try {
       await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
       
-      // Refresh both admin assigned tasks and regular tasks
       dispatch(fetchAdminAssignedTasks());
       dispatch(fetchTasks({}));
       

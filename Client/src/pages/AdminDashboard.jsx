@@ -21,7 +21,6 @@ const AdminDashboard = () => {
     deadline: "",
   });
 
-  const statuses = ["Pending", "Working", "Reviewing", "Done"];
 
   useEffect(() => {
     dispatch(fetchTasks());

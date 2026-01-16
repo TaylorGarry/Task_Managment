@@ -17,6 +17,7 @@ import AdminAssignedTasks from "./components/AdminAssignedTasks.jsx";
 import ChatUI from "./Chat/ChatUI.jsx";
 
 import { ToastContainer } from "react-toastify";
+import Sidebar from "./components/Sidebar.jsx";
 
 
 const ProtectedRoute = ({ children, adminOnly }) => {
@@ -40,7 +41,7 @@ function App() {
 
   return (
     <>
-      {/* Toast added here */}
+      
       <ToastContainer position="top-right" autoClose={3000} />
 
       <Routes>
@@ -49,6 +50,7 @@ function App() {
           element={
             <ProtectedRoute adminOnly={true}>
               <Signup />
+              {/* <Sidebar /> */}
             </ProtectedRoute>
           }
         />
