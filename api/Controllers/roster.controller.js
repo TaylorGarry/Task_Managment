@@ -2,6 +2,162 @@ import XLSX from "xlsx-js-style";
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
 
+export const addRosterWeek = async (req, res) => {
+  try {
+    const { 
+      month, 
+      year, 
+      weekNumber, 
+      startDate, 
+      endDate, 
+      employees, 
+      action = "create",
+      rosterStartDate, // NEW: Overall roster start date
+      rosterEndDate    // NEW: Overall roster end date
+    } = req.body;
+    
+    const createdBy = req.user._id;  
+
+    if (!month || !year || !weekNumber || !startDate || !endDate || !employees) {
+      return res.status(400).json({ 
+        success: false,
+        message: "Missing required fields: month, year, weekNumber, startDate, endDate, employees" 
+      });
+    }
+
+    // NEW: Validate overall roster dates
+    if (!rosterStartDate || !rosterEndDate) {
+      return res.status(400).json({ 
+        success: false,
+        message: "rosterStartDate and rosterEndDate are required" 
+      });
+    }
+
+    const processedEmployees = await Promise.all(
+      employees.map(async (emp) => {
+        let user = null;
+        if (emp.name) {
+          user = await User.findOne({ username: emp.name });
+        }
+
+        const dailyStatus = emp.dailyStatus.map((ds, index) => {
+          const date = new Date(startDate);
+          date.setDate(date.getDate() + index);
+          return {
+            date: date.toISOString(),
+            status: ds.status || "P"
+          };
+        });
+
+        const woCount = dailyStatus.filter(d => d.status === "WO").length;
+        if (woCount > 2) {
+          throw new Error(`Employee ${emp.name} cannot have more than 2 week-offs in a week`);
+        }
+        if (emp.shiftStartHour === undefined || emp.shiftEndHour === undefined) {
+          throw new Error(`Employee ${emp.name} must have both shift start and end hours`);
+        }
+
+        const shiftStartHour = parseInt(emp.shiftStartHour) || 0;
+        const shiftEndHour = parseInt(emp.shiftEndHour) || 0;
+        if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
+          throw new Error(`Employee ${emp.name} has invalid shift hours`);
+        }
+
+        if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
+          throw new Error(`Employee ${emp.name}: Shift hours must be between 0 and 23`);
+        }
+
+        const employeeData = {
+          userId: user?._id || null,
+          name: emp.name,
+          transport: emp.transport || "",
+          cabRoute: emp.cabRoute || "",
+          shiftStartHour,
+          shiftEndHour,
+          dailyStatus,
+        };
+
+        return employeeData;
+      })
+    );
+
+    let roster = await Roster.findOne({ month, year });
+    if (!roster) {
+      // NEW: Include rosterStartDate and rosterEndDate when creating new roster
+      roster = new Roster({
+        month,
+        year,
+        rosterStartDate: new Date(rosterStartDate), // NEW
+        rosterEndDate: new Date(rosterEndDate),     // NEW
+        weeks: [],
+        createdBy,
+      });
+    }
+
+    const existingWeekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+    
+    if (existingWeekIndex !== -1) {
+      if (action === "add") {
+        const existingEmployees = roster.weeks[existingWeekIndex].employees;
+        
+        const existingEmployeeNames = existingEmployees.map(emp => emp.name);
+        
+        const newEmployees = processedEmployees.filter(newEmp => 
+          !existingEmployeeNames.includes(newEmp.name)
+        );
+        
+        if (newEmployees.length === 0) {
+          return res.status(400).json({ 
+            success: false,
+            message: "All employees already exist in this roster week" 
+          });
+        }
+        
+        roster.weeks[existingWeekIndex].employees = [
+          ...existingEmployees,
+          ...newEmployees
+        ];
+        
+        console.log(`Added ${newEmployees.length} new employees to existing week`);
+      } else {
+        roster.weeks[existingWeekIndex] = {
+          weekNumber,
+          startDate: new Date(startDate),
+          endDate: new Date(endDate),
+          employees: processedEmployees,
+        };
+        console.log("Replaced existing week with new data");
+      }
+    } else {
+      roster.weeks.push({
+        weekNumber,
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
+        employees: processedEmployees,
+      });
+      console.log("Created new week");
+    }
+
+    roster.updatedBy = createdBy;
+    await roster.save();
+    
+    console.log("Roster saved successfully");
+    return res.status(201).json({ 
+      success: true,
+      message: action === "add" ? "Employees added to roster successfully" : "Roster week saved successfully", 
+      roster 
+    });
+  } catch (error) {
+    console.error("Error adding roster week:", error);
+    return res.status(400).json({ 
+      success: false,
+      message: error.message || "Failed to add roster week" 
+    });
+  }
+};
+
+
+
 // export const addRosterWeek = async (req, res) => {
 //   try {
 //     const { month, year, weekNumber, startDate, endDate, employees, action = "create" } = req.body;
@@ -9,6 +165,7 @@ import User from "../Modals/User.modal.js";
 
 //     if (!month || !year || !weekNumber || !startDate || !endDate || !employees) {
 //       return res.status(400).json({ 
+//         success: false,
 //         message: "Missing required fields: month, year, weekNumber, startDate, endDate, employees" 
 //       });
 //     }
@@ -33,28 +190,29 @@ import User from "../Modals/User.modal.js";
 //         if (woCount > 2) {
 //           throw new Error(`Employee ${emp.name} cannot have more than 2 week-offs in a week`);
 //         }
+//         if (emp.shiftStartHour === undefined || emp.shiftEndHour === undefined) {
+//           throw new Error(`Employee ${emp.name} must have both shift start and end hours`);
+//         }
+
+//         const shiftStartHour = parseInt(emp.shiftStartHour) || 0;
+//         const shiftEndHour = parseInt(emp.shiftEndHour) || 0;
+//         if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
+//           throw new Error(`Employee ${emp.name} has invalid shift hours`);
+//         }
+
+//         if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
+//           throw new Error(`Employee ${emp.name}: Shift hours must be between 0 and 23`);
+//         }
 
 //         const employeeData = {
 //           userId: user?._id || null,
 //           name: emp.name,
 //           transport: emp.transport || "",
 //           cabRoute: emp.cabRoute || "",
-//           // isCoreTeam: emp.isCoreTeam || false,
+//           shiftStartHour,
+//           shiftEndHour,
 //           dailyStatus,
 //         };
-
-//         if (!employeeData.isCoreTeam) {
-//           if (!emp.shift) {
-//             throw new Error(`Employee ${emp.name} (non-core team) must have a shift type`);
-//           }
-//           if (emp.shiftStartHour === undefined || emp.shiftEndHour === undefined) {
-//             throw new Error(`Employee ${emp.name} (non-core team) must have shift hours`);
-//           }
-
-//           employeeData.shift = emp.shift;
-//           employeeData.shiftStartHour = parseInt(emp.shiftStartHour) || 0;
-//           employeeData.shiftEndHour = parseInt(emp.shiftEndHour) || 0;
-//         }
 
 //         return employeeData;
 //       })
@@ -133,143 +291,6 @@ import User from "../Modals/User.modal.js";
 // };
 
 
-
-
-export const addRosterWeek = async (req, res) => {
-  try {
-    const { month, year, weekNumber, startDate, endDate, employees, action = "create" } = req.body;
-    const createdBy = req.user._id;  
-
-    if (!month || !year || !weekNumber || !startDate || !endDate || !employees) {
-      return res.status(400).json({ 
-        success: false,
-        message: "Missing required fields: month, year, weekNumber, startDate, endDate, employees" 
-      });
-    }
-
-    const processedEmployees = await Promise.all(
-      employees.map(async (emp) => {
-        let user = null;
-        if (emp.name) {
-          user = await User.findOne({ username: emp.name });
-        }
-
-        const dailyStatus = emp.dailyStatus.map((ds, index) => {
-          const date = new Date(startDate);
-          date.setDate(date.getDate() + index);
-          return {
-            date: date.toISOString(),
-            status: ds.status || "P"
-          };
-        });
-
-        const woCount = dailyStatus.filter(d => d.status === "WO").length;
-        if (woCount > 2) {
-          throw new Error(`Employee ${emp.name} cannot have more than 2 week-offs in a week`);
-        }
-
-        // Validate shift hours for all employees
-        if (emp.shiftStartHour === undefined || emp.shiftEndHour === undefined) {
-          throw new Error(`Employee ${emp.name} must have both shift start and end hours`);
-        }
-
-        const shiftStartHour = parseInt(emp.shiftStartHour) || 0;
-        const shiftEndHour = parseInt(emp.shiftEndHour) || 0;
-
-        // Optional: Validate that shift hours are valid
-        if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
-          throw new Error(`Employee ${emp.name} has invalid shift hours`);
-        }
-
-        if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
-          throw new Error(`Employee ${emp.name}: Shift hours must be between 0 and 23`);
-        }
-
-        const employeeData = {
-          userId: user?._id || null,
-          name: emp.name,
-          transport: emp.transport || "",
-          cabRoute: emp.cabRoute || "",
-          shiftStartHour,
-          shiftEndHour,
-          dailyStatus,
-        };
-
-        return employeeData;
-      })
-    );
-
-    let roster = await Roster.findOne({ month, year });
-    if (!roster) {
-      roster = new Roster({
-        month,
-        year,
-        weeks: [],
-        createdBy,
-      });
-    }
-
-    const existingWeekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-    
-    if (existingWeekIndex !== -1) {
-      if (action === "add") {
-        const existingEmployees = roster.weeks[existingWeekIndex].employees;
-        
-        const existingEmployeeNames = existingEmployees.map(emp => emp.name);
-        
-        const newEmployees = processedEmployees.filter(newEmp => 
-          !existingEmployeeNames.includes(newEmp.name)
-        );
-        
-        if (newEmployees.length === 0) {
-          return res.status(400).json({ 
-            success: false,
-            message: "All employees already exist in this roster week" 
-          });
-        }
-        
-        roster.weeks[existingWeekIndex].employees = [
-          ...existingEmployees,
-          ...newEmployees
-        ];
-        
-        console.log(`Added ${newEmployees.length} new employees to existing week`);
-      } else {
-        roster.weeks[existingWeekIndex] = {
-          weekNumber,
-          startDate: new Date(startDate),
-          endDate: new Date(endDate),
-          employees: processedEmployees,
-        };
-        console.log("Replaced existing week with new data");
-      }
-    } else {
-      roster.weeks.push({
-        weekNumber,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
-        employees: processedEmployees,
-      });
-      console.log("Created new week");
-    }
-
-    roster.updatedBy = createdBy;
-    await roster.save();
-    
-    console.log("Roster saved successfully");
-    return res.status(201).json({ 
-      success: true,
-      message: action === "add" ? "Employees added to roster successfully" : "Roster week saved successfully", 
-      roster 
-    });
-  } catch (error) {
-    console.error("Error adding roster week:", error);
-    return res.status(400).json({ 
-      success: false,
-      message: error.message || "Failed to add roster week" 
-    });
-  }
-};
 export const getRosterForCRMUsers = async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -303,69 +324,6 @@ export const getRosterForCRMUsers = async (req, res) => {
   }
 };
 
-// export const updateRoster = async (req, res) => {
-//   try {
-//     const { month, year, weekNumber, employeeId, updates } = req.body;
-
-//     if (!month || !year || !weekNumber || !employeeId || !updates) {
-//       return res.status(400).json({
-//         message: "month, year, weekNumber, employeeId and updates are required",
-//       });
-//     }
-
-//     const roster = await Roster.findOne({ month, year });
-//     if (!roster) {
-//       return res.status(404).json({ message: "Roster not found" });
-//     }
-
-//     const week = roster.weeks.find((w) => w.weekNumber === weekNumber);
-//     if (!week) {
-//       return res.status(404).json({ message: "Week not found in roster" });
-//     }
-
-//     const employee = week.employees.id(employeeId);
-//     if (!employee) {
-//       return res.status(404).json({ message: "Employee not found in this week" });
-//     }
-
-//     const allowedFields = [
-//       "name",
-//       "userId",
-//       "transport",
-//       "cabRoute",
-//       "shift",
-//       "shiftStartHour",
-//       "shiftEndHour",
-//       "isCoreTeam",
-//       "dailyStatus",
-//     ];
-
-//     Object.keys(updates).forEach((field) => {
-//       if (allowedFields.includes(field)) {
-//         employee[field] = updates[field];
-//       }
-//     });
-
-//     if (updates.isCoreTeam === true) {
-//       employee.shift = undefined;
-//       employee.shiftStartHour = undefined;
-//       employee.shiftEndHour = undefined;
-//     }
-
-//     await roster.save();
-
-//     return res.status(200).json({
-//       message: "Employee updated successfully",
-//       employee,
-//       roster,
-//     });
-
-//   } catch (error) {
-//     console.error("Update roster error:", error);
-//     return res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
-
 export const updateRoster = async (req, res) => {
   try {
     const { month, year, weekNumber, employeeId, updates } = req.body;
@@ -377,47 +335,80 @@ export const updateRoster = async (req, res) => {
         message: "month, year, weekNumber, employeeId and updates are required",
       });
     }
+    
     const roster = await Roster.findOne({ month, year });
     if (!roster) {
-      return res.status(403).json({ 
+      return res.status(404).json({ 
         success: false,
         message: "Roster not found" 
       });
     }
+
+    // Get overall roster dates
+    const rosterStartDate = new Date(roster.rosterStartDate);
+    const rosterEndDate = new Date(roster.rosterEndDate);
+    
+    // Set time to start and end of day for accurate comparison
+    rosterStartDate.setHours(0, 0, 0, 0);
+    rosterEndDate.setHours(23, 59, 59, 999);
+    
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+
+    // Determine roster status
+    let rosterStatus = "";
+    let canEdit = true;
+    
+    if (currentDate < rosterStartDate) {
+      // Future roster: current date is before roster start date
+      rosterStatus = "future";
+      canEdit = true; // All authorized users can edit future rosters
+    } else if (currentDate >= rosterStartDate && currentDate <= rosterEndDate) {
+      // Active roster: current date is within roster dates
+      rosterStatus = "active";
+      // Only HR and SuperAdmin can edit active rosters
+      canEdit = (user.accountType === "HR" || user.accountType === "superAdmin");
+    } else if (currentDate > rosterEndDate) {
+      // Past roster: current date is after roster end date
+      rosterStatus = "past";
+      // Only HR and SuperAdmin can edit past rosters
+      canEdit = (user.accountType === "HR" || user.accountType === "superAdmin");
+    }
+
+    // Check if user has permission to edit
+    if (!canEdit) {
+      let errorMessage = "";
+      
+      if (rosterStatus === "active") {
+        errorMessage = "Only HR and Super Admin can edit active rosters (rosters that are currently running)";
+      } else if (rosterStatus === "past") {
+        errorMessage = "Only HR and Super Admin can edit past rosters (rosters whose end date has passed)";
+      }
+      
+      return res.status(403).json({
+        success: false,
+        message: errorMessage,
+        rosterStatus: rosterStatus
+      });
+    }
+    
     const week = roster.weeks.find((w) => w.weekNumber === weekNumber);
     if (!week) {
-      return res.status(403).json({ 
+      return res.status(404).json({ 
         success: false,
         message: "Week not found in roster" 
       });
     }
-    const currentDate = new Date();
-    const weekStartDate = new Date(week.startDate);
-    const weekEndDate = new Date(week.endDate);
-    weekStartDate.setHours(0, 0, 0, 0);
-    weekEndDate.setHours(23, 59, 59, 999);
-    if (currentDate > weekEndDate) {
-      return res.status(403).json({
-        success: false,
-        message: "Cannot update previous week rosters. Previous weeks are locked for all users."
-      });
-    }
-    const isCurrentWeek = currentDate >= weekStartDate && currentDate <= weekEndDate;
-    if (isCurrentWeek) {
-      if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
-        return res.status(403).json({
-          success: false,
-          message: "Only HR and Super Admin can edit current week roster"
-        });
-      }
-    }
+    
     const employee = week.employees.id(employeeId);
     if (!employee) {
-      return res.status(403).json({ 
+      return res.status(404).json({ 
         success: false,
         message: "Employee not found in this week" 
       });
     }
+
+    // Rest of your existing validation logic...
     const allowedFields = [
       "name",
       "userId",
@@ -436,6 +427,7 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
+    
     let shiftStartHour = employee.shiftStartHour;
     let shiftEndHour = employee.shiftEndHour;
 
@@ -448,6 +440,7 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
+    
     if (updates.shiftEndHour !== undefined) {
       shiftEndHour = parseInt(updates.shiftEndHour);
       if (isNaN(shiftEndHour) || shiftEndHour < 0 || shiftEndHour > 23) {
@@ -457,6 +450,7 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
+    
     if (updates.dailyStatus && Array.isArray(updates.dailyStatus)) {
       const woCount = updates.dailyStatus.filter(d => d && d.status === "WO").length;
       if (woCount > 2) {
@@ -466,6 +460,7 @@ export const updateRoster = async (req, res) => {
         });
       }
     }
+    
     Object.keys(updates).forEach((field) => {
       if (allowedFields.includes(field)) {
         if (field !== "shiftStartHour" && field !== "shiftEndHour") {
@@ -473,16 +468,20 @@ export const updateRoster = async (req, res) => {
         }
       }
     });
+    
     employee.shiftStartHour = shiftStartHour;
     employee.shiftEndHour = shiftEndHour;
+    
     if (employee.shiftStartHour === undefined || employee.shiftEndHour === undefined) {
       return res.status(400).json({
         success: false,
         message: "Both shiftStartHour and shiftEndHour are required for all employees"
       });
     }
+    
     roster.updatedBy = user._id;
     await roster.save();
+    
     return res.status(200).json({
       success: true,
       message: "Employee updated successfully",
@@ -490,8 +489,10 @@ export const updateRoster = async (req, res) => {
       roster,
       updatedBy: user.username,
       accountType: user.accountType,
-      weekType: isCurrentWeek ? "current" : "future"
+      rosterStatus: rosterStatus,
+      canEdit: canEdit
     });
+    
   } catch (error) {
     console.error("Update roster error:", error);
     return res.status(500).json({ 
@@ -500,6 +501,140 @@ export const updateRoster = async (req, res) => {
     });
   }
 };
+// export const updateRoster = async (req, res) => {
+//   try {
+//     const { month, year, weekNumber, employeeId, updates } = req.body;
+//     const user = req.user;
+
+//     if (!month || !year || !weekNumber || !employeeId || !updates) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "month, year, weekNumber, employeeId and updates are required",
+//       });
+//     }
+//     const roster = await Roster.findOne({ month, year });
+//     if (!roster) {
+//       return res.status(403).json({ 
+//         success: false,
+//         message: "Roster not found" 
+//       });
+//     }
+//     const week = roster.weeks.find((w) => w.weekNumber === weekNumber);
+//     if (!week) {
+//       return res.status(403).json({ 
+//         success: false,
+//         message: "Week not found in roster" 
+//       });
+//     }
+//     const currentDate = new Date();
+//     const weekStartDate = new Date(week.startDate);
+//     const weekEndDate = new Date(week.endDate);
+//     weekStartDate.setHours(0, 0, 0, 0);
+//     weekEndDate.setHours(23, 59, 59, 999);
+//     if (currentDate > weekEndDate) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Cannot update previous week rosters. Previous weeks are locked for all users."
+//       });
+//     }
+//     const isCurrentWeek = currentDate >= weekStartDate && currentDate <= weekEndDate;
+//     if (isCurrentWeek) {
+//       if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
+//         return res.status(403).json({
+//           success: false,
+//           message: "Only HR and Super Admin can edit current week roster"
+//         });
+//       }
+//     }
+//     const employee = week.employees.id(employeeId);
+//     if (!employee) {
+//       return res.status(403).json({ 
+//         success: false,
+//         message: "Employee not found in this week" 
+//       });
+//     }
+//     const allowedFields = [
+//       "name",
+//       "userId",
+//       "transport",
+//       "cabRoute",
+//       "shiftStartHour",
+//       "shiftEndHour",
+//       "dailyStatus",
+//     ];
+
+//     if (updates.shiftStartHour !== undefined || updates.shiftEndHour !== undefined) {
+//       if (updates.shiftStartHour === undefined || updates.shiftEndHour === undefined) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Both shiftStartHour and shiftEndHour are required when updating shift hours"
+//         });
+//       }
+//     }
+//     let shiftStartHour = employee.shiftStartHour;
+//     let shiftEndHour = employee.shiftEndHour;
+
+//     if (updates.shiftStartHour !== undefined) {
+//       shiftStartHour = parseInt(updates.shiftStartHour);
+//       if (isNaN(shiftStartHour) || shiftStartHour < 0 || shiftStartHour > 23) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "shiftStartHour must be a valid number between 0 and 23"
+//         });
+//       }
+//     }
+//     if (updates.shiftEndHour !== undefined) {
+//       shiftEndHour = parseInt(updates.shiftEndHour);
+//       if (isNaN(shiftEndHour) || shiftEndHour < 0 || shiftEndHour > 23) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "shiftEndHour must be a valid number between 0 and 23"
+//         });
+//       }
+//     }
+//     if (updates.dailyStatus && Array.isArray(updates.dailyStatus)) {
+//       const woCount = updates.dailyStatus.filter(d => d && d.status === "WO").length;
+//       if (woCount > 2) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Cannot have more than 2 week-offs (WO) in a week"
+//         });
+//       }
+//     }
+//     Object.keys(updates).forEach((field) => {
+//       if (allowedFields.includes(field)) {
+//         if (field !== "shiftStartHour" && field !== "shiftEndHour") {
+//           employee[field] = updates[field];
+//         }
+//       }
+//     });
+//     employee.shiftStartHour = shiftStartHour;
+//     employee.shiftEndHour = shiftEndHour;
+//     if (employee.shiftStartHour === undefined || employee.shiftEndHour === undefined) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Both shiftStartHour and shiftEndHour are required for all employees"
+//       });
+//     }
+//     roster.updatedBy = user._id;
+//     await roster.save();
+//     return res.status(200).json({
+//       success: true,
+//       message: "Employee updated successfully",
+//       employee,
+//       roster,
+//       updatedBy: user.username,
+//       accountType: user.accountType,
+//       weekType: isCurrentWeek ? "current" : "future"
+//     });
+//   } catch (error) {
+//     console.error("Update roster error:", error);
+//     return res.status(500).json({ 
+//       success: false,
+//       message: error.message || "Server error"
+//     });
+//   }
+// };
 // export const exportRosterToExcel = async (req, res) => {
 //   try {
 //     const { month, year } = req.query;
