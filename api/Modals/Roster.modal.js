@@ -87,9 +87,13 @@ const rosterSchema = new mongoose.Schema(
   {
     month: { type: Number, required: true },  
     year: { type: Number, required: true },
-
+    
+    // ADD THESE FIELDS:
+    rosterStartDate: { type: Date, required: true }, // User-provided start date
+    rosterEndDate: { type: Date, required: true },   // User-provided end date
+    
     weeks: [rosterWeekSchema],
-
+    
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
   },
