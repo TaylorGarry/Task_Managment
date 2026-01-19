@@ -671,18 +671,18 @@ export const updateTaskStatusCoreTeam = async (req, res) => {
 };
 export const updateTask = async (req, res) => {
   try {
-    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
-      return res.status(403).json({ message: "Only admin can update tasks" });
-    }
-
     const { id } = req.params;
     const { title, description, shift, department, assignedTo, priority, deadline } = req.body;
-
     const task = await Task.findById(id).lean();
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    if (req.user._id.toString() !== task.createdBy.toString()) {
+      return res.status(403).json({ 
+        message: "Only the creator of the task can update it" 
+      });
+    }
     const departmentChanged = department && department !== task.department;
-    const assignedChanged = Array.isArray(assignedTo) && assignedTo.length;
+    const assignedChanged = Array.isArray(assignedTo) && assignedTo.length > 0;  
 
     const oldAssignedIds = task.assignedTo.map((id) => id.toString());
 
@@ -699,9 +699,7 @@ export const updateTask = async (req, res) => {
     if (assignedChanged) {
       employees = await User.find({
         _id: { $in: assignedTo },
-        department: department || task.department,
-        accountType: "employee",
-      }).select("_id");
+      }).select("_id accountType department");
       updatedFields.assignedTo = employees.map((e) => e._id);
     } else if (departmentChanged && !assignedChanged) {
       employees = await User.find({ department, accountType: "employee" }).select("_id");
@@ -731,7 +729,7 @@ export const updateTask = async (req, res) => {
       }));
 
     if (newStatuses.length > 0) {
-      await TaskStatus.insertMany(newStatuses, { ordered: false }).catch(() => {});
+      await TaskStatus.insertMany(newStatuses, { ordered: false }).catch(() => { });
     }
 
     const removedEmployees = oldAssignedIds.filter((id) => !newEmployeeIds.includes(id));
@@ -751,21 +749,111 @@ export const updateTask = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// export const updateTask = async (req, res) => {
+//   try {
+//     if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
+//       return res.status(403).json({ message: "Only admin can update tasks" });
+//     }
+
+//     const { id } = req.params;
+//     const { title, description, shift, department, assignedTo, priority, deadline } = req.body;
+
+//     const task = await Task.findById(id).lean();
+//     if (!task) return res.status(404).json({ message: "Task not found" });
+
+//     const departmentChanged = department && department !== task.department;
+//     const assignedChanged = Array.isArray(assignedTo) && assignedTo.length;
+
+//     const oldAssignedIds = task.assignedTo.map((id) => id.toString());
+
+//     const updatedFields = {};
+//     if (title) updatedFields.title = title;
+//     if (description) updatedFields.description = description;
+//     if (shift) updatedFields.shift = shift;
+//     if (department) updatedFields.department = department;
+//     if (priority) updatedFields.priority = priority;
+//     if (deadline) updatedFields.deadline = deadline;
+
+//     let employees = [];
+
+//     if (assignedChanged) {
+//       employees = await User.find({
+//         _id: { $in: assignedTo },
+//         department: department || task.department,
+//         accountType: "employee",
+//       }).select("_id");
+//       updatedFields.assignedTo = employees.map((e) => e._id);
+//     } else if (departmentChanged && !assignedChanged) {
+//       employees = await User.find({ department, accountType: "employee" }).select("_id");
+//       updatedFields.assignedTo = employees.map((e) => e._id);
+//     } else {
+//       employees = await User.find({ _id: { $in: task.assignedTo } }).select("_id");
+//     }
+
+//     const updatedTask = await Task.findByIdAndUpdate(id, updatedFields, { new: true }).lean();
+
+//     const today = getShiftDate();
+
+//     const [existingStatuses, newEmployeeIds] = await Promise.all([
+//       TaskStatus.find({ taskId: task._id, date: today }).select("employeeId"),
+//       Promise.resolve(employees.map((e) => e._id.toString())),
+//     ]);
+
+//     const existingEmployeeIds = existingStatuses.map((s) => s.employeeId.toString());
+
+//     const newStatuses = employees
+//       .filter((emp) => !existingEmployeeIds.includes(emp._id.toString()))
+//       .map((emp) => ({
+//         taskId: task._id,
+//         employeeId: emp._id,
+//         date: today,
+//         status: "Not Done",
+//       }));
+
+//     if (newStatuses.length > 0) {
+//       await TaskStatus.insertMany(newStatuses, { ordered: false }).catch(() => {});
+//     }
+
+//     const removedEmployees = oldAssignedIds.filter((id) => !newEmployeeIds.includes(id));
+//     if (removedEmployees.length > 0) {
+//       await TaskStatus.deleteMany({
+//         taskId: task._id,
+//         employeeId: { $in: removedEmployees },
+//       });
+//     }
+
+//     res.status(200).json({
+//       message: "Task updated successfully",
+//       task: updatedTask,
+//     });
+//   } catch (error) {
+//     console.error("Update Task Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
 export const deleteTask = async (req, res) => {
-  //added super admin feature which admin has
   try {
-    if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
-      return res.status(403).json({ message: "Only admin and super Admin can delete tasks" });
-    }
     const { id } = req.params;
-    const task = await Task.findById(id).select("_id").lean();
+    
+    const task = await Task.findById(id).select("_id createdBy").lean(); // Added 'createdBy' here
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
+
+    // Added this check
+    if (req.user._id.toString() !== task.createdBy.toString()) {
+      return res.status(403).json({ 
+        message: "Only the creator of the task can delete it" 
+      });
+    }
+
     await Promise.all([
       Task.findByIdAndDelete(id),
       TaskStatus.deleteMany({ taskId: id }),
     ]);
+    
     res.status(200).json({
       message: "Task and all related statuses deleted successfully",
       deletedTaskId: id,
@@ -775,6 +863,32 @@ export const deleteTask = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+
+// export const deleteTask = async (req, res) => {
+//   //added super admin feature which admin has
+//   try {
+//     if (req.user.accountType !== "admin" && req.user.accountType !== "superAdmin") {
+//       return res.status(403).json({ message: "Only admin and super Admin can delete tasks" });
+//     }
+//     const { id } = req.params;
+//     const task = await Task.findById(id).select("_id").lean();
+//     if (!task) {
+//       return res.status(404).json({ message: "Task not found" });
+//     }
+//     await Promise.all([
+//       Task.findByIdAndDelete(id),
+//       TaskStatus.deleteMany({ taskId: id }),
+//     ]);
+//     res.status(200).json({
+//       message: "Task and all related statuses deleted successfully",
+//       deletedTaskId: id,
+//     });
+//   } catch (error) {
+//     console.error("Delete Task Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
 export const assignTask = async (req, res) => {
   //added super admin feature which admin has
   try {
