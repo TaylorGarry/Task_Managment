@@ -5,6 +5,7 @@ import XLSX from "xlsx-js-style";
 import Remark from "../Modals/Remark.modal.js";
 import mongoose from "mongoose";
 import RosterModal from "../Modals/Roster.modal.js";
+import { getEffectiveTaskDate } from "../utils/getEffectiveTaskDate.js";
 
 
 // const getISTime = () => {
@@ -1642,7 +1643,8 @@ export const getAdminTasks = async (req, res) => {
       .populate("assignedTo", "username accountType department")
       .lean();
 
-    const effectiveDate = getShiftDate();  
+    // const effectiveDate = getShiftDate();  
+    const effectiveDate = getEffectiveTaskDate();  
     const taskIds = tasks.map(t => t._id);
 
     const allStatuses = await TaskStatus.find({
@@ -1665,7 +1667,7 @@ export const getAdminTasks = async (req, res) => {
 
       const currentUserStatus = allStatuses.find(
         s => s.taskId.toString() === task._id.toString() &&
-             s.employeeId._id.toString() === userId
+             s.employeeId._id.toString() === userId.toString()
       )?.status || "";
 
       return {
@@ -1800,7 +1802,8 @@ export const getAdminAssignedTasks = async (req, res) => {
       .populate("assignedTo", "username accountType department")
       .lean();
 
-    const effectiveDate = getShiftDate();
+    // const effectiveDate = getShiftDate();
+    const effectiveDate = getEffectiveTaskDate();
     const taskIds = tasks.map(t => t._id);
     const allStatuses = await TaskStatus.find({
       taskId: { $in: taskIds },
