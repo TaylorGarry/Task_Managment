@@ -42,6 +42,68 @@ const getShiftDate = () => {
   return shiftDate.toISOString().split("T")[0];
 };
 export { getISTime, getShiftDate };
+// export const createTask = async (req, res) => {
+//   try {
+//     const { accountType, id: userId } = req.user;
+//     if (!["admin", "superAdmin"].includes(accountType)) {
+//       return res.status(403).json({ message: "Only admin or super admin can create tasks" });
+//     }
+
+//     const { title, description, shift, department, assignedTo, deadline, priority } = req.body;
+
+//     if (!title || (!shift && accountType !== "superAdmin") || !department) {
+//       return res.status(400).json({
+//         message: "Title, shift (for non-super admin), and department are required"
+//       });
+//     }
+
+//     let usersToAssign = [];
+
+//     // ✅ Only assign to users explicitly provided
+//     if (assignedTo?.length) {
+//       usersToAssign = await User.find({ _id: { $in: assignedTo } });
+//       if (usersToAssign.length === 0) {
+//         return res.status(404).json({ message: "No valid users found in assignedTo list" });
+//       }
+//     } else {
+//       // If assignedTo is empty, assign to all employees in the department
+//       usersToAssign = await User.find({ department });
+//       if (usersToAssign.length === 0) {
+//         return res.status(404).json({ message: "No users found in this department" });
+//       }
+//     }
+
+//     const newTask = await Task.create({
+//       title,
+//       description,
+//       shift: accountType === "superAdmin" ? shift || null : shift,
+//       department,
+//       assignedTo: usersToAssign.map(u => u._id),
+//       createdBy: userId,
+//       deadline,
+//       priority,
+//       statusUnlocked: false,
+//       isCoreTeamTask: false
+//     });
+
+//     // Initialize task statuses for all assigned users
+//     const today = getShiftDate();
+//     const statuses = usersToAssign.map(u => ({
+//       taskId: newTask._id,
+//       employeeId: u._id,
+//       date: today,
+//       status: "",
+//     }));
+//     await TaskStatus.insertMany(statuses);
+
+//     res.status(201).json({ message: "Task created successfully", task: newTask });
+//   } catch (error) {
+//     console.error("Create Task Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+
 export const createTask = async (req, res) => {
   try {
     const { accountType, id: userId } = req.user;
@@ -60,11 +122,9 @@ export const createTask = async (req, res) => {
     let usersToAssign = [];
 
     if (assignedTo?.length) {
-      // Super admin can assign to anyone
       if (accountType === "superAdmin") {
         usersToAssign = await User.find({ _id: { $in: assignedTo } });
       } else {
-        // Admin can only assign to employees
         usersToAssign = await User.find({
           _id: { $in: assignedTo },
           department,
@@ -72,12 +132,9 @@ export const createTask = async (req, res) => {
         });
       }
     } else {
-      // If no assignedTo specified
       if (accountType === "superAdmin") {
-        // Super admin assigns to all users in the department
         usersToAssign = await User.find({ department });
       } else {
-        // Admin assigns to all employees in the department
         usersToAssign = await User.find({ department, accountType: "employee" });
       }
     }
@@ -115,6 +172,7 @@ export const createTask = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
 export const getTasks = async (req, res) => {
   try {
     const { startDate, endDate, shift, department, employeeId } = req.query;
@@ -389,8 +447,8 @@ export const getCoreTeamTasks = async (req, res) => {
 };
 export const updateTaskStatus = async (req, res) => {
   try {
-    if (req.user.accountType !== "employee") {
-      return res.status(403).json({ message: "Only employees can update status" });
+    if (req.user.accountType !== "employee" || req.user.accountType !== "HR") {
+      return res.status(403).json({ message: "Only employees and HR can update status" });
     }
 
     const { taskId } = req.params;
@@ -1630,7 +1688,7 @@ export const getAdminTasks = async (req, res) => {
     const { department, employeeId } = req.query; 
     const { accountType, id: userId } = req.user;
 
-    if (!["admin", "superAdmin"].includes(accountType)) {
+    if (!["admin", "superAdmin", "HR"].includes(accountType)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -1789,7 +1847,7 @@ export const getAdminAssignedTasks = async (req, res) => {
     const { department, employeeId } = req.query;  
     const { accountType, id: userId } = req.user;
 
-    if (!["admin", "superAdmin"].includes(accountType)) {
+    if (!["admin", "superAdmin", "HR"].includes(accountType)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
