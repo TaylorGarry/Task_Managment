@@ -471,8 +471,8 @@ export const getCoreTeamTasks = async (req, res) => {
 };
 export const updateTaskStatus = async (req, res) => {
   try {
-    if (req.user.accountType !== "employee" || req.user.accountType !== "HR") {
-      return res.status(403).json({ message: "Only employees and HR can update status" });
+    if (req.user.accountType !== "employee" ) {
+      return res.status(403).json({ message: "Only employees  can update status" });
     }
 
     const { taskId } = req.params;
