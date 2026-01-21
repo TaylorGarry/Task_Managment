@@ -19,8 +19,6 @@ const NotDoneTask = () => {
 
   const todayDate = getTodayDate();
 
-  // Count tasks that have no employees who marked it as "Done"
-  // This includes tasks with only "Not Done" status or no status updates
   const notDoneTasksCount = tasks?.filter(task => 
     !task.doneEmployees || task.doneEmployees?.length === 0
   )?.length || 0;

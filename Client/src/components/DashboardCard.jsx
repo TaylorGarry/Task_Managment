@@ -16,10 +16,8 @@ import { useSelector } from 'react-redux';
 ChartJS.register(ArcElement, Tooltip, Legend, Title);
 
 const DashboardCard = () => {
-  // Single useSelector call to get all needed data
   const { tasks } = useSelector((state) => state.tasks);
   
-  // Use useMemo to calculate derived values only when tasks change
   const { totalTasks, doneTasks, notDoneTasks } = useMemo(() => {
     const total = tasks?.length || 0;
     const done = tasks?.filter(task => task.doneEmployees?.length > 0)?.length || 0;
@@ -128,7 +126,6 @@ const DashboardCard = () => {
         <div className="bg-white rounded-lg shadow-md p-6">
           <h3 className="text-lg font-semibold mb-4 text-[#666666]">Remarks</h3>
           <div className="space-y-4">
-            {/* <h2 className='text-[#666666] font-mono text-2xl'>All remark as chat UI will display here</h2> */}
             <h1 className='text-blue-300 font-mono'>In Progress...</h1>
           </div>
         </div>

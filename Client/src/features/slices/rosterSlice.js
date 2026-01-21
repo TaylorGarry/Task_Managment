@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/v1/roster";
+// const API_URL = "http://localhost:4000/api/v1/roster";
 //  const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/V1/roster`;
-//  const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/V1/roster`;
+ const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/V1/roster`;
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -38,7 +38,6 @@ export const addRosterWeek = createAsyncThunk(
   "roster/addRosterWeek",
   async ({ data }, thunkAPI) => {
     try {
-      console.log("Sending data to backend:", data);
       const token = getToken();
       const res = await axios.post(`${API_URL}/add-week`, data, {
         headers: { 
@@ -55,7 +54,6 @@ export const addRosterWeek = createAsyncThunk(
 
       return res.data;
     } catch (err) {
-      console.error("Error adding roster week:", err.response?.data || err.message);
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
@@ -186,7 +184,6 @@ export const exportRosterExcel = createAsyncThunk(
       return { success: true, message: "Excel file downloaded successfully" };
       
     } catch (err) {
-      console.error("Export error:", err);
       return thunkAPI.rejectWithValue(err.message || "Failed to export Excel file");
     }
   }
@@ -238,7 +235,6 @@ export const exportSavedRoster = createAsyncThunk(
       };
       
     } catch (err) {
-      console.error("Export saved roster error:", err);
       return thunkAPI.rejectWithValue(err.message || "Failed to export saved roster Excel file");
     }
   }
@@ -342,11 +338,9 @@ const rosterSlice = createSlice({
     updateRosterData: (state, action) => {
       state.allRosters = action.payload;
     },
-    // NEW: Update roster data locally without API call
     updateRosterDataLocally: (state, action) => {
       const { month, year, weekNumber, employeeId, updates } = action.payload;
       
-      // Update in roster state
       if (state.roster && state.roster.month === month && state.roster.year === year) {
         const result = findEmployeeIndex(state.roster, weekNumber, employeeId);
         if (result.weekIndex !== -1 && result.employeeIndex !== -1) {
@@ -357,7 +351,6 @@ const rosterSlice = createSlice({
         }
       }
       
-      // Update in allRosters state
       if (state.allRosters?.data) {
         const rosterIndex = state.allRosters.data.findIndex(r => 
           r.month === month && r.year === year
@@ -386,14 +379,12 @@ const rosterSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Add Week
       .addCase(addRosterWeek.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(addRosterWeek.fulfilled, (state, action) => {
         state.loading = false;
-        // Update roster data immediately
         if (action.payload.roster) {
           state.roster = action.payload.roster;
         }
@@ -403,7 +394,6 @@ const rosterSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Fetch Roster
       .addCase(fetchRoster.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -417,7 +407,6 @@ const rosterSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Fetch All Rosters
       .addCase(fetchAllRosters.pending, (state) => {
         state.rosterDetailLoading = true;
         state.rosterDetailError = null;
@@ -450,14 +439,12 @@ const rosterSlice = createSlice({
         state.allRosters = [];
       })
       
-      // Update Week
       .addCase(updateRosterWeek.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(updateRosterWeek.fulfilled, (state, action) => {
         state.loading = false;
-        // Update roster data immediately
         if (action.payload.roster) {
           state.roster = action.payload.roster;
         }
@@ -467,7 +454,6 @@ const rosterSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Export Excel (Existing)
       .addCase(exportRosterExcel.pending, (state) => {
         state.exportLoading = true;
         state.exportSuccess = false;
@@ -482,7 +468,6 @@ const rosterSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Export Saved Roster (NEW)
       .addCase(exportSavedRoster.pending, (state) => {
         state.savedExportLoading = true;
         state.savedExportSuccess = false;
@@ -497,7 +482,6 @@ const rosterSlice = createSlice({
         state.error = action.payload;
       })
       
-      // Update Employee
       .addCase(updateRosterEmployee.pending, (state) => {
         state.loading = true;
         state.error = null;

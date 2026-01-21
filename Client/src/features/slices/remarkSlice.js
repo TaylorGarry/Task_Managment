@@ -2,9 +2,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/remarks`;
+// const API_URL = `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/remarks`;
 //  const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/remarks`;
-//  const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/remarks`;
+ const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/remarks`;
 
 const getToken = (getState) =>
   getState().auth.user?.token || JSON.parse(localStorage.getItem("user"))?.token;
@@ -28,9 +28,6 @@ export const fetchRemarks = createAsyncThunk(
   }
 );
 
-// =============================
-// ADD REMARK
-// =============================
 export const addRemark = createAsyncThunk(
   "remarks/addRemark",
   async ({ taskId, message, receiverId = null, sendToAll = false }, { rejectWithValue, getState }) => {
@@ -67,9 +64,6 @@ export const addRemark = createAsyncThunk(
   }
 );
 
-// =============================
-// UPDATE (EDIT) REMARK
-// =============================
 export const updateRemark = createAsyncThunk(
   "remarks/updateRemark",
   async ({ remarkId, message }, { rejectWithValue, getState }) => {
@@ -116,9 +110,6 @@ export const deleteRemark = createAsyncThunk(
   }
 );
 
-// =============================
-// SLICE
-// =============================
 const remarkSlice = createSlice({
   name: "remarks",
   initialState: {
@@ -143,7 +134,6 @@ const remarkSlice = createSlice({
 
   extraReducers: (builder) => {
     builder
-      // FETCH
       .addCase(fetchRemarks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -157,7 +147,6 @@ const remarkSlice = createSlice({
         state.error = action.payload;
       })
 
-      // ADD
       .addCase(addRemark.fulfilled, (state, action) => {
         if (action.payload.sentToAll && Array.isArray(action.payload.remarks)) {
           state.remarks.push(...action.payload.remarks);
@@ -168,13 +157,11 @@ const remarkSlice = createSlice({
         state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       })
 
-      // UPDATE
       .addCase(updateRemark.fulfilled, (state, action) => {
         const index = state.remarks.findIndex((r) => r._id === action.payload._id);
         if (index !== -1) state.remarks[index] = action.payload;
       })
 
-      // DELETE
       .addCase(deleteRemark.fulfilled, (state, action) => {
         state.remarks = state.remarks.filter((r) => r._id !== action.payload);
       });

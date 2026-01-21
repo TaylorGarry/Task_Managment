@@ -6,6 +6,7 @@ import {
   DialogActions, TextField, MenuItem, CircularProgress,
   IconButton, InputAdornment
 } from "@mui/material";
+import DialogBox from "./Dialogbox";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchEmployees, updateUserByAdmin } from "../features/slices/authSlice.js";
 import toast from "react-hot-toast";
@@ -35,7 +36,7 @@ const getShiftLabel = (start, end) => {
 const ManageEmployee = () => {
   const dispatch = useDispatch();
   const { employees, loading } = useSelector((state) => state.auth);
-
+  const [openDialogBox, setOpenDialogBox] = useState(false)
   const [localEmployees, setLocalEmployees] = useState([]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [formData, setFormData] = useState({
@@ -162,8 +163,8 @@ const ManageEmployee = () => {
       );
 
       handleCloseDialog();
+       setOpenDialogBox(true);
     } catch (err) {
-      console.error("Update failed:", err);
       toast.error(err || "Failed to update employee");
     }
   };
@@ -356,6 +357,12 @@ const ManageEmployee = () => {
           </Button>
         </DialogActions>
       </Dialog>
+
+       {/*  SUCCESS DIALOG */}
+      <DialogBox
+        open={openDialogBox}
+        onClose={() => setOpenDialogBox(false)}
+      />
     </div>
   );
 };
