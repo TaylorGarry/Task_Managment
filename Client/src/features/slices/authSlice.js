@@ -2,9 +2,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/v1";
+// const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -52,9 +52,6 @@ export const signupUser = createAsyncThunk(
   }
 );
 
-// ======================================================================
-// CREATE CORE TEAM USER
-// ======================================================================
 export const createCoreTeamUser = createAsyncThunk(
   "auth/createCoreTeamUser",
   async (userData, thunkAPI) => {
@@ -75,23 +72,16 @@ export const createCoreTeamUser = createAsyncThunk(
   }
 );
 
-// ======================================================================
-// LOGOUT
-// ======================================================================
 export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
   localStorage.removeItem("user");
   await axios.post(`${API_URL}/logout`);
 });
 
-// ======================================================================
-// FETCH EMPLOYEES (Optimized)
-// ======================================================================
 export const fetchEmployees = createAsyncThunk(
   "auth/fetchEmployees",
   async (_, thunkAPI) => {
     const state = thunkAPI.getState();
 
-    // 🔥 Prevent duplicate calls
     if (state.auth.employeesLoaded) {
       return state.auth.employees;
     }
@@ -113,9 +103,6 @@ export const fetchEmployees = createAsyncThunk(
   }
 );
 
-// ======================================================================
-// UPDATE PROFILE
-// ======================================================================
 export const updateProfile = createAsyncThunk(
   "auth/updateProfile",
   async (updateData, thunkAPI) => {
@@ -139,9 +126,6 @@ export const updateProfile = createAsyncThunk(
   }
 );
 
-// ======================================================================
-// UPDATE USER BY ADMIN (WITH PASSWORD RESET SUPPORT)
-// ======================================================================
 export const updateUserByAdmin = createAsyncThunk(
   "auth/updateUserByAdmin",
   async ({ userId, updateData }, thunkAPI) => {
@@ -149,12 +133,9 @@ export const updateUserByAdmin = createAsyncThunk(
       const token = thunkAPI.getState().auth.user?.token;
       if (!token) throw new Error("No admin token found");
 
-      // Prepare the update data
       const dataToSend = { ...updateData };
       
-      // If password reset is being done, ensure confirmPassword is included
       if (dataToSend.password && !dataToSend.confirmPassword) {
-        // If only password is provided without confirmPassword, use the same value
         dataToSend.confirmPassword = dataToSend.password;
       }
 
@@ -175,9 +156,6 @@ export const updateUserByAdmin = createAsyncThunk(
   }
 );
 
-// ======================================================================
-// RESET USER PASSWORD (SPECIALIZED ACTION FOR PASSWORD RESET ONLY)
-// ======================================================================
 export const resetUserPassword = createAsyncThunk(
   "auth/resetUserPassword",
   async ({ userId, password, confirmPassword }, thunkAPI) => {
@@ -214,9 +192,6 @@ export const resetUserPassword = createAsyncThunk(
   }
 );
 
-// ======================================================================
-// SLICE
-// ======================================================================
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -231,20 +206,17 @@ const authSlice = createSlice({
     status: null,
     message: null,
     
-    // Password reset specific state
     passwordResetSuccess: false,
     passwordResetMessage: null,
   },
 
   reducers: {
-    // Clear password reset state
     clearPasswordResetState: (state) => {
       state.passwordResetSuccess = false;
       state.passwordResetMessage = null;
       state.error = null;
     },
     
-    // Clear all messages
     clearMessages: (state) => {
       state.error = null;
       state.message = null;
@@ -255,9 +227,6 @@ const authSlice = createSlice({
 
   extraReducers: (builder) => {
     builder
-      // ---------------------------------------------------
-      // LOGIN
-      // ---------------------------------------------------
       .addCase(loginUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -266,7 +235,6 @@ const authSlice = createSlice({
         state.loading = false;
         state.user = action.payload;
 
-        // reset employee cache when user logs in
         state.employees = [];
         state.employeesLoaded = false;
       })
@@ -275,9 +243,6 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
 
-      // ---------------------------------------------------
-      // SIGNUP
-      // ---------------------------------------------------
       .addCase(signupUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -290,9 +255,6 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
 
-      // ---------------------------------------------------
-      // CREATE CORE TEAM USER
-      // ---------------------------------------------------
       .addCase(createCoreTeamUser.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -307,18 +269,12 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
 
-      // ---------------------------------------------------
-      // LOGOUT
-      // ---------------------------------------------------
       .addCase(logoutUser.fulfilled, (state) => {
         state.user = null;
         state.employees = [];
         state.employeesLoaded = false;
       })
 
-      // ---------------------------------------------------
-      // FETCH EMPLOYEES — optimized
-      // ---------------------------------------------------
       .addCase(fetchEmployees.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -326,16 +282,13 @@ const authSlice = createSlice({
       .addCase(fetchEmployees.fulfilled, (state, action) => {
         state.loading = false;
         state.employees = action.payload;
-        state.employeesLoaded = true; // 🔥 important
+        state.employeesLoaded = true; 
       })
       .addCase(fetchEmployees.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       })
 
-      // ---------------------------------------------------
-      // UPDATE PROFILE
-      // ---------------------------------------------------
       .addCase(updateProfile.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -349,9 +302,6 @@ const authSlice = createSlice({
         state.error = action.payload;
       })
 
-      // ---------------------------------------------------
-      // UPDATE USER BY ADMIN
-      // ---------------------------------------------------
       .addCase(updateUserByAdmin.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -363,13 +313,11 @@ const authSlice = createSlice({
         
         const { user, passwordReset, message } = action.payload;
         
-        // Update employees list
         const index = state.employees.findIndex(
           (u) => u._id === user._id
         );
         if (index !== -1) state.employees[index] = user;
         
-        // Handle password reset success state
         if (passwordReset) {
           state.passwordResetSuccess = true;
           state.passwordResetMessage = message;
@@ -383,9 +331,6 @@ const authSlice = createSlice({
         state.passwordResetSuccess = false;
       })
 
-      // ---------------------------------------------------
-      // RESET USER PASSWORD (SPECIALIZED ACTION)
-      // ---------------------------------------------------
       .addCase(resetUserPassword.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -397,7 +342,6 @@ const authSlice = createSlice({
         state.passwordResetSuccess = true;
         state.passwordResetMessage = action.payload.message;
         
-        // Update employees list with updated user
         const { user } = action.payload;
         const index = state.employees.findIndex(
           (u) => u._id === user._id

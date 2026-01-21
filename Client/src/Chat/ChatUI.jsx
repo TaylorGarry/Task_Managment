@@ -35,7 +35,6 @@ import {
   setEditingMessageId,
   setDeletingMessageId,
   clearEditingState,
-  // NEW IMPORTS
   uploadFile,
   sendMessageWithFiles,
   clearUploadedFiles
@@ -148,7 +147,6 @@ const ChatUI = () => {
   }
   
   if (!selectedChat) {
-    console.error("❌ No chat selected");
     return;
   }
 
@@ -156,7 +154,6 @@ const ChatUI = () => {
   const hasFiles = selectedFiles.length > 0;
   
   if (!hasText && !hasFiles) {
-    console.log("⚠️ Empty message, not sending");
     return;
   }
 
@@ -237,7 +234,6 @@ const ChatUI = () => {
     });
 
   } catch (error) {
-    console.error("❌ Error sending message with files:", error);
     
     filePreviews.forEach(({ previewUrl }) => {
       URL.revokeObjectURL(previewUrl);
@@ -423,7 +419,6 @@ const ChatUI = () => {
                   controls
                   className="w-full max-h-48"
                   onError={(e) => {
-                    console.error('Video load error:', item.url);
                   }}
                 />
                 <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
@@ -437,7 +432,6 @@ const ChatUI = () => {
                   controls
                   className="w-full"
                   onError={(e) => {
-                    console.error('Audio load error:', item.url);
                   }}
                 />
                 <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
@@ -561,7 +555,6 @@ const ChatUI = () => {
     });
 
     return () => {
-      // console.log("🧹 Cleaning up socket listeners");
       socket.off("connect");
       socket.off("disconnect");
       socket.off("connect_error");
@@ -713,7 +706,6 @@ const ChatUI = () => {
         setTimeout(() => scrollToBottom(), 200);
       }
     } catch (err) {
-      console.error("❌ Fetch messages error:", err);
     } finally {
       setIsLoadingMessages(false);
     }
@@ -786,7 +778,6 @@ const ChatUI = () => {
       socket.emit("join_chat", chat._id);
       fetchMessages(chat._id);
     } catch (error) {
-      console.error("❌ Error selecting user:", error);
     }
   };
 
@@ -822,7 +813,6 @@ const ChatUI = () => {
       setEditingText("");
 
     } catch (error) {
-      console.error("❌ Error editing message:", error);
       alert(error || "Failed to edit message");
 
       dispatch(clearEditingState());
@@ -836,7 +826,6 @@ const ChatUI = () => {
   };
 
   const handleDeleteMessage = async (messageId) => {
-    // if (!window.confirm("Are you sure you want to delete this message?")) return;
 
     try {
       dispatch(setDeletingMessageId(messageId));
@@ -851,7 +840,6 @@ const ChatUI = () => {
       setShowMessageMenu(null);
 
     } catch (error) {
-      console.error("❌ Error deleting message:", error);
       alert(error || "Failed to delete message");
       dispatch(setDeletingMessageId(null));
     }

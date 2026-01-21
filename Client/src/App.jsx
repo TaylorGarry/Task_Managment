@@ -24,26 +24,27 @@ const ProtectedRoute = ({ children, adminOnly }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (adminOnly && !["admin", "superAdmin"].includes(user.accountType)) {
+  if (adminOnly && !["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (!adminOnly && ["admin", "superAdmin"].includes(user.accountType)) {
-    return <Navigate to="/admin/tasks" replace />;
+  if (!adminOnly && ["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+    return <Navigate to="/admin/admintask" replace />;
   }
 
   return children;
 };
+
 
 function App() {
   const { user } = useSelector((state) => state.auth);
 
   return (
     <>
-      {/* Toast added here */}
       <ToastContainer position="top-right" autoClose={3000} />
 
       <Routes>
+        
         <Route
           path="/signup"
           element={
