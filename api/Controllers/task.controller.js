@@ -1778,7 +1778,7 @@ export const getAdminTasks = async (req, res) => {
     const { department, employeeId } = req.query; 
     const { accountType, id: userId } = req.user;
 
-    if (!["admin", "superAdmin", "HR"].includes(accountType)) {
+    if (!["admin", "superAdmin", "HR", "Operations"].includes(accountType)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
@@ -1937,7 +1937,7 @@ export const getAdminAssignedTasks = async (req, res) => {
     const { department, employeeId } = req.query;  
     const { accountType, id: userId } = req.user;
 
-    if (!["admin", "superAdmin", "HR"].includes(accountType)) {
+    if (!["admin", "superAdmin", "HR", "Operations"].includes(accountType)) {
       return res.status(403).json({ message: "Access denied" });
     }
 
