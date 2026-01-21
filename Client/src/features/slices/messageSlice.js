@@ -17,7 +17,6 @@ export const uploadFile = createAsyncThunk(
       return res.data.media;
       
     } catch (err) {
-      console.error("❌ Error uploading file:", err);
       return rejectWithValue(err.response?.data || err.message);
     }
   }
@@ -44,7 +43,6 @@ export const sendMessage = createAsyncThunk(
       };
       
     } catch (err) {
-      console.error("❌ Error sending message:", err);
       return rejectWithValue(err.response?.data || err.message);
     }
   }
@@ -75,7 +73,6 @@ export const sendMessageWithFiles = createAsyncThunk(
       };
       
     } catch (err) {
-      console.error("❌ Error sending message with files:", err);
       return rejectWithValue(err.response?.data || err.message);
     }
   }
@@ -91,7 +88,6 @@ export const editMessage = createAsyncThunk(
       return res.data.message || res.data;
       
     } catch (err) {
-      console.error("❌ Error editing message:", err);
       return rejectWithValue(err.response?.data || err.message);
     }
   }
@@ -105,7 +101,6 @@ export const deleteMessage = createAsyncThunk(
       return { messageId, data: res.data };
       
     } catch (err) {
-      console.error("❌ Error deleting message:", err);
       return rejectWithValue(err.response?.data || err.message);
     }
   }
@@ -128,7 +123,6 @@ const messageSlice = createSlice({
       const { chatId, message } = action.payload;
       
       if (!chatId || !message) {
-        console.error("Invalid payload for addIncomingMessage:", action.payload);
         return;
       }
       
@@ -153,7 +147,6 @@ const messageSlice = createSlice({
       const { chatId, messages } = action.payload;
       
       if (!chatId) {
-        console.error("No chatId in setMessagesForChat:", action.payload);
         return;
       }
       
@@ -301,7 +294,6 @@ const messageSlice = createSlice({
       .addCase(sendMessage.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-        console.error("❌ sendMessage rejected:", action.payload);
       })
       .addCase(sendMessageWithFiles.pending, (state) => {
         state.loading = true;
@@ -360,7 +352,6 @@ const messageSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
         state.editingMessageId = null;
-        console.error("❌ editMessage rejected:", action.payload);
       })
       
       .addCase(deleteMessage.pending, (state) => {
@@ -381,7 +372,6 @@ const messageSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
         state.deletingMessageId = null;
-        console.error("❌ deleteMessage rejected:", action.payload);
       });
   },
 });

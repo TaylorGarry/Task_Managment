@@ -28,7 +28,7 @@ const userData = getUserData();
 let reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
 
-export const socket = io("http://localhost:4000", {
+export const socket = io("https://fdbs-server-a9gqg.ondigitalocean.app", {
   transports: ["websocket", "polling"],
   withCredentials: true,
   auth: {

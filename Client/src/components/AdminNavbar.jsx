@@ -7,9 +7,9 @@ import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar } from "react-icons/fi";
 import toast from "react-hot-toast";
 
-const API_URL = "http://localhost:4000/api/v1";
+// const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 
 const AdminNavbar = () => {
@@ -68,7 +68,6 @@ const AdminNavbar = () => {
         setShowProfilePopup(false);
       }
     } catch (err) {
-      console.error("Profile update failed:", err);
       toast.error(err.response?.data?.message || "Failed to update profile");
     } finally {
       setLoading(false);
@@ -93,7 +92,6 @@ const AdminNavbar = () => {
 
       toast.success("Excel exported successfully!");
     } catch (err) {
-      console.error("Export failed:", err);
       toast.error(err?.message || "Failed to export tasks!");
     } finally {
       setExporting(false);
@@ -121,23 +119,24 @@ const AdminNavbar = () => {
             <Link to="/admin/admintask" className="hover:underline text-[#155DFC] font-semibold">
               Your Task
             </Link>
-            {/* <Link to="/admin/assigned-tasks" className="hover:underline text-[#155DFC] font-semibold">
-  Your Assigned Tasks
-</Link> */}
-            <Link to="/admin/assign-task" className="hover:underline text-[#155DFC] font-semibold">
-              Assign Task
-            </Link>
+           
+           
             <Link to="/admin/chat" className="hover:underline text-[#155DFC] font-semibold">
               Chat
             </Link>
-            <Link to="/admin/tasks" className="hover:underline text-[#155DFC] font-semibold">
-              Task Status
-            </Link>
-            <Link to="/admin/defaulter" className="hover:underline text-[#155DFC] font-semibold">
-              Defaulter
-            </Link>
+           
+           
             {["admin", "superAdmin"].includes(user?.accountType) && (
               <>
+               <Link to="/admin/assign-task" className="hover:underline text-[#155DFC] font-semibold">
+              Assign Task
+            </Link>
+               <Link to="/admin/tasks" className="hover:underline text-[#155DFC] font-semibold">
+              Task Status
+            </Link>
+             <Link to="/admin/defaulter" className="hover:underline text-[#155DFC] font-semibold">
+              Defaulter  
+            </Link>
                 <button
                   onClick={handleExport}
                   disabled={exporting}
@@ -230,6 +229,9 @@ const AdminNavbar = () => {
               >
                 Admin Dashboard
               </Link>
+                 <Link to="/admin/admintask" className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors">
+              Your Task
+            </Link>
 
               <Link
                 to="/admin/assign-task"
@@ -315,8 +317,11 @@ const AdminNavbar = () => {
                   Logout
                 </button>
               </div>
+<<<<<<< Updated upstream
               
-              {/* User info at bottom */}
+              
+=======
+>>>>>>> Stashed changes
               <div className="mt-auto pt-4 border-t border-gray-300">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white">
@@ -329,8 +334,10 @@ const AdminNavbar = () => {
                 </div>
               </div>
             </div>
+<<<<<<< Updated upstream
             
-            {/* Click outside to close */}
+=======
+>>>>>>> Stashed changes
             <div 
               className="flex-1" 
               onClick={() => setShowMobileMenu(false)}

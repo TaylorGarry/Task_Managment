@@ -7,6 +7,7 @@ import {
 } from "../features/slices/taskSlice.js";
 import { fetchEmployees } from "../features/slices/authSlice.js";
 import toast, { Toaster } from "react-hot-toast";
+import Sidebar from "../components/Sidebar.jsx";
 
 const AdminDashboard = () => {
   const dispatch = useDispatch();
@@ -61,6 +62,8 @@ const AdminDashboard = () => {
    <div className="p-4">
   <Toaster />
   <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1>
+
+  <Sidebar />
 
   <form
     onSubmit={handleAddTask}

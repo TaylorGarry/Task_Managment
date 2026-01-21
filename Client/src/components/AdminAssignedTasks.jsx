@@ -14,26 +14,16 @@ const AdminAssignedTasks = () => {
   const user = JSON.parse(localStorage.getItem("user"));
 
   useEffect(() => {
-    console.log("🔄 AdminAssignedTasks useEffect - fetching admin assigned tasks");
     dispatch(fetchAdminAssignedTasks());
   }, [dispatch]);
 
   useEffect(() => {
-    console.log("📊 AdminAssignedTasks state updated");
-    console.log("📋 adminAssignedTasks count:", adminAssignedTasks.length);
     if (adminAssignedTasks.length > 0) {
-      console.log("📋 First admin assigned task:", {
-        id: adminAssignedTasks[0]._id,
-        title: adminAssignedTasks[0].title,
-        doneEmployees: adminAssignedTasks[0].doneEmployees?.length || 0,
-        notDoneEmployees: adminAssignedTasks[0].notDoneEmployees?.length || 0,
-        date: adminAssignedTasks[0].date
-      });
+      
     }
   }, [adminAssignedTasks]);
 
   const handleStatusUpdate = async (taskId, status) => {
-    console.log("🚀 handleStatusUpdate called for task:", taskId, "status:", status);
     
     try {
       await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
@@ -43,7 +33,6 @@ const AdminAssignedTasks = () => {
       
       toast.success("Task status updated successfully!");
     } catch (err) {
-      console.error("❌ Update failed:", err);
       toast.error(err || "Failed to update status");
     }
   };

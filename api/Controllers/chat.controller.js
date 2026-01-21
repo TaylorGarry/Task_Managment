@@ -14,6 +14,10 @@ cloudinary.config({
 export const getUserChats = async (req, res) => {
   try {
     const currentUserId = req.user._id || req.user.id;  
+<<<<<<< HEAD
+=======
+    console.log("🔍 Current user ID:", currentUserId);
+>>>>>>> keshav_dev
 
     const chats = await Chat.find({ participants: currentUserId })
       .populate({
