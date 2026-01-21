@@ -443,7 +443,10 @@ const TaskStatus = () => {
               )}
               <div ref={messagesEndRef}></div>
             </div>
+<<<<<<< Updated upstream
 
+=======
+>>>>>>> Stashed changes
             <div className="p-4 border-t border-gray-100 bg-white">
               <div className="flex items-center gap-3">
                 <div className="flex-1 relative">

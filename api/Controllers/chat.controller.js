@@ -13,21 +13,19 @@ cloudinary.config({
 
 export const getUserChats = async (req, res) => {
   try {
-    const currentUserId = req.user._id || req.user.id; // Handle both
+    const currentUserId = req.user._id || req.user.id;  
     console.log("🔍 Current user ID:", currentUserId);
 
     const chats = await Chat.find({ participants: currentUserId })
       .populate({
         path: "participants",
         select: "username name department",
-        match: { _id: { $ne: currentUserId } } // Only get other users
+        match: { _id: { $ne: currentUserId } }  
       })
       .populate("lastMessage")
       .sort({ updatedAt: -1 });
 
-    // Map to include only the "other user" for frontend
     const mappedChats = chats.map(chat => {
-      // Find the participant who is NOT the current user
       const otherUser = chat.participants?.find(
         p => p && (p._id.toString() !== currentUserId.toString() && 
                    p.id?.toString() !== currentUserId.toString())

@@ -317,8 +317,11 @@ const AdminNavbar = () => {
                   Logout
                 </button>
               </div>
+<<<<<<< Updated upstream
               
               
+=======
+>>>>>>> Stashed changes
               <div className="mt-auto pt-4 border-t border-gray-300">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white">
@@ -331,7 +334,10 @@ const AdminNavbar = () => {
                 </div>
               </div>
             </div>
+<<<<<<< Updated upstream
             
+=======
+>>>>>>> Stashed changes
             <div 
               className="flex-1" 
               onClick={() => setShowMobileMenu(false)}
