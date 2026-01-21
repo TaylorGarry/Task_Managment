@@ -14,10 +14,7 @@ cloudinary.config({
 export const getUserChats = async (req, res) => {
   try {
     const currentUserId = req.user._id || req.user.id;  
-<<<<<<< HEAD
-=======
     console.log("🔍 Current user ID:", currentUserId);
->>>>>>> keshav_dev
 
     const chats = await Chat.find({ participants: currentUserId })
       .populate({
@@ -82,6 +79,7 @@ export const getOrCreateOneToOneChat = async (req, res) => {
       archive => archive.userId.toString() === currentUserId.toString()
     );
 
+    // Return only the "other user" in participants
     const otherUser = chat.participants.find(
       p => p._id.toString() !== currentUserId.toString()
     );
