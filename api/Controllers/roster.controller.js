@@ -177,7 +177,6 @@ export const deleteEmployeeFromRoster = async (req, res) => {
       });
     }
 
-    // Find the roster by its _id
     const roster = await Roster.findById(rosterId);
     if (!roster) {
       return res.status(404).json({
@@ -186,7 +185,6 @@ export const deleteEmployeeFromRoster = async (req, res) => {
       });
     }
 
-    // Permission check - only HR and SuperAdmin
     if (!(user.accountType === "HR" || user.accountType === "superAdmin")) {
       return res.status(403).json({
         success: false,
@@ -1845,4 +1843,726 @@ export const exportSavedRoster = async (req, res) => {
       error: error.message 
     });
   }
+};
+
+
+
+/**
+ * AUTO-PROPAGATE ROSTER CONTROLLER
+ * Creates roster weeks automatically by copying employees from existing weeks
+ */
+
+/**
+ * Create roster for a date range by auto-copying employees
+ */
+export const createRosterForDateRange = async (req, res) => {
+  try {
+    const {
+      month,
+      year,
+      startDate,
+      endDate,
+      sourceWeekNumber, // Optional: Week number to copy from (defaults to latest week)
+      newEmployees = [], // Optional: Additional employees to add
+      modifyExisting = [], // Optional: Modify existing employees
+      preserveDailyStatus = false, // Whether to keep daily statuses (true) or reset to "P" (false)
+      rosterStartDate, // Overall roster start date
+      rosterEndDate // Overall roster end date
+    } = req.body;
+
+    const createdBy = req.user._id;
+
+    // Validate required fields
+    if (!month || !year || !startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: month, year, startDate, endDate"
+      });
+    }
+
+    // Validate overall roster dates if provided
+    const finalRosterStartDate = rosterStartDate || startDate;
+    const finalRosterEndDate = rosterEndDate || endDate;
+
+    // Parse dates
+    const rangeStart = new Date(startDate);
+    const rangeEnd = new Date(endDate);
+    const rangeStartDate = new Date(rangeStart);
+    const rangeEndDate = new Date(rangeEnd);
+
+    // Validate date range
+    if (rangeStartDate >= rangeEndDate) {
+      return res.status(400).json({
+        success: false,
+        message: "startDate must be before endDate"
+      });
+    }
+
+    // Check if range is reasonable (e.g., not more than 3 months)
+    const maxDays = 90; // 3 months
+    const daysDifference = Math.ceil((rangeEndDate - rangeStartDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDifference > maxDays) {
+      return res.status(400).json({
+        success: false,
+        message: `Date range cannot exceed ${maxDays} days. Please create multiple rosters.`
+      });
+    }
+
+    // Find existing roster for the month/year
+    let roster = await Roster.findOne({ month, year });
+
+    // Get source employees to copy
+    let sourceEmployees = [];
+    let actualSourceWeekNumber = sourceWeekNumber;
+
+    if (roster && roster.weeks.length > 0) {
+      if (sourceWeekNumber) {
+        // Copy from specified week
+        const sourceWeek = roster.weeks.find(w => w.weekNumber === sourceWeekNumber);
+        if (sourceWeek) {
+          sourceEmployees = sourceWeek.employees;
+          console.log(`Using employees from specified week ${sourceWeekNumber}`);
+        } else {
+          return res.status(404).json({
+            success: false,
+            message: `Source week ${sourceWeekNumber} not found in roster`
+          });
+        }
+      } else {
+        // Copy from latest week
+        const latestWeek = roster.weeks.reduce((latest, current) =>
+          current.weekNumber > latest.weekNumber ? current : latest
+        );
+        sourceEmployees = latestWeek.employees;
+        actualSourceWeekNumber = latestWeek.weekNumber;
+        console.log(`Using employees from latest week ${latestWeek.weekNumber}`);
+      }
+    }
+
+    // If no source employees and no new employees provided
+    if (sourceEmployees.length === 0 && newEmployees.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No source employees found and no new employees provided. Cannot create empty roster."
+      });
+    }
+
+    // Calculate weeks in the date range (7-day weeks)
+    const weeksToCreate = calculateWeeksInRange(rangeStartDate, rangeEndDate);
+    
+    // Determine starting week number
+    let nextWeekNumber = 1;
+    if (roster && roster.weeks.length > 0) {
+      nextWeekNumber = Math.max(...roster.weeks.map(w => w.weekNumber)) + 1;
+    }
+
+    // Prepare weeks data
+    const weeksData = [];
+
+    for (let i = 0; i < weeksToCreate.length; i++) {
+      const week = weeksToCreate[i];
+      const weekNumber = nextWeekNumber + i;
+
+      // Clone employees from source
+      let weekEmployees = sourceEmployees.map(emp => ({
+        userId: emp.userId,
+        name: emp.name,
+        transport: emp.transport || "",
+        cabRoute: emp.cabRoute || "",
+        shiftStartHour: emp.shiftStartHour,
+        shiftEndHour: emp.shiftEndHour,
+        dailyStatus: preserveDailyStatus 
+          ? cloneDailyStatus(emp.dailyStatus, week.startDate, week.endDate)
+          : generateDefaultDailyStatus(week.startDate, week.endDate)
+      }));
+
+      // Add new employees if provided
+      if (newEmployees.length > 0) {
+        const additionalEmployees = await processNewEmployeesForWeek(
+          newEmployees,
+          week.startDate,
+          week.endDate,
+          preserveDailyStatus
+        );
+        weekEmployees = [...weekEmployees, ...additionalEmployees];
+      }
+
+      // Apply modifications to existing employees
+      if (modifyExisting.length > 0) {
+        weekEmployees = applyEmployeeModificationsForWeek(weekEmployees, modifyExisting);
+      }
+
+      // Validate week-offs
+      weekEmployees.forEach(emp => {
+        const woCount = emp.dailyStatus.filter(d => d.status === "WO").length;
+        if (woCount > 2) {
+          throw new Error(`Employee ${emp.name} cannot have more than 2 week-offs in a week`);
+        }
+      });
+
+      weeksData.push({
+        weekNumber,
+        startDate: week.startDate,
+        endDate: week.endDate,
+        employees: weekEmployees
+      });
+    }
+
+    // Create or update roster
+    if (!roster) {
+      roster = new Roster({
+        month,
+        year,
+        rosterStartDate: new Date(finalRosterStartDate),
+        rosterEndDate: new Date(finalRosterEndDate),
+        weeks: weeksData,
+        createdBy,
+      });
+    } else {
+      // Check for overlapping weeks
+      const overlappingWeeks = roster.weeks.filter(existingWeek => 
+        isDateRangeOverlapping(
+          existingWeek.startDate, 
+          existingWeek.endDate, 
+          rangeStartDate, 
+          rangeEndDate
+        )
+      );
+
+      if (overlappingWeeks.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Date range overlaps with existing weeks. Please choose a non-overlapping range.",
+          overlappingWeeks: overlappingWeeks.map(w => ({
+            weekNumber: w.weekNumber,
+            startDate: w.startDate,
+            endDate: w.endDate
+          }))
+        });
+      }
+
+      // Add new weeks
+      roster.weeks.push(...weeksData);
+      
+      // Sort weeks by weekNumber
+      roster.weeks.sort((a, b) => a.weekNumber - b.weekNumber);
+      
+      // Update roster dates
+      const currentStart = new Date(roster.rosterStartDate);
+      const currentEnd = new Date(roster.rosterEndDate);
+      
+      if (rangeStartDate < currentStart) {
+        roster.rosterStartDate = rangeStartDate;
+      }
+      if (rangeEndDate > currentEnd) {
+        roster.rosterEndDate = rangeEndDate;
+      }
+      
+      roster.updatedBy = createdBy;
+    }
+
+    await roster.save();
+
+    // Prepare response
+    const responseData = {
+      success: true,
+      message: `Created ${weeksData.length} week(s) successfully`,
+      data: {
+        weeksCreated: weeksData.length,
+        totalWeeks: roster.weeks.length,
+        sourceWeek: actualSourceWeekNumber || 'N/A',
+        employeeCount: sourceEmployees.length,
+        newEmployeesAdded: newEmployees.length,
+        dateRange: {
+          start: rangeStartDate,
+          end: rangeEndDate
+        },
+        rosterInfo: {
+          month,
+          year,
+          rosterId: roster._id,
+          rosterStartDate: roster.rosterStartDate,
+          rosterEndDate: roster.rosterEndDate
+        }
+      }
+    };
+
+    console.log(`Created ${weeksData.length} week(s) for ${month}/${year}`);
+    return res.status(201).json(responseData);
+
+  } catch (error) {
+    console.error("Error creating roster for date range:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to create roster for date range"
+    });
+  }
+};
+
+/**
+ * Quick copy employees from one week to another
+ */
+export const copyEmployeesToWeek = async (req, res) => {
+  try {
+    const {
+      rosterId,
+      sourceWeekNumber,
+      targetWeekNumbers, // Can be single week number or array
+      excludeEmployees = [], // Employees to exclude from copy
+      resetStatus = false // Whether to reset daily statuses
+    } = req.body;
+
+    const userId = req.user._id;
+
+    if (!rosterId || !sourceWeekNumber || !targetWeekNumbers) {
+      return res.status(400).json({
+        success: false,
+        message: "rosterId, sourceWeekNumber, and targetWeekNumbers are required"
+      });
+    }
+
+    // Convert targetWeekNumbers to array if single value
+    const targetWeeks = Array.isArray(targetWeekNumbers) 
+      ? targetWeekNumbers 
+      : [targetWeekNumbers];
+
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "Roster not found"
+      });
+    }
+
+    // Find source week
+    const sourceWeek = roster.weeks.find(w => w.weekNumber === sourceWeekNumber);
+    if (!sourceWeek) {
+      return res.status(404).json({
+        success: false,
+        message: `Source week ${sourceWeekNumber} not found`
+      });
+    }
+
+    // Filter excluded employees
+    let employeesToCopy = sourceWeek.employees;
+    if (excludeEmployees.length > 0) {
+      employeesToCopy = employeesToCopy.filter(emp => 
+        !excludeEmployees.includes(emp.name) && 
+        !excludeEmployees.includes(emp.userId?.toString())
+      );
+    }
+
+    // Process each target week
+    const results = [];
+
+    for (const targetWeekNumber of targetWeeks) {
+      const targetWeekIndex = roster.weeks.findIndex(w => w.weekNumber === targetWeekNumber);
+      
+      if (targetWeekIndex === -1) {
+        results.push({
+          weekNumber: targetWeekNumber,
+          success: false,
+          message: `Week ${targetWeekNumber} not found`
+        });
+        continue;
+      }
+
+      const targetWeek = roster.weeks[targetWeekIndex];
+      
+      // Create cloned employees
+      const clonedEmployees = employeesToCopy.map(sourceEmp => {
+        const existingEmployee = targetWeek.employees.find(emp => 
+          emp.name === sourceEmp.name || 
+          (emp.userId && sourceEmp.userId && emp.userId.toString() === sourceEmp.userId.toString())
+        );
+
+        if (existingEmployee) {
+          // Update existing employee
+          return {
+            ...existingEmployee.toObject(),
+            transport: sourceEmp.transport,
+            cabRoute: sourceEmp.cabRoute,
+            shiftStartHour: sourceEmp.shiftStartHour,
+            shiftEndHour: sourceEmp.shiftEndHour,
+            dailyStatus: resetStatus 
+              ? generateDefaultDailyStatus(targetWeek.startDate, targetWeek.endDate)
+              : cloneDailyStatus(sourceEmp.dailyStatus, targetWeek.startDate, targetWeek.endDate)
+          };
+        } else {
+          // Add new employee
+          return {
+            userId: sourceEmp.userId,
+            name: sourceEmp.name,
+            transport: sourceEmp.transport || "",
+            cabRoute: sourceEmp.cabRoute || "",
+            shiftStartHour: sourceEmp.shiftStartHour,
+            shiftEndHour: sourceEmp.shiftEndHour,
+            dailyStatus: resetStatus
+              ? generateDefaultDailyStatus(targetWeek.startDate, targetWeek.endDate)
+              : cloneDailyStatus(sourceEmp.dailyStatus, targetWeek.startDate, targetWeek.endDate)
+          };
+        }
+      });
+
+      // Replace employees in target week
+      roster.weeks[targetWeekIndex].employees = clonedEmployees;
+
+      results.push({
+        weekNumber: targetWeekNumber,
+        success: true,
+        employeesCopied: clonedEmployees.length,
+        message: `Copied ${clonedEmployees.length} employees from week ${sourceWeekNumber}`
+      });
+    }
+
+    // Update roster
+    roster.updatedBy = userId;
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Employees copied successfully",
+      results,
+      rosterInfo: {
+        rosterId: roster._id,
+        month: roster.month,
+        year: roster.year,
+        updatedBy: req.user.username
+      }
+    });
+
+  } catch (error) {
+    console.error("Error copying employees:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to copy employees"
+    });
+  }
+};
+
+/**
+ * Bulk update multiple weeks at once
+ */
+export const bulkUpdateWeeks = async (req, res) => {
+  try {
+    const {
+      rosterId,
+      weekNumbers,
+      updateType, // 'add', 'remove', 'update', 'reset'
+      employees = [],
+      employeeNames = [], // For remove operation
+      resetToDefault = false // Reset all statuses to "P"
+    } = req.body;
+
+    const userId = req.user._id;
+
+    if (!rosterId || !weekNumbers || !updateType) {
+      return res.status(400).json({
+        success: false,
+        message: "rosterId, weekNumbers, and updateType are required"
+      });
+    }
+
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "Roster not found"
+      });
+    }
+
+    const results = [];
+
+    for (const weekNumber of weekNumbers) {
+      const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+      
+      if (weekIndex === -1) {
+        results.push({
+          weekNumber,
+          success: false,
+          message: `Week ${weekNumber} not found`
+        });
+        continue;
+      }
+
+      const week = roster.weeks[weekIndex];
+
+      switch (updateType) {
+        case 'add':
+          const addedEmployees = await addEmployeesToWeek(
+            employees,
+            week.startDate,
+            week.endDate
+          );
+          week.employees.push(...addedEmployees);
+          results.push({
+            weekNumber,
+            success: true,
+            employeesAdded: addedEmployees.length,
+            message: `Added ${addedEmployees.length} employees`
+          });
+          break;
+
+        case 'remove':
+          const removeCount = removeEmployeesFromWeek(week, employeeNames);
+          results.push({
+            weekNumber,
+            success: true,
+            employeesRemoved: removeCount,
+            message: `Removed ${removeCount} employees`
+          });
+          break;
+
+        case 'update':
+          const updatedCount = updateEmployeesInWeek(week, employees);
+          results.push({
+            weekNumber,
+            success: true,
+            employeesUpdated: updatedCount,
+            message: `Updated ${updatedCount} employees`
+          });
+          break;
+
+        case 'reset':
+          const resetCount = resetWeekStatuses(week);
+          results.push({
+            weekNumber,
+            success: true,
+            employeesReset: resetCount,
+            message: `Reset ${resetCount} employees to default status`
+          });
+          break;
+
+        default:
+          results.push({
+            weekNumber,
+            success: false,
+            message: `Unknown update type: ${updateType}`
+          });
+      }
+    }
+
+    // Save changes
+    roster.updatedBy = userId;
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Bulk update completed",
+      results,
+      summary: {
+        totalWeeksUpdated: results.filter(r => r.success).length,
+        totalWeeksFailed: results.filter(r => !r.success).length
+      }
+    });
+
+  } catch (error) {
+    console.error("Error in bulk update:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to perform bulk update"
+    });
+  }
+};
+
+// ============ HELPER FUNCTIONS ============
+
+/**
+ * Calculate weeks in a date range
+ */
+const calculateWeeksInRange = (startDate, endDate) => {
+  const weeks = [];
+  let currentStart = new Date(startDate);
+  
+  while (currentStart <= endDate) {
+    let currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentEnd.getDate() + 6); // 7-day week
+    
+    // Adjust if end exceeds range
+    if (currentEnd > endDate) {
+      currentEnd = new Date(endDate);
+    }
+    
+    weeks.push({
+      startDate: new Date(currentStart),
+      endDate: new Date(currentEnd)
+    });
+    
+    // Move to next week
+    currentStart.setDate(currentStart.getDate() + 7);
+  }
+  
+  return weeks;
+};
+
+/**
+ * Generate default daily statuses for a week
+ */
+const generateDefaultDailyStatus = (startDate, endDate) => {
+  const dailyStatus = [];
+  const current = new Date(startDate);
+  const end = new Date(endDate);
+  
+  while (current <= end) {
+    dailyStatus.push({
+      date: new Date(current),
+      status: "P" // Default Present
+    });
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return dailyStatus;
+};
+
+/**
+ * Clone daily statuses with date adjustment
+ */
+const cloneDailyStatus = (sourceStatuses, newStartDate, newEndDate) => {
+  if (!sourceStatuses || sourceStatuses.length === 0) {
+    return generateDefaultDailyStatus(newStartDate, newEndDate);
+  }
+
+  const daysInWeek = Math.ceil((newEndDate - newStartDate) / (1000 * 60 * 60 * 24)) + 1;
+  const clonedStatuses = [];
+
+  for (let i = 0; i < daysInWeek; i++) {
+    const date = new Date(newStartDate);
+    date.setDate(date.getDate() + i);
+    
+    // Use corresponding status from source, or default to "P"
+    const sourceStatus = sourceStatuses[i % sourceStatuses.length];
+    clonedStatuses.push({
+      date,
+      status: sourceStatus ? sourceStatus.status : "P"
+    });
+  }
+
+  return clonedStatuses;
+};
+
+/**
+ * Process new employees for a week
+ */
+const processNewEmployeesForWeek = async (employees, startDate, endDate, preserveStatus = false) => {
+  const processed = await Promise.all(
+    employees.map(async (emp) => {
+      let user = null;
+      if (emp.name) {
+        user = await User.findOne({ username: emp.name });
+      }
+
+      // Validate shift hours
+      if (emp.shiftStartHour === undefined || emp.shiftEndHour === undefined) {
+        throw new Error(`Employee ${emp.name} must have both shift start and end hours`);
+      }
+
+      const shiftStartHour = parseInt(emp.shiftStartHour) || 0;
+      const shiftEndHour = parseInt(emp.shiftEndHour) || 0;
+
+      if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
+        throw new Error(`Employee ${emp.name}: Shift hours must be between 0 and 23`);
+      }
+
+      return {
+        userId: user?._id || null,
+        name: emp.name,
+        transport: emp.transport || "",
+        cabRoute: emp.cabRoute || "",
+        shiftStartHour,
+        shiftEndHour,
+        dailyStatus: preserveStatus && emp.dailyStatus
+          ? cloneDailyStatus(emp.dailyStatus, startDate, endDate)
+          : generateDefaultDailyStatus(startDate, endDate)
+      };
+    })
+  );
+
+  return processed;
+};
+
+/**
+ * Apply modifications to employees for a week
+ */
+const applyEmployeeModificationsForWeek = (employees, modifications) => {
+  return employees.map(emp => {
+    const modification = modifications.find(m => 
+      m.name === emp.name || 
+      (m.userId && emp.userId && m.userId === emp.userId.toString())
+    );
+    
+    if (modification) {
+      return {
+        ...emp,
+        ...modification,
+        dailyStatus: modification.dailyStatus || emp.dailyStatus
+      };
+    }
+    return emp;
+  });
+};
+
+/**
+ * Check if date ranges overlap
+ */
+const isDateRangeOverlapping = (start1, end1, start2, end2) => {
+  const startDate1 = new Date(start1);
+  const endDate1 = new Date(end1);
+  const startDate2 = new Date(start2);
+  const endDate2 = new Date(end2);
+  
+  return startDate1 <= endDate2 && endDate1 >= startDate2;
+};
+
+/**
+ * Add employees to a week
+ */
+const addEmployeesToWeek = async (employees, startDate, endDate) => {
+  return processNewEmployeesForWeek(employees, startDate, endDate, false);
+};
+
+/**
+ * Remove employees from a week
+ */
+const removeEmployeesFromWeek = (week, employeeNames) => {
+  const initialCount = week.employees.length;
+  week.employees = week.employees.filter(emp => 
+    !employeeNames.includes(emp.name)
+  );
+  return initialCount - week.employees.length;
+};
+
+/**
+ * Update employees in a week
+ */
+const updateEmployeesInWeek = (week, employeeUpdates) => {
+  let updateCount = 0;
+  
+  employeeUpdates.forEach(update => {
+    const employee = week.employees.find(emp => 
+      emp.name === update.name || 
+      emp._id.toString() === update.employeeId
+    );
+    
+    if (employee) {
+      Object.keys(update).forEach(key => {
+        if (key !== 'name' && key !== 'employeeId') {
+          employee[key] = update[key];
+        }
+      });
+      updateCount++;
+    }
+  });
+  
+  return updateCount;
+};
+
+/**
+ * Reset all employee statuses in a week
+ */
+const resetWeekStatuses = (week) => {
+  week.employees.forEach(emp => {
+    emp.dailyStatus = generateDefaultDailyStatus(week.startDate, week.endDate);
+  });
+  return week.employees.length;
 };
