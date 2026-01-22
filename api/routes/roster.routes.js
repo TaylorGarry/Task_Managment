@@ -6,7 +6,10 @@ import {
   updateRoster,
   exportRosterToExcel,
   getAllRosters,
-  exportSavedRoster
+  exportSavedRoster,
+  deleteEmployeeFromRoster,
+  deleteEmployeeByUserId,
+deleteEmployeeByName
 } from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 
@@ -27,4 +30,8 @@ router.get("/exportroster", authMiddleware, exportRosterToExcel);
 router.get("/rosterdetail", authMiddleware, getAllRosters);
 
 router.get("/export-saved", authMiddleware, exportSavedRoster);
+
+router.post('/delete-employee',authMiddleware, deleteEmployeeFromRoster); // By employeeId
+router.post('/delete-employee-by-userid', authMiddleware,deleteEmployeeByUserId); // By CRM userId
+router.post('/delete-employee-by-name', authMiddleware,deleteEmployeeByName);
 export default router;

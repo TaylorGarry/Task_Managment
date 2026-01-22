@@ -1,9 +1,9 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// const API_URL = "http://localhost:4000/api/v1/roster";
-//  const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/V1/roster`;
- const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/V1/roster`;
+const API_URL = "http://localhost:4000/api/v1/roster";
+//  const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/v1/roster`;
+//  const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -262,16 +262,114 @@ export const updateRosterEmployee = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` }
       });
 
+      // Invalidate cache
       cache.roster.data = null;
       cache.roster.timestamp = null;
+      cache.allRosters.data = null;
+      cache.allRosters.timestamp = null;
 
-      thunkAPI.dispatch(updateRosterDataLocally({
+      // Return data needed for immediate UI update
+      return {
+        ...res.data,
         month,
         year,
         weekNumber,
         employeeId,
         updates: sanitizedUpdates
-      }));
+      };
+      
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+); 
+
+export const deleteEmployeeFromRoster = createAsyncThunk(
+  "roster/deleteEmployeeFromRoster",
+  async ({ rosterId, weekNumber, employeeId }, thunkAPI) => {
+    try {
+      const token = getToken();
+      
+      const res = await axios.post(`${API_URL}/delete-employee`, 
+        { rosterId, weekNumber, employeeId },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        }
+      );
+
+      // Invalidate cache
+      cache.roster.data = null;
+      cache.roster.timestamp = null;
+      cache.allRosters.data = null;
+      cache.allRosters.timestamp = null;
+
+      // Return data with employeeId for UI update
+      return {
+        ...res.data,
+        employeeId, // Include employeeId in response
+        rosterId,
+        weekNumber
+      };
+      
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+export const deleteEmployeeByUserId = createAsyncThunk(
+  "roster/deleteEmployeeByUserId",
+  async ({ rosterId, weekNumber, userId }, thunkAPI) => {
+    try {
+      const token = getToken();
+      
+      const res = await axios.post(`${API_URL}/delete-employee-by-userid`, 
+        { rosterId, weekNumber, userId },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        }
+      );
+
+      // Invalidate cache
+      cache.roster.data = null;
+      cache.roster.timestamp = null;
+      cache.allRosters.data = null;
+      cache.allRosters.timestamp = null;
+
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+export const deleteEmployeeByName = createAsyncThunk(
+  "roster/deleteEmployeeByName",
+  async ({ rosterId, weekNumber, employeeName }, thunkAPI) => {
+    try {
+      const token = getToken();
+      
+      const res = await axios.post(`${API_URL}/delete-employee-by-name`, 
+        { rosterId, weekNumber, employeeName },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        }
+      );
+
+      // Invalidate cache
+      cache.roster.data = null;
+      cache.roster.timestamp = null;
+      cache.allRosters.data = null;
+      cache.allRosters.timestamp = null;
 
       return res.data;
     } catch (err) {
@@ -306,6 +404,9 @@ const rosterSlice = createSlice({
     savedExportSuccess: false,
     rosterDetailLoading: false,
     rosterDetailError: null,
+    deleteLoading: false, // Add this
+    deleteSuccess: false, 
+    deleteError: null,
     pagination: {
       currentPage: 1,
       totalPages: 1,
@@ -334,6 +435,12 @@ const rosterSlice = createSlice({
     clearError: (state) => {
       state.error = null;
       state.rosterDetailError = null;
+      state.deleteError = null;
+    },
+      clearDeleteState: (state) => { 
+      state.deleteLoading = false;
+      state.deleteSuccess = false;
+      state.deleteError = null;
     },
     updateRosterData: (state, action) => {
       state.allRosters = action.payload;
@@ -376,6 +483,33 @@ const rosterSlice = createSlice({
         }
       }
     },
+    removeEmployeeFromRosterLocally: (state, action) => {
+      const { rosterId, weekNumber, employeeId } = action.payload;
+      
+      if (state.roster && state.roster._id === rosterId) {
+        const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+        if (weekIndex !== -1) {
+          state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
+            emp => emp._id !== employeeId
+          );
+        }
+      }
+      if (state.allRosters?.data) {
+        const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
+        if (rosterIndex !== -1) {
+          const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
+            w => w.weekNumber === weekNumber
+          );
+          if (weekIndex !== -1) {
+            state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
+              state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
+                emp => emp._id !== employeeId
+              );
+          }
+        }
+      }
+    },
+ 
   },
   extraReducers: (builder) => {
     builder
@@ -438,6 +572,134 @@ const rosterSlice = createSlice({
         state.rosterDetailError = action.payload;
         state.allRosters = [];
       })
+      .addCase(deleteEmployeeFromRoster.pending, (state) => {
+      state.deleteLoading = true;
+      state.deleteSuccess = false;
+      state.deleteError = null;
+    })
+    .addCase(deleteEmployeeFromRoster.fulfilled, (state, action) => {
+      state.deleteLoading = false;
+      state.deleteSuccess = true;
+      state.deleteError = null;
+      
+      const { rosterId, weekNumber, employeeId } = action.payload || action.meta.arg;
+      
+      // Safely update main roster state
+      if (state.roster && state.roster.weeks) {
+        const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+        if (weekIndex !== -1) {
+          state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
+            emp => emp._id !== employeeId
+          );
+        }
+      }
+      
+      // Update allRosters state
+      if (state.allRosters?.data && Array.isArray(state.allRosters.data)) {
+        const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
+        if (rosterIndex !== -1 && state.allRosters.data[rosterIndex]?.weeks) {
+          const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
+            w => w.weekNumber === weekNumber
+          );
+          if (weekIndex !== -1 && state.allRosters.data[rosterIndex].weeks[weekIndex]?.employees) {
+            state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
+              state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
+                emp => emp._id !== employeeId
+              );
+          }
+        }
+      }
+    })
+    .addCase(deleteEmployeeFromRoster.rejected, (state, action) => {
+      state.deleteLoading = false;
+      state.deleteSuccess = false;
+      state.deleteError = action.payload;
+    }) 
+    .addCase(deleteEmployeeByUserId.pending, (state) => {
+      state.deleteLoading = true;
+      state.deleteSuccess = false;
+      state.deleteError = null;
+    })
+    .addCase(deleteEmployeeByUserId.fulfilled, (state, action) => {
+      state.deleteLoading = false;
+      state.deleteSuccess = true;
+      state.deleteError = null;
+      
+      const { rosterId, weekNumber, userId } = action.payload || action.meta.arg; 
+      if (state.roster && state.roster.weeks) {
+        const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+        if (weekIndex !== -1) {
+          state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
+            emp => !emp.userId || emp.userId.toString() !== userId
+          );
+        }
+      } 
+      if (state.allRosters?.data && Array.isArray(state.allRosters.data)) {
+        const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
+        if (rosterIndex !== -1 && state.allRosters.data[rosterIndex]?.weeks) {
+          const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
+            w => w.weekNumber === weekNumber
+          );
+          if (weekIndex !== -1 && state.allRosters.data[rosterIndex].weeks[weekIndex]?.employees) {
+            state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
+              state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
+                emp => !emp.userId || emp.userId.toString() !== userId
+              );
+          }
+        }
+      }
+    })
+    .addCase(deleteEmployeeByUserId.rejected, (state, action) => {
+      state.deleteLoading = false;
+      state.deleteSuccess = false;
+      state.deleteError = action.payload;
+    })
+    
+    
+    .addCase(deleteEmployeeByName.pending, (state) => {
+      state.deleteLoading = true;
+      state.deleteSuccess = false;
+      state.deleteError = null;
+    })
+    .addCase(deleteEmployeeByName.fulfilled, (state, action) => {
+      state.deleteLoading = false;
+      state.deleteSuccess = true;
+      state.deleteError = null;
+      
+      const { rosterId, weekNumber, employeeName } = action.payload || action.meta.arg;
+      
+       
+      if (state.roster && state.roster.weeks) {
+        const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+        if (weekIndex !== -1) {
+          state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
+            emp => !emp.name || emp.name.toLowerCase() !== employeeName.toLowerCase()
+          );
+        }
+      }
+      
+    
+      if (state.allRosters?.data && Array.isArray(state.allRosters.data)) {
+        const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
+        if (rosterIndex !== -1 && state.allRosters.data[rosterIndex]?.weeks) {
+          const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
+            w => w.weekNumber === weekNumber
+          );
+          if (weekIndex !== -1 && state.allRosters.data[rosterIndex].weeks[weekIndex]?.employees) {
+            state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
+              state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
+                emp => !emp.name || emp.name.toLowerCase() !== employeeName.toLowerCase()
+              );
+          }
+        }
+      }
+    })
+    .addCase(deleteEmployeeByName.rejected, (state, action) => {
+      state.deleteLoading = false;
+      state.deleteSuccess = false;
+      state.deleteError = action.payload;
+    })
+
       
       .addCase(updateRosterWeek.pending, (state) => {
         state.loading = true;
@@ -483,16 +745,57 @@ const rosterSlice = createSlice({
       })
       
       .addCase(updateRosterEmployee.pending, (state) => {
-        state.loading = true;
-        state.error = null;
-      })
-      .addCase(updateRosterEmployee.fulfilled, (state, action) => {
-        state.loading = false;
-      })
-      .addCase(updateRosterEmployee.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
-      });
+      state.loading = true;
+      state.error = null;
+    })
+    .addCase(updateRosterEmployee.fulfilled, (state, action) => {
+      state.loading = false;
+      
+      const { month, year, weekNumber, employeeId, updates, employee } = action.payload;
+      
+      if (state.roster && state.roster.month === month && state.roster.year === year) {
+        const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
+        if (weekIndex !== -1) {
+          const employeeIndex = state.roster.weeks[weekIndex].employees.findIndex(
+            emp => emp._id === employeeId
+          );
+          if (employeeIndex !== -1) {
+            state.roster.weeks[weekIndex].employees[employeeIndex] = {
+              ...state.roster.weeks[weekIndex].employees[employeeIndex],
+              ...updates
+            };
+          }
+        }
+      }
+      if (state.allRosters?.data) {
+        const rosterIndex = state.allRosters.data.findIndex(r => 
+          r.month === month && r.year === year
+        );
+        
+        if (rosterIndex !== -1) {
+          const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
+            w => w.weekNumber === weekNumber
+          );
+          
+          if (weekIndex !== -1) {
+            const employeeIndex = state.allRosters.data[rosterIndex].weeks[weekIndex].employees.findIndex(
+              e => e._id === employeeId
+            );
+            
+            if (employeeIndex !== -1) {
+              state.allRosters.data[rosterIndex].weeks[weekIndex].employees[employeeIndex] = {
+                ...state.allRosters.data[rosterIndex].weeks[weekIndex].employees[employeeIndex],
+                ...updates
+              };
+            }
+          }
+        }
+      }
+    })
+    .addCase(updateRosterEmployee.rejected, (state, action) => {
+      state.loading = false;
+      state.error = action.payload;
+    });
   },
 });
 
@@ -500,7 +803,10 @@ export const {
   clearExportState, 
   clearRosterDetailState, 
   clearError,
+  clearDeleteState,
   updateRosterData,
-  updateRosterDataLocally  
+  updateRosterDataLocally,
+  removeEmployeeFromRosterLocally 
+
 } = rosterSlice.actions;
 export default rosterSlice.reducer;

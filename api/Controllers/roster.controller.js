@@ -165,6 +165,258 @@ export const addRosterWeek = async (req, res) => {
   }
 };
 
+export const deleteEmployeeFromRoster = async (req, res) => {
+  try {
+    const { rosterId, weekNumber, employeeId } = req.body;
+    const user = req.user;
+
+    if (!rosterId || !weekNumber || !employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "rosterId, weekNumber, and employeeId are required",
+      });
+    }
+
+    // Find the roster by its _id
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "Roster not found"
+      });
+    }
+
+    // Permission check - only HR and SuperAdmin
+    if (!(user.accountType === "HR" || user.accountType === "superAdmin")) {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can delete employees from roster",
+      });
+    }
+
+    // Find the specific week
+    const week = roster.weeks.find(w => w.weekNumber === parseInt(weekNumber));
+    if (!week) {
+      return res.status(404).json({
+        success: false,
+        message: `Week ${weekNumber} not found in roster`
+      });
+    }
+
+    // Find the employee index
+    const employeeIndex = week.employees.findIndex(emp => 
+      emp._id.toString() === employeeId
+    );
+
+    if (employeeIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: `Employee with ID ${employeeId} not found in week ${weekNumber}`
+      });
+    }
+
+    // Get employee info before deletion
+    const deletedEmployee = week.employees[employeeIndex];
+
+    // Remove the employee from the array
+    week.employees.splice(employeeIndex, 1);
+
+    // Update roster metadata
+    roster.updatedBy = user._id;
+    roster.updatedAt = new Date();
+
+    // Save the roster
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Employee "${deletedEmployee.name}" deleted successfully`,
+      deletedEmployee: {
+        name: deletedEmployee.name,
+        employeeId: deletedEmployee._id,
+        userId: deletedEmployee.userId,
+        weekNumber: week.weekNumber
+      },
+      rosterInfo: {
+        rosterId: roster._id,
+        month: roster.month,
+        year: roster.year,
+        remainingEmployees: week.employees.length
+      },
+      updatedBy: user.username,
+      timestamp: roster.updatedAt
+    });
+
+  } catch (error) {
+    console.error("Delete employee error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error"
+    });
+  }
+};
+
+export const deleteEmployeeByUserId = async (req, res) => {
+  try {
+    const { rosterId, weekNumber, userId } = req.body;
+    const user = req.user;
+
+    if (!rosterId || !weekNumber || !userId) {
+      return res.status(400).json({
+        success: false,
+        message: "rosterId, weekNumber, and userId are required",
+      });
+    }
+
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "Roster not found"
+      });
+    }
+
+    // Permission check
+    if (!(user.accountType === "HR" || user.accountType === "superAdmin")) {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can delete employees from roster",
+      });
+    }
+
+    const week = roster.weeks.find(w => w.weekNumber === parseInt(weekNumber));
+    if (!week) {
+      return res.status(404).json({
+        success: false,
+        message: `Week ${weekNumber} not found in roster`
+      });
+    }
+
+    // Find employee by userId (CRM user)
+    const employeeIndex = week.employees.findIndex(emp =>
+      emp.userId && emp.userId.toString() === userId
+    );
+
+    if (employeeIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: `Employee with userId ${userId} not found in week ${weekNumber}`
+      });
+    }
+
+    const deletedEmployee = week.employees[employeeIndex];
+    week.employees.splice(employeeIndex, 1);
+
+    roster.updatedBy = user._id;
+    roster.updatedAt = new Date();
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `CRM User "${deletedEmployee.name}" deleted successfully`,
+      deletedEmployee: {
+        name: deletedEmployee.name,
+        userId: deletedEmployee.userId,
+        employeeId: deletedEmployee._id,
+        weekNumber: week.weekNumber
+      },
+      rosterInfo: {
+        rosterId: roster._id,
+        month: roster.month,
+        year: roster.year,
+        remainingEmployees: week.employees.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Delete employee by userId error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error"
+    });
+  }
+};
+
+export const deleteEmployeeByName = async (req, res) => {
+  try {
+    const { rosterId, weekNumber, employeeName } = req.body;
+    const user = req.user;
+
+    if (!rosterId || !weekNumber || !employeeName) {
+      return res.status(400).json({
+        success: false,
+        message: "rosterId, weekNumber, and employeeName are required",
+      });
+    }
+
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "Roster not found"
+      });
+    }
+
+    // Permission check
+    if (!(user.accountType === "HR" || user.accountType === "superAdmin")) {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can delete employees from roster",
+      });
+    }
+
+    const week = roster.weeks.find(w => w.weekNumber === parseInt(weekNumber));
+    if (!week) {
+      return res.status(404).json({
+        success: false,
+        message: `Week ${weekNumber} not found in roster`
+      });
+    }
+
+    // Find employee by name (case-insensitive)
+    const employeeIndex = week.employees.findIndex(emp =>
+      emp.name && emp.name.toLowerCase() === employeeName.toLowerCase()
+    );
+
+    if (employeeIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: `Employee "${employeeName}" not found in week ${weekNumber}`
+      });
+    }
+
+    const deletedEmployee = week.employees[employeeIndex];
+    week.employees.splice(employeeIndex, 1);
+
+    roster.updatedBy = user._id;
+    roster.updatedAt = new Date();
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Employee "${deletedEmployee.name}" deleted successfully`,
+      deletedEmployee: {
+        name: deletedEmployee.name,
+        userId: deletedEmployee.userId,
+        employeeId: deletedEmployee._id,
+        weekNumber: week.weekNumber
+      },
+      rosterInfo: {
+        rosterId: roster._id,
+        month: roster.month,
+        year: roster.year,
+        remainingEmployees: week.employees.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Delete employee by name error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error"
+    });
+  }
+};
 
 
 // export const addRosterWeek = async (req, res) => {
