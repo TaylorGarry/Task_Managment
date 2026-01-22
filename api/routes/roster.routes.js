@@ -9,14 +9,17 @@ import {
   exportSavedRoster,
   deleteEmployeeFromRoster,
   deleteEmployeeByUserId,
-deleteEmployeeByName
+  deleteEmployeeByName,
+  createRosterForDateRange,
+  copyEmployeesToWeek,
+  bulkUpdateWeeks
 } from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 
 const router = express.Router();
 
 // Add a new roster week
-router.post("/add-week", authMiddleware,validateRosterWeek, addRosterWeek);
+router.post("/add-week", authMiddleware, validateRosterWeek, addRosterWeek);
 
 // Get roster details (for existing CRM users only)
 router.get("/getroster", authMiddleware, getRosterForCRMUsers);
@@ -31,7 +34,15 @@ router.get("/rosterdetail", authMiddleware, getAllRosters);
 
 router.get("/export-saved", authMiddleware, exportSavedRoster);
 
-router.post('/delete-employee',authMiddleware, deleteEmployeeFromRoster); // By employeeId
-router.post('/delete-employee-by-userid', authMiddleware,deleteEmployeeByUserId); // By CRM userId
-router.post('/delete-employee-by-name', authMiddleware,deleteEmployeeByName);
+router.post('/delete-employee', authMiddleware, deleteEmployeeFromRoster); // By employeeId
+router.post('/delete-employee-by-userid', authMiddleware, deleteEmployeeByUserId); // By CRM userId
+router.post('/delete-employee-by-name', authMiddleware, deleteEmployeeByName);
+
+router.post("/create-range", authMiddleware, createRosterForDateRange);
+
+// 2. Copy employees from one week to another week(s)
+router.post("/copy-employees", authMiddleware, copyEmployeesToWeek);
+
+// 3. Bulk update multiple weeks at once
+router.post("/bulk-update", authMiddleware, bulkUpdateWeeks);
 export default router;
