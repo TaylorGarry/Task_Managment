@@ -9,6 +9,9 @@ import {
   updateRosterEmployee,
   exportRosterExcel,
   exportSavedRoster,
+  deleteEmployeeFromRoster,
+  deleteEmployeeByUserId,
+  deleteEmployeeByName
 } from "../features/slices/rosterSlice";
 
 // const RosterForm = () => {
@@ -1142,11 +1145,6 @@ import {
 
 // export default RosterForm;
 
-
-
-
-
-
 const RosterForm = () => {
   const dispatch = useDispatch();
   const {
@@ -1156,7 +1154,10 @@ const RosterForm = () => {
     allRosters,
     rosterDetailLoading,
     savedExportLoading,
-    savedExportSuccess
+    savedExportSuccess,
+    deleteLoading,      // Added
+    deleteSuccess,      // Added
+    deleteError         // Added
   } = useSelector((state) => state.roster || {});
 
   const [employeeInput, setEmployeeInput] = useState({
@@ -1186,6 +1187,10 @@ const RosterForm = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editSavedEmployee, setEditSavedEmployee] = useState(null);
 
+  // ADDED: State for delete confirmation
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [employeeToDelete, setEmployeeToDelete] = useState(null);
+
   // ADDED: State for roster dates
   const [rosterDates, setRosterDates] = useState({
     startDate: new Date().toISOString().slice(0, 10),
@@ -1212,6 +1217,25 @@ const RosterForm = () => {
       return () => container.removeEventListener("scroll", handleScroll);
     }
   }, []);
+
+  // ADDED: Clear delete state when component unmounts
+  useEffect(() => {
+    return () => {
+      if (deleteSuccess || deleteError) {
+        dispatch(clearDeleteState());
+      }
+    };
+  }, [dispatch, deleteSuccess, deleteError]);
+
+  // ADDED: Show success/error notifications for delete
+  useEffect(() => {
+    if (deleteSuccess) {
+      toast.success("Employee deleted successfully");
+    }
+    if (deleteError) {
+      toast.error(deleteError);
+    }
+  }, [deleteSuccess, deleteError]);
 
   const handleExportSavedRoster = async () => {
     try {
@@ -1645,8 +1669,56 @@ const RosterForm = () => {
     }
   };
 
-  const handleRemoveSaved = async (empId, weekNum) => {
-    toast.success("Remove from saved roster is not implemented here");
+  // ADDED: Handle delete button click
+  const handleDeleteSaved = (emp, rosterWeek) => {
+    setEmployeeToDelete({
+      employeeId: emp._id,
+      name: emp.name,
+      userId: emp.userId,
+      weekNumber: rosterWeek.weekNumber,
+      rosterId: allRosters[0]?._id
+    });
+    setShowDeleteModal(true);
+  };
+
+  // ADDED: Confirm and execute deletion
+  const confirmDeleteEmployee = async () => {
+    if (!employeeToDelete || !employeeToDelete.rosterId || !employeeToDelete.weekNumber) {
+      toast.error("Missing delete information");
+      return;
+    }
+
+    try {
+      let deletePromise;
+      
+      if (employeeToDelete.userId) {
+        // Delete by userId (CRM user)
+        deletePromise = dispatch(deleteEmployeeByUserId({
+          rosterId: employeeToDelete.rosterId,
+          weekNumber: employeeToDelete.weekNumber,
+          userId: employeeToDelete.userId
+        }));
+      } else {
+        // Delete by employeeId (non-CRM user or fallback)
+        deletePromise = dispatch(deleteEmployeeFromRoster({
+          rosterId: employeeToDelete.rosterId,
+          weekNumber: employeeToDelete.weekNumber,
+          employeeId: employeeToDelete.employeeId
+        }));
+      }
+
+      await deletePromise.unwrap();
+      
+      // Refresh the saved roster data
+      await dispatch(fetchAllRosters({})).unwrap();
+      
+      // Close modal
+      setShowDeleteModal(false);
+      setEmployeeToDelete(null);
+      
+    } catch (err) {
+      toast.error(err.message || "Failed to delete employee");
+    }
   };
 
   const renderSavedRosterTable = () => {
@@ -1776,7 +1848,26 @@ const RosterForm = () => {
                       </td>
                       <td className="border p-3">
                         <div className="flex space-x-2">
-                          <button onClick={() => handleEditSaved(emp, rosterWeek)} className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm cursor-pointer">Edit</button>
+                          <button 
+                            onClick={() => handleEditSaved(emp, rosterWeek)} 
+                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm cursor-pointer"
+                          >
+                            Edit
+                          </button>
+                          <button 
+                            onClick={() => handleDeleteSaved(emp, rosterWeek)} 
+                            disabled={deleteLoading && employeeToDelete?.employeeId === emp._id}
+                            className={`bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm cursor-pointer ${
+                              deleteLoading && employeeToDelete?.employeeId === emp._id 
+                                ? 'opacity-50 cursor-not-allowed' 
+                                : ''
+                            }`}
+                          >
+                            {deleteLoading && employeeToDelete?.employeeId === emp._id 
+                              ? 'Deleting...' 
+                              : 'Delete'
+                            }
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -2336,17 +2427,108 @@ const RosterForm = () => {
               <button onClick={() => { setShowEditModal(false); setEditSavedEmployee(null); }} className="text-gray-600 hover:text-gray-900">✕</button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <input type="text" name="name" value={editSavedEmployee.name} onChange={handleEditSavedChange} placeholder="Name" className="border p-3 rounded text-gray-800" />
-              <select name="transport" value={editSavedEmployee.transport} onChange={handleEditSavedChange} className="border p-3 rounded text-gray-800">
-                <option value="">Transport?</option>
-                <option value="Yes">Yes</option>
-                <option value="No">No</option>
-              </select>
-              <input type="text" name="cabRoute" value={editSavedEmployee.cabRoute} onChange={handleEditSavedChange} placeholder="CAB Route" className="border p-3 rounded text-gray-800" />
-              <input type="number" name="shiftStartHour" value={editSavedEmployee.shiftStartHour} onChange={handleEditSavedChange} placeholder="Start Hour (0-23)" min="0" max="23" className="border p-3 rounded text-gray-800" />
-              <input type="number" name="shiftEndHour" value={editSavedEmployee.shiftEndHour} onChange={handleEditSavedChange} placeholder="End Hour (0-23)" min="0" max="23" className="border p-3 rounded text-gray-800" />
-            </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+
+  {/* Name */}
+  <div className="relative">
+    <input
+      type="text"
+      name="name"
+      value={editSavedEmployee.name}
+      onChange={handleEditSavedChange}
+      className="peer w-full border border-gray-300 rounded p-3 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
+      // placeholder="Name"
+    />
+    <label className="absolute left-3 top-3 text-gray-500 bg-white px-1 transition-all 
+      peer-placeholder-shown:top-3.5 
+      peer-placeholder-shown:text-base 
+      peer-focus:-top-2 
+      peer-focus:text-sm 
+      peer-focus:text-blue-500">
+      Name
+    </label>
+  </div>
+
+  {/* Transport */}
+  <div className="relative">
+    <select
+      name="transport"
+      value={editSavedEmployee.transport}
+      onChange={handleEditSavedChange}
+      className="peer w-full border border-gray-300 rounded p-3 text-gray-800 focus:outline-none focus:border-blue-500"
+    >
+      <option value="" disabled></option>
+      <option value="Yes">Yes</option>
+      <option value="No">No</option>
+    </select>
+    <label className="absolute left-3 -top-2 text-sm text-gray-500 bg-white px-1">
+      Transport
+    </label>
+  </div>
+
+  {/* Cab Route */}
+  <div className="relative">
+    <input
+      type="text"
+      name="cabRoute"
+      value={editSavedEmployee.cabRoute}
+      onChange={handleEditSavedChange}
+      className="peer w-full border border-gray-300 rounded p-3 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
+      // placeholder="Cab Route"
+    />
+    <label className="absolute left-3 top-3 text-gray-500 bg-white px-1 transition-all
+      peer-placeholder-shown:top-3.5
+      peer-focus:-top-2
+      peer-focus:text-sm
+      peer-focus:text-blue-500">
+      CAB Route
+    </label>
+  </div>
+
+  {/* Shift Start */}
+  <div className="relative">
+    <input
+      type="number"
+      name="shiftStartHour"
+      value={editSavedEmployee.shiftStartHour}
+      onChange={handleEditSavedChange}
+      min="0"
+      max="23"
+      className="peer w-full border border-gray-300 rounded p-3 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
+      placeholder="Start Hour"
+    />
+    <label className="absolute left-3 top-3 text-gray-500 bg-white px-1 transition-all
+      peer-placeholder-shown:top-3.5
+      peer-focus:-top-2
+      peer-focus:text-sm
+      peer-focus:text-blue-500">
+      Start Hour (0–23)
+    </label>
+  </div>
+
+  {/* Shift End */}
+  <div className="relative">
+    <input
+      type="number"
+      name="shiftEndHour"
+      value={editSavedEmployee.shiftEndHour}
+      onChange={handleEditSavedChange}
+      min="0"
+      max="23"
+      className="peer w-full border border-gray-300 rounded p-3 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
+      placeholder="End Hour"
+    />
+    <label className="absolute left-3 top-3 text-gray-500 bg-white px-1 transition-all
+      peer-placeholder-shown:top-3.5
+      peer-focus:-top-2
+      peer-focus:text-sm
+      peer-focus:text-blue-500">
+      End Hour (0–23)
+    </label>
+  </div>
+
+</div>
+
 
             <div className="mt-6">
               <h3 className="font-semibold mb-3 text-gray-800">Daily Status</h3>
@@ -2372,6 +2554,97 @@ const RosterForm = () => {
             <div className="mt-6 flex justify-end space-x-3">
               <button onClick={() => { setShowEditModal(false); setEditSavedEmployee(null); }} className="px-4 py-2 rounded border">Cancel</button>
               <button onClick={handleSaveEditedSaved} className="px-4 py-2 rounded bg-green-500 text-white">Save Changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADDED: Delete Confirmation Modal */}
+      {showDeleteModal && employeeToDelete && (
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black bg-opacity-50">
+          <div className="bg-white rounded-2xl p-6 shadow-xl w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-xl font-semibold text-gray-800">Delete Employee</h2>
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setEmployeeToDelete(null);
+                }}
+                className="text-gray-600 hover:text-gray-900"
+                disabled={deleteLoading}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <div className="flex items-center mb-2">
+                  <svg className="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.771-.833-2.542 0L5.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <h3 className="font-medium text-red-800">Warning</h3>
+                </div>
+                <p className="text-sm text-red-700">
+                  Are you sure you want to delete <span className="font-semibold">{employeeToDelete.name}</span> from the roster?
+                  This action cannot be undone.
+                </p>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+                <p className="text-sm text-gray-700">
+                  <strong>Employee Details:</strong>
+                </p>
+                <ul className="text-sm text-gray-600 mt-1 space-y-1">
+                  <li>• Name: {employeeToDelete.name}</li>
+                  <li>• Week: {employeeToDelete.weekNumber}</li>
+                  <li>• Type: {employeeToDelete.userId ? 'CRM User' : 'Non-CRM User'}</li>
+                  {employeeToDelete.userId && (
+                    <li>• User ID: {employeeToDelete.userId.substring(0, 8)}...</li>
+                  )}
+                </ul>
+              </div>
+
+              {deleteError && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                  <p className="text-sm text-yellow-700">{deleteError}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="mt-6 flex justify-end space-x-3">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setEmployeeToDelete(null);
+                }}
+                className="px-4 py-2 rounded border hover:bg-gray-50"
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDeleteEmployee}
+                disabled={deleteLoading}
+                className={`px-4 py-2 rounded font-medium ${deleteLoading ? 'bg-red-400' : 'bg-red-500 hover:bg-red-600'} text-white flex items-center`}
+              >
+                {deleteLoading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Delete Employee
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>
