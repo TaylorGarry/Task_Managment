@@ -12,7 +12,9 @@ import {
   deleteEmployeeByName,
   createRosterForDateRange,
   copyEmployeesToWeek,
-  bulkUpdateWeeks
+  bulkUpdateWeeks,
+  getRosterForBulkEdit,
+  bulkUpdateRosterWeeks,
 } from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 
@@ -45,4 +47,9 @@ router.post("/copy-employees", authMiddleware, copyEmployeesToWeek);
 
 // 3. Bulk update multiple weeks at once
 router.post("/bulk-update", authMiddleware, bulkUpdateWeeks);
+
+router.get("/bulk-edit/:rosterId", authMiddleware, getRosterForBulkEdit);
+
+// 2. Save all changes across multiple weeks at once
+router.put("/bulk-save/:rosterId", authMiddleware, bulkUpdateRosterWeeks);
 export default router;

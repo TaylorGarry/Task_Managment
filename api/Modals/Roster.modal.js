@@ -69,7 +69,6 @@ const rosterEmployeeSchema = new mongoose.Schema({
   transport: { type: String, enum: ["Yes", "No", ""], default: "" },
   cabRoute: { type: String, default: "" },
 
-  // Shift timings are now required for all users
   shiftStartHour: { type: Number, required: true },
   shiftEndHour: { type: Number, required: true },
 
@@ -88,9 +87,8 @@ const rosterSchema = new mongoose.Schema(
     month: { type: Number, required: true },  
     year: { type: Number, required: true },
     
-    // ADD THESE FIELDS:
-    rosterStartDate: { type: Date, required: true }, // User-provided start date
-    rosterEndDate: { type: Date, required: true },   // User-provided end date
+    rosterStartDate: { type: Date, required: true },  
+    rosterEndDate: { type: Date, required: true },    
     
     weeks: [rosterWeekSchema],
     
