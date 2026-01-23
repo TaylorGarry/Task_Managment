@@ -57,7 +57,7 @@ const dailyStatusSchema = new mongoose.Schema({
   date: { type: Date, required: true },
   status: { 
     type: String, 
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H","", null], 
+    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H","LWD", "", null], 
     default: "P" 
   }
 });
@@ -73,6 +73,10 @@ const rosterEmployeeSchema = new mongoose.Schema({
   shiftEndHour: { type: Number, required: true },
 
   dailyStatus: [dailyStatusSchema],
+  teamLeader: {
+    type: String,
+    default: ""
+  }
 });
 
 const rosterWeekSchema = new mongoose.Schema({

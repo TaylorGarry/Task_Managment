@@ -12,8 +12,8 @@ export const addRosterWeek = async (req, res) => {
       endDate, 
       employees, 
       action = "create",
-      rosterStartDate, // Overall roster start date
-      rosterEndDate    // Overall roster end date
+      rosterStartDate, 
+      rosterEndDate     
     } = req.body;
     
     const createdBy = req.user._id;  
@@ -25,7 +25,6 @@ export const addRosterWeek = async (req, res) => {
       });
     }
 
-    // Validate overall roster dates
     if (!rosterStartDate || !rosterEndDate) {
       return res.status(400).json({ 
         success: false,
@@ -75,15 +74,14 @@ export const addRosterWeek = async (req, res) => {
           shiftStartHour,
           shiftEndHour,
           dailyStatus,
+          teamLeader: emp.teamLeader || ""
         };
-
         return employeeData;
       })
     );
 
     let roster = await Roster.findOne({ month, year });
     if (!roster) {
-      // Create new roster with dates
       roster = new Roster({
         month,
         year,
@@ -93,36 +91,28 @@ export const addRosterWeek = async (req, res) => {
         createdBy,
       });
     } else {
-      // FIX: Update roster dates for existing roster too
       roster.rosterStartDate = new Date(rosterStartDate);
       roster.rosterEndDate = new Date(rosterEndDate);
-      roster.updatedBy = createdBy; // Also update updatedBy here
+      roster.updatedBy = createdBy;  
     }
-
     const existingWeekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-    
     if (existingWeekIndex !== -1) {
       if (action === "add") {
         const existingEmployees = roster.weeks[existingWeekIndex].employees;
-        
         const existingEmployeeNames = existingEmployees.map(emp => emp.name);
-        
         const newEmployees = processedEmployees.filter(newEmp => 
           !existingEmployeeNames.includes(newEmp.name)
         );
-        
         if (newEmployees.length === 0) {
           return res.status(400).json({ 
             success: false,
             message: "All employees already exist in this roster week" 
           });
         }
-        
         roster.weeks[existingWeekIndex].employees = [
           ...existingEmployees,
           ...newEmployees
         ];
-        
         console.log(`Added ${newEmployees.length} new employees to existing week`);
       } else {
         roster.weeks[existingWeekIndex] = {
@@ -142,14 +132,10 @@ export const addRosterWeek = async (req, res) => {
       });
       console.log("Created new week");
     }
-
-    // Only set updatedBy here if not already set above
     if (!roster.updatedBy) {
       roster.updatedBy = createdBy;
     }
-    
     await roster.save();
-    
     console.log("Roster saved successfully");
     return res.status(201).json({ 
       success: true,
@@ -659,7 +645,7 @@ export const updateRoster = async (req, res) => {
       });
     }
 
-    // Rest of your existing validation logic...
+    // Update allowed fields to include teamLeader
     const allowedFields = [
       "name",
       "userId",
@@ -668,6 +654,7 @@ export const updateRoster = async (req, res) => {
       "shiftStartHour",
       "shiftEndHour",
       "dailyStatus",
+      "teamLeader" // ADDED: Allow teamLeader field to be updated
     ];
 
     if (updates.shiftStartHour !== undefined || updates.shiftEndHour !== undefined) {
@@ -712,14 +699,21 @@ export const updateRoster = async (req, res) => {
       }
     }
     
+    // Apply updates to allowed fields
     Object.keys(updates).forEach((field) => {
       if (allowedFields.includes(field)) {
         if (field !== "shiftStartHour" && field !== "shiftEndHour") {
-          employee[field] = updates[field];
+          // Handle teamLeader field specifically (allow empty string)
+          if (field === "teamLeader") {
+            employee[field] = updates[field] || "";
+          } else {
+            employee[field] = updates[field];
+          }
         }
       }
     });
     
+    // Update shift hours
     employee.shiftStartHour = shiftStartHour;
     employee.shiftEndHour = shiftEndHour;
     
@@ -730,6 +724,7 @@ export const updateRoster = async (req, res) => {
       });
     }
     
+    // Mark roster as updated
     roster.updatedBy = user._id;
     await roster.save();
     
@@ -1614,8 +1609,8 @@ export const exportSavedRoster = async (req, res) => {
       return `${formattedDate} ${day}`;
     };
 
-    // Define all status types
-    const STATUS_TYPES = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H"];
+    // Define all status types - ADDED LWD
+    const STATUS_TYPES = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD"];
     const STATUS_NAMES = {
       "P": "Present",
       "WO": "Week Off", 
@@ -1624,7 +1619,8 @@ export const exportSavedRoster = async (req, res) => {
       "UL": "Unpaid Leave",
       "LWP": "Leave Without Pay",
       "BL": "Bereavement Leave",
-      "H": "Holiday"
+      "H": "Holiday",
+      "LWD": "Last Working Day" // ADDED LWD
     };
 
     roster.weeks.forEach((week) => {
@@ -1634,8 +1630,8 @@ export const exportSavedRoster = async (req, res) => {
 
       const data = [];
       
-      // Header row
-      const header = ["Name", "Transport", "CAB Route", "Shift Start Hour", "Shift End Hour"];
+      // Header row - ADDED "Team Leader" after "CAB Route"
+      const header = ["Name", "Transport", "CAB Route", "Team Leader", "Shift Start Hour", "Shift End Hour"];
       
       const dayCount = sortedEmployees[0]?.dailyStatus?.length || 0;
       for (let i = 0; i < dayCount; i++) {
@@ -1657,6 +1653,7 @@ export const exportSavedRoster = async (req, res) => {
           emp.name || "", 
           emp.transport || "", 
           emp.cabRoute || "", 
+          emp.teamLeader || "", // ADDED: Team Leader field
           emp.shiftStartHour !== undefined ? emp.shiftStartHour : "", 
           emp.shiftEndHour !== undefined ? emp.shiftEndHour : ""
         ];
@@ -1695,7 +1692,7 @@ export const exportSavedRoster = async (req, res) => {
 
       // Add summary row if there are employees
       if (sortedEmployees.length > 0) {
-        const summaryRow = ["", "", "", "", "Week Summary"];
+        const summaryRow = ["", "", "", "", "", "Week Summary"];
         
         // Empty cells for days
         for (let i = 0; i < dayCount; i++) {
@@ -1767,7 +1764,8 @@ export const exportSavedRoster = async (req, res) => {
           const isEmployeeRow = !isSummaryRow;
           
           if (isEmployeeRow) {
-            if (C >= 5 && C < range.e.c - STATUS_TYPES.length) {  // Daily status cells
+            // UPDATED: Changed from 5 to 6 because we added Team Leader column
+            if (C >= 6 && C < range.e.c - STATUS_TYPES.length) {  // Daily status cells
               const status = worksheet[cellAddress].v;
               // Apply color coding based on status
               switch(status) {
@@ -1795,6 +1793,9 @@ export const exportSavedRoster = async (req, res) => {
                 case "H":
                   cellStyle.fill = { fgColor: { rgb: "B4C6E7" } };  // Light blue
                   break;
+                case "LWD": // ADDED LWD color coding
+                  cellStyle.fill = { fgColor: { rgb: "E6B8B7" } };  // Light red/pink
+                  break;
                 default:
                   cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  // White
               }
@@ -1815,11 +1816,12 @@ export const exportSavedRoster = async (req, res) => {
         }
       }
 
-      // Set column widths
+      // Set column widths - UPDATED: Added Team Leader column
       worksheet['!cols'] = [
         { wch: 20 },  // Name
         { wch: 15 },  // Transport
         { wch: 15 },  // CAB Route
+        { wch: 15 },  // Team Leader
         { wch: 15 },  // Shift Start Hour
         { wch: 15 },  // Shift End Hour
         ...Array(dayCount).fill({ wch: 12 }),  // Daily status columns
@@ -2526,6 +2528,7 @@ export const getRosterForBulkEdit = async (req, res) => {
           name: emp.name,
           transport: emp.transport,
           cabRoute: emp.cabRoute,
+          teamLeader: emp.teamLeader || "",
           shiftStartHour: emp.shiftStartHour,
           shiftEndHour: emp.shiftEndHour,
           dailyStatus: emp.dailyStatus.map(status => ({
@@ -2655,6 +2658,7 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
             name: newEmp.name,
             transport: newEmp.transport || "",
             cabRoute: newEmp.cabRoute || "",
+            teamLeader: newEmp.teamLeader || "",
             shiftStartHour: shiftStartHour,
             shiftEndHour: shiftEndHour,
             // Daily status will be generated per week
@@ -2745,13 +2749,14 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
                 throw new Error(`Employee ${emp.name} not found in week ${weekNumber}`);
               }
 
-              // Create updated employee object
+              // Create updated employee object WITH TEAMLEADER
               const employeeData = {
                 _id: existingEmployee._id,
                 userId: emp.userId || existingEmployee.userId,
                 name: emp.name || existingEmployee.name,
                 transport: emp.transport !== undefined ? emp.transport : existingEmployee.transport,
                 cabRoute: emp.cabRoute !== undefined ? emp.cabRoute : existingEmployee.cabRoute,
+                teamLeader: emp.teamLeader !== undefined ? emp.teamLeader : (existingEmployee.teamLeader || ""), // ADDED TEAMLEADER
                 shiftStartHour: emp.shiftStartHour !== undefined ? parseInt(emp.shiftStartHour) : existingEmployee.shiftStartHour,
                 shiftEndHour: emp.shiftEndHour !== undefined ? parseInt(emp.shiftEndHour) : existingEmployee.shiftEndHour,
                 dailyStatus: emp.dailyStatus && Array.isArray(emp.dailyStatus) 
@@ -2798,6 +2803,7 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
                 name: newEmp.name,
                 transport: newEmp.transport,
                 cabRoute: newEmp.cabRoute,
+                teamLeader: newEmp.teamLeader || "", // ADDED TEAMLEADER
                 shiftStartHour: newEmp.shiftStartHour,
                 shiftEndHour: newEmp.shiftEndHour,
                 dailyStatus: dailyStatus
