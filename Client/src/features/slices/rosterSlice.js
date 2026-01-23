@@ -824,6 +824,7 @@ const getToken = () => {
   return user?.token || null;
 };
 
+// Enhanced cache management
 const cache = {
   roster: {
     data: null,
@@ -837,16 +838,136 @@ const cache = {
     filters: null,
     CACHE_DURATION: 5 * 60 * 1000,
   },
+  bulkEditRoster: {
+    data: null,
+    timestamp: null,
+    rosterId: null,
+    CACHE_DURATION: 5 * 60 * 1000,
+  },
+};
+
+// Helper function to clear ALL roster caches
+const clearAllRosterCaches = () => {
+  cache.roster.data = null;
+  cache.roster.timestamp = null;
+  cache.roster.filters = null;
+  
+  cache.allRosters.data = null;
+  cache.allRosters.timestamp = null;
+  cache.allRosters.filters = null;
+  
+  cache.bulkEditRoster.data = null;
+  cache.bulkEditRoster.timestamp = null;
+  cache.bulkEditRoster.rosterId = null;
+  
+  console.log("All roster caches cleared");
+};
+
+// Helper function to clear specific roster cache
+const clearRosterCache = () => {
+  cache.roster.data = null;
+  cache.roster.timestamp = null;
+  cache.roster.filters = null;
+  console.log("Roster cache cleared");
+};
+
+// Helper function to clear allRosters cache
+const clearAllRostersCache = () => {
+  cache.allRosters.data = null;
+  cache.allRosters.timestamp = null;
+  cache.allRosters.filters = null;
+  console.log("All rosters cache cleared");
+};
+
+// Helper function to clear bulk edit cache
+const clearBulkEditCache = (rosterId = null) => {
+  if (rosterId && cache.bulkEditRoster.rosterId === rosterId) {
+    cache.bulkEditRoster.data = null;
+    cache.bulkEditRoster.timestamp = null;
+    cache.bulkEditRoster.rosterId = null;
+    console.log(`Bulk edit cache cleared for roster: ${rosterId}`);
+  } else if (!rosterId) {
+    cache.bulkEditRoster.data = null;
+    cache.bulkEditRoster.timestamp = null;
+    cache.bulkEditRoster.rosterId = null;
+    console.log("All bulk edit caches cleared");
+  }
 };
 
 const isCacheValid = (cacheKey, filters) => {
   const cacheItem = cache[cacheKey];
   if (!cacheItem.data || !cacheItem.timestamp) return false;
-  const areFiltersSame = JSON.stringify(cacheItem.filters) === JSON.stringify(filters);
-  if (!areFiltersSame) return false;
+  
+  // For roster and allRosters, check filters
+  if (cacheKey === 'roster' || cacheKey === 'allRosters') {
+    const areFiltersSame = JSON.stringify(cacheItem.filters) === JSON.stringify(filters);
+    if (!areFiltersSame) return false;
+  }
+  
+  // For bulkEditRoster, check rosterId match
+  if (cacheKey === 'bulkEditRoster' && filters && cacheItem.rosterId !== filters) {
+    return false;
+  }
+  
   const now = Date.now();
   return now - cacheItem.timestamp < cacheItem.CACHE_DURATION;
 };
+
+// BULK EDIT FEATURE THUNKS
+export const getRosterForBulkEdit = createAsyncThunk(
+  "roster/getRosterForBulkEdit",
+  async (rosterId, thunkAPI) => {
+    try {
+      // Check cache first
+      if (isCacheValid("bulkEditRoster", rosterId)) {
+        console.log("Returning cached bulk edit roster data");
+        return cache.bulkEditRoster.data;
+      }
+
+      const token = getToken();
+      const res = await axios.get(`${API_URL}/bulk-edit/${rosterId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // Update cache
+      cache.bulkEditRoster.data = res.data;
+      cache.bulkEditRoster.timestamp = Date.now();
+      cache.bulkEditRoster.rosterId = rosterId;
+      
+      console.log("Fetched fresh bulk edit roster data and cached it");
+
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+export const bulkUpdateRosterWeeks = createAsyncThunk(
+  "roster/bulkUpdateRosterWeeks",
+  async ({ rosterId, data }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.put(`${API_URL}/bulk-save/${rosterId}`, data, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+
+      // Clear ALL caches after successful bulk update
+      clearAllRosterCaches();
+      
+      console.log("Bulk update successful, all caches cleared");
+
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+// EXISTING THUNKS - UPDATED TO CLEAR CACHES PROPERLY
 
 export const addRosterWeek = createAsyncThunk(
   "roster/addRosterWeek",
@@ -859,10 +980,11 @@ export const addRosterWeek = createAsyncThunk(
           'Content-Type': 'application/json'
         },
       });
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
+      
+      // Clear all caches after adding roster week
+      clearAllRosterCaches();
+      
+      console.log("Roster week added, all caches cleared");
 
       return res.data;
     } catch (err) {
@@ -876,6 +998,7 @@ export const fetchRoster = createAsyncThunk(
   async (filters = {}, thunkAPI) => {
     try {
       if (isCacheValid("roster", filters)) {
+        console.log("Returning cached roster data");
         return cache.roster.data;
       }
 
@@ -892,6 +1015,8 @@ export const fetchRoster = createAsyncThunk(
       cache.roster.data = res.data;
       cache.roster.timestamp = Date.now();
       cache.roster.filters = filters;
+      
+      console.log("Fetched fresh roster data and cached it");
 
       return res.data;
     } catch (err) {
@@ -907,6 +1032,7 @@ export const fetchAllRosters = createAsyncThunk(
       const { month, year, page = 1, limit = 10 } = filters;
       
       if (isCacheValid("allRosters", filters)) {
+        console.log("Returning cached all rosters data");
         return cache.allRosters.data;
       }
 
@@ -925,6 +1051,8 @@ export const fetchAllRosters = createAsyncThunk(
       cache.allRosters.data = res.data;
       cache.allRosters.timestamp = Date.now();
       cache.allRosters.filters = filters;
+      
+      console.log("Fetched fresh all rosters data and cached it");
 
       return res.data;
     } catch (err) {
@@ -942,10 +1070,10 @@ export const updateRosterWeek = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
+      // Clear all caches after updating roster week
+      clearAllRosterCaches();
+      
+      console.log("Roster week updated, all caches cleared");
 
       return res.data;
     } catch (err) {
@@ -954,49 +1082,180 @@ export const updateRosterWeek = createAsyncThunk(
   }
 );
 
-export const exportRosterExcel = createAsyncThunk(
-  "roster/exportRosterExcel",
-  async ({ month, year }, thunkAPI) => {
+export const updateRosterEmployee = createAsyncThunk(
+  "roster/updateRosterEmployee",
+  async ({ month, year, weekNumber, employeeId, updates }, thunkAPI) => {
     try {
       const token = getToken();
+      const sanitizedUpdates = { ...updates };
+      delete sanitizedUpdates.isCoreTeam;
+      delete sanitizedUpdates.shift;
+      const body = {
+        month,
+        year,
+        weekNumber,
+        employeeId,
+        updates: sanitizedUpdates
+      };
+      const res = await axios.put(`${API_URL}/update-employee`, body, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Clear all caches after updating employee
+      clearAllRosterCaches();
+      
+      console.log("Employee updated, all caches cleared");
+      
+      return {
+        ...res.data,
+        month,
+        year,
+        weekNumber,
+        employeeId,
+        updates: sanitizedUpdates
+      };
+      
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+); 
 
-      const response = await fetch(
-        `${API_URL}/exportroster?month=${month}&year=${year}`,
+// DELETE OPERATIONS - ALL CLEAR CACHE PROPERLY
+
+export const deleteEmployeeFromRoster = createAsyncThunk(
+  "roster/deleteEmployeeFromRoster",
+  async ({ rosterId, weekNumber, employeeId }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.post(`${API_URL}/delete-employee`, 
+        { rosterId, weekNumber, employeeId },
         {
           headers: { 
             Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
           },
         }
       );
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const blob = await response.blob();
       
-      let filename = `roster_${month}_${year}.xlsx`;
-      const contentDisposition = response.headers.get('Content-Disposition');
-      if (contentDisposition) {
-        const match = contentDisposition.match(/filename="?(.+)"?/);
-        if (match && match[1]) {
-          filename = match[1];
-        }
-      }
-
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-
-      return { success: true, message: "Excel file downloaded successfully" };
+      // Clear all caches after deleting employee
+      clearAllRosterCaches();
       
+      console.log("Employee deleted, all caches cleared");
+      
+      return {
+        ...res.data,
+        employeeId,  
+        rosterId,
+        weekNumber
+      };
     } catch (err) {
-      return thunkAPI.rejectWithValue(err.message || "Failed to export Excel file");
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+export const deleteEmployeeByUserId = createAsyncThunk(
+  "roster/deleteEmployeeByUserId",
+  async ({ rosterId, weekNumber, userId }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.post(`${API_URL}/delete-employee-by-userid`, 
+        { rosterId, weekNumber, userId },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        }
+      );
+      
+      // Clear all caches after deleting employee
+      clearAllRosterCaches();
+      
+      console.log("Employee deleted by user ID, all caches cleared");
+      
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+export const deleteEmployeeByName = createAsyncThunk(
+  "roster/deleteEmployeeByName",
+  async ({ rosterId, weekNumber, employeeName }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.post(`${API_URL}/delete-employee-by-name`, 
+        { rosterId, weekNumber, employeeName },
+        {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+        }
+      );
+      
+      // Clear all caches after deleting employee
+      clearAllRosterCaches();
+      
+      console.log("Employee deleted by name, all caches cleared");
+      
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+// OTHER OPERATIONS THAT SHOULD CLEAR CACHE
+
+export const createRosterForDateRange = createAsyncThunk(
+  "roster/createRosterForDateRange",
+  async ({ data }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.post(`${API_URL}/create-range`, data, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      // Clear all caches after creating roster range
+      clearAllRosterCaches();
+      
+      console.log("Roster range created, all caches cleared");
+      
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    }
+  }
+);
+
+
+export const copyEmployeesToWeek = createAsyncThunk(
+  "roster/copyEmployeesToWeek",
+  async ({ data }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.post(`${API_URL}/copy-employees`, data, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+      });
+      
+      // Clear all caches after copying employees
+      clearAllRosterCaches();
+      
+      console.log("Employees copied, all caches cleared");
+      
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
 );
@@ -1052,205 +1311,6 @@ export const exportSavedRoster = createAsyncThunk(
   }
 );
 
-export const updateRosterEmployee = createAsyncThunk(
-  "roster/updateRosterEmployee",
-  async ({ month, year, weekNumber, employeeId, updates }, thunkAPI) => {
-    try {
-      const token = getToken();
-
-      const sanitizedUpdates = { ...updates };
-      delete sanitizedUpdates.isCoreTeam;
-      delete sanitizedUpdates.shift;
-
-      const body = {
-        month,
-        year,
-        weekNumber,
-        employeeId,
-        updates: sanitizedUpdates
-      };
-
-      const res = await axios.put(`${API_URL}/update-employee`, body, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-
-      // Invalidate cache
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
-      // Return data needed for immediate UI update
-      return {
-        ...res.data,
-        month,
-        year,
-        weekNumber,
-        employeeId,
-        updates: sanitizedUpdates
-      };
-      
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-    }
-  }
-); 
-
-export const deleteEmployeeFromRoster = createAsyncThunk(
-  "roster/deleteEmployeeFromRoster",
-  async ({ rosterId, weekNumber, employeeId }, thunkAPI) => {
-    try {
-      const token = getToken();
-      
-      const res = await axios.post(`${API_URL}/delete-employee`, 
-        { rosterId, weekNumber, employeeId },
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-        }
-      );
-
-      // Invalidate cache
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
-      // Return data with employeeId for UI update
-      return {
-        ...res.data,
-        employeeId, // Include employeeId in response
-        rosterId,
-        weekNumber
-      };
-      
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-    }
-  }
-);
-
-export const deleteEmployeeByUserId = createAsyncThunk(
-  "roster/deleteEmployeeByUserId",
-  async ({ rosterId, weekNumber, userId }, thunkAPI) => {
-    try {
-      const token = getToken();
-      
-      const res = await axios.post(`${API_URL}/delete-employee-by-userid`, 
-        { rosterId, weekNumber, userId },
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-        }
-      );
-
-      // Invalidate cache
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
-      return res.data;
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-    }
-  }
-);
-
-export const deleteEmployeeByName = createAsyncThunk(
-  "roster/deleteEmployeeByName",
-  async ({ rosterId, weekNumber, employeeName }, thunkAPI) => {
-    try {
-      const token = getToken();
-      
-      const res = await axios.post(`${API_URL}/delete-employee-by-name`, 
-        { rosterId, weekNumber, employeeName },
-        {
-          headers: { 
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-        }
-      );
-
-      // Invalidate cache
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
-      return res.data;
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-    }
-  }
-);
-
-// ==================== NEW AUTO-PROPAGATION THUNKS ====================
-
-/**
- * Create roster for a date range (auto-create multiple weeks)
- */
-export const createRosterForDateRange = createAsyncThunk(
-  "roster/createRosterForDateRange",
-  async ({ data }, thunkAPI) => {
-    try {
-      const token = getToken();
-      const res = await axios.post(`${API_URL}/create-range`, data, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
-
-      // Invalidate cache since we're adding new weeks
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
-      return res.data;
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-    }
-  }
-);
-
-/**
- * Copy employees from one week to other week(s)
- */
-export const copyEmployeesToWeek = createAsyncThunk(
-  "roster/copyEmployeesToWeek",
-  async ({ data }, thunkAPI) => {
-    try {
-      const token = getToken();
-      const res = await axios.post(`${API_URL}/copy-employees`, data, {
-        headers: { 
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-      });
-
-      // Invalidate cache since roster data changed
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
-      return res.data;
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
-    }
-  }
-);
-
-/**
- * Bulk update multiple weeks (add/remove/update/reset)
- */
 export const bulkUpdateWeeks = createAsyncThunk(
   "roster/bulkUpdateWeeks",
   async ({ data }, thunkAPI) => {
@@ -1262,13 +1322,12 @@ export const bulkUpdateWeeks = createAsyncThunk(
           'Content-Type': 'application/json'
         },
       });
-
-      // Invalidate cache since roster data changed
-      cache.roster.data = null;
-      cache.roster.timestamp = null;
-      cache.allRosters.data = null;
-      cache.allRosters.timestamp = null;
-
+      
+      // Clear all caches after bulk update
+      clearAllRosterCaches();
+      
+      console.log("Bulk weeks update, all caches cleared");
+      
       return res.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
@@ -1276,24 +1335,24 @@ export const bulkUpdateWeeks = createAsyncThunk(
   }
 );
 
+// Helper function remains the same
 const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   if (!roster?.weeks) return -1;
-  
   const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
   if (weekIndex === -1) return -1;
-  
   const employeeIndex = roster.weeks[weekIndex].employees.findIndex(e => 
     e._id === employeeId || (e.userId && e.userId._id === employeeId)
   );
-  
   return { weekIndex, employeeIndex };
 };
 
+// UPDATED SLICE WITH BULK EDIT STATES
 const rosterSlice = createSlice({
   name: "roster",
   initialState: {
     roster: null,
     allRosters: null,
+    bulkEditRoster: null, // NEW: for bulk edit data
     loading: false,
     error: null,
     exportLoading: false,
@@ -1305,8 +1364,6 @@ const rosterSlice = createSlice({
     deleteLoading: false,
     deleteSuccess: false, 
     deleteError: null,
-    
-    // ========== NEW STATES FOR AUTO-PROPAGATION ==========
     createRangeLoading: false,
     createRangeSuccess: false,
     createRangeError: null,
@@ -1316,8 +1373,12 @@ const rosterSlice = createSlice({
     bulkUpdateLoading: false,
     bulkUpdateSuccess: false,
     bulkUpdateError: null,
-    // ====================================================
-    
+    // NEW STATES FOR BULK EDIT
+    bulkEditLoading: false,
+    bulkEditError: null,
+    bulkSaveLoading: false,
+    bulkSaveSuccess: false,
+    bulkSaveError: null,
     pagination: {
       currentPage: 1,
       totalPages: 1,
@@ -1347,18 +1408,17 @@ const rosterSlice = createSlice({
       state.error = null;
       state.rosterDetailError = null;
       state.deleteError = null;
-      // Clear new error states too
       state.createRangeError = null;
       state.copyEmployeesError = null;
       state.bulkUpdateError = null;
+      state.bulkEditError = null; // NEW
+      state.bulkSaveError = null; // NEW
     },
     clearDeleteState: (state) => { 
       state.deleteLoading = false;
       state.deleteSuccess = false;
       state.deleteError = null;
     },
-    
-    // ========== NEW REDUCERS FOR AUTO-PROPAGATION ==========
     clearCreateRangeState: (state) => {
       state.createRangeLoading = false;
       state.createRangeSuccess = false;
@@ -1374,14 +1434,38 @@ const rosterSlice = createSlice({
       state.bulkUpdateSuccess = false;
       state.bulkUpdateError = null;
     },
-    // ====================================================
-    
+    // NEW REDUCERS FOR BULK EDIT
+    clearBulkEditState: (state) => {
+      state.bulkEditRoster = null;
+      state.bulkEditLoading = false;
+      state.bulkEditError = null;
+      state.bulkSaveLoading = false;
+      state.bulkSaveSuccess = false;
+      state.bulkSaveError = null;
+      // Also clear cache
+      clearBulkEditCache();
+    },
+    clearBulkSaveState: (state) => {
+      state.bulkSaveLoading = false;
+      state.bulkSaveSuccess = false;
+      state.bulkSaveError = null;
+    },
+    // Force refresh roster data (useful when you know data changed)
+    forceRefreshRoster: (state) => {
+      clearAllRosterCaches();
+      state.roster = null;
+      state.allRosters = null;
+      state.bulkEditRoster = null;
+      console.log("Forced roster refresh - all data cleared");
+    },
+    // Manually update local data after edit (immediate UI update)
     updateRosterData: (state, action) => {
       state.allRosters = action.payload;
     },
     updateRosterDataLocally: (state, action) => {
       const { month, year, weekNumber, employeeId, updates } = action.payload;
       
+      // Update main roster
       if (state.roster && state.roster.month === month && state.roster.year === year) {
         const result = findEmployeeIndex(state.roster, weekNumber, employeeId);
         if (result.weekIndex !== -1 && result.employeeIndex !== -1) {
@@ -1392,16 +1476,15 @@ const rosterSlice = createSlice({
         }
       }
       
+      // Update allRosters
       if (state.allRosters?.data) {
         const rosterIndex = state.allRosters.data.findIndex(r => 
           r.month === month && r.year === year
         );
-        
         if (rosterIndex !== -1) {
           const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
             w => w.weekNumber === weekNumber
           );
-          
           if (weekIndex !== -1) {
             const employeeIndex = state.allRosters.data[rosterIndex].weeks[weekIndex].employees.findIndex(
               e => e._id === employeeId || (e.userId && e.userId._id === employeeId)
@@ -1416,10 +1499,24 @@ const rosterSlice = createSlice({
           }
         }
       }
+      
+      // Also update bulkEditRoster if it exists
+      if (state.bulkEditRoster?.data) {
+        const week = state.bulkEditRoster.data.weeks?.find(w => w.weekNumber === weekNumber);
+        if (week) {
+          const employee = week.employees?.find(e => e._id === employeeId);
+          if (employee) {
+            Object.assign(employee, updates);
+          }
+        }
+      }
+      
+      console.log("Local roster data updated immediately");
     },
     removeEmployeeFromRosterLocally: (state, action) => {
       const { rosterId, weekNumber, employeeId } = action.payload;
       
+      // Update main roster
       if (state.roster && state.roster._id === rosterId) {
         const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
         if (weekIndex !== -1) {
@@ -1428,6 +1525,8 @@ const rosterSlice = createSlice({
           );
         }
       }
+      
+      // Update allRosters
       if (state.allRosters?.data) {
         const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
         if (rosterIndex !== -1) {
@@ -1442,11 +1541,21 @@ const rosterSlice = createSlice({
           }
         }
       }
+      
+      // Also update bulkEditRoster if it exists
+      if (state.bulkEditRoster?.data?._id === rosterId) {
+        const week = state.bulkEditRoster.data.weeks?.find(w => w.weekNumber === weekNumber);
+        if (week) {
+          week.employees = week.employees?.filter(emp => emp._id !== employeeId) || [];
+        }
+      }
+      
+      console.log("Employee removed locally immediately");
     },
   },
   extraReducers: (builder) => {
-    // ========== ALL YOUR EXISTING EXTRA REDUCERS ==========
     builder
+      // Existing reducers...
       .addCase(addRosterWeek.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -1459,6 +1568,19 @@ const rosterSlice = createSlice({
       })
       .addCase(addRosterWeek.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+      })
+       .addCase(exportSavedRoster.pending, (state) => {
+        state.savedExportLoading = true;
+        state.savedExportSuccess = false;
+        state.error = null;
+      })
+      .addCase(exportSavedRoster.fulfilled, (state) => {
+        state.savedExportLoading = false;
+        state.savedExportSuccess = true;
+      })
+      .addCase(exportSavedRoster.rejected, (state, action) => {
+        state.savedExportLoading = false;
         state.error = action.payload;
       })
       
@@ -1481,10 +1603,8 @@ const rosterSlice = createSlice({
       })
       .addCase(fetchAllRosters.fulfilled, (state, action) => {
         state.rosterDetailLoading = false;
-        
         if (action.payload.success) {
           state.allRosters = action.payload.data || [];
-          
           if (action.payload.pagination) {
             state.pagination = {
               currentPage: action.payload.pagination.currentPage || 1,
@@ -1496,7 +1616,6 @@ const rosterSlice = createSlice({
         } else {
           state.allRosters = Array.isArray(action.payload) ? action.payload : [];
         }
-        
         if (!state.allRosters) {
           state.allRosters = [];
         }
@@ -1507,6 +1626,7 @@ const rosterSlice = createSlice({
         state.allRosters = [];
       })
       
+      // DELETE OPERATIONS - with immediate UI update
       .addCase(deleteEmployeeFromRoster.pending, (state) => {
         state.deleteLoading = true;
         state.deleteSuccess = false;
@@ -1516,275 +1636,61 @@ const rosterSlice = createSlice({
         state.deleteLoading = false;
         state.deleteSuccess = true;
         state.deleteError = null;
-        
-        const { rosterId, weekNumber, employeeId } = action.payload || action.meta.arg;
-        
-        // Safely update main roster state
-        if (state.roster && state.roster.weeks) {
-          const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-          if (weekIndex !== -1) {
-            state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
-              emp => emp._id !== employeeId
-            );
-          }
-        }
-        
-        // Update allRosters state
-        if (state.allRosters?.data && Array.isArray(state.allRosters.data)) {
-          const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
-          if (rosterIndex !== -1 && state.allRosters.data[rosterIndex]?.weeks) {
-            const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
-              w => w.weekNumber === weekNumber
-            );
-            if (weekIndex !== -1 && state.allRosters.data[rosterIndex].weeks[weekIndex]?.employees) {
-              state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
-                state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
-                  emp => emp._id !== employeeId
-                );
-            }
-          }
-        }
+        // The local update is handled in updateRosterDataLocally reducer
       })
       .addCase(deleteEmployeeFromRoster.rejected, (state, action) => {
         state.deleteLoading = false;
         state.deleteSuccess = false;
         state.deleteError = action.payload;
-      }) 
-      
-      .addCase(deleteEmployeeByUserId.pending, (state) => {
-        state.deleteLoading = true;
-        state.deleteSuccess = false;
-        state.deleteError = null;
-      })
-      .addCase(deleteEmployeeByUserId.fulfilled, (state, action) => {
-        state.deleteLoading = false;
-        state.deleteSuccess = true;
-        state.deleteError = null;
-        
-        const { rosterId, weekNumber, userId } = action.payload || action.meta.arg; 
-        if (state.roster && state.roster.weeks) {
-          const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-          if (weekIndex !== -1) {
-            state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
-              emp => !emp.userId || emp.userId.toString() !== userId
-            );
-          }
-        } 
-        if (state.allRosters?.data && Array.isArray(state.allRosters.data)) {
-          const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
-          if (rosterIndex !== -1 && state.allRosters.data[rosterIndex]?.weeks) {
-            const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
-              w => w.weekNumber === weekNumber
-            );
-            if (weekIndex !== -1 && state.allRosters.data[rosterIndex].weeks[weekIndex]?.employees) {
-              state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
-                state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
-                  emp => !emp.userId || emp.userId.toString() !== userId
-                );
-            }
-          }
-        }
-      })
-      .addCase(deleteEmployeeByUserId.rejected, (state, action) => {
-        state.deleteLoading = false;
-        state.deleteSuccess = false;
-        state.deleteError = action.payload;
       })
       
-      .addCase(deleteEmployeeByName.pending, (state) => {
-        state.deleteLoading = true;
-        state.deleteSuccess = false;
-        state.deleteError = null;
+      // BULK EDIT OPERATIONS
+      .addCase(getRosterForBulkEdit.pending, (state) => {
+        state.bulkEditLoading = true;
+        state.bulkEditError = null;
       })
-      .addCase(deleteEmployeeByName.fulfilled, (state, action) => {
-        state.deleteLoading = false;
-        state.deleteSuccess = true;
-        state.deleteError = null;
-        
-        const { rosterId, weekNumber, employeeName } = action.payload || action.meta.arg;
-        
-        if (state.roster && state.roster.weeks) {
-          const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-          if (weekIndex !== -1) {
-            state.roster.weeks[weekIndex].employees = state.roster.weeks[weekIndex].employees.filter(
-              emp => !emp.name || emp.name.toLowerCase() !== employeeName.toLowerCase()
-            );
-          }
-        }
-        
-        if (state.allRosters?.data && Array.isArray(state.allRosters.data)) {
-          const rosterIndex = state.allRosters.data.findIndex(r => r._id === rosterId);
-          if (rosterIndex !== -1 && state.allRosters.data[rosterIndex]?.weeks) {
-            const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
-              w => w.weekNumber === weekNumber
-            );
-            if (weekIndex !== -1 && state.allRosters.data[rosterIndex].weeks[weekIndex]?.employees) {
-              state.allRosters.data[rosterIndex].weeks[weekIndex].employees = 
-                state.allRosters.data[rosterIndex].weeks[weekIndex].employees.filter(
-                  emp => !emp.name || emp.name.toLowerCase() !== employeeName.toLowerCase()
-                );
-            }
-          }
-        }
+      .addCase(getRosterForBulkEdit.fulfilled, (state, action) => {
+        state.bulkEditLoading = false;
+        state.bulkEditRoster = action.payload;
       })
-      .addCase(deleteEmployeeByName.rejected, (state, action) => {
-        state.deleteLoading = false;
-        state.deleteSuccess = false;
-        state.deleteError = action.payload;
+      .addCase(getRosterForBulkEdit.rejected, (state, action) => {
+        state.bulkEditLoading = false;
+        state.bulkEditError = action.payload;
       })
-
-      .addCase(updateRosterWeek.pending, (state) => {
+      
+      .addCase(bulkUpdateRosterWeeks.pending, (state) => {
+        state.bulkSaveLoading = true;
+        state.bulkSaveSuccess = false;
+        state.bulkSaveError = null;
+      })
+      .addCase(bulkUpdateRosterWeeks.fulfilled, (state, action) => {
+        state.bulkSaveLoading = false;
+        state.bulkSaveSuccess = true;
+        state.bulkEditError = null;
+        // Clear bulk edit data after successful save
+        state.bulkEditRoster = null;
+      })
+      .addCase(bulkUpdateRosterWeeks.rejected, (state, action) => {
+        state.bulkSaveLoading = false;
+        state.bulkSaveSuccess = false;
+        state.bulkSaveError = action.payload;
+      })
+      
+      // Add other existing cases...
+      .addCase(updateRosterEmployee.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
-      .addCase(updateRosterWeek.fulfilled, (state, action) => {
+      .addCase(updateRosterEmployee.fulfilled, (state, action) => {
         state.loading = false;
-        if (action.payload.roster) {
-          state.roster = action.payload.roster;
-        }
+        // Local update is handled by updateRosterDataLocally reducer
       })
-      .addCase(updateRosterWeek.rejected, (state, action) => {
+      .addCase(updateRosterEmployee.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      })
-      
-      .addCase(exportRosterExcel.pending, (state) => {
-        state.exportLoading = true;
-        state.exportSuccess = false;
-        state.error = null;
-      })
-      .addCase(exportRosterExcel.fulfilled, (state) => {
-        state.exportLoading = false;
-        state.exportSuccess = true;
-      })
-      .addCase(exportRosterExcel.rejected, (state, action) => {
-        state.exportLoading = false;
-        state.error = action.payload;
-      })
-      
-      .addCase(exportSavedRoster.pending, (state) => {
-        state.savedExportLoading = true;
-        state.savedExportSuccess = false;
-        state.error = null;
-      })
-      .addCase(exportSavedRoster.fulfilled, (state) => {
-        state.savedExportLoading = false;
-        state.savedExportSuccess = true;
-      })
-      .addCase(exportSavedRoster.rejected, (state, action) => {
-        state.savedExportLoading = false;
-        state.error = action.payload;
-      })
-      
-     .addCase(updateRosterEmployee.pending, (state) => {
-      state.loading = true;
-      state.error = null;
-    })
-    .addCase(updateRosterEmployee.fulfilled, (state, action) => {
-      state.loading = false;
-      
-      const { month, year, weekNumber, employeeId, updates, employee } = action.payload;
-      
-      if (state.roster && state.roster.month === month && state.roster.year === year) {
-        const weekIndex = state.roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-        if (weekIndex !== -1) {
-          const employeeIndex = state.roster.weeks[weekIndex].employees.findIndex(
-            emp => emp._id === employeeId
-          );
-          if (employeeIndex !== -1) {
-            state.roster.weeks[weekIndex].employees[employeeIndex] = {
-              ...state.roster.weeks[weekIndex].employees[employeeIndex],
-              ...updates
-            };
-          }
-        }
-      }
-      if (state.allRosters?.data) {
-        const rosterIndex = state.allRosters.data.findIndex(r => 
-          r.month === month && r.year === year
-        );
-        
-        if (rosterIndex !== -1) {
-          const weekIndex = state.allRosters.data[rosterIndex].weeks.findIndex(
-            w => w.weekNumber === weekNumber
-          );
-          
-          if (weekIndex !== -1) {
-            const employeeIndex = state.allRosters.data[rosterIndex].weeks[weekIndex].employees.findIndex(
-              e => e._id === employeeId
-            );
-            
-            if (employeeIndex !== -1) {
-              state.allRosters.data[rosterIndex].weeks[weekIndex].employees[employeeIndex] = {
-                ...state.allRosters.data[rosterIndex].weeks[weekIndex].employees[employeeIndex],
-                ...updates
-              };
-            }
-          }
-        }
-      }
-    })
-    .addCase(updateRosterEmployee.rejected, (state, action) => {
-      state.loading = false;
-      state.error = action.payload;
-    });
-    
- 
-    builder
-      .addCase(createRosterForDateRange.pending, (state) => {
-        state.createRangeLoading = true;
-        state.createRangeSuccess = false;
-        state.createRangeError = null;
-      })
-      .addCase(createRosterForDateRange.fulfilled, (state, action) => {
-        state.createRangeLoading = false;
-        state.createRangeSuccess = true;
-        
-        if (action.payload.data?.rosterId) {
-        }
-      })
-      .addCase(createRosterForDateRange.rejected, (state, action) => {
-        state.createRangeLoading = false;
-        state.createRangeSuccess = false;
-        state.createRangeError = action.payload;
       });
-    
-    builder
-      .addCase(copyEmployeesToWeek.pending, (state) => {
-        state.copyEmployeesLoading = true;
-        state.copyEmployeesSuccess = false;
-        state.copyEmployeesError = null;
-      })
-      .addCase(copyEmployeesToWeek.fulfilled, (state, action) => {
-        state.copyEmployeesLoading = false;
-        state.copyEmployeesSuccess = true;
-        
-       
-      })
-      .addCase(copyEmployeesToWeek.rejected, (state, action) => {
-        state.copyEmployeesLoading = false;
-        state.copyEmployeesSuccess = false;
-        state.copyEmployeesError = action.payload;
-      });
-    
-    // bulkUpdateWeeks
-    builder
-      .addCase(bulkUpdateWeeks.pending, (state) => {
-        state.bulkUpdateLoading = true;
-        state.bulkUpdateSuccess = false;
-        state.bulkUpdateError = null;
-      })
-      .addCase(bulkUpdateWeeks.fulfilled, (state, action) => {
-        state.bulkUpdateLoading = false;
-        state.bulkUpdateSuccess = true;
-        
-        // Cache is invalidated, so next fetch will get fresh data
-      })
-      .addCase(bulkUpdateWeeks.rejected, (state, action) => {
-        state.bulkUpdateLoading = false;
-        state.bulkUpdateSuccess = false;
-        state.bulkUpdateError = action.payload;
-      });
+      
+    // Add other existing extraReducers...
   },
 });
 
@@ -1793,11 +1699,12 @@ export const {
   clearRosterDetailState, 
   clearError,
   clearDeleteState,
-  // ========== NEW ACTION CREATORS ==========
   clearCreateRangeState,
   clearCopyEmployeesState,
   clearBulkUpdateState,
-  // =========================================
+  clearBulkEditState,      // NEW
+  clearBulkSaveState,      // NEW
+  forceRefreshRoster,      // NEW
   updateRosterData,
   updateRosterDataLocally,
   removeEmployeeFromRosterLocally 

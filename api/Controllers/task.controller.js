@@ -1746,7 +1746,7 @@ export const getAdminTasks = async (req, res) => {
 export const updateAdminTaskStatus = async (req, res) => {
   try {
     const { accountType, id: userId } = req.user;
-    if (!["admin", "superAdmin"].includes(accountType)) {
+    if (!["admin", "superAdmin", "HR"].includes(accountType)) {
       return res.status(403).json({ message: "Only admin/superAdmin can update" });
     }
 
