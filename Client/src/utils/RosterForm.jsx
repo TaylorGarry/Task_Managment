@@ -39,6 +39,7 @@ const RosterForm = () => {
     shift: "",
     shiftStartHour: "",
     shiftEndHour: "",
+    teamLeader: "",
     isCoreTeam: false,
     dailyStatus: Array(7).fill("P"),
   });
@@ -272,6 +273,7 @@ const proceedWithBulkEditAfterFetch = () => {
       shift: "",
       shiftStartHour: "",
       shiftEndHour: "",
+      teamLeader: "",
       isCoreTeam: false,
       dailyStatus: Array(7).fill("P"),
     });
@@ -332,6 +334,7 @@ const proceedWithBulkEditAfterFetch = () => {
           name: emp.name,
           transport: emp.transport || "",
           cabRoute: emp.cabRoute || "",
+          teamLeader: emp.teamLeader || "",
           isCoreTeam: emp.isCoreTeam || false,
           dailyStatus: emp.dailyStatus.map((status, index) => {
             const date = new Date(startDate);
@@ -579,6 +582,7 @@ const proceedWithBulkEditAfterFetch = () => {
         name: editSavedEmployee.name,
         transport: editSavedEmployee.transport,
         cabRoute: editSavedEmployee.cabRoute,
+        teamLeader: editSavedEmployee.teamLeader || "",
         shiftStartHour: editSavedEmployee.shiftStartHour === "" ? undefined : parseInt(editSavedEmployee.shiftStartHour),
         shiftEndHour: editSavedEmployee.shiftEndHour === "" ? undefined : parseInt(editSavedEmployee.shiftEndHour),
         dailyStatus: dailyStatusObjects,
@@ -876,6 +880,7 @@ const proceedWithBulkEditAfterFetch = () => {
                   <th className="border p-3 text-left font-semibold text-gray-800">Name</th>
                   <th className="border p-3 text-left font-semibold text-gray-800">Transport</th>
                   <th className="border p-3 text-left font-semibold text-gray-800">CAB Route</th>
+                  <th className="border p-3 text-left font-semibold text-gray-800">Team Leader</th>
                   <th className="border p-3 text-left font-semibold text-gray-800">Shift Hours</th>
                   <th className="border p-3 text-left font-semibold text-gray-800">Weekly Status</th>
                   <th className="border p-3 text-left font-semibold text-gray-800">Actions</th>
@@ -889,7 +894,7 @@ const proceedWithBulkEditAfterFetch = () => {
                       <td className="border p-3 text-gray-800 font-medium">{emp.name}</td>
                       <td className="border p-3 text-gray-800">{emp.transport || "-"}</td>
                       <td className="border p-3 text-gray-800">{emp.cabRoute || "-"}</td>
-                     
+                     <td className="border p-3 text-gray-800">{emp.teamLeader || "-"}</td>
                       <td className="border p-3 text-gray-800">
                         {emp.isCoreTeam ? "N/A" : formatShiftHours(emp.shiftStartHour, emp.shiftEndHour)}
                       </td>
@@ -1749,7 +1754,6 @@ const proceedWithBulkEditAfterFetch = () => {
           <p className="text-gray-600 mt-1">Manage weekly roster with day-wise status tracking</p>
         </div>
         <div className="flex gap-2">
-          {/* ADD BULK EDIT BUTTON HERE */}
           <button
             onClick={handleBulkEditRoster}
             className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-4 py-2 rounded font-medium flex items-center cursor-pointer shadow-md"
@@ -1903,7 +1907,7 @@ const proceedWithBulkEditAfterFetch = () => {
                   <option value="No" className="text-gray-800">No</option>
                 </select>
                 <input type="text" name="cabRoute" value={employeeInput.cabRoute} onChange={handleInputChange} placeholder="CAB Route" className="border p-3 rounded text-gray-800 placeholder-gray-500" />
-                
+                <input type="text" name="teamLeader" value={employeeInput.teamLeader || ""} onChange={handleInputChange} placeholder="Team Leader (Optional)" className="border p-3 rounded text-gray-800 placeholder-gray-500" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1962,6 +1966,7 @@ const proceedWithBulkEditAfterFetch = () => {
                           employeeInput.dailyStatus[i] === "LWP" ? "border-yellow-300 bg-yellow-50" : 
                           employeeInput.dailyStatus[i] === "BL" ? "border-purple-300 bg-purple-50" : 
                           employeeInput.dailyStatus[i] === "H" ? "border-purple-400 bg-purple-100" : 
+                          employeeInput.dailyStatus[i] === "LWD" ? "border-yellow-400 bg-yellow-100" :
                           "border-gray-300"
                         }`}
                       >
@@ -1973,6 +1978,7 @@ const proceedWithBulkEditAfterFetch = () => {
                         <option value="LWP" className="text-yellow-600">Leave Without Pay (LWP)</option>
                         <option value="BL" className="text-purple-600">Bereavement Leave (BL)</option>
                         <option value="H" className="text-purple-700">Holiday (H)</option>
+                        <option value="LWD" className="text-yellow-700">Last Working Day (LWD)</option>
                       </select>
                       <div className="mt-1 text-lg">
                         {employeeInput.dailyStatus[i] === "P" && "✅"}
@@ -1983,6 +1989,7 @@ const proceedWithBulkEditAfterFetch = () => {
                         {employeeInput.dailyStatus[i] === "LWP" && "💰"}
                         {employeeInput.dailyStatus[i] === "BL" && "⚫"}
                         {employeeInput.dailyStatus[i] === "H" && "🎉"}
+                        {employeeInput.dailyStatus[i] === "LWD" && "📅"}
                       </div>
                     </div>
                   ))}
@@ -2360,7 +2367,22 @@ const proceedWithBulkEditAfterFetch = () => {
             CAB Route
           </label>
         </div>
-
+      <div className="relative">
+          <input
+            type="text"
+            name="teamLeader"
+            value={editSavedEmployee.teamLeader || ""}
+            onChange={handleEditSavedChange}
+            className="peer w-full border border-gray-300 rounded p-3 text-gray-800 placeholder-transparent focus:outline-none focus:border-blue-500"
+          />
+          <label className="absolute left-3 top-3 text-gray-500 bg-white px-1 transition-all
+            peer-placeholder-shown:top-3.5
+            peer-focus:-top-2
+            peer-focus:text-sm
+            peer-focus:text-blue-500">
+            Team Leader
+          </label>
+        </div>
         {/* Shift Start */}
         <div className="relative">
           <input
@@ -2420,6 +2442,7 @@ const proceedWithBulkEditAfterFetch = () => {
                   <option value="LWP">LWP (L)</option>
                   <option value="BL">BL (L)</option>
                   <option value="H">Holiday (H)</option>
+                  <option value="LWD">Last Working Day(LWD)</option>
                 </select>
               </div>
             ))}

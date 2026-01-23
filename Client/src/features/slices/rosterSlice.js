@@ -816,8 +816,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
 // const API_URL = "http://localhost:4000/api/v1/roster";
-//  const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/v1/roster`;
- const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
+ const API_URL = `${import.meta.env.VITE_API_URL || "https://crm-taskmanagement-api-7eos5.ondigitalocean.app"}/api/v1/roster`;
+//  const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -846,7 +846,6 @@ const cache = {
   },
 };
 
-// Helper function to clear ALL roster caches
 const clearAllRosterCaches = () => {
   cache.roster.data = null;
   cache.roster.timestamp = null;
@@ -863,7 +862,6 @@ const clearAllRosterCaches = () => {
   console.log("All roster caches cleared");
 };
 
-// Helper function to clear specific roster cache
 const clearRosterCache = () => {
   cache.roster.data = null;
   cache.roster.timestamp = null;
@@ -871,7 +869,6 @@ const clearRosterCache = () => {
   console.log("Roster cache cleared");
 };
 
-// Helper function to clear allRosters cache
 const clearAllRostersCache = () => {
   cache.allRosters.data = null;
   cache.allRosters.timestamp = null;
@@ -879,7 +876,6 @@ const clearAllRostersCache = () => {
   console.log("All rosters cache cleared");
 };
 
-// Helper function to clear bulk edit cache
 const clearBulkEditCache = (rosterId = null) => {
   if (rosterId && cache.bulkEditRoster.rosterId === rosterId) {
     cache.bulkEditRoster.data = null;
@@ -904,7 +900,6 @@ const isCacheValid = (cacheKey, filters) => {
     if (!areFiltersSame) return false;
   }
   
-  // For bulkEditRoster, check rosterId match
   if (cacheKey === 'bulkEditRoster' && filters && cacheItem.rosterId !== filters) {
     return false;
   }
@@ -913,35 +908,31 @@ const isCacheValid = (cacheKey, filters) => {
   return now - cacheItem.timestamp < cacheItem.CACHE_DURATION;
 };
 
-// BULK EDIT FEATURE THUNKS
 export const getRosterForBulkEdit = createAsyncThunk(
   "roster/getRosterForBulkEdit",
   async (rosterId, thunkAPI) => {
-    try {
-      // Check cache first
-      if (isCacheValid("bulkEditRoster", rosterId)) {
-        console.log("Returning cached bulk edit roster data");
-        return cache.bulkEditRoster.data;
-      }
+    const state = thunkAPI.getState().roster;
 
-      const token = getToken();
-      const res = await axios.get(`${API_URL}/bulk-edit/${rosterId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      // Update cache
-      cache.bulkEditRoster.data = res.data;
-      cache.bulkEditRoster.timestamp = Date.now();
-      cache.bulkEditRoster.rosterId = rosterId;
-      
-      console.log("Fetched fresh bulk edit roster data and cached it");
-
-      return res.data;
-    } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+    if (
+      state.bulkEditRoster &&
+      isCacheValid("bulkEditRoster", rosterId)
+    ) {
+      return state.bulkEditRoster;
     }
+
+    const token = getToken();
+    const res = await axios.get(`${API_URL}/bulk-edit/${rosterId}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+
+    cache.bulkEditRoster.data = res.data;
+    cache.bulkEditRoster.timestamp = Date.now();
+    cache.bulkEditRoster.rosterId = rosterId;
+
+    return res.data;
   }
 );
+
 
 export const bulkUpdateRosterWeeks = createAsyncThunk(
   "roster/bulkUpdateRosterWeeks",
@@ -966,8 +957,6 @@ export const bulkUpdateRosterWeeks = createAsyncThunk(
     }
   }
 );
-
-// EXISTING THUNKS - UPDATED TO CLEAR CACHES PROPERLY
 
 export const addRosterWeek = createAsyncThunk(
   "roster/addRosterWeek",
@@ -997,33 +986,25 @@ export const fetchRoster = createAsyncThunk(
   "roster/fetchRoster",
   async (filters = {}, thunkAPI) => {
     try {
-      if (isCacheValid("roster", filters)) {
-        console.log("Returning cached roster data");
-        return cache.roster.data;
-      }
-
       const token = getToken();
       const query = new URLSearchParams({
-        month: filters.month || "",
-        year: filters.year || "",
+        month: filters.month,
+        year: filters.year,
       }).toString();
 
       const res = await axios.get(`${API_URL}/getroster?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      cache.roster.data = res.data;
-      cache.roster.timestamp = Date.now();
-      cache.roster.filters = filters;
-      
-      console.log("Fetched fresh roster data and cached it");
-
       return res.data;
     } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
     }
   }
 );
+
 
 export const fetchAllRosters = createAsyncThunk(
   "roster/fetchAllRosters",
@@ -1350,10 +1331,12 @@ const findEmployeeIndex = (roster, weekNumber, employeeId) => {
 const rosterSlice = createSlice({
   name: "roster",
   initialState: {
-    roster: null,
-    allRosters: null,
-    bulkEditRoster: null, // NEW: for bulk edit data
+    roster: undefined,
+    allRosters: undefined,
+    bulkEditRoster: undefined, // NEW: for bulk edit data
     loading: false,
+    isHydrated: false,
+    bulkEditHydrated: false,
     error: null,
     exportLoading: false,
     exportSuccess: false,
@@ -1436,7 +1419,7 @@ const rosterSlice = createSlice({
     },
     // NEW REDUCERS FOR BULK EDIT
     clearBulkEditState: (state) => {
-      state.bulkEditRoster = null;
+      state.bulkEditRoster = undefined;
       state.bulkEditLoading = false;
       state.bulkEditError = null;
       state.bulkSaveLoading = false;
@@ -1453,9 +1436,9 @@ const rosterSlice = createSlice({
     // Force refresh roster data (useful when you know data changed)
     forceRefreshRoster: (state) => {
       clearAllRosterCaches();
-      state.roster = null;
-      state.allRosters = null;
-      state.bulkEditRoster = null;
+      state.roster = undefined;
+      state.allRosters = undefined;
+      state.bulkEditRoster = undefined;
       console.log("Forced roster refresh - all data cleared");
     },
     // Manually update local data after edit (immediate UI update)
@@ -1591,10 +1574,12 @@ const rosterSlice = createSlice({
       .addCase(fetchRoster.fulfilled, (state, action) => {
         state.loading = false;
         state.roster = action.payload;
+        state.isHydrated = true;
       })
       .addCase(fetchRoster.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+        state.isHydrated = true;
       })
       
       .addCase(fetchAllRosters.pending, (state) => {
@@ -1645,18 +1630,24 @@ const rosterSlice = createSlice({
       })
       
       // BULK EDIT OPERATIONS
-      .addCase(getRosterForBulkEdit.pending, (state) => {
-        state.bulkEditLoading = true;
-        state.bulkEditError = null;
-      })
-      .addCase(getRosterForBulkEdit.fulfilled, (state, action) => {
-        state.bulkEditLoading = false;
-        state.bulkEditRoster = action.payload;
-      })
-      .addCase(getRosterForBulkEdit.rejected, (state, action) => {
-        state.bulkEditLoading = false;
-        state.bulkEditError = action.payload;
-      })
+     .addCase(getRosterForBulkEdit.pending, (state) => {
+  state.bulkEditLoading = true;
+  state.bulkEditError = null;
+  state.bulkEditHydrated = false;
+})
+
+.addCase(getRosterForBulkEdit.fulfilled, (state, action) => {
+  state.bulkEditLoading = false;
+  state.bulkEditRoster = action.payload;
+  state.bulkEditHydrated = true;
+})
+
+.addCase(getRosterForBulkEdit.rejected, (state, action) => {
+  state.bulkEditLoading = false;
+  state.bulkEditError = action.payload;
+  state.bulkEditHydrated = true;
+})
+
       
       .addCase(bulkUpdateRosterWeeks.pending, (state) => {
         state.bulkSaveLoading = true;
@@ -1666,7 +1657,7 @@ const rosterSlice = createSlice({
       .addCase(bulkUpdateRosterWeeks.fulfilled, (state, action) => {
         state.bulkSaveLoading = false;
         state.bulkSaveSuccess = true;
-        state.bulkEditError = null;
+        state.bulkEditError = undefined;
         // Clear bulk edit data after successful save
         state.bulkEditRoster = null;
       })
