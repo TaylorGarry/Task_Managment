@@ -265,6 +265,7 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
       </div>
 
       <div className="space-y-1 text-gray-600 text-sm mb-4">
+          <h1>{task.description}</h1>
         <div className="flex justify-between">
           <span className="font-semibold text-gray-700">Shift:</span>
           <span className={`font-medium ${
@@ -278,6 +279,9 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
         <div className="flex justify-between">
           <span className="font-semibold text-gray-700">Department:</span>
           <span>{task.department}</span>
+        </div>
+        <div className="flex justify-between">
+          {/* <span className="font-semibold text-gray-700">Description:</span> */}
         </div>
         <div className="flex justify-between">
           <span className="font-semibold text-gray-700">Priority:</span>
