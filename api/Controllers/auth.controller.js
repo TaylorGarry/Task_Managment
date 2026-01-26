@@ -271,7 +271,7 @@ export const getAllEmployees = async (req, res) => {
     let query = {};
 
     if (requester.accountType === "superAdmin") {
-      query = { accountType: { $in: ["employee", "admin", "superAdmin", "HR"] } };
+      query = { accountType: { $in: ["employee", "admin", "superAdmin", "HR", "Operations"] } };
     } else {
       query = { accountType: "employee" };
     }

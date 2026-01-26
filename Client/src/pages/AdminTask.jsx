@@ -60,6 +60,25 @@ const AdminTask = () => {
       return;
     }
 
+<<<<<<< HEAD
+  try {
+    await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
+    
+    const today = new Date().toISOString().split('T')[0];
+    
+    dispatch(fetchTasks({ 
+      startDate: today, 
+      endDate: today,
+      _cacheBust: Date.now()  
+    }));
+    
+    toast.success("Task status updated successfully!");
+    setSelectedStatus((prev) => ({ ...prev, [taskId]: "" }));
+  } catch (err) {
+    toast.error(err || "Failed to update status");
+  }
+};
+=======
     try {
       await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
       await dispatch(fetchAdminTasks());
@@ -121,6 +140,7 @@ const AdminTask = () => {
     const date = new Date(dateString);
     return date.toLocaleDateString();
   };
+>>>>>>> keshav_dev
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">

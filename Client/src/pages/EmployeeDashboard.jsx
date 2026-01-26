@@ -58,16 +58,41 @@ const EmployeeDashboard = () => {
  
 const handleStatusChange = async (taskId, status) => {
   const task = tasks.find(t => t._id === taskId);
+<<<<<<< HEAD
+
+  console.log("TASK:", {
+    id: task?._id,
+    isCoreTeamTask: task?.isCoreTeamTask,
+    shift: task?.shift,
+    date: task?.date,
+    canUpdate: task?.canUpdate,
+  });
+=======
+>>>>>>> keshav_dev
   if (!task) {
     toast.error("Task not found");
     return;
   }
 
-  if (status === "") {
+  if (!status) {
     toast.error("Please select a valid status");
     return;
   }
 
+<<<<<<< HEAD
+  /* =====================================================
+     ✅ CORE TEAM — NO RESTRICTIONS (CRITICAL FIX)
+     ===================================================== */
+  if (isCoreTeam) {
+    try {
+      await dispatch(
+        updateTaskStatusCoreTeam({ id: taskId, status })
+      ).unwrap();
+
+      toast.success("Task status updated successfully!");
+    } catch (err) {
+      toast.error(err?.message || "Failed to update status");
+=======
   
   const normalizeDate = (dateInput) => {
     if (!dateInput) return '';
@@ -87,40 +112,80 @@ const handleStatusChange = async (taskId, status) => {
       return '';
     } catch (error) {
       return '';
+>>>>>>> keshav_dev
     }
-  };
+    return; // ⬅️ VERY IMPORTANT
+  }
 
+<<<<<<< HEAD
+  /* =====================================================
+     ⬇️ NORMAL EMPLOYEE LOGIC (UNCHANGED)
+     ===================================================== */
+=======
   const taskNormalizedDate = normalizeDate(task.date);
+>>>>>>> keshav_dev
 
-  // Get all tasks for the same normalized date
-  const sameDayTasks = tasks.filter(t => {
-    const tDate = normalizeDate(t.date);
-    return tDate === taskNormalizedDate && tDate !== '';
-  });
+  const normalizeDate = (dateInput) => {
+  if (!dateInput) return "";
 
+<<<<<<< HEAD
+  const d = new Date(dateInput);
+  d.setHours(0, 0, 0, 0);
+
+  const local = new Date(
+    d.getTime() - d.getTimezoneOffset() * 60000
+  );
+
+  return local.toISOString().split("T")[0];
+};
+
+
+  const taskDate = normalizeDate(task.date);
+
+  const sameDayTasks = tasks.filter(
+    t => normalizeDate(t.date) === taskDate
+  );
+=======
   
+>>>>>>> keshav_dev
 
-  // Group tasks by shift
   const startTasks = sameDayTasks.filter(t => t.shift === "Start");
   const midTasks = sameDayTasks.filter(t => t.shift === "Mid");
 
+<<<<<<< HEAD
+  const isTaskMissed =
+    (!task.employeeStatus || task.employeeStatus === "") &&
+    task.canUpdate === false;
+=======
 
   // Check if current task is missed
   const isTaskMissed = (task.employeeStatus === "" || !task.employeeStatus) &&
                        task.canUpdate === false;
+>>>>>>> keshav_dev
 
   if (isTaskMissed) {
     toast.error(`${task.shift} shift time window has passed. Can update tomorrow.`);
     return;
   }
 
+<<<<<<< HEAD
+  if (!task.canUpdate) {
+=======
   const canTaskBeUpdated = task.canUpdate === true;
   
   if (!canTaskBeUpdated) {
+>>>>>>> keshav_dev
     toast.error(`${task.shift} shift time window is not currently open.`);
     return;
   }
 
+<<<<<<< HEAD
+  const areAllTasksHandled = (tasksInShift) =>
+    tasksInShift.every(t =>
+      t.employeeStatus ||
+      ((!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false)
+    );
+=======
   
   const areAllTasksInShiftHandled = (shiftTasks) => {
     if (shiftTasks.length === 0) {
@@ -136,10 +201,27 @@ const handleStatusChange = async (taskId, status) => {
     
     return unhandledTasks.length === 0;
   };
+>>>>>>> keshav_dev
 
-  let isBlocked = false;
   let blockReason = "";
 
+<<<<<<< HEAD
+  if (task.shift === "Mid" && startTasks.length && !areAllTasksHandled(startTasks)) {
+    blockReason = "Cannot update Mid shift. Start shift tasks pending.";
+  }
+
+  if (
+    task.shift === "End" &&
+    (
+      (startTasks.length && !areAllTasksHandled(startTasks)) ||
+      (midTasks.length && !areAllTasksHandled(midTasks))
+    )
+  ) {
+    blockReason = "Cannot update End shift. Previous shift tasks pending.";
+  }
+
+  if (blockReason) {
+=======
   if (task.shift === "Mid") {
     if (startTasks.length > 0) {
       const allStartHandled = areAllTasksInShiftHandled(startTasks);
@@ -222,14 +304,25 @@ const handleStatusChange = async (taskId, status) => {
   }
 
   if (isBlocked) {
+>>>>>>> keshav_dev
     toast.error(blockReason);
     return;
   }
 
+<<<<<<< HEAD
+=======
 
+>>>>>>> keshav_dev
   try {
-    let updatedStatus;
+    await dispatch(
+      updateTaskStatus({ id: taskId, status })
+    ).unwrap();
 
+<<<<<<< HEAD
+    toast.success("Task status updated successfully!");
+  } catch (err) {
+    toast.error(err?.message || "Failed to update status");
+=======
     if (isCoreTeam) {
       updatedStatus = await dispatch(
         updateTaskStatusCoreTeam({ id: taskId, status })
@@ -252,8 +345,10 @@ const handleStatusChange = async (taskId, status) => {
   } catch (err) {
     const errorMessage = err?.message || err || "Failed to update status, please try again.";
     toast.error(errorMessage);
+>>>>>>> keshav_dev
   }
 };
+
 
   const openChat = (task) => {
     setSelectedTask(task);
@@ -378,6 +473,10 @@ const handleStatusChange = async (taskId, status) => {
                   task={task} 
                   onStatusChange={handleStatusChange} 
                   allTasks={tasks} 
+<<<<<<< HEAD
+                  isCoreTeam={isCoreTeam}
+=======
+>>>>>>> keshav_dev
                 />
                 <button
                   onClick={() => openChat(task)}

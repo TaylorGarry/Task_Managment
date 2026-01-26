@@ -123,6 +123,16 @@ const TaskCard = ({ task, onOpenChat }) => {
 
   
   const formatAdminDate = (dateInput) => {
+<<<<<<< HEAD
+  if (!dateInput) return "";
+
+  try {
+    const dateObj = new Date(dateInput);
+    console.log("Date Object from admin task card::>>>", dateObj);
+
+    if (isNaN(dateObj.getTime())) {
+      console.warn("Invalid date input:", dateInput);
+=======
     if (!dateInput) return "";
     
     try {
@@ -146,10 +156,34 @@ const TaskCard = ({ task, onOpenChat }) => {
       
       return `${monthNames[month]} ${day}`;
     } catch (error) {
+>>>>>>> keshav_dev
       return "";
     }
-  };
 
+<<<<<<< HEAD
+    const month = dateObj.getMonth();
+    const day = dateObj.getDate();
+
+    const monthNames = [
+      "January", "February", "March", "April", "May", "June",
+      "July", "August", "September", "October", "November", "December"
+    ];
+
+    console.log(
+      `Final date printed after function finished::: ${monthNames[month]} ${day}`
+    );
+
+    return `${monthNames[month]} ${day}`;
+
+  } catch (error) {
+    console.error("Error formatting date:", error);
+    return "";
+  }
+};
+
+
+=======
+>>>>>>> keshav_dev
   const getDisplayDate = () => {
     return task.displayDate || task.date || task.createdAt;
   };
