@@ -42,10 +42,7 @@ function App() {
 
   return (
     <>
-<<<<<<< HEAD
       
-=======
->>>>>>> keshav_dev
       <ToastContainer position="top-right" autoClose={3000} />
 
       <Routes>

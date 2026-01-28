@@ -60,7 +60,6 @@ const AdminTask = () => {
       return;
     }
 
-<<<<<<< HEAD
   try {
     await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
     
@@ -78,69 +77,6 @@ const AdminTask = () => {
     toast.error(err || "Failed to update status");
   }
 };
-=======
-    try {
-      await dispatch(updateAdminTaskStatus({ id: taskId, status })).unwrap();
-      await dispatch(fetchAdminTasks());
-      toast.success("Task status updated successfully!");
-    } catch (err) {
-      toast.error(err || "Failed to update status");
-    }
-  };
-
-  // ===============================
-  // Remark Handlers
-  // ===============================
-  const openRemarkPopup = (task) => {
-    setCurrentTask(task);
-    setShowRemarkPopup(true);
-    dispatch(fetchRemarks(task._id));
-  };
-
-  const closeRemarkPopup = () => {
-    setShowRemarkPopup(false);
-    setCurrentTask(null);
-    setRemarkMessage("");
-    dispatch(clearRemarks());
-  };
-
-  const handleSendRemark = async (e) => {
-    if (e) e.preventDefault();
-    if (!remarkMessage.trim()) {
-      toast.error("Remark message cannot be empty");
-      return;
-    }
-
-    try {
-      await dispatch(
-        addRemark({ taskId: currentTask._id, message: remarkMessage.trim() })
-      ).unwrap();
-      setRemarkMessage("");
-      dispatch(fetchRemarks(currentTask._id));
-    } catch (err) {
-      toast.error(err || "Failed to send remark");
-    }
-  };
-
-  const handleKeyPress = (e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      handleSendRemark();
-    }
-  };
-
-  // Format time to HH:MM
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  // Format date to DD/MM/YYYY
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
->>>>>>> keshav_dev
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -181,11 +117,7 @@ const AdminTask = () => {
                   <p className="text-gray-500">
                     <span className="font-medium">Shift:</span> {task.shift || "N/A"}
                   </p>
-                  <p className="text-gray-500">
-                    <span className="font-medium">Assignees:</span> {assigneeCount}
-                  </p>
                 </div>
-
                 <div className="mt-3">
                   <h3 className="font-medium text-gray-700 mb-1 text-sm">
                     Employees Status:

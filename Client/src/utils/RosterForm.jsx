@@ -603,10 +603,7 @@ const proceedWithBulkEditAfterFetch = () => {
       setEditSavedEmployee(null);
       toast.success("Employee updated successfully");
     } catch (err) {
-<<<<<<< HEAD
       console.error(err);
-=======
->>>>>>> keshav_dev
       toast.error(err || "Only HR and Super Admin can edit current week roster");
     }
   };

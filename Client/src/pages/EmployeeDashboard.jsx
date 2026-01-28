@@ -15,19 +15,19 @@ const EmployeeDashboard = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   const isCoreTeam = user?.isCoreTeam;
   const employeeDepartment = user?.department || "";
-  
+
   const [filters, setFilters] = useState({
     date: new Date().toISOString().split("T")[0],
     shift: "",
     department: employeeDepartment,
   });
-  
+
   const [selectedTask, setSelectedTask] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [editingRemarkId, setEditingRemarkId] = useState(null);
   const [editingMessage, setEditingMessage] = useState("");
-  
+
   const shiftOptions = ["Start", "Mid", "End"];
   const departmentOptions = [employeeDepartment];
   const messagesEndRef = useRef(null);
@@ -55,191 +55,140 @@ const EmployeeDashboard = () => {
   const handleFilterChange = (e) => {
     setFilters({ ...filters, [e.target.name]: e.target.value });
   };
- 
-const handleStatusChange = async (taskId, status) => {
-  const task = tasks.find(t => t._id === taskId);
-<<<<<<< HEAD
 
-  console.log("TASK:", {
-    id: task?._id,
-    isCoreTeamTask: task?.isCoreTeamTask,
-    shift: task?.shift,
-    date: task?.date,
-    canUpdate: task?.canUpdate,
-  });
-=======
->>>>>>> keshav_dev
-  if (!task) {
-    toast.error("Task not found");
-    return;
-  }
+  const handleStatusChange = async (taskId, status) => {
+    const task = tasks.find(t => t._id === taskId);
+    if (!task) {
+      toast.error("Task not found");
+      return;
+    }
 
-  if (!status) {
-    toast.error("Please select a valid status");
-    return;
-  }
+    if (status === "") {
+      toast.error("Please select a valid status");
+      return;
+    }
 
-<<<<<<< HEAD
-  /* =====================================================
-     ✅ CORE TEAM — NO RESTRICTIONS (CRITICAL FIX)
-     ===================================================== */
-  if (isCoreTeam) {
-    try {
-      await dispatch(
-        updateTaskStatusCoreTeam({ id: taskId, status })
-      ).unwrap();
 
-      toast.success("Task status updated successfully!");
-    } catch (err) {
-      toast.error(err?.message || "Failed to update status");
-=======
-  
-  const normalizeDate = (dateInput) => {
-    if (!dateInput) return '';
-    
-    try {
-      if (dateInput instanceof Date) {
-        return dateInput.toISOString().split('T')[0];
-      }
-      
-      if (typeof dateInput === 'string') {
-        const d = new Date(dateInput);
-        if (!isNaN(d.getTime())) {
-          return d.toISOString().split('T')[0];
+    const normalizeDate = (dateInput) => {
+      if (!dateInput) return '';
+
+      try {
+        if (dateInput instanceof Date) {
+          return dateInput.toISOString().split('T')[0];
         }
+
+        if (typeof dateInput === 'string') {
+          const d = new Date(dateInput);
+          if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+          }
+        }
+
+        return '';
+      } catch (error) {
+        return '';
       }
-      
-      return '';
-    } catch (error) {
-      return '';
->>>>>>> keshav_dev
-    }
-    return; // ⬅️ VERY IMPORTANT
-  }
+    };
 
-<<<<<<< HEAD
-  /* =====================================================
-     ⬇️ NORMAL EMPLOYEE LOGIC (UNCHANGED)
-     ===================================================== */
-=======
-  const taskNormalizedDate = normalizeDate(task.date);
->>>>>>> keshav_dev
+    const taskNormalizedDate = normalizeDate(task.date);
 
-  const normalizeDate = (dateInput) => {
-  if (!dateInput) return "";
-
-<<<<<<< HEAD
-  const d = new Date(dateInput);
-  d.setHours(0, 0, 0, 0);
-
-  const local = new Date(
-    d.getTime() - d.getTimezoneOffset() * 60000
-  );
-
-  return local.toISOString().split("T")[0];
-};
-
-
-  const taskDate = normalizeDate(task.date);
-
-  const sameDayTasks = tasks.filter(
-    t => normalizeDate(t.date) === taskDate
-  );
-=======
-  
->>>>>>> keshav_dev
-
-  const startTasks = sameDayTasks.filter(t => t.shift === "Start");
-  const midTasks = sameDayTasks.filter(t => t.shift === "Mid");
-
-<<<<<<< HEAD
-  const isTaskMissed =
-    (!task.employeeStatus || task.employeeStatus === "") &&
-    task.canUpdate === false;
-=======
-
-  // Check if current task is missed
-  const isTaskMissed = (task.employeeStatus === "" || !task.employeeStatus) &&
-                       task.canUpdate === false;
->>>>>>> keshav_dev
-
-  if (isTaskMissed) {
-    toast.error(`${task.shift} shift time window has passed. Can update tomorrow.`);
-    return;
-  }
-
-<<<<<<< HEAD
-  if (!task.canUpdate) {
-=======
-  const canTaskBeUpdated = task.canUpdate === true;
-  
-  if (!canTaskBeUpdated) {
->>>>>>> keshav_dev
-    toast.error(`${task.shift} shift time window is not currently open.`);
-    return;
-  }
-
-<<<<<<< HEAD
-  const areAllTasksHandled = (tasksInShift) =>
-    tasksInShift.every(t =>
-      t.employeeStatus ||
-      ((!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false)
-    );
-=======
-  
-  const areAllTasksInShiftHandled = (shiftTasks) => {
-    if (shiftTasks.length === 0) {
-      return true;
-    }
-    
-    const unhandledTasks = shiftTasks.filter(t => {
-      const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-      const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-      return !hasStatus && !isMissed; 
+    // Get all tasks for the same normalized date
+    const sameDayTasks = tasks.filter(t => {
+      const tDate = normalizeDate(t.date);
+      return tDate === taskNormalizedDate && tDate !== '';
     });
-    
-    
-    return unhandledTasks.length === 0;
-  };
->>>>>>> keshav_dev
 
-  let blockReason = "";
 
-<<<<<<< HEAD
-  if (task.shift === "Mid" && startTasks.length && !areAllTasksHandled(startTasks)) {
-    blockReason = "Cannot update Mid shift. Start shift tasks pending.";
-  }
 
-  if (
-    task.shift === "End" &&
-    (
-      (startTasks.length && !areAllTasksHandled(startTasks)) ||
-      (midTasks.length && !areAllTasksHandled(midTasks))
-    )
-  ) {
-    blockReason = "Cannot update End shift. Previous shift tasks pending.";
-  }
+    // Group tasks by shift
+    const startTasks = sameDayTasks.filter(t => t.shift === "Start");
+    const midTasks = sameDayTasks.filter(t => t.shift === "Mid");
 
-  if (blockReason) {
-=======
-  if (task.shift === "Mid") {
-    if (startTasks.length > 0) {
+
+    // Check if current task is missed
+    const isTaskMissed = (task.employeeStatus === "" || !task.employeeStatus) &&
+      task.canUpdate === false;
+
+    if (isTaskMissed) {
+      toast.error(`${task.shift} shift time window has passed. Can update tomorrow.`);
+      return;
+    }
+
+    const canTaskBeUpdated = task.canUpdate === true;
+
+    if (!canTaskBeUpdated) {
+      toast.error(`${task.shift} shift time window is not currently open.`);
+      return;
+    }
+
+
+    const areAllTasksInShiftHandled = (shiftTasks) => {
+      if (shiftTasks.length === 0) {
+        return true;
+      }
+
+      const unhandledTasks = shiftTasks.filter(t => {
+        const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+        const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
+        return !hasStatus && !isMissed;
+      });
+
+
+      return unhandledTasks.length === 0;
+    };
+
+    let isBlocked = false;
+    let blockReason = "";
+
+    if (task.shift === "Mid") {
+      if (startTasks.length > 0) {
+        const allStartHandled = areAllTasksInShiftHandled(startTasks);
+
+        if (!allStartHandled) {
+          isBlocked = true;
+
+          const pendingStart = startTasks.filter(t => {
+            const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+            const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
+            return !hasStatus && !isMissed;
+          });
+
+          const missedStart = startTasks.filter(t =>
+            (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
+          );
+
+          let reason = `Cannot update Mid shift. `;
+          if (pendingStart.length > 0) {
+            reason += `${pendingStart.length} Start shift task(s) pending completion. `;
+          }
+          if (missedStart.length > 0) {
+            reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
+          }
+          blockReason = reason.trim();
+        }
+      } else {
+      }
+    }
+
+    if (task.shift === "End") {
       const allStartHandled = areAllTasksInShiftHandled(startTasks);
-      
-      if (!allStartHandled) {
+      const allMidHandled = areAllTasksInShiftHandled(midTasks);
+
+
+      if (startTasks.length > 0 && !allStartHandled) {
         isBlocked = true;
-        
+
         const pendingStart = startTasks.filter(t => {
           const hasStatus = t.employeeStatus && t.employeeStatus !== "";
           const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
           return !hasStatus && !isMissed;
         });
-        
-        const missedStart = startTasks.filter(t => 
+
+        const missedStart = startTasks.filter(t =>
           (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
         );
-        
-        let reason = `Cannot update Mid shift. `;
+
+        let reason = `Cannot update End shift. `;
         if (pendingStart.length > 0) {
           reason += `${pendingStart.length} Start shift task(s) pending completion. `;
         }
@@ -247,108 +196,64 @@ const handleStatusChange = async (taskId, status) => {
           reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
         }
         blockReason = reason.trim();
-      }
-    } else {
-    }
-  }
 
-  if (task.shift === "End") {
-    const allStartHandled = areAllTasksInShiftHandled(startTasks);
-    const allMidHandled = areAllTasksInShiftHandled(midTasks);
-    
-    
-    if (startTasks.length > 0 && !allStartHandled) {
-      isBlocked = true;
-      
-      const pendingStart = startTasks.filter(t => {
-        const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-        const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-        return !hasStatus && !isMissed;
-      });
-      
-      const missedStart = startTasks.filter(t => 
-        (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
-      );
-      
-      let reason = `Cannot update End shift. `;
-      if (pendingStart.length > 0) {
-        reason += `${pendingStart.length} Start shift task(s) pending completion. `;
-      }
-      if (missedStart.length > 0) {
-        reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
-      }
-      blockReason = reason.trim();
-      
-    } else if (midTasks.length > 0 && !allMidHandled) {
-      isBlocked = true;
-      
-      const pendingMid = midTasks.filter(t => {
-        const hasStatus = t.employeeStatus && t.employeeStatus !== "";
-        const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
-        return !hasStatus && !isMissed;
-      });
-      
-      const missedMid = midTasks.filter(t => 
-        (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
-      );
-      
-      let reason = `Cannot update End shift. `;
-      if (pendingMid.length > 0) {
-        reason += `${pendingMid.length} Mid shift task(s) pending completion. `;
-      }
-      if (missedMid.length > 0) {
-        reason += `${missedMid.length} Mid shift task(s) missed (time window passed).`;
-      }
-      blockReason = reason.trim();
-    }
-  }
+      } else if (midTasks.length > 0 && !allMidHandled) {
+        isBlocked = true;
 
-  if (isBlocked) {
->>>>>>> keshav_dev
-    toast.error(blockReason);
-    return;
-  }
+        const pendingMid = midTasks.filter(t => {
+          const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+          const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
+          return !hasStatus && !isMissed;
+        });
 
-<<<<<<< HEAD
-=======
+        const missedMid = midTasks.filter(t =>
+          (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
+        );
 
->>>>>>> keshav_dev
-  try {
-    await dispatch(
-      updateTaskStatus({ id: taskId, status })
-    ).unwrap();
-
-<<<<<<< HEAD
-    toast.success("Task status updated successfully!");
-  } catch (err) {
-    toast.error(err?.message || "Failed to update status");
-=======
-    if (isCoreTeam) {
-      updatedStatus = await dispatch(
-        updateTaskStatusCoreTeam({ id: taskId, status })
-      ).unwrap();
-      dispatch({
-        type: "tasks/updateTaskStatusCoreTeam/fulfilled",
-        payload: updatedStatus,
-      });
-    } else {
-      updatedStatus = await dispatch(
-        updateTaskStatus({ id: taskId, status })
-      ).unwrap();
-      dispatch({
-        type: "tasks/updateTaskStatus/fulfilled",
-        payload: updatedStatus,
-      });
+        let reason = `Cannot update End shift. `;
+        if (pendingMid.length > 0) {
+          reason += `${pendingMid.length} Mid shift task(s) pending completion. `;
+        }
+        if (missedMid.length > 0) {
+          reason += `${missedMid.length} Mid shift task(s) missed (time window passed).`;
+        }
+        blockReason = reason.trim();
+      }
     }
 
-    toast.success("Task status updated successfully!");
-  } catch (err) {
-    const errorMessage = err?.message || err || "Failed to update status, please try again.";
-    toast.error(errorMessage);
->>>>>>> keshav_dev
-  }
-};
+    if (isBlocked) {
+      toast.error(blockReason);
+      return;
+    }
 
+
+    try {
+      let updatedStatus;
+
+      if (isCoreTeam) {
+        updatedStatus = await dispatch(
+          updateTaskStatusCoreTeam({ id: taskId, status })
+        ).unwrap();
+        dispatch({
+          type: "tasks/updateTaskStatusCoreTeam/fulfilled",
+          payload: updatedStatus,
+        });
+      } else {
+        updatedStatus = await dispatch(
+          updateTaskStatus({ id: taskId, status })
+        ).unwrap();
+        dispatch({
+          type: "tasks/updateTaskStatus/fulfilled",
+          payload: updatedStatus,
+        });
+      }
+
+      toast.success("Task status updated successfully!");
+    } catch (err) {
+      const errorMessage = err?.message || err || "Failed to update status, please try again.";
+      toast.error(errorMessage);
+    }
+  };
 
   const openChat = (task) => {
     setSelectedTask(task);
@@ -438,7 +343,7 @@ const handleStatusChange = async (taskId, status) => {
             </div>
           </div>
         )}
-        
+
         {loading && (
           <div className="flex justify-center items-center py-8">
             <div className="flex space-x-2">
@@ -469,14 +374,10 @@ const handleStatusChange = async (taskId, status) => {
           ) : (
             tasks.map((task) => (
               <div key={task._id} className="relative">
-                <TaskCard 
-                  task={task} 
-                  onStatusChange={handleStatusChange} 
-                  allTasks={tasks} 
-<<<<<<< HEAD
-                  isCoreTeam={isCoreTeam}
-=======
->>>>>>> keshav_dev
+                <TaskCard
+                  task={task}
+                  onStatusChange={handleStatusChange}
+                  allTasks={tasks}
                 />
                 <button
                   onClick={() => openChat(task)}
@@ -497,8 +398,8 @@ const handleStatusChange = async (taskId, status) => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-800 text-lg truncate">{selectedTask?.title}</h3>
                   <p className="text-sm text-gray-500 mt-1">
-                    {Array.isArray(selectedTask?.assignedTo) 
-                      ? `${selectedTask?.assignedTo.length} assignee(s)` 
+                    {Array.isArray(selectedTask?.assignedTo)
+                      ? `${selectedTask?.assignedTo.length} assignee(s)`
                       : selectedTask?.assignedTo?.username || 'Unassigned'}
                   </p>
                 </div>
@@ -549,11 +450,10 @@ const handleStatusChange = async (taskId, status) => {
                           className={`relative max-w-[80%] ${isMine ? "ml-8" : "mr-8"}`}
                         >
                           <div
-                            className={`px-4 py-3 rounded-2xl break-words shadow-sm relative transition-all duration-200 hover:shadow-md ${
-                              isMine
+                            className={`px-4 py-3 rounded-2xl break-words shadow-sm relative transition-all duration-200 hover:shadow-md ${isMine
                                 ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-none"
                                 : "bg-white text-gray-800 border border-gray-100 rounded-bl-none"
-                            }`}
+                              }`}
                           >
                             {isEditing ? (
                               <div className="space-y-3">
@@ -561,11 +461,10 @@ const handleStatusChange = async (taskId, status) => {
                                   type="text"
                                   value={editingMessage}
                                   onChange={(e) => setEditingMessage(e.target.value)}
-                                  className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 transition-all duration-200 ${
-                                    isMine 
-                                      ? "bg-blue-700/20 text-white placeholder-blue-300 border-blue-400/30 focus:ring-blue-300/30" 
+                                  className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 transition-all duration-200 ${isMine
+                                      ? "bg-blue-700/20 text-white placeholder-blue-300 border-blue-400/30 focus:ring-blue-300/30"
                                       : "bg-white text-gray-800 border-gray-300 focus:ring-blue-100"
-                                  }`}
+                                    }`}
                                   placeholder="Edit remark..."
                                   autoFocus
                                   onKeyPress={(e) => {
@@ -615,7 +514,7 @@ const handleStatusChange = async (taskId, status) => {
                               <>
                                 <div className="relative">
                                   <p className="text-sm pr-8">{msg.message}</p>
-                                  
+
                                   {isMine && (
                                     <div className="absolute -top-2 -right-2">
                                       <button
@@ -637,7 +536,10 @@ const handleStatusChange = async (taskId, status) => {
                                     {msg.senderId?.username}
                                   </span>
                                   <span className={`text-xs ${isMine ? "text-white/80" : "text-gray-500"}`}>
-                                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                                    {new Date(msg.createdAt).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric'
+                                    })} • {new Date(msg.createdAt).toLocaleTimeString([], {
                                       hour: "2-digit",
                                       minute: "2-digit",
                                     })}
@@ -689,11 +591,10 @@ const handleStatusChange = async (taskId, status) => {
                   <button
                     onClick={handleSendRemark}
                     disabled={!newMessage.trim()}
-                    className={`p-3 rounded-full shadow-md transition-all duration-200 transform hover:scale-105 cursor-pointer ${
-                      newMessage.trim()
+                    className={`p-3 rounded-full shadow-md transition-all duration-200 transform hover:scale-105 cursor-pointer ${newMessage.trim()
                         ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                         : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                    }`}
+                      }`}
                   >
                     <FiSend size={18} />
                   </button>

@@ -45,9 +45,9 @@ import api from "../../api.js";
 const ChatUI = () => {
   const dispatch = useDispatch();
   const { chats, searchResults } = useSelector((state) => state.chat);
-  const { 
-    messagesByChat, 
-    editingMessageId, 
+  const {
+    messagesByChat,
+    editingMessageId,
     deletingMessageId,
     uploading,
     uploadError
@@ -58,7 +58,7 @@ const ChatUI = () => {
 
   const [selectedChat, setSelectedChat] = useState(null);
   const [text, setText] = useState("");
-  const [selectedFiles, setSelectedFiles] = useState([]);  
+  const [selectedFiles, setSelectedFiles] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [socketConnected, setSocketConnected] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -66,7 +66,7 @@ const ChatUI = () => {
   const [editingText, setEditingText] = useState("");
   const [showMessageMenu, setShowMessageMenu] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
-  
+
   const [typingUsers, setTypingUsers] = useState({});
   const [isTyping, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
@@ -75,12 +75,6 @@ const ChatUI = () => {
 
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
-
-  const scrollToBottom = useCallback(() => {
-    if (messageEndRef.current) {
-      messageEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, []);
 
   const autoResizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -97,16 +91,16 @@ const ChatUI = () => {
 
   const handleFileSelect = (e) => {
     const files = Array.from(e.target.files);
-    
+
     const oversizedFiles = files.filter(file => file.size > 100 * 1024 * 1024);
     if (oversizedFiles.length > 0) {
       alert(`Some files exceed 100MB limit: ${oversizedFiles.map(f => f.name).join(', ')}`);
       return;
     }
-    
+
     setSelectedFiles(prev => [...prev, ...files]);
     setShowFilePreview(true);
-    
+
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -135,137 +129,135 @@ const ChatUI = () => {
   };
 
   const handleSend = async () => {
-  if (typingTimeoutRef.current) {
-    clearTimeout(typingTimeoutRef.current);
-  }
-  
-  if (isTyping && selectedChat && socketConnected) {
-    setIsTyping(false);
-    socket.emit("stop_typing", { 
-      chatId: selectedChat._id
-    });
-  }
-  
-  if (!selectedChat) {
-    return;
-  }
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
 
-  const hasText = text.trim().length > 0;
-  const hasFiles = selectedFiles.length > 0;
-  
-  if (!hasText && !hasFiles) {
-    return;
-  }
+    if (isTyping && selectedChat && socketConnected) {
+      setIsTyping(false);
+      socket.emit("stop_typing", {
+        chatId: selectedChat._id
+      });
+    }
 
-  const messageText = text;
-  setText("");
+    if (!selectedChat) {
+      return;
+    }
 
-  if (textareaRef.current) {
-    textareaRef.current.style.height = 'auto';
-  }
+    const hasText = text.trim().length > 0;
+    const hasFiles = selectedFiles.length > 0;
 
-  const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-  
-  setSendingMessages(prev => new Set(prev).add(tempId));
+    if (!hasText && !hasFiles) {
+      return;
+    }
 
-  const filePreviews = selectedFiles.map(file => ({
-    file,
-    previewUrl: URL.createObjectURL(file)
-  }));
+    const messageText = text;
+    setText("");
 
-  const tempMessage = {
-    _id: tempId,
-    chatId: selectedChat._id,
-    sender: {
-      _id: userId,
-      id: userId,
-      username: user.name || user.username
-    },
-    content: {
-      text: messageText,
-      media: filePreviews.map(({ file, previewUrl }) => ({
-        url: previewUrl,  
-        filename: file.name,
-        size: file.size,
-        type: file.type,
-        mimeType: file.type,
-        isTemp: true
-      }))
-    },
-    messageType: selectedFiles.length > 0 
-      ? (hasText ? "mixed" : "media") 
-      : "text",
-    createdAt: new Date().toISOString(),
-    isSending: true,
-    isTemp: true
-  };
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+    }
 
-  dispatch(addIncomingMessage({
-    chatId: selectedChat._id,
-    message: tempMessage
-  }));
+    const tempId = `temp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-  setTimeout(() => scrollToBottom(), 50);
+    setSendingMessages(prev => new Set(prev).add(tempId));
 
-  try {
-    const result = await dispatch(sendMessageWithFiles({
+    const filePreviews = selectedFiles.map(file => ({
+      file,
+      previewUrl: URL.createObjectURL(file)
+    }));
+
+    const tempMessage = {
+      _id: tempId,
       chatId: selectedChat._id,
-      text: messageText,
-      files: selectedFiles,
-    })).unwrap();
+      sender: {
+        _id: userId,
+        id: userId,
+        username: user.name || user.username
+      },
+      content: {
+        text: messageText,
+        media: filePreviews.map(({ file, previewUrl }) => ({
+          url: previewUrl,
+          filename: file.name,
+          size: file.size,
+          type: file.type,
+          mimeType: file.type,
+          isTemp: true
+        }))
+      },
+      messageType: selectedFiles.length > 0
+        ? (hasText ? "mixed" : "media")
+        : "text",
+      createdAt: new Date().toISOString(),
+      isSending: true,
+      isTemp: true
+    };
+
+    dispatch(addIncomingMessage({
+      chatId: selectedChat._id,
+      message: tempMessage
+    }));
+
+    try {
+      const result = await dispatch(sendMessageWithFiles({
+        chatId: selectedChat._id,
+        text: messageText,
+        files: selectedFiles,
+      })).unwrap();
 
 
-    filePreviews.forEach(({ previewUrl }) => {
-      URL.revokeObjectURL(previewUrl);
-    });
+      filePreviews.forEach(({ previewUrl }) => {
+        URL.revokeObjectURL(previewUrl);
+      });
 
-    if (result.message) {
+      if (result.message) {
+        dispatch(replaceTempMessage({
+          chatId: selectedChat._id,
+          tempId: tempId,
+          realMessage: result.message
+        }));
+      }
+
+      setSendingMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tempId);
+        return newSet;
+      });
+
+    } catch (error) {
+
+      filePreviews.forEach(({ previewUrl }) => {
+        URL.revokeObjectURL(previewUrl);
+      });
+
       dispatch(replaceTempMessage({
         chatId: selectedChat._id,
         tempId: tempId,
-        realMessage: result.message
+        realMessage: null
       }));
+
+      setSendingMessages(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(tempId);
+        return newSet;
+      });
+
+      if (error.message?.includes('Failed to upload')) {
+        alert('Failed to upload one or more files. Please check file size and type.');
+      } else {
+        alert(error.message || "Failed to send message");
+      }
+
+      setText(messageText);
+
+    } finally {
+      setSelectedFiles([]);
+      setShowFilePreview(false);
+
+      dispatch(clearUploadedFiles());
     }
-
-    setSendingMessages(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(tempId);
-      return newSet;
-    });
-
-  } catch (error) {
-    
-    filePreviews.forEach(({ previewUrl }) => {
-      URL.revokeObjectURL(previewUrl);
-    });
-    
-    dispatch(replaceTempMessage({
-      chatId: selectedChat._id,
-      tempId: tempId,
-      realMessage: null
-    }));
-
-    setSendingMessages(prev => {
-      const newSet = new Set(prev);
-      newSet.delete(tempId);
-      return newSet;
-    });
-
-    if (error.message?.includes('Failed to upload')) {
-      alert('Failed to upload one or more files. Please check file size and type.');
-    } else {
-      alert(error.message || "Failed to send message");
-    }
-    
-    setText(messageText);
-    
-  } finally {
-    setSelectedFiles([]);
-    setShowFilePreview(false);
-    
-    dispatch(clearUploadedFiles());
-  }
-};
+  };
   const renderFilePreview = () => {
     if (!showFilePreview || selectedFiles.length === 0) return null;
 
@@ -285,7 +277,7 @@ const ChatUI = () => {
             <FiXCircle size={18} />
           </button>
         </div>
-        
+
         <div className="space-y-2 max-h-40 overflow-y-auto">
           {selectedFiles.map((file, index) => (
             <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
@@ -317,222 +309,222 @@ const ChatUI = () => {
     );
   };
 
- const renderMessageMedia = (media) => {
-  if (!media || media.length === 0) return null;
+  const renderMessageMedia = (media) => {
+    if (!media || media.length === 0) return null;
 
- const handleFileDownload = (file) => {
-  const isPdf = file.resourceType === "raw" && file.filename.toLowerCase().endsWith(".pdf");
+    const handleFileDownload = (file) => {
+      const isPdf = file.resourceType === "raw" && file.filename.toLowerCase().endsWith(".pdf");
 
-  if (isPdf) {
-    const pdfUrl = file.url.includes("?")
-      ? `${file.url}&fl_attachment:false`
-      : `${file.url}?fl_attachment:false`;
+      if (isPdf) {
+        const pdfUrl = file.url.includes("?")
+          ? `${file.url}&fl_attachment:false`
+          : `${file.url}?fl_attachment:false`;
 
-    window.open(pdfUrl, "_blank");
-    return;
-  }
+        window.open(pdfUrl, "_blank");
+        return;
+      }
 
-  const link = document.createElement('a');
-  link.href = file.url;
-  link.download = file.filename || "";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-};
-
-
+      const link = document.createElement('a');
+      link.href = file.url;
+      link.download = file.filename || "";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    };
 
 
-  return (
-    <div className="mt-2 space-y-2">
-      {media.map((item, index) => {
-        const isImage = item.mediaType === 'image' || 
-                       item.mimeType?.startsWith('image/') ||
-                       item.url?.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)$/i);
-        
-        const isExcel = item.mediaType === 'excel' || 
-                       item.mimeType?.includes('excel') ||
-                       item.mimeType?.includes('spreadsheet') ||
-                       item.filename?.match(/\.(xlsx|xls|xlsm|xlsb|xltx|xltm|xlam|csv)$/i);
-        
-        const isPDF = item.mediaType === 'pdf' || 
-                     item.mimeType === 'application/pdf' ||
-                     item.filename?.match(/\.pdf$/i);
-        
-        const isDocument = item.mediaType === 'document' || 
-                          item.mimeType?.includes('word') ||
-                          item.mimeType?.includes('msword') ||
-                          item.filename?.match(/\.(docx|doc|dotx|dotm|rtf)$/i);
-        
-        const isArchive = item.mediaType === 'archive' ||
-                         item.mimeType?.includes('zip') ||
-                         item.mimeType?.includes('rar') ||
-                         item.mimeType?.includes('compressed') ||
-                         item.filename?.match(/\.(zip|rar|7z|tar|gz|bz2)$/i);
-        
-        const isText = item.mediaType === 'text' ||
-                      item.mimeType?.startsWith('text/') ||
-                      item.filename?.match(/\.(txt|json|xml|html|css|js|ts|py|java|cpp)$/i);
-        
-        const isVideo = item.mediaType === 'video' ||
-                       item.mimeType?.startsWith('video/') ||
-                       item.url?.match(/\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv|m4v)$/i);
-        
-        const isAudio = item.mediaType === 'audio' ||
-                       item.mimeType?.startsWith('audio/') ||
-                       item.url?.match(/\.(mp3|wav|ogg|m4a|flac|aac|wma)$/i);
-        
-        const isPresentation = item.mediaType === 'presentation' ||
-                              item.mimeType?.includes('presentation') ||
-                              item.mimeType?.includes('powerpoint') ||
-                              item.filename?.match(/\.(pptx|ppt|pptm|potx|potm)$/i);
 
-        const isDownloadableDocument = isExcel || isPDF || isDocument || isArchive || 
-                                      isText || isPresentation || 
-                                      item.resourceType === 'raw' ||
-                                      item.mediaType === 'file';
 
-        return (
-          <div key={index} className="max-w-xs">
-            {isImage ? (
-              <div className="rounded-lg overflow-hidden border border-gray-200">
-                <img
-                  src={item.url}
-                  alt={item.filename || 'Image'}
-                  className="w-full h-auto max-h-48 object-cover cursor-pointer"
-                  onClick={() => window.open(item.url, '_blank')}
-                  onError={(e) => {
-                    e.target.onerror = null;
-                    e.target.src = 'https://via.placeholder.com/150?text=Image+Error';
-                  }}
-                />
-                {item.filename && (
+    return (
+      <div className="mt-2 space-y-2">
+        {media.map((item, index) => {
+          const isImage = item.mediaType === 'image' ||
+            item.mimeType?.startsWith('image/') ||
+            item.url?.match(/\.(jpg|jpeg|png|gif|webp|bmp|tiff|svg)$/i);
+
+          const isExcel = item.mediaType === 'excel' ||
+            item.mimeType?.includes('excel') ||
+            item.mimeType?.includes('spreadsheet') ||
+            item.filename?.match(/\.(xlsx|xls|xlsm|xlsb|xltx|xltm|xlam|csv)$/i);
+
+          const isPDF = item.mediaType === 'pdf' ||
+            item.mimeType === 'application/pdf' ||
+            item.filename?.match(/\.pdf$/i);
+
+          const isDocument = item.mediaType === 'document' ||
+            item.mimeType?.includes('word') ||
+            item.mimeType?.includes('msword') ||
+            item.filename?.match(/\.(docx|doc|dotx|dotm|rtf)$/i);
+
+          const isArchive = item.mediaType === 'archive' ||
+            item.mimeType?.includes('zip') ||
+            item.mimeType?.includes('rar') ||
+            item.mimeType?.includes('compressed') ||
+            item.filename?.match(/\.(zip|rar|7z|tar|gz|bz2)$/i);
+
+          const isText = item.mediaType === 'text' ||
+            item.mimeType?.startsWith('text/') ||
+            item.filename?.match(/\.(txt|json|xml|html|css|js|ts|py|java|cpp)$/i);
+
+          const isVideo = item.mediaType === 'video' ||
+            item.mimeType?.startsWith('video/') ||
+            item.url?.match(/\.(mp4|webm|ogg|mov|avi|mkv|flv|wmv|m4v)$/i);
+
+          const isAudio = item.mediaType === 'audio' ||
+            item.mimeType?.startsWith('audio/') ||
+            item.url?.match(/\.(mp3|wav|ogg|m4a|flac|aac|wma)$/i);
+
+          const isPresentation = item.mediaType === 'presentation' ||
+            item.mimeType?.includes('presentation') ||
+            item.mimeType?.includes('powerpoint') ||
+            item.filename?.match(/\.(pptx|ppt|pptm|potx|potm)$/i);
+
+          const isDownloadableDocument = isExcel || isPDF || isDocument || isArchive ||
+            isText || isPresentation ||
+            item.resourceType === 'raw' ||
+            item.mediaType === 'file';
+
+          return (
+            <div key={index} className="max-w-xs">
+              {isImage ? (
+                <div className="rounded-lg overflow-hidden border border-gray-200">
+                  <img
+                    src={item.url}
+                    alt={item.filename || 'Image'}
+                    className="w-full h-auto max-h-48 object-cover cursor-pointer"
+                    onClick={() => window.open(item.url, '_blank')}
+                    onError={(e) => {
+                      e.target.onerror = null;
+                      e.target.src = 'https://via.placeholder.com/150?text=Image+Error';
+                    }}
+                  />
+                  {item.filename && (
+                    <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
+                      {item.filename}
+                    </div>
+                  )}
+                </div>
+              ) : isVideo ? (
+                <div className="rounded-lg overflow-hidden border border-gray-200">
+                  <video
+                    src={item.url}
+                    controls
+                    className="w-full max-h-48"
+                    onError={(e) => {
+                    }}
+                  />
                   <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
-                    {item.filename}
+                    {item.filename || 'Video file'}
                   </div>
-                )}
-              </div>
-            ) : isVideo ? (
-              <div className="rounded-lg overflow-hidden border border-gray-200">
-                <video
-                  src={item.url}
-                  controls
-                  className="w-full max-h-48"
-                  onError={(e) => {
-                  }}
-                />
-                <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
-                  {item.filename || 'Video file'}
                 </div>
-              </div>
-            ) : isAudio ? (
-              <div className="rounded-lg overflow-hidden border border-gray-200">
-                <audio
-                  src={item.url}
-                  controls
-                  className="w-full"
-                  onError={(e) => {
-                  }}
-                />
-                <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
-                  {item.filename || 'Audio file'}
+              ) : isAudio ? (
+                <div className="rounded-lg overflow-hidden border border-gray-200">
+                  <audio
+                    src={item.url}
+                    controls
+                    className="w-full"
+                    onError={(e) => {
+                    }}
+                  />
+                  <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
+                    {item.filename || 'Audio file'}
+                  </div>
                 </div>
-              </div>
-            ) : isDownloadableDocument ? (
-              <button
-                onClick={() => handleFileDownload(item)}
-                className="w-full flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-left"
-              >
-                {isExcel ? (
-                  <div className="text-green-600">
-                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V1.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.64-1.29H2l2.27 3.82-2.48 3.85h2.16zM22.5 21v-3h-2v3zm0-4.5v-3h-2v3zm0-4.5v-3h-2v3zm0-4.5v-3h-2v3z"/>
+              ) : isDownloadableDocument ? (
+                <button
+                  onClick={() => handleFileDownload(item)}
+                  className="w-full flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-left"
+                >
+                  {isExcel ? (
+                    <div className="text-green-600">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M23 1.5q.41 0 .7.3.3.29.3.7v19q0 .41-.3.7-.29.3-.7.3H7q-.41 0-.7-.3-.3-.29-.3-.7V18H1q-.41 0-.7-.3-.3-.29-.3-.7V7q0-.41.3-.7Q.58 6 1 6h5V1.5q0-.41.3-.7.29-.3.7-.3zM6 13.28l1.42 2.66h2.14l-2.38-3.87 2.34-3.8H7.46l-1.3 2.4-.05.08-.04.09-.64-1.28-.64-1.29H2l2.27 3.82-2.48 3.85h2.16zM22.5 21v-3h-2v3zm0-4.5v-3h-2v3zm0-4.5v-3h-2v3zm0-4.5v-3h-2v3z" />
+                      </svg>
+                    </div>
+                  ) : isPDF ? (
+                    <div className="text-red-600">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z" />
+                      </svg>
+                    </div>
+                  ) : isDocument ? (
+                    <div className="text-blue-600">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                      </svg>
+                    </div>
+                  ) : isPresentation ? (
+                    <div className="text-orange-600">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-9h-4v1h4v-1zm0 2h-4v1h4v-1zm0 2h-4v1h4v-1z" />
+                      </svg>
+                    </div>
+                  ) : isArchive ? (
+                    <div className="text-yellow-600">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z" />
+                      </svg>
+                    </div>
+                  ) : isText ? (
+                    <div className="text-gray-600">
+                      <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z" />
+                      </svg>
+                    </div>
+                  ) : (
+                    <IoDocument className="text-gray-500 text-2xl" />
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {item.filename || 'Document'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {item.size ? formatFileSize(item.size) : 'Unknown size'}
+                      {isExcel && ' • Excel'}
+                      {isPDF && ' • PDF'}
+                      {isDocument && ' • Document'}
+                      {isPresentation && ' • Presentation'}
+                      {isArchive && ' • Archive'}
+                      {isText && ' • Text'}
+                    </p>
+                  </div>
+
+                  <div className="text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
                   </div>
-                ) : isPDF ? (
-                  <div className="text-red-600">
-                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/>
-                    </svg>
-                  </div>
-                ) : isDocument ? (
-                  <div className="text-blue-600">
-                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-                    </svg>
-                  </div>
-                ) : isPresentation ? (
-                  <div className="text-orange-600">
-                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6zm10-9h-4v1h4v-1zm0 2h-4v1h4v-1zm0 2h-4v1h4v-1z"/>
-                    </svg>
-                  </div>
-                ) : isArchive ? (
-                  <div className="text-yellow-600">
-                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
-                    </svg>
-                  </div>
-                ) : isText ? (
-                  <div className="text-gray-600">
-                    <svg className="w-8 h-8" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
-                    </svg>
-                  </div>
-                ) : (
+                </button>
+              ) : (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                >
                   <IoDocument className="text-gray-500 text-2xl" />
-                )}
-                
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">
-                    {item.filename || 'Document'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {item.size ? formatFileSize(item.size) : 'Unknown size'}
-                    {isExcel && ' • Excel'}
-                    {isPDF && ' • PDF'}
-                    {isDocument && ' • Document'}
-                    {isPresentation && ' • Presentation'}
-                    {isArchive && ' • Archive'}
-                    {isText && ' • Text'}
-                  </p>
-                </div>
-                
-                <div className="text-gray-400">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                  </svg>
-                </div>
-              </button>
-            ) : (
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                <IoDocument className="text-gray-500 text-2xl" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">
-                    {item.filename || 'File'}
-                  </p>
-                  <p className="text-xs text-gray-500">
-                    {item.size ? formatFileSize(item.size) : 'Click to open'}
-                  </p>
-                </div>
-                <div className="text-gray-400">
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
-                </div>
-              </a>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-};
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-800 truncate">
+                      {item.filename || 'File'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {item.size ? formatFileSize(item.size) : 'Click to open'}
+                    </p>
+                  </div>
+                  <div className="text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                    </svg>
+                  </div>
+                </a>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 
   useEffect(() => {
     if (!socket.connected) {
@@ -635,10 +627,6 @@ const ChatUI = () => {
               dispatch(addIncomingMessage({ chatId, message }));
             }
           }
-
-          if (selectedChat && selectedChat._id === chatId) {
-            setTimeout(() => scrollToBottom(), 100);
-          }
         }
       }
     };
@@ -679,7 +667,7 @@ const ChatUI = () => {
       socket.off("message_edited", handleMessageEdited);
       socket.off("message_deleted", handleMessageDeleted);
     };
-  }, [dispatch, selectedChat, scrollToBottom, messagesByChat, userId, editingMessageId]);
+  }, [dispatch, selectedChat, messagesByChat, userId, editingMessageId]);
 
   useEffect(() => {
     dispatch(getUserChats());
@@ -702,19 +690,17 @@ const ChatUI = () => {
           chatId,
           messages: res.data.messages
         }));
-
-        setTimeout(() => scrollToBottom(), 200);
       }
     } catch (err) {
     } finally {
       setIsLoadingMessages(false);
     }
-  }, [dispatch, scrollToBottom]);
+  }, [dispatch]);
 
   const openChat = useCallback((chat) => {
     setSelectedChat(chat);
     setShowMessageMenu(null);
-    setTypingUsers({});  
+    setTypingUsers({});
     dispatch(clearEditingState());
     setEditingText("");
 
@@ -735,7 +721,7 @@ const ChatUI = () => {
 
     if (!isTyping) {
       setIsTyping(true);
-      socket.emit("typing", { 
+      socket.emit("typing", {
         chatId: selectedChat._id
       });
     }
@@ -747,21 +733,21 @@ const ChatUI = () => {
     typingTimeoutRef.current = setTimeout(() => {
       if (isTyping) {
         setIsTyping(false);
-        socket.emit("stop_typing", { 
+        socket.emit("stop_typing", {
           chatId: selectedChat._id
         });
       }
-    }, 1500);  
+    }, 1500);
   }, [selectedChat, socketConnected, isTyping]);
- 
+
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
       }
-      
+
       if (isTyping && selectedChat && socketConnected) {
-        socket.emit("stop_typing", { 
+        socket.emit("stop_typing", {
           chatId: selectedChat._id
         });
       }
@@ -874,12 +860,6 @@ const ChatUI = () => {
   });
 
   useEffect(() => {
-    if (filteredMessages.length > 0) {
-      setTimeout(() => scrollToBottom(), 100);
-    }
-  }, [filteredMessages, scrollToBottom]);
-
-  useEffect(() => {
     const handleClickOutside = (event) => {
       if (showMessageMenu && !event.target.closest('.message-menu')) {
         setShowMessageMenu(null);
@@ -891,7 +871,7 @@ const ChatUI = () => {
   }, [showMessageMenu]);
 
   return (
-    <div className="w-full min-h-screen bg-white flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-10 md:mt-10 mb-5">
+    <div className="w-full h-[calc(100vh-50px)] bg-white flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-10 md:mt-10 mb-2 overflow-hidden">
       {selectedChat && (
         <div className="md:hidden flex items-center justify-between p-4 bg-white rounded-t-xl mb-2 shadow-sm">
           <div className="flex items-center gap-3">
@@ -916,7 +896,7 @@ const ChatUI = () => {
       <div
         className={`bg-white rounded-xl p-3 sm:p-4 flex flex-col shadow-md 
           ${selectedChat ? "hidden md:flex" : "flex"}
-          w-full md:w-1/4 lg:w-1/5 xl:w-1/6`}
+          w-full md:w-1/4 lg:w-1/5 xl:w-1/6 overflow-hidden`}
       >
         <div className="flex items-center gap-3 mb-4 md:mb-0">
           <FaUserCircle size={40} className="text-gray-500 hidden md:block" />
@@ -961,7 +941,7 @@ const ChatUI = () => {
         </div>
 
         <h3 className="mt-4 md:mt-6 font-semibold text-gray-700 text-sm md:text-base">Last chats</h3>
-        <div className="mt-2 md:mt-4 space-y-2 md:space-y-4 flex-1 overflow-y-auto">
+        <div className="mt-2 md:mt-4 space-y-2 md:space-y-4 flex-1 overflow-y-auto min-h-0">
           {chats.map((c) => {
             const otherUser = c.otherUser;
             const displayName = otherUser?.username || otherUser?.name || "Unknown";
@@ -996,7 +976,7 @@ const ChatUI = () => {
       </div>
 
       {selectedChat ? (
-        <div className="bg-[#EDF0F5] rounded-xl flex flex-col shadow-md mx-0 md:mx-2 lg:mx-4 w-full md:w-3/4 lg:w-4/5 xl:w-5/6 flex-1">
+        <div className="bg-[#EDF0F5] rounded-xl flex flex-col shadow-md mx-0 md:mx-2 lg:mx-4 w-full md:w-3/4 lg:w-4/5 xl:w-5/6 flex-1 min-h-0 overflow-hidden">
           <div className="hidden md:flex p-4 justify-between items-center bg-white rounded-t-xl">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-3">
@@ -1006,8 +986,8 @@ const ChatUI = () => {
                     {selectedChat.otherUser?.username || "Unknown"}
                   </h2>
                   <span className={`text-xs ${socketConnected ? "text-green-600" : "text-red-600"}`}>
-              {socketConnected ? "Online" : "Offline"}
-            </span>
+                    {socketConnected ? "Online" : "Offline"}
+                  </span>
                 </div>
               </div>
             </div>
@@ -1016,7 +996,11 @@ const ChatUI = () => {
 
           <div
             ref={messagesContainerRef}
-            className="flex-1 p-2 md:p-4 overflow-y-auto"
+            className="flex-1 p-2 md:p-4 overflow-y-auto min-h-0"
+             style={{ 
+              maxHeight: 'calc(100vh - 250px)',  
+              height: 'auto'
+            }}
           >
             {isLoadingMessages ? (
               <div className="flex justify-center items-center h-full">
@@ -1030,7 +1014,7 @@ const ChatUI = () => {
               </div>
             ) : (
               <div className="space-y-1 md:space-y-2">
-                {filteredMessages.map((m) => {
+                {filteredMessages.map((m, index) => {
                   if (!m || !m._id) return null;
 
                   const senderId = m.sender?._id || m.sender?.id || m.sender;
@@ -1040,120 +1024,158 @@ const ChatUI = () => {
                   const isMyMessage = senderId === userId;
                   const isEditing = editingMessageId === m._id;
                   const isDeleting = deletingMessageId === m._id;
+                  const showDateSeparator = () => {
+                    if (isTempMessage) return false;
+                    const currentDate = new Date(m.createdAt);
+                    const prevMessage = filteredMessages[index - 1];
+                    if (!prevMessage) return true;
+                    let prevIndex = index - 1;
+                    while (prevIndex >= 0 &&
+                      (filteredMessages[prevIndex].isTemp ||
+                        filteredMessages[prevIndex]._id.toString().startsWith('temp_'))) {
+                      prevIndex--;
+                    }
 
+                    const prevValidMessage = filteredMessages[prevIndex];
+                    if (!prevValidMessage) return true;
+                    const prevDate = new Date(prevValidMessage.createdAt);
+                    return (
+                      currentDate.getDate() !== prevDate.getDate() ||
+                      currentDate.getMonth() !== prevDate.getMonth() ||
+                      currentDate.getFullYear() !== prevDate.getFullYear()
+                    );
+                  };
+                  const shouldShowDate = showDateSeparator();
                   return (
-                    <div
-                      key={m._id}
-                      className={`flex ${isMyMessage ? "justify-end" : "justify-start"} group relative`}
-                      onMouseEnter={() => isMyMessage && !isTempMessage && setShowMessageMenu(m._id)}
-                      onMouseLeave={() => isMyMessage && showMessageMenu === m._id && setShowMessageMenu(null)}
-                    >
-                      {isMyMessage && !isTempMessage && (
-                        <div
-                          className={`absolute right-0 top-0 message-menu bg-white border border-gray-200 rounded-md shadow-md z-10 flex flex-col overflow-hidden transition-all duration-200 ${showMessageMenu === m._id
-                              ? "opacity-100 visible scale-100"
-                              : "opacity-0 invisible scale-95"
-                            }`}
-                          style={{ minWidth: '70px' }}
-                        >
-                          <button
-                            onClick={() => handleStartEdit(m)}
-                            className="px-3 py-2 text-xs sm:text-sm cursor-pointer text-blue-600 hover:bg-blue-50 text-left hover:text-blue-700 transition-colors"
-                            onMouseEnter={(e) => e.stopPropagation()}
-                          >
-                            edit
-                          </button>
-                          <div className="border-t border-gray-100"></div>
-                          <button
-                            onClick={() => handleDeleteMessage(m._id)}
-                            className="px-3 py-2 text-xs sm:text-sm cursor-pointer text-red-600 hover:bg-red-50 text-left hover:text-red-700 transition-colors"
-                            onMouseEnter={(e) => e.stopPropagation()}
-                          >
-                            delete
-                          </button>
+                    <div key={m._id}>
+                      {shouldShowDate && !isTempMessage && (
+                        <div className="flex justify-center my-4">
+                          <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full">
+                            {new Date(m.createdAt).toLocaleDateString('en-US', {
+                              weekday: 'long',
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            })}
+                          </div>
                         </div>
                       )}
-                      <div className={`max-w-[85%] sm:max-w-[80%] md:max-w-[70%] ${isMyMessage ? "text-right" : "text-left"}`}>
-                        {!isMyMessage && (
-                          <p className="text-xs font-medium text-gray-600 mb-1 ml-1">
-                            {m.sender?.username || "User"}
-                          </p>
-                        )}
-                        {isEditing ? (
-                          <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-2 md:p-3">
-                            <textarea
-                              value={editingText}
-                              onChange={(e) => setEditingText(e.target.value)}
-                              className="w-full p-2 border rounded-lg bg-white text-sm md:text-base"
-                              rows="2"
-                              autoFocus
-                            />
-                            <div className="flex justify-end space-x-2 mt-2">
-                              <button
-                                onClick={handleCancelEdit}
-                                className="px-2 py-1 text-xs md:text-sm bg-gray-200 rounded hover:bg-gray-300 flex items-center"
-                              >
-                                <FiX className="mr-1" /> Cancel
-                              </button>
-                              <button
-                                onClick={handleSaveEdit}
-                                className="px-2 py-1 text-xs md:text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
-                              >
-                                <FiCheck className="mr-1" /> Save
-                              </button>
-                            </div>
-                          </div>
-                        ) : (
+                      <div
+                        className={`flex ${isMyMessage ? "justify-end" : "justify-start"} group relative`}
+                        onMouseEnter={() => isMyMessage && !isTempMessage && setShowMessageMenu(m._id)}
+                        onMouseLeave={() => isMyMessage && showMessageMenu === m._id && setShowMessageMenu(null)}
+                      >
+                        {isMyMessage && !isTempMessage && (
                           <div
-                            className={`inline-block px-3 py-2 md:px-4 md:py-2 rounded-2xl ${isMyMessage
-                                ? "bg-blue-500 text-white rounded-br-none"
-                                : "bg-white text-gray-800 rounded-bl-none border border-gray-200"
-                              } ${isTempMessage ? "opacity-80" : ""} ${isDeleting ? "opacity-50" : ""}`}
+                            className={`absolute right-0 top-0 message-menu bg-white border border-gray-200 rounded-md shadow-md z-10 flex flex-col overflow-hidden transition-all duration-200 ${showMessageMenu === m._id
+                                ? "opacity-100 visible scale-100"
+                                : "opacity-0 invisible scale-95"
+                              }`}
+                            style={{ minWidth: '70px' }}
                           >
-                            {isTempMessage && (
-                              <div className="flex items-center mb-1">
-                                <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
-                                <span className="text-xs opacity-90">
-                                  Sending...
-                                </span>
-                              </div>
-                            )}
-
-                            {isDeleting && (
-                              <div className="flex items-center mb-1">
-                                <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
-                                <span className="text-xs opacity-90">
-                                  Deleting...
-                                </span>
-                              </div>
-                            )}
-
-                            {m.content?.text && (
-                              <p className="break-words whitespace-pre-wrap text-sm md:text-base">
-                                {m.content.text}
-                              </p>
-                            )}
-                            {m.content?.media?.length > 0 && renderMessageMedia(m.content.media)}
+                            <button
+                              onClick={() => handleStartEdit(m)}
+                              className="px-3 py-2 text-xs sm:text-sm cursor-pointer text-blue-600 hover:bg-blue-50 text-left hover:text-blue-700 transition-colors"
+                              onMouseEnter={(e) => e.stopPropagation()}
+                            >
+                              edit
+                            </button>
+                            <div className="border-t border-gray-100"></div>
+                            <button
+                              onClick={() => handleDeleteMessage(m._id)}
+                              className="px-3 py-2 text-xs sm:text-sm cursor-pointer text-red-600 hover:bg-red-50 text-left hover:text-red-700 transition-colors"
+                              onMouseEnter={(e) => e.stopPropagation()}
+                            >
+                              delete
+                            </button>
                           </div>
                         )}
-                        <div className={`mt-1 ${isMyMessage ? "text-right" : "text-left"}`}>
-                          <span className="text-xs text-gray-500">
-                            {isTempMessage
-                              ? "Just now"
-                              : new Date(m.createdAt).toLocaleTimeString([], {
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })
-                            }
-                            {m.isEdited && !isEditing && (
-                              <span className="ml-1 text-gray-400 italic">(edited)</span>
-                            )}
-                            {isMyMessage && !isTempMessage && !isEditing && (
-                              <span className="ml-1">
-                                {m.readBy?.length > 1 ? " ✓✓" : " ✓"}
+                        <div className={`max-w-[85%] sm:max-w-[80%] md:max-w-[70%] ${isMyMessage ? "text-right" : "text-left"}`}>
+                          {!isMyMessage && (
+                            <p className="text-xs font-medium text-gray-600 mb-1 ml-1">
+                              {m.sender?.username || "User"}
+                            </p>
+                          )}
+                          {isEditing ? (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-2 md:p-3">
+                              <textarea
+                                value={editingText}
+                                onChange={(e) => setEditingText(e.target.value)}
+                                className="w-full p-2 border rounded-lg bg-white text-sm md:text-base"
+                                rows="2"
+                                autoFocus
+                              />
+                              <div className="flex justify-end space-x-2 mt-2">
+                                <button
+                                  onClick={handleCancelEdit}
+                                  className="px-2 py-1 text-xs md:text-sm bg-gray-200 rounded hover:bg-gray-300 flex items-center"
+                                >
+                                  <FiX className="mr-1" /> Cancel
+                                </button>
+                                <button
+                                  onClick={handleSaveEdit}
+                                  className="px-2 py-1 text-xs md:text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
+                                >
+                                  <FiCheck className="mr-1" /> Save
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div
+                              className={`inline-block px-3 py-2 md:px-4 md:py-2 rounded-2xl ${isMyMessage
+                                  ? "bg-blue-500 text-white rounded-br-none"
+                                  : "bg-white text-gray-800 rounded-bl-none border border-gray-200"
+                                } ${isTempMessage ? "opacity-80" : ""} ${isDeleting ? "opacity-50" : ""}`}
+                            >
+                              {isTempMessage && (
+                                <div className="flex items-center mb-1">
+                                  <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+                                  <span className="text-xs opacity-90">Sending...</span>
+                                </div>
+                              )}
+
+                              {isDeleting && (
+                                <div className="flex items-center mb-1">
+                                  <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+                                  <span className="text-xs opacity-90">Deleting...</span>
+                                </div>
+                              )}
+                              {m.content?.text && (
+                                <p className="break-words whitespace-pre-wrap text-sm md:text-base">
+                                  {m.content.text}
+                                </p>
+                              )}
+                              {m.content?.media?.length > 0 && renderMessageMedia(m.content.media)}
+                            </div>
+                          )}
+                          <div className={`mt-1 flex items-center ${isMyMessage ? "justify-end" : "justify-start"}`}>
+                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                              {!isTempMessage && (
+                                <span className="text-gray-400">
+                                  {new Date(m.createdAt).toLocaleDateString([], {
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })}
+                                </span>
+                              )}
+                              <span>
+                                {isTempMessage
+                                  ? "Just now"
+                                  : new Date(m.createdAt).toLocaleTimeString([], {
+                                    hour: '2-digit',
+                                    minute: '2-digit'
+                                  })}
                               </span>
-                            )}
-                          </span>
+                              {m.isEdited && !isEditing && (
+                                <span className="ml-1 text-gray-400 italic">(edited)</span>
+                              )}
+                              {isMyMessage && !isTempMessage && !isEditing && (
+                                <span className="ml-1">
+                                  {m.readBy?.length > 1 ? " ✓✓" : " ✓"}
+                                </span>
+                              )}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -1167,8 +1189,8 @@ const ChatUI = () => {
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                     </div>
                     <span className="text-xs text-gray-500">
-                      {Object.keys(typingUsers).length === 1 
-                        ? 'Typing...' 
+                      {Object.keys(typingUsers).length === 1
+                        ? 'Typing...'
                         : `${Object.keys(typingUsers).length} people typing...`
                       }
                     </span>
