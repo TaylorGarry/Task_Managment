@@ -163,8 +163,6 @@ export const signup = async (req, res) => {
   }
 };
 
-
-
 export const createCoreTeamUser = async (req, res) => {
   try {
     const { username, password, accountType, department } = req.body;

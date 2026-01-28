@@ -170,7 +170,7 @@ const TaskStatus = () => {
               />
             </div>
           </div>
-          
+
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1">Department</label>
             <select
@@ -187,7 +187,7 @@ const TaskStatus = () => {
               ))}
             </select>
           </div>
-          
+
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1 cursor-pointer">Shift</label>
             <select
@@ -202,7 +202,7 @@ const TaskStatus = () => {
               <option value="End">End</option>
             </select>
           </div>
-          
+
           <div className="flex-1">
             <label className="block text-xs font-medium text-gray-500 mb-1 cursor-pointer">Employee</label>
             <select
@@ -249,8 +249,8 @@ const TaskStatus = () => {
               <div className="flex-1 min-w-0">
                 <h3 className="font-semibold text-gray-800 text-lg truncate">{selectedTask.title}</h3>
                 <p className="text-sm text-gray-500 mt-1">
-                  {Array.isArray(selectedTask.assignedTo) 
-                    ? `${selectedTask.assignedTo.length} assignee(s)` 
+                  {Array.isArray(selectedTask.assignedTo)
+                    ? `${selectedTask.assignedTo.length} assignee(s)`
                     : selectedTask.assignedTo?.username || 'Unassigned'}
                 </p>
               </div>
@@ -326,11 +326,10 @@ const TaskStatus = () => {
                         className={`relative max-w-[80%] ${isMine ? "ml-8" : "mr-8"}`}
                       >
                         <div
-                          className={`px-4 py-3 rounded-2xl break-words shadow-sm relative transition-all duration-200 hover:shadow-md ${
-                            isMine
+                          className={`px-4 py-3 rounded-2xl break-words shadow-sm relative transition-all duration-200 hover:shadow-md ${isMine
                               ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-none"
                               : "bg-white text-gray-800 border border-gray-100 rounded-bl-none"
-                          }`}
+                            }`}
                         >
                           {isEditing ? (
                             <div className="space-y-3">
@@ -338,11 +337,10 @@ const TaskStatus = () => {
                                 type="text"
                                 value={editingMessage}
                                 onChange={(e) => setEditingMessage(e.target.value)}
-                                className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 transition-all duration-200 ${
-                                  isMine 
-                                    ? "bg-blue-700/20 text-white placeholder-blue-300 border-blue-400/30 focus:ring-blue-300/30" 
+                                className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 transition-all duration-200 ${isMine
+                                    ? "bg-blue-700/20 text-white placeholder-blue-300 border-blue-400/30 focus:ring-blue-300/30"
                                     : "bg-white text-gray-800 border-gray-300 focus:ring-blue-100"
-                                }`}
+                                  }`}
                                 placeholder="Edit remark..."
                                 autoFocus
                                 onKeyPress={(e) => {
@@ -392,7 +390,7 @@ const TaskStatus = () => {
                             <>
                               <div className="relative">
                                 <p className="text-sm pr-8">{msg.message}</p>
-                                
+
                                 {isMine && (
                                   <div className="absolute -top-2 -right-2">
                                     <button
@@ -411,11 +409,14 @@ const TaskStatus = () => {
 
                               <div className="flex justify-between items-center mt-3 pt-2 border-t border-opacity-20">
                                 <span className={`text-xs font-medium ${isMine ? "text-white/90" : "text-gray-600"}`}>
-                                  {msg.senderId?.username || 
-                                   (msg.sendToAll ? "All" : "All")}
+                                  {msg.senderId?.username ||
+                                    (msg.sendToAll ? "All" : "All")}
                                 </span>
                                 <span className={`text-xs ${isMine ? "text-white/80" : "text-gray-500"}`}>
-                                  {new Date(msg.createdAt).toLocaleTimeString([], {
+                                  {new Date(msg.createdAt).toLocaleDateString('en-US', {
+                                    month: 'short',
+                                    day: 'numeric'
+                                  })} • {new Date(msg.createdAt).toLocaleTimeString([], {
                                     hour: "2-digit",
                                     minute: "2-digit",
                                   })}
@@ -466,11 +467,10 @@ const TaskStatus = () => {
                 <button
                   onClick={handleSendMessage}
                   disabled={!message.trim()}
-                  className={`p-3 rounded-full shadow-md transition-all duration-200 transform hover:scale-105 ${
-                    message.trim()
+                  className={`p-3 rounded-full shadow-md transition-all duration-200 transform hover:scale-105 ${message.trim()
                       ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                       : "bg-gray-100 text-gray-400 cursor-not-allowed"
-                  }`}
+                    }`}
                 >
                   <FiSend size={18} />
                 </button>

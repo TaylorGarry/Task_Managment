@@ -161,11 +161,7 @@ const AdminTask = () => {
                   <p className="text-gray-500">
                     <span className="font-medium">Shift:</span> {task.shift || "N/A"}
                   </p>
-                  <p className="text-gray-500">
-                    <span className="font-medium">Assignees:</span> {assigneeCount}
-                  </p>
                 </div>
-
                 <div className="mt-3">
                   <h3 className="font-medium text-gray-700 mb-1 text-sm">
                     Employees Status:
