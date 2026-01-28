@@ -148,7 +148,6 @@ const TaskCard = ({ task, onOpenChat }) => {
     } catch (error) {
       return "";
     }
-  };
 
   const getDisplayDate = () => {
     return task.displayDate || task.date || task.createdAt;
@@ -368,5 +367,6 @@ const TaskCard = ({ task, onOpenChat }) => {
     </>
   );
 };
+}
 
 export default TaskCard;

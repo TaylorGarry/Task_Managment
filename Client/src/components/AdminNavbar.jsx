@@ -263,7 +263,7 @@ const AdminNavbar = () => {
                 Defaulter
               </Link>
 
-              {user?.accountType === "admin" && (
+              {user?.accountType === "admin"  && (
                 <>
                   <div className="mt-2 pt-4 border-t border-gray-300">
                     <button

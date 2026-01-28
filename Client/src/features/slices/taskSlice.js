@@ -588,6 +588,43 @@ const taskSlice = createSlice({
         });
       })
 
+      // .addCase(updateTaskStatusCoreTeam.fulfilled, (state, action) => {
+      //   const updatedStatus = action.payload;
+      //   state.tasks = state.tasks.map((task) => {
+      //     if (task._id === updatedStatus.taskId) {
+      //       let doneEmployees = task.doneEmployees || [];
+      //       let notDoneEmployees = task.notDoneEmployees || [];
+
+      //       doneEmployees = doneEmployees.filter(
+      //         (e) => e._id !== updatedStatus.employeeId
+      //       );
+      //       notDoneEmployees = notDoneEmployees.filter(
+      //         (e) => e._id !== updatedStatus.employeeId
+      //       );
+
+      //       const empObj = {
+      //         _id: updatedStatus.employeeId,
+      //         username: updatedStatus.username || "Unknown",
+      //       };
+
+      //       if (updatedStatus.status === "Done") doneEmployees.push(empObj);
+      //       else notDoneEmployees.push(empObj);
+
+      //       return {
+      //         ...task,
+      //         doneEmployees,
+      //         notDoneEmployees,
+      //         employeeStatus:
+      //           task.assignedTo?.some((e) => e._id === updatedStatus.employeeId)
+      //             ? updatedStatus.status
+      //             : task.employeeStatus,
+      //       };
+      //     }
+      //     return task;
+      //   });
+      // })
+
+
       .addCase(updateTaskStatusCoreTeam.fulfilled, (state, action) => {
         const updatedStatus = action.payload;
         state.tasks = state.tasks.map((task) => {
@@ -635,7 +672,6 @@ const taskSlice = createSlice({
       state.loading = false;
       state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
     })
-      
       .addCase(fetchAdminTasks.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -648,7 +684,6 @@ const taskSlice = createSlice({
         state.loading = false;
         state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
       })
-
       .addCase(updateAdminTaskStatus.fulfilled, (state, action) => {
   const updatedStatus = action.payload;
   const employeeId = updatedStatus.employeeId;
