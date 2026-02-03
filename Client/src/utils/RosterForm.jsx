@@ -1750,56 +1750,67 @@ const proceedWithBulkEditAfterFetch = () => {
           <h1 className="text-2xl font-bold text-gray-800">Roster Management</h1>
           <p className="text-gray-600 mt-1">Manage weekly roster with day-wise status tracking</p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={handleBulkEditRoster}
-            className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-4 py-2 rounded font-medium flex items-center cursor-pointer shadow-md"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-            </svg>
-            Bulk Edit Roster
-          </button>
-          
-          <button
-            onClick={() => setShowCopyPopup(true)}
-            className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-4 py-2 rounded font-medium flex items-center cursor-pointer shadow-md"
-          >
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
-            </svg>
-            Auto-Propagate
-          </button>
-          
-          <button
-            onClick={handleExportSavedRoster}
-            disabled={savedExportLoading}
-            className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-medium flex items-center cursor-pointer"
-          >
-            {savedExportLoading ? (
-              <>
-                <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                </svg>
-                Exporting...
-              </>
-            ) : (
-              <>
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                Export Roster
-              </>
-            )}
-          </button>
-          <button onClick={handleViewSavedRoster} className="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded font-medium flex items-center cursor-pointer">
-            <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
-            </svg>
-            View Saved Roster
-          </button>
-        </div>
+        <div className="flex flex-col items-end sm:flex-row gap-3 w-full">
+  <button
+    onClick={handleBulkEditRoster}
+    className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer shadow-md"
+  >
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+    </svg>
+    Bulk Edit Roster
+  </button>
+
+  <button
+    onClick={() => setShowCopyPopup(true)}
+    className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer shadow-md"
+  >
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2" />
+    </svg>
+    Auto-Propagate
+  </button>
+
+  <button
+    onClick={handleExportSavedRoster}
+    disabled={savedExportLoading}
+    className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer disabled:opacity-70"
+  >
+    {savedExportLoading ? (
+      <>
+        <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
+          <circle className="opacity-25" cx="12" cy="12" r="10"
+            stroke="currentColor" strokeWidth="4" fill="none" />
+          <path className="opacity-75" fill="currentColor"
+            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+        </svg>
+        Exporting...
+      </>
+    ) : (
+      <>
+        <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+            d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+        </svg>
+        Export Roster
+      </>
+    )}
+  </button>
+
+  <button
+    onClick={handleViewSavedRoster}
+    className="w-full sm:w-auto bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer"
+  >
+    <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+        d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4" />
+    </svg>
+    View Saved Roster
+  </button>
+</div>
+
       </div>
     </div>
     {showBulkEdit && selectedRosterId && (

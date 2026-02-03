@@ -2160,10 +2160,10 @@ export const bulkUpdateWeeks = async (req, res) => {
     const {
       rosterId,
       weekNumbers,
-      updateType, // 'add', 'remove', 'update', 'reset'
+      updateType,  
       employees = [],
-      employeeNames = [], // For remove operation
-      resetToDefault = false // Reset all statuses to "P"
+      employeeNames = [],  
+      resetToDefault = false  
     } = req.body;
 
     const userId = req.user._id;
@@ -2282,9 +2282,8 @@ const calculateWeeksInRange = (startDate, endDate) => {
   
   while (currentStart <= endDate) {
     let currentEnd = new Date(currentStart);
-    currentEnd.setDate(currentEnd.getDate() + 6); // 7-day week
+    currentEnd.setDate(currentEnd.getDate() + 6);  
     
-    // Adjust if end exceeds range
     if (currentEnd > endDate) {
       currentEnd = new Date(endDate);
     }
@@ -2294,7 +2293,6 @@ const calculateWeeksInRange = (startDate, endDate) => {
       endDate: new Date(currentEnd)
     });
     
-    // Move to next week
     currentStart.setDate(currentStart.getDate() + 7);
   }
   
@@ -2308,7 +2306,7 @@ const generateDefaultDailyStatus = (startDate, endDate) => {
   while (current <= end) {
     dailyStatus.push({
       date: new Date(current),
-      status: "P" // Default Present
+      status: "P" 
     });
     current.setDate(current.getDate() + 1);
   }
@@ -2326,8 +2324,6 @@ const cloneDailyStatus = (sourceStatuses, newStartDate, newEndDate) => {
   for (let i = 0; i < daysInWeek; i++) {
     const date = new Date(newStartDate);
     date.setDate(date.getDate() + i);
-    
-    // Use corresponding status from source, or default to "P"
     const sourceStatus = sourceStatuses[i % sourceStatuses.length];
     clonedStatuses.push({
       date,
@@ -2344,8 +2340,6 @@ const processNewEmployeesForWeek = async (employees, startDate, endDate, preserv
       if (emp.name) {
         user = await User.findOne({ username: emp.name });
       }
-
-      // Validate shift hours
       if (emp.shiftStartHour === undefined || emp.shiftEndHour === undefined) {
         throw new Error(`Employee ${emp.name} must have both shift start and end hours`);
       }
@@ -2435,14 +2429,11 @@ const resetWeekStatuses = (week) => {
   });
   return week.employees.length;
 };
-
-
-// 1. Get roster data for bulk editing (with all weeks) with authorization
 export const getRosterForBulkEdit = async (req, res) => {
   try {
     const { rosterId } = req.params;
-    const user = req.user; // Assuming user info is attached to request
-    const userAccountType = user.accountType; // 'superAdmin', 'HR', etc.
+    const user = req.user;  
+    const userAccountType = user.accountType;  
     const currentDate = new Date();
     
     if (!rosterId) {
@@ -2451,8 +2442,6 @@ export const getRosterForBulkEdit = async (req, res) => {
         message: "rosterId is required"
       });
     }
-
-    // Check user accountType - only superAdmin and HR can access bulk edit
     if (!['superAdmin', 'HR'].includes(userAccountType)) {
       return res.status(403).json({
         success: false,
@@ -2460,46 +2449,30 @@ export const getRosterForBulkEdit = async (req, res) => {
         userAccountType: userAccountType
       });
     }
-
     const roster = await Roster.findById(rosterId);
-
     if (!roster) {
       return res.status(404).json({
         success: false,
         message: "Roster not found"
       });
     }
-
-    // Sort weeks by week number for consistent display
     roster.weeks.sort((a, b) => a.weekNumber - b.weekNumber);
-
-    // Determine which weeks are editable based on dates and user accountType
     const weeksWithEditability = roster.weeks.map(week => {
       const weekEndDate = new Date(week.endDate);
       const weekStartDate = new Date(week.startDate);
-      
       let isEditable = false;
       let canAddEmployees = false;
       let editRestrictionReason = '';
       let requiresSuperAdmin = false;
-      
-      // Check if week has ended (end date is in the past)
       const hasWeekEnded = weekEndDate < currentDate;
-      
-      // Check if week is current (started but not ended)
       const isCurrentWeek = weekStartDate <= currentDate && weekEndDate >= currentDate;
-      
-      // Check if week is upcoming (not started yet)
       const isUpcomingWeek = weekStartDate > currentDate;
       
-      // Authorization logic based on accountType
       if (userAccountType === 'superAdmin') {
-        // SuperAdmin can edit all weeks (past, current, upcoming)
         isEditable = true;
-        canAddEmployees = true; // SuperAdmin can add employees to any week
+        canAddEmployees = true;  
         requiresSuperAdmin = hasWeekEnded;
       } else if (userAccountType === 'HR') {
-        // HR can edit only current and upcoming weeks
         if (hasWeekEnded) {
           isEditable = false;
           canAddEmployees = false;
@@ -2507,7 +2480,7 @@ export const getRosterForBulkEdit = async (req, res) => {
           editRestrictionReason = 'Week has ended. Only Super Admin can edit past weeks.';
         } else if (isCurrentWeek || isUpcomingWeek) {
           isEditable = true;
-          canAddEmployees = true; // HR can add employees to current and future weeks
+          canAddEmployees = true;  
           requiresSuperAdmin = false;
         }
       }
@@ -2578,12 +2551,10 @@ export const getRosterForBulkEdit = async (req, res) => {
     });
   }
 };
-
-// 2. Bulk save all weeks at once with authorization and date validation
 export const bulkUpdateRosterWeeks = async (req, res) => {
   try {
     const { rosterId } = req.params;
-    const { weeks, newEmployees } = req.body; // weeks array with updated data, newEmployees array to add
+    const { weeks, newEmployees } = req.body;  
     const user = req.user;
     const userAccountType = user.accountType;
     const currentDate = new Date();
@@ -2865,6 +2836,703 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to perform bulk update"
+    });
+  }
+};
+export const getOpsMetaCurrentWeekRoster = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.department !== "Ops - Meta") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only Ops-Meta department employees can access this."
+      });
+    }
+
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const roster = await Roster.findOne({ 
+      month: currentMonth, 
+      year: currentYear 
+    });
+    
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "No roster found for current month"
+      });
+    }
+
+    // Find current week
+    const currentWeek = roster.weeks.find(week => {
+      const weekStart = new Date(week.startDate);
+      const weekEnd = new Date(week.endDate);
+      
+      weekStart.setHours(0, 0, 0, 0);
+      weekEnd.setHours(23, 59, 59, 999);
+      
+      return currentDate >= weekStart && currentDate <= weekEnd;
+    });
+
+    if (!currentWeek) {
+      return res.status(404).json({
+        success: false,
+        message: "No roster week found for current date"
+      });
+    }
+
+    // Check edit permission
+    const weekStartDate = new Date(currentWeek.startDate);
+    const weekEndDate = new Date(currentWeek.endDate);
+    
+    weekStartDate.setHours(0, 0, 0, 0);
+    weekEndDate.setHours(23, 59, 59, 999);
+    
+    let canEdit = false;
+    let editMessage = "";
+    
+    if (currentDate < weekStartDate) {
+      canEdit = false;
+      editMessage = "Cannot edit roster before the week starts";
+    } else if (currentDate > weekEndDate) {
+      canEdit = false;
+      editMessage = "Cannot edit roster after the week has ended";
+    } else {
+      canEdit = true;
+      editMessage = "Can edit roster for your team during current week";
+    }
+
+    // ========== FILTER: Only show employees where user.username === teamLeader ==========
+    // Since teamLeader is stored as String, match it with user's username
+    const currentUserUsername = user.username;
+    
+    // Filter employees where teamLeader matches current user's username
+    const teamEmployees = currentWeek.employees.filter(emp => {
+      // Check if teamLeader matches current user's username
+      // Trim and compare case-insensitively to handle variations
+      if (emp.teamLeader && typeof emp.teamLeader === 'string') {
+        return emp.teamLeader.trim().toLowerCase() === currentUserUsername.toLowerCase();
+      }
+      return false;
+    });
+
+    // If no employees found for this team leader
+    if (teamEmployees.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: `No employees assigned to you (${currentUserUsername}) as Team Leader`,
+        data: {
+          weekNumber: currentWeek.weekNumber,
+          startDate: currentWeek.startDate,
+          endDate: currentWeek.endDate,
+          currentDate: currentDate,
+          canEdit: canEdit,
+          editMessage: editMessage,
+          rosterEntries: [],
+          summary: {
+            totalEmployees: 0,
+            teamLeader: currentUserUsername,
+            currentUser: user.username,
+            userDepartment: user.department,
+            teamSize: 0,
+            message: "You have no team members assigned"
+          }
+        }
+      });
+    }
+
+    // Get user details for filtered employees only
+    const teamUserIds = teamEmployees
+      .filter(emp => emp.userId)
+      .map(emp => emp.userId);
+    
+    const teamUsers = teamUserIds.length > 0 
+      ? await User.find({ _id: { $in: teamUserIds } })
+          .select('_id username name department accountType')
+      : [];
+
+    // Format roster entries with user details
+    const formattedRoster = teamEmployees.map(emp => {
+      const userDetails = teamUsers.find(u => 
+        u._id.toString() === emp.userId?.toString()
+      );
+      
+      return {
+        _id: emp._id,
+        userId: emp.userId,
+        name: emp.name,
+        username: userDetails?.username || '',
+        department: userDetails?.department || 'Unknown',
+        accountType: userDetails?.accountType || 'employee',
+        transport: emp.transport || "",
+        cabRoute: emp.cabRoute || "",
+        teamLeader: emp.teamLeader || "",
+        shiftStartHour: emp.shiftStartHour,
+        shiftEndHour: emp.shiftEndHour,
+        dailyStatus: emp.dailyStatus.map(status => ({
+          date: status.date,
+          status: status.status || "P"
+        }))
+      };
+    });
+
+    // Get unique departments in the team
+    const teamDepartments = [...new Set(formattedRoster.map(e => e.department))];
+
+    return res.status(200).json({
+      success: true,
+      message: `Current week roster for your team (Team Leader: ${currentUserUsername})`,
+      data: {
+        weekNumber: currentWeek.weekNumber,
+        startDate: currentWeek.startDate,
+        endDate: currentWeek.endDate,
+        currentDate: currentDate,
+        canEdit: canEdit,
+        editMessage: editMessage,
+        rosterEntries: formattedRoster,
+        summary: {
+          totalEmployees: formattedRoster.length,
+          teamLeader: currentUserUsername,
+          departments: teamDepartments,
+          currentUser: user.username,
+          userDepartment: user.department,
+          teamSize: formattedRoster.length,
+          hasTeam: formattedRoster.length > 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching roster:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error"
+    });
+  }
+}; 
+export const updateOpsMetaRoster = async (req, res) => {
+  try {
+    const user = req.user;
+    if (user.department !== "Ops - Meta") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only Ops-Meta department employees can access this."
+      });
+    }
+
+    const { employeeId, updates } = req.body;
+
+    if (!employeeId || !updates) {
+      return res.status(400).json({
+        success: false,
+        message: "employeeId and updates are required"
+      });
+    }
+
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    const currentYear = currentDate.getFullYear();
+    const currentMonth = currentDate.getMonth() + 1;
+    const roster = await Roster.findOne({ 
+      month: currentMonth, 
+      year: currentYear 
+    });
+    
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "No roster found for current month"
+      });
+    }
+    const currentWeekIndex = roster.weeks.findIndex(week => {
+      const weekStart = new Date(week.startDate);
+      const weekEnd = new Date(week.endDate);
+      
+      weekStart.setHours(0, 0, 0, 0);
+      weekEnd.setHours(23, 59, 59, 999);
+      
+      return currentDate >= weekStart && currentDate <= weekEnd;
+    });
+
+    if (currentWeekIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "No current week found"
+      });
+    }
+
+    const currentWeek = roster.weeks[currentWeekIndex];
+    const weekStartDate = new Date(currentWeek.startDate);
+    const weekEndDate = new Date(currentWeek.endDate);
+    
+    weekStartDate.setHours(0, 0, 0, 0);
+    weekEndDate.setHours(23, 59, 59, 999);
+    
+    if (currentDate < weekStartDate) {
+      return res.status(403).json({
+        success: false,
+        message: "Cannot edit roster before the week starts"
+      });
+    }
+
+    if (currentDate > weekEndDate) {
+      return res.status(403).json({
+        success: false,
+        message: "Cannot edit roster after the week has ended"
+      });
+    }
+    const employeeIndex = currentWeek.employees.findIndex(emp => 
+      emp._id.toString() === employeeId
+    );
+
+    if (employeeIndex === -1) {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found in roster"
+      });
+    }
+
+    const employee = roster.weeks[currentWeekIndex].employees[employeeIndex];
+    if (!employee.teamLeader || 
+        employee.teamLeader.trim().toLowerCase() !== user.username.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. You are not the Team Leader for this employee."
+      });
+    }
+    if (updates.shiftStartHour !== undefined || updates.shiftEndHour !== undefined) {
+      if (updates.shiftStartHour === undefined || updates.shiftEndHour === undefined) {
+        return res.status(400).json({
+          success: false,
+          message: "Both shiftStartHour and shiftEndHour are required"
+        });
+      }
+    }
+    let shiftStartHour = employee.shiftStartHour;
+    let shiftEndHour = employee.shiftEndHour;
+    if (updates.shiftStartHour !== undefined) {
+      shiftStartHour = parseInt(updates.shiftStartHour);
+      if (isNaN(shiftStartHour) || shiftStartHour < 0 || shiftStartHour > 23) {
+        return res.status(400).json({
+          success: false,
+          message: "shiftStartHour must be 0-23"
+        });
+      }
+    }
+    
+    if (updates.shiftEndHour !== undefined) {
+      shiftEndHour = parseInt(updates.shiftEndHour);
+      if (isNaN(shiftEndHour) || shiftEndHour < 0 || shiftEndHour > 23) {
+        return res.status(400).json({
+          success: false,
+          message: "shiftEndHour must be 0-23"
+        });
+      }
+    }
+    if (updates.dailyStatus && Array.isArray(updates.dailyStatus)) {
+      const woCount = updates.dailyStatus.filter(d => d && d.status === "WO").length;
+      if (woCount > 2) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot have more than 2 week-offs"
+        });
+      }
+    }
+    Object.keys(updates).forEach(field => {
+      if (field === "teamLeader") { 
+        return;  
+      } else if (field === "dailyStatus" && Array.isArray(updates[field])) {
+        roster.weeks[currentWeekIndex].employees[employeeIndex][field] = updates[field].map(ds => ({
+          date: new Date(ds.date),
+          status: ds.status || "P"
+        }));
+      } else {
+        roster.weeks[currentWeekIndex].employees[employeeIndex][field] = updates[field];
+      }
+    }); 
+    roster.weeks[currentWeekIndex].employees[employeeIndex].shiftStartHour = shiftStartHour;
+    roster.weeks[currentWeekIndex].employees[employeeIndex].shiftEndHour = shiftEndHour; 
+    roster.updatedBy = user._id;
+    roster.markModified('weeks');
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Roster updated successfully",
+      data: {
+        employeeId: employeeId,
+        employeeName: employee.name,
+        weekNumber: currentWeek.weekNumber,
+        updatedBy: user.username,
+        teamLeader: user.username,
+        updatedFields: Object.keys(updates).filter(field => field !== "teamLeader"),  
+        updatedAt: new Date(),
+        note: "You can only edit employees assigned to you as Team Leader"
+      }
+    });
+
+  } catch (error) {
+    console.error("Error updating roster:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error"
+    });
+  }
+};
+export const rosterUploadFromExcel = async (req, res) => {
+  try {
+    const user = req.user;
+    const isAdmin = ["admin", "superAdmin", "HR"].includes(user.accountType);
+    const isOpsMetaEmployee = user.accountType === "employee" && user.department === "Ops - Meta";
+    
+    if (!isAdmin && !isOpsMetaEmployee) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only admin, HR, or Ops-Meta department employees can upload roster."
+      });
+    }
+    const { startDate, endDate } = req.body;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Date range is required. Please select start date and end date."
+      });
+    }
+    const selectedStartDate = new Date(startDate);
+    const selectedEndDate = new Date(endDate);
+    selectedStartDate.setHours(0, 0, 0, 0);
+    selectedEndDate.setHours(0, 0, 0, 0);
+    
+    if (isNaN(selectedStartDate.getTime()) || isNaN(selectedEndDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format. Please use YYYY-MM-DD format."
+      });
+    }
+    
+    if (selectedStartDate > selectedEndDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date cannot be after end date."
+      });
+    }
+    const totalDays = Math.round((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24)) + 1;
+    
+    if (totalDays !== 7) {
+      return res.status(400).json({
+        success: false,
+        message: "Date range must be exactly 7 days for roster upload."
+      });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (isOpsMetaEmployee) {
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      if (selectedStartDate < today) {
+        return res.status(400).json({
+          success: false,
+          message: "Ops-Meta employees can only upload roster for future weeks starting from today. Cannot upload for yesterday or past dates."
+        });
+      }
+      if (selectedStartDate < today) {
+        return res.status(400).json({
+          success: false,
+          message: "Ops-Meta employees can only upload roster for dates starting from today onwards."
+        });
+      }
+    } 
+    else {
+      if (selectedStartDate < today) {
+        return res.status(400).json({
+          success: false,
+          message: "Cannot upload roster for past dates. Please select today or future dates."
+        });
+      }
+    }
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is required"
+      });
+    }
+    const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+    const excelData = XLSX.utils.sheet_to_json(worksheet);
+    if (!excelData || excelData.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is empty or has no data"
+      });
+    }
+    const requiredExcelColumns = [
+      'Name',
+      'Transport',
+      'Team Leader',
+      'Shift Start Hour',
+      'Shift End Hour'
+    ];
+
+    const firstRow = excelData[0];
+    const availableColumns = Object.keys(firstRow);
+    console.log("Available columns:", availableColumns);
+
+    const missingColumns = requiredExcelColumns.filter(col => !availableColumns.includes(col));
+    
+    if (missingColumns.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Missing required columns in Excel: ${missingColumns.join(', ')}. Your Excel should have: Name, Transport, Team Leader, Shift Start Hour, Shift End Hour, and date columns (DD/MM)`
+      });
+    }
+    let excelDateColumns = [];
+    const pattern1 = /^\d{1,2}\/\d{1,2}(\s+\w+)?$/;
+    const pattern2 = /^\d{1,2}\/\d{1,2}$/;
+    for (const col of availableColumns) {
+      if (pattern1.test(col) || pattern2.test(col)) {
+        excelDateColumns.push(col);
+      }
+    }
+    if (excelDateColumns.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No date columns found in Excel. Looking for columns like: 26/01, 26/01 Mon, etc."
+      });
+    }
+    if (excelDateColumns.length !== 7) {
+      return res.status(400).json({
+        success: false,
+        message: `Excel should have exactly 7 date columns (one for each day of the week). Found: ${excelDateColumns.length} columns: ${excelDateColumns.join(', ')}`
+      });
+    }
+    const expectedDateColumns = [];
+    const currentDate = new Date(selectedStartDate);
+    for (let i = 0; i < 7; i++) {
+      const day = String(currentDate.getDate()).padStart(2, '0');
+      const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+      const dateColumn = `${day}/${month}`;
+      expectedDateColumns.push(dateColumn);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    const employeesData = [];
+    const processedEmployees = new Set();
+    for (const [index, row] of excelData.entries()) {
+      try {
+        if (!row.Name || row.Name.trim() === '') {
+          continue;
+        }
+        const name = (row.Name || "").toString().trim();
+        const username = name.toLowerCase().replace(/\s+/g, '.');
+        const employeeKey = `${username}-${startDate}-${endDate}`;
+        if (processedEmployees.has(employeeKey)) {
+          console.warn(`Duplicate entry for employee ${name}, skipping`);
+          continue;
+        }
+        processedEmployees.add(employeeKey);
+        const rowTeamLeader = (row['Team Leader'] || "").toString().trim();
+        if (isOpsMetaEmployee && rowTeamLeader && rowTeamLeader.toLowerCase() !== user.username.toLowerCase()) {
+          console.log(`Ops-Meta employee ${user.username} uploading for team leader: ${rowTeamLeader}`);
+        }
+        let userRecord = await User.findOne({ username: username });
+        if (!userRecord) {
+          userRecord = await User.findOne({ 
+            $or: [
+              { name: name },
+              { username: { $regex: new RegExp(`^${name.split(' ')[0].toLowerCase()}`, 'i') } }
+            ]
+          });
+          if (!userRecord) {
+            console.warn(`User not found with name: ${name}. Roster entry will be created without userId.`);
+          }
+        }
+        const transportValue = (row.Transport || "").toString().trim();
+        const validTransport = ["Yes", "No", ""];
+        if (!validTransport.includes(transportValue)) {
+          return res.status(400).json({
+            success: false,
+            message: `Invalid transport value for ${name}. Must be "Yes", "No", or empty.`
+          });
+        }
+        const dailyStatus = [];
+        const statusDate = new Date(selectedStartDate);
+        for (let i = 0; i < excelDateColumns.length; i++) {
+          const excelDateColumn = excelDateColumns[i];
+          const statusValue = (row[excelDateColumn] || "P").toString().trim().toUpperCase();
+          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", ""];
+          if (!validStatus.includes(statusValue)) {
+            return res.status(400).json({
+              success: false,
+              message: `Invalid status "${row[excelDateColumn]}" for ${name} on column ${excelDateColumn}. Valid values: P, WO, L, NCNS, UL, LWP, BL, H, LWD`
+            });
+          }
+          const date = new Date(statusDate);
+          date.setHours(0, 0, 0, 0);
+          dailyStatus.push({
+            date: date,
+            status: statusValue || "P",
+            originalExcelColumn: excelDateColumn
+          });
+          statusDate.setDate(statusDate.getDate() + 1);
+        }
+        const woCount = dailyStatus.filter(d => d.status === "WO").length;
+        if (woCount > 2) {
+          return res.status(400).json({
+            success: false,
+            message: `Employee ${name} cannot have more than 2 week-offs in a week`
+          });
+        }
+        const shiftStartHour = parseInt(row['Shift Start Hour']);
+        const shiftEndHour = parseInt(row['Shift End Hour']);
+        if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
+          return res.status(400).json({
+            success: false,
+            message: `Employee ${name} has invalid shift hours`
+          });
+        }
+        if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
+          return res.status(400).json({
+            success: false,
+            message: `Employee ${name}: Shift hours must be between 0 and 23`
+          });
+        }
+        employeesData.push({
+          userId: userRecord?._id || null,
+          name: name,
+          username: username,
+          transport: transportValue,
+          cabRoute: (row['CAB Route'] || "").toString().trim(),
+          shiftStartHour: shiftStartHour,
+          shiftEndHour: shiftEndHour,
+          dailyStatus: dailyStatus,
+          teamLeader: rowTeamLeader,
+          excelDateMapping: excelDateColumns
+        });
+      } catch (rowError) {
+        console.error(`Error processing row ${index + 2}:`, rowError);
+        return res.status(400).json({
+          success: false,
+          message: `Error in row ${index + 2}: ${rowError.message}`
+        });
+      }
+    }
+    if (employeesData.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid roster data found in the Excel file."
+      });
+    }
+    const rosterMonth = selectedStartDate.getMonth() + 1;
+    const rosterYear = selectedStartDate.getFullYear();
+    let roster = await Roster.findOne({ 
+      month: rosterMonth, 
+      year: rosterYear 
+    });
+    if (!roster) {
+      roster = new Roster({
+        month: rosterMonth,
+        year: rosterYear,
+        rosterStartDate: selectedStartDate,
+        rosterEndDate: selectedEndDate,
+        weeks: [],
+        createdBy: user._id,
+      });
+    } else {
+      roster.updatedBy = user._id;
+      roster.rosterStartDate = selectedStartDate;
+      roster.rosterEndDate = selectedEndDate;
+    }
+    const weekNumber = Math.ceil(selectedStartDate.getDate() / 7);
+    const existingWeekIndex = roster.weeks.findIndex(w => 
+      w.startDate.getTime() === selectedStartDate.getTime() &&
+      w.endDate.getTime() === selectedEndDate.getTime()
+    );
+    
+    if (existingWeekIndex !== -1) {
+      if (isOpsMetaEmployee) {
+        roster.weeks[existingWeekIndex] = {
+          weekNumber: weekNumber,
+          startDate: selectedStartDate,
+          endDate: selectedEndDate,
+          employees: employeesData
+        };
+      } else {
+        roster.weeks[existingWeekIndex] = {
+          weekNumber: weekNumber,
+          startDate: selectedStartDate,
+          endDate: selectedEndDate,
+          employees: employeesData
+        };
+      }
+    } else {
+      roster.weeks.push({
+        weekNumber: weekNumber,
+        startDate: selectedStartDate,
+        endDate: selectedEndDate,
+        employees: employeesData
+      });
+    }
+    await roster.save();
+    return res.status(200).json({
+      success: true,
+      message: `Roster uploaded successfully for ${startDate} to ${endDate}`,
+      data: {
+        selectedDateRange: {
+          startDate: startDate,
+          endDate: endDate,
+          totalDays: totalDays,
+          expectedDates: expectedDateColumns
+        },
+        excelDateMapping: {
+          foundDateColumns: excelDateColumns,
+          mappingNote: `Excel date columns mapped to selected date range: ${startDate} to ${endDate}`,
+          mappingOrder: excelDateColumns.map((col, i) => 
+            `${col} → ${expectedDateColumns[i]} (Day ${i+1})`
+          )
+        },
+        summary: {
+          totalEmployees: employeesData.length,
+          weekNumber: weekNumber,
+          month: rosterMonth,
+          year: rosterYear,
+          uploadedBy: {
+            username: user.username,
+            accountType: user.accountType,
+            department: user.department,
+            permissions: isOpsMetaEmployee 
+              ? `Ops-Meta employees can upload for any team (future dates only)` 
+              : "Admins/HR can upload for any team and future dates"
+          }
+        },
+        excelFormat: {
+          acceptedColumns: [...requiredExcelColumns, ...excelDateColumns],
+          note: `Username is auto-generated from Name. Excel date columns (${excelDateColumns.length} found) will be mapped to selected date range.`,
+          transportValues: ['Yes', 'No', ''],
+          statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD', ''],
+          permissionsNote: isOpsMetaEmployee 
+            ? `Ops-Meta employees can upload for any team (future dates from tomorrow only)` 
+            : "Admins/HR can upload for any team and future dates",
+          sampleRow: {
+            Name: 'John Doe',
+            Transport: 'Yes',
+            'CAB Route': 'Route A',
+            'Team Leader': 'AnyTeamLeaderName',  
+            'Shift Start Hour': 9,
+            'Shift End Hour': 17,
+            ...Object.fromEntries(excelDateColumns.map(col => [col, 'P']))
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error("Error uploading roster from Excel:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to upload roster from Excel"
     });
   }
 };
