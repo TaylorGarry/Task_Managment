@@ -55,17 +55,17 @@ const Login = () => {
             type="text"
             placeholder="Username"
             {...register("username", { required: true })}
-            className="w-full p-2 border rounded"
+            className="w-full p-2 border border-[#6c6a6a] rounded"
           />
           <div className="relative">
             <input
               type={showPassword ? "text" : "password"}
               placeholder="Password"
               {...register("password", { required: true })}
-              className="w-full p-2 border rounded pr-10"
+              className="w-full p-2 border border-[#6c6a6a] rounded pr-10"
             />
             <span
-              className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-gray-500"
+              className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-black-700"
               onClick={() => setShowPassword(!showPassword)}
             >
               {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
@@ -75,7 +75,7 @@ const Login = () => {
           <button
             type="submit"
             disabled={loading}
-            className={`w-full p-2 rounded text-white cursor-pointer ${loading
+            className={`w-full p-2 rounded text-white text-lg cursor-pointer ${loading
               ? "bg-blue-300 cursor-not-allowed"
               : "bg-blue-500 hover:bg-blue-600"
               }`}

@@ -19,14 +19,10 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         dailyStatus: Array(7).fill('P')
     });
     const [errors, setErrors] = useState({});
-
-    // Fetch roster data when component mounts
     useEffect(() => {
         if (rosterId) {
             dispatch(getRosterForBulkEdit(rosterId));
         }
-
-        // Cleanup on unmount
         return () => {
             dispatch(clearBulkEditState());
             dispatch(clearBulkSaveState());
@@ -154,12 +150,8 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         );
         setEditedWeeks(updatedWeeks);
     };
-
-    // Save all changes
     const handleSaveAll = () => {
         if (!rosterId) return;
-
-        // Prepare data for API
         const weeksData = editedWeeks.map(week => ({
             weekNumber: week.weekNumber,
             employees: week.employees.map(emp => ({
@@ -183,8 +175,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
             data: { weeks: weeksData }
         }));
     };
-
-    // Get status icon
     const getStatusIcon = (status) => {
         switch (status) {
             case 'P': return '✅';
@@ -199,8 +189,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
             default: return '📝';
         }
     };
-
-    // Days of week
     const daysOfWeek = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
     if (bulkEditLoading) {
@@ -241,7 +229,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
     return (
         <div className="fixed inset-0 bg-white flex flex-col z-50">
-            {/* Header */}
             <div className="sticky top-0 z-50 bg-white border-b shadow-sm">
                 <div className="p-4 md:p-6 flex justify-between items-center">
                     <div>
@@ -277,8 +264,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         </button>
                     </div>
                 </div>
-
-                {/* Tabs */}
                 <div className="border-t">
                     <div className="flex overflow-x-auto">
                         {editedWeeks.map((week, index) => {
@@ -325,12 +310,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     </div>
                 </div>
             </div>
-
-            {/* Main Content */}
             <div className="flex-1 overflow-y-auto p-4 md:p-6">
                 {editedWeeks.length > 0 && (
                     <>
-                        {/* Week Information */}
                         <div className="mb-6 bg-gray-50 rounded-lg p-4 border">
                             <div className="flex justify-between items-center">
                                 <div>
@@ -355,8 +337,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 </div>
                             </div>
                         </div>
-
-                        {/* Add Employee Form */}
                         {showAddEmployeeForm && (
                             <div className="mb-6 bg-white rounded-lg border shadow-sm p-4">
                                 <div className="flex justify-between items-center mb-4">
@@ -440,8 +420,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         Add to Current & Future Weeks
                                     </button>
                                 </div>
-
-                                {/* Daily Status for New Employee */}
                                 <div className="mt-4">
                                     <h4 className="font-medium text-gray-700 mb-3">Default Weekly Status Pattern</h4>
                                     <div className="grid grid-cols-7 gap-2">
@@ -472,8 +450,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 </div>
                             </div>
                         )}
-
-                        {/* Employee Table */}
                        <div className="bg-white rounded-lg border shadow-sm overflow-hidden">
     <div className="overflow-x-auto">
         <table className="w-full">
@@ -496,7 +472,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
                     return (
                         <tr key={employee._id} className="border-b hover:bg-gray-50">
-                            {/* Name */}
                             <td className="p-2">
                                 <input
                                     type="text"
@@ -505,8 +480,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     className="w-full border border-gray-300 p-1 rounded text-sm"
                                 />
                             </td>
-
-                            {/* Transport */}
                             <td className="p-2">
                                 <select
                                     value={employee.transport || ''}
@@ -518,8 +491,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     <option value="No">No</option>
                                 </select>
                             </td>
-
-                            {/* CAB Route */}
                             <td className="p-2">
                                 <input
                                     type="text"
@@ -528,8 +499,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     className="w-full border border-gray-300 p-1 rounded text-sm"
                                 />
                             </td>
-
-                            {/* Team Leader */}
                             <td className="p-2">
                                 <input
                                     type="text"
@@ -539,8 +508,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     className="w-full border border-gray-300 p-1 rounded text-sm"
                                 />
                             </td>
-                            
-                            {/* Shift Hours */}
                             <td className="p-2">
                                 <div className="flex gap-1">
                                     <input
@@ -562,8 +529,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     />
                                 </div>
                             </td>
-
-                            {/* Daily Status - FIXED THIS SECTION */}
                             <td className="p-2">
                                 <div className="flex gap-0.5 justify-center min-w-max">
                                     {employee.dailyStatus.slice(0, daysInWeek).map((status, dayIndex) => {
@@ -600,8 +565,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     })}
                                 </div>
                             </td>
-
-                            {/* Actions */}
                             <td className="p-2">
                                 <button
                                     onClick={() => handleRemoveEmployee(activeTab, employee._id)}
@@ -626,8 +589,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     </>
                 )}
             </div>
-
-            {/* Footer */}
             <div className="sticky bottom-0 bg-white border-t p-4">
                 <div className="flex justify-between items-center">
                     <div>
@@ -653,8 +614,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     </div>
                 </div>
             </div>
-
-            {/* Success/Error Messages */}
             {bulkSaveSuccess && (
                 <div className="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg z-60">
                     <div className="flex items-center">

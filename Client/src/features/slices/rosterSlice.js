@@ -814,9 +814,10 @@
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { toast } from "react-toastify";
 
-// const API_URL = "http://localhost:4000/api/v1/roster";
- const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
+const API_URL = "http://localhost:4000/api/v1/roster";
+// const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -843,6 +844,12 @@ const cache = {
     rosterId: null,
     CACHE_DURATION: 5 * 60 * 1000,
   },
+  // ADDED: Ops-Meta roster cache
+  opsMetaRoster: {
+    data: null,
+    timestamp: null,
+    CACHE_DURATION: 2 * 60 * 1000, // Shorter cache for real-time updates
+  },
 };
 
 const clearAllRosterCaches = () => {
@@ -857,6 +864,10 @@ const clearAllRosterCaches = () => {
   cache.bulkEditRoster.data = null;
   cache.bulkEditRoster.timestamp = null;
   cache.bulkEditRoster.rosterId = null;
+  
+  // ADDED: Clear Ops-Meta cache
+  cache.opsMetaRoster.data = null;
+  cache.opsMetaRoster.timestamp = null;
   
   console.log("All roster caches cleared");
 };
@@ -889,9 +900,22 @@ const clearBulkEditCache = (rosterId = null) => {
   }
 };
 
+// ADDED: Clear Ops-Meta cache function
+const clearOpsMetaRosterCache = () => {
+  cache.opsMetaRoster.data = null;
+  cache.opsMetaRoster.timestamp = null;
+  console.log("Ops-Meta roster cache cleared");
+};
+
 const isCacheValid = (cacheKey, filters) => {
   const cacheItem = cache[cacheKey];
   if (!cacheItem.data || !cacheItem.timestamp) return false;
+  
+  // ADDED: Check for Ops-Meta roster
+  if (cacheKey === 'opsMetaRoster') {
+    const now = Date.now();
+    return now - cacheItem.timestamp < cacheItem.CACHE_DURATION;
+  }
   
   // For roster and allRosters, check filters
   if (cacheKey === 'roster' || cacheKey === 'allRosters') {
@@ -907,6 +931,103 @@ const isCacheValid = (cacheKey, filters) => {
   return now - cacheItem.timestamp < cacheItem.CACHE_DURATION;
 };
 
+// ========== ADDED: EXCEL UPLOAD ASYNC THUNK ==========
+export const uploadRosterFromExcel = createAsyncThunk(
+  'roster/uploadFromExcel',
+  async ({ startDate, endDate, excelFile }, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      
+      // Create form data with your exact field names
+      const formData = new FormData();
+      formData.append('startDate', startDate);  // Must match req.body.startDate
+      formData.append('endDate', endDate);      // Must match req.body.endDate
+      formData.append('excelFile', excelFile);  // Must match upload.single('excelFile')
+
+      const response = await axios.post(`${API_URL}/upload-excel`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data',  // Important for file upload
+        },
+      });
+
+      // Clear all caches after successful upload
+      clearAllRosterCaches();
+      
+      toast.success(response.data.message || 'Roster uploaded successfully');
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || 
+                     error.response?.data?.error || 
+                     error.message;
+      toast.error(message);
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// ========== OPS-META SPECIFIC ASYNC THUNKS ==========
+export const getOpsMetaCurrentWeekRoster = createAsyncThunk(
+  'roster/opsMeta/getCurrentWeek',
+  async (_, { rejectWithValue, getState }) => {
+    try {
+      // Check cache first
+      if (isCacheValid('opsMetaRoster')) {
+        console.log("Returning cached Ops-Meta roster data");
+        return cache.opsMetaRoster.data;
+      }
+
+      const token = getToken();
+      const response = await axios.get(`${API_URL}/current-week`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      // Cache the response
+      cache.opsMetaRoster.data = response.data;
+      cache.opsMetaRoster.timestamp = Date.now();
+      
+      console.log("Fetched fresh Ops-Meta roster data and cached it");
+      
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message;
+      toast.error(message);
+      return rejectWithValue(message);
+    }
+  }
+);
+
+export const updateOpsMetaRoster = createAsyncThunk(
+  'roster/opsMeta/update',
+  async ({ employeeId, updates }, { rejectWithValue, getState }) => {
+    try {
+      const token = getToken();
+      const response = await axios.put(
+        `${API_URL}/update`,
+        { employeeId, updates },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      // Clear Ops-Meta cache after update for fresh data
+      clearOpsMetaRosterCache();
+      
+      toast.success(response.data.message);
+      return response.data;
+    } catch (error) {
+      const message = error.response?.data?.message || error.message;
+      toast.error(message);
+      return rejectWithValue(message);
+    }
+  }
+);
+
+// ========== EXISTING ASYNC THUNKS ==========
 export const getRosterForBulkEdit = createAsyncThunk(
   "roster/getRosterForBulkEdit",
   async (rosterId, thunkAPI) => {
@@ -931,7 +1052,6 @@ export const getRosterForBulkEdit = createAsyncThunk(
     return res.data;
   }
 );
-
 
 export const bulkUpdateRosterWeeks = createAsyncThunk(
   "roster/bulkUpdateRosterWeeks",
@@ -1003,7 +1123,6 @@ export const fetchRoster = createAsyncThunk(
     }
   }
 );
-
 
 export const fetchAllRosters = createAsyncThunk(
   "roster/fetchAllRosters",
@@ -1101,8 +1220,7 @@ export const updateRosterEmployee = createAsyncThunk(
   }
 ); 
 
-// DELETE OPERATIONS - ALL CLEAR CACHE PROPERLY
-
+// DELETE OPERATIONS
 export const deleteEmployeeFromRoster = createAsyncThunk(
   "roster/deleteEmployeeFromRoster",
   async ({ rosterId, weekNumber, employeeId }, thunkAPI) => {
@@ -1189,8 +1307,7 @@ export const deleteEmployeeByName = createAsyncThunk(
   }
 );
 
-// OTHER OPERATIONS THAT SHOULD CLEAR CACHE
-
+// OTHER OPERATIONS
 export const createRosterForDateRange = createAsyncThunk(
   "roster/createRosterForDateRange",
   async ({ data }, thunkAPI) => {
@@ -1214,7 +1331,6 @@ export const createRosterForDateRange = createAsyncThunk(
     }
   }
 );
-
 
 export const copyEmployeesToWeek = createAsyncThunk(
   "roster/copyEmployeesToWeek",
@@ -1315,7 +1431,7 @@ export const bulkUpdateWeeks = createAsyncThunk(
   }
 );
 
-// Helper function remains the same
+// Helper function
 const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   if (!roster?.weeks) return -1;
   const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
@@ -1326,13 +1442,26 @@ const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   return { weekIndex, employeeIndex };
 };
 
-// UPDATED SLICE WITH BULK EDIT STATES
+// UPDATED SLICE WITH OPS-META STATES AND EXCEL UPLOAD
 const rosterSlice = createSlice({
   name: "roster",
   initialState: {
     roster: undefined,
     allRosters: undefined,
-    bulkEditRoster: undefined, // NEW: for bulk edit data
+    bulkEditRoster: undefined,
+    // ADDED: Ops-Meta specific states
+    opsMetaRoster: undefined,
+    opsMetaLoading: false,
+    opsMetaError: null,
+    opsMetaCanEdit: false,
+    opsMetaEditMessage: "",
+    
+    // ADDED: Excel upload states
+    excelUploadLoading: false,
+    excelUploadSuccess: false,
+    excelUploadError: null,
+    excelUploadData: null,
+    
     loading: false,
     isHydrated: false,
     bulkEditHydrated: false,
@@ -1355,7 +1484,6 @@ const rosterSlice = createSlice({
     bulkUpdateLoading: false,
     bulkUpdateSuccess: false,
     bulkUpdateError: null,
-    // NEW STATES FOR BULK EDIT
     bulkEditLoading: false,
     bulkEditError: null,
     bulkSaveLoading: false,
@@ -1376,6 +1504,22 @@ const rosterSlice = createSlice({
       state.savedExportSuccess = false;
       state.error = null;
     },
+    // ADDED: Ops-Meta specific reducer
+    clearOpsMetaState: (state) => {
+      state.opsMetaRoster = undefined;
+      state.opsMetaLoading = false;
+      state.opsMetaError = null;
+      state.opsMetaCanEdit = false;
+      state.opsMetaEditMessage = "";
+      clearOpsMetaRosterCache();
+    },
+    // ADDED: Excel upload reducer
+    clearExcelUploadState: (state) => {
+      state.excelUploadLoading = false;
+      state.excelUploadSuccess = false;
+      state.excelUploadError = null;
+      state.excelUploadData = null;
+    },
     clearRosterDetailState: (state) => {
       state.allRosters = null;
       state.rosterDetailError = null;
@@ -1393,8 +1537,12 @@ const rosterSlice = createSlice({
       state.createRangeError = null;
       state.copyEmployeesError = null;
       state.bulkUpdateError = null;
-      state.bulkEditError = null; // NEW
-      state.bulkSaveError = null; // NEW
+      state.bulkEditError = null;
+      state.bulkSaveError = null;
+      // ADDED: Clear Ops-Meta error
+      state.opsMetaError = null;
+      // ADDED: Clear Excel upload error
+      state.excelUploadError = null;
     },
     clearDeleteState: (state) => { 
       state.deleteLoading = false;
@@ -1416,7 +1564,6 @@ const rosterSlice = createSlice({
       state.bulkUpdateSuccess = false;
       state.bulkUpdateError = null;
     },
-    // NEW REDUCERS FOR BULK EDIT
     clearBulkEditState: (state) => {
       state.bulkEditRoster = undefined;
       state.bulkEditLoading = false;
@@ -1424,7 +1571,6 @@ const rosterSlice = createSlice({
       state.bulkSaveLoading = false;
       state.bulkSaveSuccess = false;
       state.bulkSaveError = null;
-      // Also clear cache
       clearBulkEditCache();
     },
     clearBulkSaveState: (state) => {
@@ -1432,15 +1578,34 @@ const rosterSlice = createSlice({
       state.bulkSaveSuccess = false;
       state.bulkSaveError = null;
     },
-    // Force refresh roster data (useful when you know data changed)
+    // UPDATED: Include Ops-Meta in force refresh
     forceRefreshRoster: (state) => {
       clearAllRosterCaches();
       state.roster = undefined;
       state.allRosters = undefined;
       state.bulkEditRoster = undefined;
+      state.opsMetaRoster = undefined;
       console.log("Forced roster refresh - all data cleared");
     },
-    // Manually update local data after edit (immediate UI update)
+    // ADDED: Update Ops-Meta roster locally
+    updateOpsMetaRosterLocally: (state, action) => {
+      const { employeeId, updates } = action.payload;
+      
+      if (state.opsMetaRoster?.data?.rosterEntries) {
+        const employeeIndex = state.opsMetaRoster.data.rosterEntries.findIndex(
+          emp => emp._id === employeeId
+        );
+        
+        if (employeeIndex !== -1) {
+          state.opsMetaRoster.data.rosterEntries[employeeIndex] = {
+            ...state.opsMetaRoster.data.rosterEntries[employeeIndex],
+            ...updates
+          };
+          
+          console.log("Ops-Meta roster updated locally:", employeeId);
+        }
+      }
+    },
     updateRosterData: (state, action) => {
       state.allRosters = action.payload;
     },
@@ -1552,7 +1717,8 @@ const rosterSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-       .addCase(exportSavedRoster.pending, (state) => {
+      
+      .addCase(exportSavedRoster.pending, (state) => {
         state.savedExportLoading = true;
         state.savedExportSuccess = false;
         state.error = null;
@@ -1610,7 +1776,7 @@ const rosterSlice = createSlice({
         state.allRosters = [];
       })
       
-      // DELETE OPERATIONS - with immediate UI update
+      // DELETE OPERATIONS
       .addCase(deleteEmployeeFromRoster.pending, (state) => {
         state.deleteLoading = true;
         state.deleteSuccess = false;
@@ -1620,7 +1786,6 @@ const rosterSlice = createSlice({
         state.deleteLoading = false;
         state.deleteSuccess = true;
         state.deleteError = null;
-        // The local update is handled in updateRosterDataLocally reducer
       })
       .addCase(deleteEmployeeFromRoster.rejected, (state, action) => {
         state.deleteLoading = false;
@@ -1629,24 +1794,21 @@ const rosterSlice = createSlice({
       })
       
       // BULK EDIT OPERATIONS
-     .addCase(getRosterForBulkEdit.pending, (state) => {
-  state.bulkEditLoading = true;
-  state.bulkEditError = null;
-  state.bulkEditHydrated = false;
-})
-
-.addCase(getRosterForBulkEdit.fulfilled, (state, action) => {
-  state.bulkEditLoading = false;
-  state.bulkEditRoster = action.payload;
-  state.bulkEditHydrated = true;
-})
-
-.addCase(getRosterForBulkEdit.rejected, (state, action) => {
-  state.bulkEditLoading = false;
-  state.bulkEditError = action.payload;
-  state.bulkEditHydrated = true;
-})
-
+      .addCase(getRosterForBulkEdit.pending, (state) => {
+        state.bulkEditLoading = true;
+        state.bulkEditError = null;
+        state.bulkEditHydrated = false;
+      })
+      .addCase(getRosterForBulkEdit.fulfilled, (state, action) => {
+        state.bulkEditLoading = false;
+        state.bulkEditRoster = action.payload;
+        state.bulkEditHydrated = true;
+      })
+      .addCase(getRosterForBulkEdit.rejected, (state, action) => {
+        state.bulkEditLoading = false;
+        state.bulkEditError = action.payload;
+        state.bulkEditHydrated = true;
+      })
       
       .addCase(bulkUpdateRosterWeeks.pending, (state) => {
         state.bulkSaveLoading = true;
@@ -1657,7 +1819,6 @@ const rosterSlice = createSlice({
         state.bulkSaveLoading = false;
         state.bulkSaveSuccess = true;
         state.bulkEditError = undefined;
-        // Clear bulk edit data after successful save
         state.bulkEditRoster = null;
       })
       .addCase(bulkUpdateRosterWeeks.rejected, (state, action) => {
@@ -1666,21 +1827,67 @@ const rosterSlice = createSlice({
         state.bulkSaveError = action.payload;
       })
       
-      // Add other existing cases...
+      // ADDED: OPS-META OPERATIONS
+      .addCase(getOpsMetaCurrentWeekRoster.pending, (state) => {
+        state.opsMetaLoading = true;
+        state.opsMetaError = null;
+      })
+      .addCase(getOpsMetaCurrentWeekRoster.fulfilled, (state, action) => {
+        state.opsMetaLoading = false;
+        state.opsMetaRoster = action.payload;
+        
+        // Extract canEdit and editMessage from response
+        if (action.payload.data) {
+          state.opsMetaCanEdit = action.payload.data.canEdit || false;
+          state.opsMetaEditMessage = action.payload.data.editMessage || "";
+        }
+      })
+      .addCase(getOpsMetaCurrentWeekRoster.rejected, (state, action) => {
+        state.opsMetaLoading = false;
+        state.opsMetaError = action.payload;
+      })
+      
+      .addCase(updateOpsMetaRoster.pending, (state) => {
+        state.opsMetaLoading = true;
+        state.opsMetaError = null;
+      })
+      .addCase(updateOpsMetaRoster.fulfilled, (state, action) => {
+        state.opsMetaLoading = false;
+      })
+      .addCase(updateOpsMetaRoster.rejected, (state, action) => {
+        state.opsMetaLoading = false;
+        state.opsMetaError = action.payload;
+      })
+      
+      // ADDED: EXCEL UPLOAD OPERATIONS
+      .addCase(uploadRosterFromExcel.pending, (state) => {
+        state.excelUploadLoading = true;
+        state.excelUploadSuccess = false;
+        state.excelUploadError = null;
+        state.excelUploadData = null;
+      })
+      .addCase(uploadRosterFromExcel.fulfilled, (state, action) => {
+        state.excelUploadLoading = false;
+        state.excelUploadSuccess = true;
+        state.excelUploadData = action.payload;
+      })
+      .addCase(uploadRosterFromExcel.rejected, (state, action) => {
+        state.excelUploadLoading = false;
+        state.excelUploadError = action.payload;
+      })
+      
+      // Existing cases...
       .addCase(updateRosterEmployee.pending, (state) => {
         state.loading = true;
         state.error = null;
       })
       .addCase(updateRosterEmployee.fulfilled, (state, action) => {
         state.loading = false;
-        // Local update is handled by updateRosterDataLocally reducer
       })
       .addCase(updateRosterEmployee.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
       });
-      
-    // Add other existing extraReducers...
   },
 });
 
@@ -1692,12 +1899,15 @@ export const {
   clearCreateRangeState,
   clearCopyEmployeesState,
   clearBulkUpdateState,
-  clearBulkEditState,      // NEW
-  clearBulkSaveState,      // NEW
-  forceRefreshRoster,      // NEW
+  clearBulkEditState,
+  clearBulkSaveState,
+  forceRefreshRoster,
   updateRosterData,
   updateRosterDataLocally,
-  removeEmployeeFromRosterLocally 
+  removeEmployeeFromRosterLocally,
+  clearOpsMetaState,
+  updateOpsMetaRosterLocally,
+  clearExcelUploadState,
 } = rosterSlice.actions;
 
 export default rosterSlice.reducer;
