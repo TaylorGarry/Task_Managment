@@ -11,7 +11,6 @@
 // // Import routes
 // import authRoutes from "./routes/auth.routes.js";
 // import taskRoutes from "./routes/task.routes.js";
-// import reviewRoutes from "./routes/review.routes.js";
 // import taskStatusRoutes from "./routes/taskStatus.routes.js";
 // import remarkRoutes from "./routes/remark.routes.js";
 // import rosterRoutes from "./routes/roster.routes.js";
@@ -241,7 +240,6 @@
 // // Use routes
 // app.use("/api/v1", authRoutes);
 // app.use("/api/v1/tasks", taskRoutes);
-// app.use("/api/v1/review", reviewRoutes);
 // app.use("/api/v1/task-status", taskStatusRoutes);
 // app.use("/api/remarks", remarkRoutes);
 // app.use("/api/v1/roster", rosterRoutes);
@@ -375,12 +373,12 @@ import path from "path";
 
 import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/task.routes.js";
-import reviewRoutes from "./routes/review.routes.js";
 import taskStatusRoutes from "./routes/taskStatus.routes.js";
 import remarkRoutes from "./routes/remark.routes.js";
 import rosterRoutes from "./routes/roster.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import messageRoutes from "./routes/message.routes.js";
+import pushRoutes from "./routes/push.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 
 dotenv.config();
@@ -459,6 +457,9 @@ const publicRoutes = [
   "/api/v1/signup",
   "/api/v1/logout"
 ];
+const ipFreeRoutes = [
+  "/api/v1/push/subscribe"
+];
 
 app.use((req, res, next) => {
   if (publicRoutes.includes(req.path)) {
@@ -469,6 +470,7 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
   if (publicRoutes.includes(req.path)) return next(); 
+  if (ipFreeRoutes.includes(req.path)) return next(); 
 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -617,12 +619,13 @@ io.on("connection", (socket) => {
 
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
-app.use("/api/v1/review", reviewRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
 app.use("/api/remarks", remarkRoutes);
 app.use("/api/v1/roster", rosterRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
+app.use("/api/v1/push", pushRoutes);
+
 
 app.get("/", (req, res) => {
   res.json({

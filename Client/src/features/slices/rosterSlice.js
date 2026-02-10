@@ -816,8 +816,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const API_URL = "http://localhost:4000/api/v1/roster";
-// const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
+// const API_URL = "http://localhost:4000/api/v1/roster";
+const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -844,11 +844,10 @@ const cache = {
     rosterId: null,
     CACHE_DURATION: 5 * 60 * 1000,
   },
-  // ADDED: Ops-Meta roster cache
   opsMetaRoster: {
     data: null,
     timestamp: null,
-    CACHE_DURATION: 2 * 60 * 1000, // Shorter cache for real-time updates
+    CACHE_DURATION: 2 * 60 * 1000,  
   },
 };
 
@@ -899,8 +898,6 @@ const clearBulkEditCache = (rosterId = null) => {
     console.log("All bulk edit caches cleared");
   }
 };
-
-// ADDED: Clear Ops-Meta cache function
 const clearOpsMetaRosterCache = () => {
   cache.opsMetaRoster.data = null;
   cache.opsMetaRoster.timestamp = null;
@@ -910,19 +907,14 @@ const clearOpsMetaRosterCache = () => {
 const isCacheValid = (cacheKey, filters) => {
   const cacheItem = cache[cacheKey];
   if (!cacheItem.data || !cacheItem.timestamp) return false;
-  
-  // ADDED: Check for Ops-Meta roster
   if (cacheKey === 'opsMetaRoster') {
     const now = Date.now();
     return now - cacheItem.timestamp < cacheItem.CACHE_DURATION;
   }
-  
-  // For roster and allRosters, check filters
   if (cacheKey === 'roster' || cacheKey === 'allRosters') {
     const areFiltersSame = JSON.stringify(cacheItem.filters) === JSON.stringify(filters);
     if (!areFiltersSame) return false;
   }
-  
   if (cacheKey === 'bulkEditRoster' && filters && cacheItem.rosterId !== filters) {
     return false;
   }
@@ -931,27 +923,22 @@ const isCacheValid = (cacheKey, filters) => {
   return now - cacheItem.timestamp < cacheItem.CACHE_DURATION;
 };
 
-// ========== ADDED: EXCEL UPLOAD ASYNC THUNK ==========
 export const uploadRosterFromExcel = createAsyncThunk(
   'roster/uploadFromExcel',
   async ({ startDate, endDate, excelFile }, { rejectWithValue }) => {
     try {
-      const token = getToken();
-      
-      // Create form data with your exact field names
+      const token = getToken(); 
       const formData = new FormData();
-      formData.append('startDate', startDate);  // Must match req.body.startDate
-      formData.append('endDate', endDate);      // Must match req.body.endDate
-      formData.append('excelFile', excelFile);  // Must match upload.single('excelFile')
+      formData.append('startDate', startDate);   
+      formData.append('endDate', endDate);      
+      formData.append('excelFile', excelFile);   
 
       const response = await axios.post(`${API_URL}/upload-excel`, formData, {
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',  // Important for file upload
+          'Content-Type': 'multipart/form-data',   
         },
-      });
-
-      // Clear all caches after successful upload
+      }); 
       clearAllRosterCaches();
       
       toast.success(response.data.message || 'Roster uploaded successfully');
@@ -964,32 +951,24 @@ export const uploadRosterFromExcel = createAsyncThunk(
       return rejectWithValue(message);
     }
   }
-);
-
-// ========== OPS-META SPECIFIC ASYNC THUNKS ==========
+); 
 export const getOpsMetaCurrentWeekRoster = createAsyncThunk(
   'roster/opsMeta/getCurrentWeek',
   async (_, { rejectWithValue, getState }) => {
     try {
-      // Check cache first
       if (isCacheValid('opsMetaRoster')) {
         console.log("Returning cached Ops-Meta roster data");
         return cache.opsMetaRoster.data;
       }
-
       const token = getToken();
       const response = await axios.get(`${API_URL}/current-week`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-      });
-
-      // Cache the response
+      }); 
       cache.opsMetaRoster.data = response.data;
       cache.opsMetaRoster.timestamp = Date.now();
-      
       console.log("Fetched fresh Ops-Meta roster data and cached it");
-      
       return response.data;
     } catch (error) {
       const message = error.response?.data?.message || error.message;
@@ -1012,11 +991,8 @@ export const updateOpsMetaRoster = createAsyncThunk(
             Authorization: `Bearer ${token}`,
           },
         }
-      );
-
-      // Clear Ops-Meta cache after update for fresh data
+      ); 
       clearOpsMetaRosterCache();
-      
       toast.success(response.data.message);
       return response.data;
     } catch (error) {
@@ -1025,21 +1001,17 @@ export const updateOpsMetaRoster = createAsyncThunk(
       return rejectWithValue(message);
     }
   }
-);
-
-// ========== EXISTING ASYNC THUNKS ==========
+); 
 export const getRosterForBulkEdit = createAsyncThunk(
   "roster/getRosterForBulkEdit",
   async (rosterId, thunkAPI) => {
     const state = thunkAPI.getState().roster;
-
     if (
       state.bulkEditRoster &&
       isCacheValid("bulkEditRoster", rosterId)
     ) {
       return state.bulkEditRoster;
     }
-
     const token = getToken();
     const res = await axios.get(`${API_URL}/bulk-edit/${rosterId}`, {
       headers: { Authorization: `Bearer ${token}` },
@@ -1063,13 +1035,9 @@ export const bulkUpdateRosterWeeks = createAsyncThunk(
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-      });
-
-      // Clear ALL caches after successful bulk update
+      }); 
       clearAllRosterCaches();
-      
       console.log("Bulk update successful, all caches cleared");
-
       return res.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
@@ -1087,13 +1055,9 @@ export const addRosterWeek = createAsyncThunk(
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-      });
-      
-      // Clear all caches after adding roster week
+      }); 
       clearAllRosterCaches();
-      
       console.log("Roster week added, all caches cleared");
-
       return res.data;
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);

@@ -166,10 +166,11 @@ import AdminAssignedTasks from "./components/AdminAssignedTasks.jsx";
 import ChatUI from "./Chat/ChatUI.jsx";
 import { ToastContainer } from "react-toastify";
 import OpsRoster from "./Roster/OpsRoster.jsx";
-import ExcelRosterUpload from "./Roster/ExcelRosterUpload.jsx"; // ADD THIS IMPORT
+import ExcelRosterUpload from "./Roster/ExcelRosterUpload.jsx";  
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
+  console.log("VAPID PUBLIC KEY::::::",import.meta.env.VITE_VAPID_PUBLIC_KEY);
 
   if (!user) return <Navigate to="/login" replace />;
 
