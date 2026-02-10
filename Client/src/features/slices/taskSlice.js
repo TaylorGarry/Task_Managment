@@ -1,8 +1,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { toast } from "react-toastify";
-const API_URL = "http://localhost:4000/api/v1/tasks";
-// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
+// const API_URL = "http://localhost:4000/api/v1/tasks";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token || null;

@@ -7,6 +7,7 @@ import Navbar from "./Navbar";
 import { Toaster, toast } from "react-hot-toast";
 import { MessageCircle } from "lucide-react";
 import { FiX, FiSend, FiEdit2, FiCheck, FiXCircle } from "react-icons/fi";
+import { subscribeUserToPush } from "../utils/pushNotifications";
 
 const EmployeeDashboard = () => {
   const dispatch = useDispatch();
@@ -31,6 +32,26 @@ const EmployeeDashboard = () => {
   const shiftOptions = ["Start", "Mid", "End"];
   const departmentOptions = [employeeDepartment];
   const messagesEndRef = useRef(null);
+
+useEffect(() => {
+  console.log("The subscribeUserToPush is now loading from EmployeeDashboard.jsx file ::::");
+  
+  let isSubscribed = false;
+  
+  const initPush = async () => {
+    if (isSubscribed) return;
+    isSubscribed = true;
+    
+    await subscribeUserToPush();
+  };
+  
+  initPush();
+  
+  return () => {
+    isSubscribed = true;
+  };
+}, []);
+
 
   useEffect(() => {
     if (isCoreTeam) {

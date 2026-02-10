@@ -14,11 +14,9 @@ export const fetchRemarks = createAsyncThunk(
   async (taskId, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
-
       const res = await axios.get(`${API_URL}/${taskId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       return res.data;
     } catch (error) {
       return rejectWithValue(
@@ -33,7 +31,6 @@ export const addRemark = createAsyncThunk(
   async ({ taskId, message, receiverId = null, sendToAll = false }, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
-
       const res = await axios.post(
         `${API_URL}/${taskId}`,
         { message, receiverId, sendToAll },
@@ -44,14 +41,12 @@ export const addRemark = createAsyncThunk(
           },
         }
       );
-
       if (res.data.sentToAll && Array.isArray(res.data.remarks)) {
         return {
           remarks: res.data.remarks,
           sentToAll: true,
         };
       }
-
       return {
         remark: res.data.remark,
         sentToAll: false,
@@ -69,7 +64,6 @@ export const updateRemark = createAsyncThunk(
   async ({ remarkId, message }, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
-
       const res = await axios.put(
         `${API_URL}/update/${remarkId}`,
         { message },
@@ -80,7 +74,6 @@ export const updateRemark = createAsyncThunk(
           },
         }
       );
-
       return res.data.remark;
     } catch (error) {
       return rejectWithValue(
@@ -90,17 +83,14 @@ export const updateRemark = createAsyncThunk(
   }
 );
 
-
 export const deleteRemark = createAsyncThunk(
   "remarks/deleteRemark",
   async (remarkId, { rejectWithValue, getState }) => {
     try {
       const token = getToken(getState);
-
       await axios.delete(`${API_URL}/${remarkId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       return remarkId;
     } catch (error) {
       return rejectWithValue(
@@ -131,7 +121,6 @@ const remarkSlice = createSlice({
       state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     },
   },
-
   extraReducers: (builder) => {
     builder
       .addCase(fetchRemarks.pending, (state) => {
@@ -146,22 +135,18 @@ const remarkSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
       })
-
       .addCase(addRemark.fulfilled, (state, action) => {
         if (action.payload.sentToAll && Array.isArray(action.payload.remarks)) {
           state.remarks.push(...action.payload.remarks);
         } else {
           state.remarks.push(action.payload.remark);
         }
-
         state.remarks.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
       })
-
       .addCase(updateRemark.fulfilled, (state, action) => {
         const index = state.remarks.findIndex((r) => r._id === action.payload._id);
         if (index !== -1) state.remarks[index] = action.payload;
       })
-
       .addCase(deleteRemark.fulfilled, (state, action) => {
         state.remarks = state.remarks.filter((r) => r._id !== action.payload);
       });

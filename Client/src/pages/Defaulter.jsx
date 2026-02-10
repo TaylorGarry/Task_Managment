@@ -53,8 +53,12 @@ const Defaulter = () => {
       setModalLoading(true);
       setModalOpen(true);
       const token = localStorage.getItem("token");
+      // const res = await fetch(
+      //   `http://localhost:4000/api/v1/tasks/employee-defaulters/${employeeId}`,
+      //   { headers: { Authorization: `Bearer ${token}` } }
+      // );
       const res = await fetch(
-        `http://localhost:4000/api/v1/tasks/employee-defaulters/${employeeId}`,
+        `https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks/employee-defaulters/${employeeId}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       const data = await res.json();
@@ -288,8 +292,6 @@ const Defaulter = () => {
             Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, defaulters?.length || 0)} of {defaulters?.length || 0} records
           </div>
         </div>
-
-        {/* Filter Section */}
         <div className="bg-white p-4 rounded-lg shadow mb-6">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
             <div>

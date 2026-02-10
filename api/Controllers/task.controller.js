@@ -600,8 +600,6 @@ export const getCoreTeamTasks = async (req, res) => {
 
 
 
-
-
 export const updateTaskStatus = async (req, res) => {
   try {
     if (req.user.accountType !== "employee" && req.user.accountType !== "HR") {

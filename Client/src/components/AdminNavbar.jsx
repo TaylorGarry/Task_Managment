@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
-import { Link, Outlet, useNavigate } from "react-router-dom";
+import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
@@ -16,6 +16,7 @@ const AdminNavbar = () => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -98,49 +99,64 @@ const AdminNavbar = () => {
     }
   };
 
+  const isActive = (path) => location.pathname === path;
+  const navLinkClass = (path) =>
+    `rounded-full px-3 py-1.5 transition-colors font-semibold ${
+      isActive(path)
+        ? "bg-cyan-400 text-slate-900"
+        : "text-white/80 hover:text-white"
+    }`;
+
   return (
     <>
-      <nav className="fixed top-0 left-0 w-full bg-[#EEEEEE] text-white z-50 shadow-lg">
-        <div className="flex justify-between items-center p-2">
-          <h1 className="text-lg font-bold text-[#155DFC]">Task Management</h1>
+      <nav className="fixed top-0 left-0 w-full z-50">
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap');
+        `}</style>
+        <div className="border-b border-white/10 bg-slate-950/80 text-white shadow-[0_10px_30px_-20px_rgba(0,0,0,0.7)] backdrop-blur">
+          <div className="flex justify-between items-center p-2">
+            <h1
+              className="text-lg font-semibold text-white"
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              Task Management
+            </h1>
 
-          <div className="hidden md:flex items-center gap-4">
+          <div className="hidden md:flex items-center gap-4" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
             <Link 
               to="/admin/roster" 
-              className="flex items-center gap-2 hover:underline text-[#155DFC] font-semibold"
+              className={`flex items-center gap-2 ${navLinkClass("/admin/roster")}`}
             >
-              <FiCalendar className="text-lg" />
+              <FiCalendar className="text-lg text-cyan-300" />
               Roster
             </Link>
             
-            <Link to="/admin/adminDashboard" className="hover:underline text-[#155DFC] font-semibold">
+            <Link to="/admin/adminDashboard" className={navLinkClass("/admin/adminDashboard")}>
               Admin
             </Link>
-            <Link to="/admin/admintask" className="hover:underline text-[#155DFC] font-semibold">
+            <Link to="/admin/admintask" className={navLinkClass("/admin/admintask")}>
               Your Task
             </Link>
-           
-           
-            <Link to="/admin/chat" className="hover:underline text-[#155DFC] font-semibold">
+            <Link to="/admin/chat" className={navLinkClass("/admin/chat")}>
               Chat
             </Link>
            
            
             {["admin", "superAdmin"].includes(user?.accountType) && (
               <>
-               <Link to="/admin/assign-task" className="hover:underline text-[#155DFC] font-semibold">
+               <Link to="/admin/assign-task" className={navLinkClass("/admin/assign-task")}>
               Assign Task
             </Link>
-               <Link to="/admin/tasks" className="hover:underline text-[#155DFC] font-semibold">
+               <Link to="/admin/tasks" className={navLinkClass("/admin/tasks")}>
               Task Status
             </Link>
-             <Link to="/admin/defaulter" className="hover:underline text-[#155DFC] font-semibold">
+             <Link to="/admin/defaulter" className={navLinkClass("/admin/defaulter")}>
               Defaulter  
             </Link>
                 <button
                   onClick={handleExport}
                   disabled={exporting}
-                  className="flex items-center gap-2 bg-[#00B579] hover:bg-green-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all cursor-pointer"
+                  className="flex items-center gap-2 bg-emerald-400/90 hover:bg-emerald-300 text-slate-900 px-3 py-1.5 rounded-full text-sm shadow transition-all cursor-pointer"
                 >
                   <FiDownload />
                   {exporting ? "Exporting..." : "Export Excel"}
@@ -148,7 +164,7 @@ const AdminNavbar = () => {
 
                 <button
                   onClick={() => navigate("/signup")}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-md text-sm shadow transition-all cursor-pointer"
+                  className="flex items-center gap-2 bg-cyan-400 hover:bg-cyan-300 text-slate-900 px-3 py-1.5 rounded-full text-sm shadow transition-all cursor-pointer"
                 >
                   Create User
                 </button>
@@ -157,17 +173,17 @@ const AdminNavbar = () => {
 
             <div className="relative ml-4" ref={dropdownRef}>
               <button
-                className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white border-2 border-white cursor-pointer"
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-semibold text-white border border-white/20 cursor-pointer"
                 onClick={() => setShowDropdown(!showDropdown)}
               >
                 {getInitials(user?.username)}
               </button>
 
               {showDropdown && (
-                <div className="absolute right-0 mt-2 w-36 bg-white text-[#155DFC] rounded shadow-lg py-2">
+                <div className="absolute right-0 mt-2 w-40 bg-slate-900 text-white rounded-2xl shadow-xl border border-white/10 py-2">
                   <button
                     onClick={() => setShowProfilePopup(true)}
-                    className="w-full px-2 py-2 hover:bg-gray-200 text-left cursor-pointer"
+                    className="w-full px-3 py-2 hover:bg-white/10 text-left cursor-pointer"
                   >
                     My Profile
                   </button>
@@ -177,14 +193,14 @@ const AdminNavbar = () => {
                       navigate("/admin/manage-employee");
                       setShowDropdown(false);
                     }}
-                    className="w-full px-2 py-2 hover:bg-gray-200 text-left cursor-pointer"
+                    className="w-full px-3 py-2 hover:bg-white/10 text-left cursor-pointer"
                   >
                     Team
                   </button>
 
                   <button
                     onClick={handleLogout}
-                    className="w-full px-2 py-2 hover:bg-gray-200 text-left cursor-pointer"
+                    className="w-full px-3 py-2 hover:bg-white/10 text-left cursor-pointer text-rose-200"
                   >
                     Logout
                   </button>
@@ -194,20 +210,21 @@ const AdminNavbar = () => {
           </div>
 
           <div className="md:hidden">
-            <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-[#155DFC]">
+            <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-white/80">
               <FiMenu />
             </button>
           </div>
         </div>
+        </div>
 
         {showMobileMenu && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex md:hidden">
-            <div className="bg-[#EEEEEE] w-64 p-6 flex flex-col gap-4 relative">
+          <div className="fixed inset-0 bg-slate-950/70 z-50 flex md:hidden">
+            <div className="bg-slate-900 w-72 p-6 flex flex-col gap-4 relative text-white" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
               <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold text-[#155DFC]">Menu</h2>
+                <h2 className="text-lg font-semibold text-white">Menu</h2>
                 <button
                   onClick={() => setShowMobileMenu(false)}
-                  className="text-2xl text-[#155DFC] hover:text-blue-700"
+                  className="text-2xl text-white/70 hover:text-white"
                 >
                   <FiX />
                 </button>
@@ -215,41 +232,41 @@ const AdminNavbar = () => {
 
               <Link
                 to="/admin/roster"
-                className="flex items-center gap-2 text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className="flex items-center gap-2 text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
-                <FiCalendar className="text-lg" />
+                <FiCalendar className="text-lg text-cyan-300" />
                 Roster
               </Link>
 
               <Link
                 to="/admin/adminDashboard"
-                className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Admin Dashboard
               </Link>
-                 <Link to="/admin/admintask" className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors">
+                 <Link to="/admin/admintask" className="text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors">
               Your Task
             </Link>
 
               <Link
                 to="/admin/assign-task"
-                className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Assign Task
               </Link>
               <Link
                 to="/admin/chat"
-                className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Chat
               </Link>
               <Link
                 to="/admin/tasks"
-                className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Task Status
@@ -257,7 +274,7 @@ const AdminNavbar = () => {
 
               <Link
                 to="/admin/defaulter"
-                className="text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors"
+                className="text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Defaulter
@@ -265,22 +282,22 @@ const AdminNavbar = () => {
 
               {user?.accountType === "admin"  && (
                 <>
-                  <div className="mt-2 pt-4 border-t border-gray-300">
+                  <div className="mt-2 pt-4 border-t border-white/10">
                     <button
                       onClick={() => {
                         navigate("/admin/manage-employee");
                         setShowMobileMenu(false);
                       }}
-                      className="flex items-center gap-2 text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors w-full text-left"
+                      className="flex items-center gap-2 text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors w-full text-left"
                     >
-                      <FiUsers className="text-lg" />
+                      <FiUsers className="text-lg text-cyan-300" />
                       Team Management
                     </button>
 
                     <button
                       onClick={handleExport}
                       disabled={exporting}
-                      className="flex items-center gap-2 bg-[#00B579] hover:bg-green-700 text-white px-4 py-3 rounded-md text-sm shadow transition-all w-full justify-center mt-2"
+                      className="flex items-center gap-2 bg-emerald-400/90 hover:bg-emerald-300 text-slate-900 px-4 py-3 rounded-full text-sm shadow transition-all w-full justify-center mt-2"
                     >
                       <FiDownload size={18} />
                       {exporting ? "Exporting..." : "Export Excel"}
@@ -291,7 +308,7 @@ const AdminNavbar = () => {
                         navigate("/signup");
                         setShowMobileMenu(false);
                       }}
-                      className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-md text-sm shadow transition-all w-full justify-center mt-2"
+                      className="flex items-center gap-2 bg-cyan-400 hover:bg-cyan-300 text-slate-900 px-4 py-3 rounded-full text-sm shadow transition-all w-full justify-center mt-2"
                     >
                       <FiUserPlus size={18} />
                       Create User
@@ -300,31 +317,31 @@ const AdminNavbar = () => {
                 </>
               )}
 
-              <div className="mt-4 pt-4 border-t border-gray-300">
+              <div className="mt-4 pt-4 border-t border-white/10">
                 <button
                   onClick={() => setShowProfilePopup(true)}
-                  className="flex items-center gap-2 text-[#155DFC] font-semibold hover:text-blue-700 py-2 px-3 rounded-lg hover:bg-blue-50 transition-colors w-full text-left"
+                  className="flex items-center gap-2 text-white/80 font-semibold hover:text-white py-2 px-3 rounded-xl hover:bg-white/10 transition-colors w-full text-left"
                 >
-                  <FiUser className="text-lg" />
+                  <FiUser className="text-lg text-cyan-300" />
                   My Profile
                 </button>
                 
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-2 text-red-600 hover:text-red-700 font-semibold py-2 px-3 rounded-lg hover:bg-red-50 transition-colors w-full text-left mt-2"
+                  className="flex items-center gap-2 text-rose-200 hover:text-rose-100 font-semibold py-2 px-3 rounded-xl hover:bg-white/10 transition-colors w-full text-left mt-2"
                 >
                   <FiLogOut className="text-lg" />
                   Logout
                 </button>
               </div>
-              <div className="mt-auto pt-4 border-t border-gray-300">
+              <div className="mt-auto pt-4 border-t border-white/10">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center font-semibold text-white">
+                  <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-semibold text-white border border-white/20">
                     {getInitials(user?.username)}
                   </div>
                   <div>
-                    <p className="text-sm font-medium text-gray-800">{user?.username}</p>
-                    <p className="text-xs text-gray-600">{user?.accountType}</p>
+                    <p className="text-sm font-medium text-white">{user?.username}</p>
+                    <p className="text-xs text-white/60">{user?.accountType}</p>
                   </div>
                 </div>
               </div>
@@ -337,16 +354,16 @@ const AdminNavbar = () => {
         )}
 
         {showProfilePopup && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center">
-            <div className="bg-white p-6 rounded-2xl shadow-xl w-80 relative text-black">
+          <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/70 backdrop-blur-sm">
+            <div className="bg-slate-900 p-6 rounded-3xl shadow-2xl w-80 relative text-white border border-white/10">
               <button
                 onClick={() => setShowProfilePopup(false)}
-                className="absolute top-2 right-2 text-gray-600 hover:text-gray-900"
+                className="absolute top-2 right-2 text-white/60 hover:text-white"
               >
                 <FiX size={20} />
               </button>
 
-              <h2 className="text-xl font-semibold text-gray-800 mb-4 text-center">
+              <h2 className="text-xl font-semibold text-white mb-4 text-center">
                 Update Profile
               </h2>
 
@@ -356,19 +373,19 @@ const AdminNavbar = () => {
                   placeholder="New Username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="border border-gray-300 text-black rounded px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="border border-white/10 text-white rounded-xl px-3 py-2 bg-white/5 focus:outline-none focus:ring focus:ring-cyan-300/40 placeholder:text-white/50"
                 />
                 <input
                   type="password"
                   placeholder="New Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="border border-gray-300 text-black rounded px-3 py-2 focus:outline-none focus:ring focus:ring-blue-300"
+                  className="border border-white/10 text-white rounded-xl px-3 py-2 bg-white/5 focus:outline-none focus:ring focus:ring-cyan-300/40 placeholder:text-white/50"
                 />
                 <button
                   onClick={handleUpdateProfile}
                   disabled={loading}
-                  className="bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-md mt-2 cursor-pointer"
+                  className="bg-cyan-400 hover:bg-cyan-300 text-slate-900 py-2 rounded-full mt-2 cursor-pointer"
                 >
                   {loading ? "Updating..." : "Update"}
                 </button>
