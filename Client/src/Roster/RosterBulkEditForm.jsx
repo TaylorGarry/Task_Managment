@@ -5,6 +5,9 @@ import { getRosterForBulkEdit, bulkUpdateRosterWeeks, clearBulkEditState, clearB
 const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const dispatch = useDispatch();
     const { bulkEditRoster, bulkEditLoading, bulkEditError, bulkSaveLoading, bulkSaveSuccess, bulkSaveError } = useSelector((state) => state.roster);
+    // 🔹 History Modal State
+const [showHistoryModal, setShowHistoryModal] = useState(false);
+const [selectedEmployee, setSelectedEmployee] = useState(null);
 
     const [activeTab, setActiveTab] = useState(0);
     const [editedWeeks, setEditedWeeks] = useState([]);
@@ -30,6 +33,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     }, [rosterId, dispatch]);
 
     useEffect(() => {
+        console.log("BULK EDIT ROSTER FULL DATA:::::::<><><><><<><><><><><><>:::", bulkEditRoster);
         if (bulkEditRoster?.data?.weeks) {
             const weeksCopy = JSON.parse(JSON.stringify(bulkEditRoster.data.weeks));
             setEditedWeeks(weeksCopy);
@@ -48,6 +52,27 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
         setEditedWeeks(updatedWeeks);
     };
+
+   const handleViewHistory = (employee) => {
+    const history = bulkEditRoster?.data?.editHistory || [];
+
+    if (history.length === 0) {
+        alert("No edit history available");
+        return;
+    }
+
+    const employeeLogs = history.filter(
+        (log) => log.employeeId?.toString() === employee._id?.toString()
+    );
+
+    setSelectedEmployee({
+        name: employee.name,
+        logs: employeeLogs
+    });
+
+    setShowHistoryModal(true);
+};
+
 
     const handleNewEmployeeChange = (field, value, dayIndex = null) => {
         const updatedEmployee = { ...newEmployee };
@@ -565,14 +590,27 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     })}
                                 </div>
                             </td>
-                            <td className="p-2">
-                                <button
-                                    onClick={() => handleRemoveEmployee(activeTab, employee._id)}
-                                    className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs"
-                                >
-                                    Remove
-                                </button>
-                            </td>
+                           <td className="p-2">
+    <div className="flex gap-2">
+        {/* 👁 View History */}
+        <button
+            onClick={() => handleViewHistory(employee)}
+            className="px-2 py-1 bg-blue-500 hover:bg-blue-600 text-white rounded text-xs"
+            title="View Edit History"
+        >
+            👁
+        </button>
+
+        {/* Remove Button */}
+        <button
+            onClick={() => handleRemoveEmployee(activeTab, employee._id)}
+            className="px-2 py-1 bg-red-500 hover:bg-red-600 text-white rounded text-xs"
+        >
+            Remove
+        </button>
+    </div>
+</td>
+
                         </tr>
                     );
                 })}
@@ -637,6 +675,54 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     </div>
                 </div>
             )}
+
+            {showHistoryModal && selectedEmployee && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white w-[700px] max-h-[80vh] overflow-y-auto rounded-lg shadow-lg p-6">
+            
+            <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-semibold">
+                    Edit History - {selectedEmployee.name}
+                </h2>
+                <button
+                    onClick={() => setShowHistoryModal(false)}
+                    className="text-gray-500 hover:text-gray-700 text-lg"
+                >
+                    ✕
+                </button>
+            </div>
+
+            {selectedEmployee.logs.length === 0 ? (
+                <p className="text-gray-500 text-center py-6">
+                    No edits found for this employee.
+                </p>
+            ) : (
+                <div className="space-y-4">
+                    {selectedEmployee.logs.map((log, index) => (
+                        <div key={index} className="border p-4 rounded bg-gray-50">
+                            <div className="flex justify-between text-sm text-gray-600 mb-2">
+                                <span>
+                                    Edited By: <b>{log.editedByName}</b>
+                                </span>
+                                <span>
+                                    {new Date(log.editedAt).toLocaleString()}
+                                </span>
+                            </div>
+
+                            <div className="text-sm">
+                                <p className="font-medium mb-1">Changes:</p>
+                                <pre className="bg-white p-2 rounded text-xs overflow-x-auto">
+                                    {JSON.stringify(log.changes, null, 2)}
+                                </pre>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    </div>
+)}
+
         </div>
     );
 };

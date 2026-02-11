@@ -33,6 +33,43 @@ const rosterWeekSchema = new mongoose.Schema({
   employees: [rosterEmployeeSchema],
 });
 
+const rosterEditHistorySchema = new mongoose.Schema({
+  editedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    required: true
+  },
+  editedByName: {
+    type: String,
+    required: true
+  },
+  accountType: {
+    type: String,
+  },
+  actionType: {
+    type: String, // update / bulk-update / delete / add
+  },
+  weekNumber: Number,
+  employeeId: {
+    type: mongoose.Schema.Types.ObjectId,
+  },
+  employeeName: String,
+
+  changes: [
+    {
+      field: String,
+      oldValue: mongoose.Schema.Types.Mixed,
+      newValue: mongoose.Schema.Types.Mixed
+    }
+  ],
+
+  editedAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+
 const rosterSchema = new mongoose.Schema(
   {
     month: { type: Number, required: true },  
@@ -45,6 +82,8 @@ const rosterSchema = new mongoose.Schema(
     
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+
+    editHistory: [rosterEditHistorySchema]
   },
   { timestamps: true }
 );

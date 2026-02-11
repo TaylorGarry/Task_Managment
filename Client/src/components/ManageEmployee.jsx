@@ -185,7 +185,7 @@ const ManageEmployee = () => {
     );
 
   return (
-    <div className="p-6 mt-10">
+    <div className="p-6 mt-10 ">
       <Paper elevation={3}>
         <TableContainer>
           <Table>

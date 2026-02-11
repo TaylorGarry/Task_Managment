@@ -143,10 +143,6 @@ const TaskStatus = () => {
         </div>
       )}
 
-      <div className="mb-8">
-        <h2 className="text-3xl font-bold text-gray-800 mb-2">Task Status</h2>
-      </div>
-
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 mb-8">
         <div className="flex flex-col sm:flex-row gap-3">
           <div className="flex-1">

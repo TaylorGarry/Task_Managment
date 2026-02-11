@@ -566,187 +566,75 @@ export const updateRoster = async (req, res) => {
     const { month, year, weekNumber, employeeId, updates } = req.body;
     const user = req.user;
 
-    if (!month || !year || !weekNumber || !employeeId || !updates) {
-      return res.status(400).json({
-        success: false,
-        message: "month, year, weekNumber, employeeId and updates are required",
-      });
-    }
-    
     const roster = await Roster.findOne({ month, year });
-    if (!roster) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Roster not found" 
-      });
-    }
+    if (!roster) return res.status(404).json({ success: false, message: "Roster not found" });
 
-    // Get overall roster dates
-    const rosterStartDate = new Date(roster.rosterStartDate);
-    const rosterEndDate = new Date(roster.rosterEndDate);
-    
-    // Set time to start and end of day for accurate comparison
-    rosterStartDate.setHours(0, 0, 0, 0);
-    rosterEndDate.setHours(23, 59, 59, 999);
-    
-    const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
+    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+    if (!week) return res.status(404).json({ success: false, message: "Week not found" });
 
-    // Determine roster status
-    let rosterStatus = "";
-    let canEdit = true;
-    
-    if (currentDate < rosterStartDate) {
-      // Future roster: current date is before roster start date
-      rosterStatus = "future";
-      canEdit = true; // All authorized users can edit future rosters
-    } else if (currentDate >= rosterStartDate && currentDate <= rosterEndDate) {
-      // Active roster: current date is within roster dates
-      rosterStatus = "active";
-      // Only HR and SuperAdmin can edit active rosters
-      canEdit = (user.accountType === "HR" || user.accountType === "superAdmin");
-    } else if (currentDate > rosterEndDate) {
-      // Past roster: current date is after roster end date
-      rosterStatus = "past";
-      // Only HR and SuperAdmin can edit past rosters
-      canEdit = (user.accountType === "HR" || user.accountType === "superAdmin");
-    }
-
-    // Check if user has permission to edit
-    if (!canEdit) {
-      let errorMessage = "";
-      
-      if (rosterStatus === "active") {
-        errorMessage = "Only HR and Super Admin can edit active rosters (rosters that are currently running)";
-      } else if (rosterStatus === "past") {
-        errorMessage = "Only HR and Super Admin can edit past rosters (rosters whose end date has passed)";
-      }
-      
-      return res.status(403).json({
-        success: false,
-        message: errorMessage,
-        rosterStatus: rosterStatus
-      });
-    }
-    
-    const week = roster.weeks.find((w) => w.weekNumber === weekNumber);
-    if (!week) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Week not found in roster" 
-      });
-    }
-    
     const employee = week.employees.id(employeeId);
-    if (!employee) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Employee not found in this week" 
-      });
-    }
+    if (!employee) return res.status(404).json({ success: false, message: "Employee not found" });
 
-    // Update allowed fields to include teamLeader
-    const allowedFields = [
-      "name",
-      "userId",
-      "transport",
-      "cabRoute",
-      "shiftStartHour",
-      "shiftEndHour",
-      "dailyStatus",
-      "teamLeader" // ADDED: Allow teamLeader field to be updated
-    ];
+    const changes = [];
 
-    if (updates.shiftStartHour !== undefined || updates.shiftEndHour !== undefined) {
-      if (updates.shiftStartHour === undefined || updates.shiftEndHour === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: "Both shiftStartHour and shiftEndHour are required when updating shift hours"
-        });
-      }
-    }
-    
-    let shiftStartHour = employee.shiftStartHour;
-    let shiftEndHour = employee.shiftEndHour;
+    Object.keys(updates).forEach(field => {
 
-    if (updates.shiftStartHour !== undefined) {
-      shiftStartHour = parseInt(updates.shiftStartHour);
-      if (isNaN(shiftStartHour) || shiftStartHour < 0 || shiftStartHour > 23) {
-        return res.status(400).json({
-          success: false,
-          message: "shiftStartHour must be a valid number between 0 and 23"
-        });
-      }
-    }
-    
-    if (updates.shiftEndHour !== undefined) {
-      shiftEndHour = parseInt(updates.shiftEndHour);
-      if (isNaN(shiftEndHour) || shiftEndHour < 0 || shiftEndHour > 23) {
-        return res.status(400).json({
-          success: false,
-          message: "shiftEndHour must be a valid number between 0 and 23"
-        });
-      }
-    }
-    
-    if (updates.dailyStatus && Array.isArray(updates.dailyStatus)) {
-      const woCount = updates.dailyStatus.filter(d => d && d.status === "WO").length;
-      if (woCount > 2) {
-        return res.status(400).json({
-          success: false,
-          message: "Cannot have more than 2 week-offs (WO) in a week"
-        });
-      }
-    }
-    
-    // Apply updates to allowed fields
-    Object.keys(updates).forEach((field) => {
-      if (allowedFields.includes(field)) {
-        if (field !== "shiftStartHour" && field !== "shiftEndHour") {
-          // Handle teamLeader field specifically (allow empty string)
-          if (field === "teamLeader") {
-            employee[field] = updates[field] || "";
-          } else {
-            employee[field] = updates[field];
+      if (field === "dailyStatus") {
+        updates.dailyStatus.forEach((newDay, index) => {
+          const oldDay = employee.dailyStatus[index];
+          if (oldDay && oldDay.status !== newDay.status) {
+            changes.push({
+              field: `dailyStatus (${newDay.date})`,
+              oldValue: oldDay.status,
+              newValue: newDay.status
+            });
+            employee.dailyStatus[index].status = newDay.status;
           }
+        });
+
+      } else {
+        if (employee[field] !== updates[field]) {
+          changes.push({
+            field,
+            oldValue: employee[field],
+            newValue: updates[field]
+          });
+          employee[field] = updates[field];
         }
       }
+
     });
-    
-    // Update shift hours
-    employee.shiftStartHour = shiftStartHour;
-    employee.shiftEndHour = shiftEndHour;
-    
-    if (employee.shiftStartHour === undefined || employee.shiftEndHour === undefined) {
-      return res.status(400).json({
-        success: false,
-        message: "Both shiftStartHour and shiftEndHour are required for all employees"
+
+    if (changes.length > 0) {
+      roster.editHistory.push({
+        editedBy: user._id,
+        editedByName: user.username,
+        accountType: user.accountType,
+        actionType: "update",
+        weekNumber,
+        employeeId,
+        employeeName: employee.name,
+        changes
       });
     }
-    
-    // Mark roster as updated
+
     roster.updatedBy = user._id;
+    roster.markModified("weeks");
+    roster.markModified("editHistory");
+
     await roster.save();
-    
+
     return res.status(200).json({
       success: true,
-      message: "Employee updated successfully",
-      employee,
-      roster,
-      updatedBy: user.username,
-      accountType: user.accountType,
-      rosterStatus: rosterStatus,
-      canEdit: canEdit
+      message: "Employee updated successfully"
     });
-    
+
   } catch (error) {
-    console.error("Update roster error:", error);
-    return res.status(500).json({ 
-      success: false,
-      message: error.message || "Server error"
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
+
+
 // export const updateRoster = async (req, res) => {
 //   try {
 //     const { month, year, weekNumber, employeeId, updates } = req.body;
@@ -2160,18 +2048,17 @@ export const bulkUpdateWeeks = async (req, res) => {
     const {
       rosterId,
       weekNumbers,
-      updateType,  
+      updateType,
       employees = [],
-      employeeNames = [],  
-      resetToDefault = false  
+      employeeNames = [],
     } = req.body;
 
-    const userId = req.user._id;
+    const user = req.user;
 
     if (!rosterId || !weekNumbers || !updateType) {
       return res.status(400).json({
         success: false,
-        message: "rosterId, weekNumbers, and updateType are required"
+        message: "rosterId, weekNumbers, and updateType are required",
       });
     }
 
@@ -2179,69 +2066,210 @@ export const bulkUpdateWeeks = async (req, res) => {
     if (!roster) {
       return res.status(404).json({
         success: false,
-        message: "Roster not found"
+        message: "Roster not found",
       });
     }
 
+    // -------------------- DATE PERMISSION CHECK --------------------
+    const rosterStartDate = new Date(roster.rosterStartDate);
+    const rosterEndDate = new Date(roster.rosterEndDate);
+
+    rosterStartDate.setHours(0, 0, 0, 0);
+    rosterEndDate.setHours(23, 59, 59, 999);
+
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+
+    let rosterStatus = "";
+    let canEdit = false;
+
+    if (currentDate < rosterStartDate) {
+      rosterStatus = "future";
+      canEdit = true;
+    } else if (
+      currentDate >= rosterStartDate &&
+      currentDate <= rosterEndDate
+    ) {
+      rosterStatus = "active";
+      canEdit =
+        user.accountType === "HR" ||
+        user.accountType === "superAdmin";
+    } else {
+      rosterStatus = "past";
+      canEdit =
+        user.accountType === "HR" ||
+        user.accountType === "superAdmin";
+    }
+
+    if (!canEdit) {
+      return res.status(403).json({
+        success: false,
+        message:
+          rosterStatus === "active"
+            ? "Only HR and Super Admin can edit active rosters"
+            : "Only HR and Super Admin can edit past rosters",
+        rosterStatus,
+      });
+    }
+
+    // -------------------- BULK UPDATE --------------------
     const results = [];
 
     for (const weekNumber of weekNumbers) {
-      const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-      
-      if (weekIndex === -1) {
+      const week = roster.weeks.find(
+        (w) => w.weekNumber === weekNumber
+      );
+
+      if (!week) {
         results.push({
           weekNumber,
           success: false,
-          message: `Week ${weekNumber} not found`
+          message: `Week ${weekNumber} not found`,
         });
         continue;
       }
 
-      const week = roster.weeks[weekIndex];
-
       switch (updateType) {
-        case 'add':
+
+        // ================== ADD ==================
+        case "add":
           const addedEmployees = await addEmployeesToWeek(
             employees,
             week.startDate,
             week.endDate
           );
-          week.employees.push(...addedEmployees);
+
+          addedEmployees.forEach((emp) => {
+            const exists = week.employees.some(
+              (e) => e.userId?.toString() === emp.userId?.toString()
+            );
+            if (!exists) {
+              week.employees.push(emp);
+
+              roster.editHistory.push({
+                editedBy: user._id,
+                editedByName: user.username,
+                accountType: user.accountType,
+                actionType: "add",
+                weekNumber,
+                employeeId: emp._id,
+                employeeName: emp.name,
+                changes: [{ field: "employee", oldValue: null, newValue: "Added" }]
+              });
+            }
+          });
+
           results.push({
             weekNumber,
             success: true,
             employeesAdded: addedEmployees.length,
-            message: `Added ${addedEmployees.length} employees`
           });
           break;
 
-        case 'remove':
-          const removeCount = removeEmployeesFromWeek(week, employeeNames);
+        // ================== REMOVE ==================
+        case "remove":
+          week.employees = week.employees.filter(emp => {
+            if (employeeNames.includes(emp.name)) {
+
+              roster.editHistory.push({
+                editedBy: user._id,
+                editedByName: user.username,
+                accountType: user.accountType,
+                actionType: "delete",
+                weekNumber,
+                employeeId: emp._id,
+                employeeName: emp.name,
+                changes: [{ field: "employee", oldValue: "Present", newValue: "Removed" }]
+              });
+
+              return false;
+            }
+            return true;
+          });
+
           results.push({
             weekNumber,
             success: true,
-            employeesRemoved: removeCount,
-            message: `Removed ${removeCount} employees`
+            employeesRemoved: employeeNames.length,
           });
           break;
 
-        case 'update':
-          const updatedCount = updateEmployeesInWeek(week, employees);
+        // ================== UPDATE (🔥 EDIT HISTORY FIXED) ==================
+        case "update":
+
+          employees.forEach(empUpdate => {
+
+            const employee = week.employees.id(empUpdate._id);
+            if (!employee) return;
+
+            const changes = [];
+
+            Object.keys(empUpdate).forEach(field => {
+
+              // Deep compare for objects/arrays like dailyStatus
+              const oldValue = employee[field];
+              const newValue = empUpdate[field];
+
+              const isDifferent =
+                JSON.stringify(oldValue) !== JSON.stringify(newValue);
+
+              if (isDifferent) {
+                changes.push({
+                  field,
+                  oldValue,
+                  newValue
+                });
+
+                employee[field] = newValue;
+              }
+            });
+
+            if (changes.length > 0) {
+              roster.editHistory.push({
+                editedBy: user._id,
+                editedByName: user.username,
+                accountType: user.accountType,
+                actionType: "bulk-update",
+                weekNumber,
+                employeeId: employee._id,
+                employeeName: employee.name,
+                changes
+              });
+            }
+
+          });
+
           results.push({
             weekNumber,
             success: true,
-            employeesUpdated: updatedCount,
-            message: `Updated ${updatedCount} employees`
+            employeesUpdated: employees.length,
           });
+
           break;
 
-        case 'reset':
-          const resetCount = resetWeekStatuses(week);
+        // ================== RESET ==================
+        case "reset":
+          week.employees.forEach(emp => {
+            emp.dailyStatus.forEach(day => {
+              day.status = "Working";
+            });
+
+            roster.editHistory.push({
+              editedBy: user._id,
+              editedByName: user.username,
+              accountType: user.accountType,
+              actionType: "reset",
+              weekNumber,
+              employeeId: emp._id,
+              employeeName: emp.name,
+              changes: [{ field: "dailyStatus", oldValue: "Custom", newValue: "Reset to Working" }]
+            });
+          });
+
           results.push({
             weekNumber,
             success: true,
-            employeesReset: resetCount,
-            message: `Reset ${resetCount} employees to default status`
+            employeesReset: week.employees.length,
           });
           break;
 
@@ -2249,33 +2277,35 @@ export const bulkUpdateWeeks = async (req, res) => {
           results.push({
             weekNumber,
             success: false,
-            message: `Unknown update type: ${updateType}`
+            message: `Unknown update type: ${updateType}`,
           });
       }
     }
 
-    // Save changes
-    roster.updatedBy = userId;
+    roster.updatedBy = user._id;
     await roster.save();
 
     return res.status(200).json({
       success: true,
       message: "Bulk update completed",
+      rosterStatus,
       results,
       summary: {
-        totalWeeksUpdated: results.filter(r => r.success).length,
-        totalWeeksFailed: results.filter(r => !r.success).length
-      }
+        totalWeeksUpdated: results.filter((r) => r.success).length,
+        totalWeeksFailed: results.filter((r) => !r.success).length,
+      },
     });
 
   } catch (error) {
     console.error("Error in bulk update:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to perform bulk update"
+      message: error.message || "Failed to perform bulk update",
     });
   }
 };
+
+
 const calculateWeeksInRange = (startDate, endDate) => {
   const weeks = [];
   let currentStart = new Date(startDate);
@@ -2524,6 +2554,7 @@ export const getRosterForBulkEdit = async (req, res) => {
         createdBy: roster.createdBy,
         updatedBy: roster.updatedBy,
         weeks: weeksWithEditability,
+        editHistory: roster.editHistory || [],
         summary: {
           totalWeeks: roster.weeks.length,
           totalEmployees: roster.weeks.reduce((sum, week) => sum + week.employees.length, 0),
@@ -2554,291 +2585,92 @@ export const getRosterForBulkEdit = async (req, res) => {
 export const bulkUpdateRosterWeeks = async (req, res) => {
   try {
     const { rosterId } = req.params;
-    const { weeks, newEmployees } = req.body;  
+    const { weeks } = req.body;
     const user = req.user;
-    const userAccountType = user.accountType;
-    const currentDate = new Date();
 
     if (!rosterId) {
-      return res.status(400).json({
-        success: false,
-        message: "rosterId is required"
-      });
-    }
-
-    // Check user accountType - only superAdmin and HR can edit
-    if (!['superAdmin', 'HR'].includes(userAccountType)) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Only Super Admin and HR can edit rosters"
-      });
+      return res.status(400).json({ success: false, message: "rosterId required" });
     }
 
     const roster = await Roster.findById(rosterId);
     if (!roster) {
-      return res.status(404).json({
-        success: false,
-        message: "Roster not found"
-      });
+      return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-    // Sort roster weeks by week number
-    roster.weeks.sort((a, b) => a.weekNumber - b.weekNumber);
+    for (const updatedWeek of weeks) {
+      const week = roster.weeks.find(w => w.weekNumber === updatedWeek.weekNumber);
+      if (!week) continue;
 
-    // Track changes and validation results
-    const updateResults = [];
-    let hasValidationErrors = false;
-    const validationErrors = [];
+      for (const empUpdate of updatedWeek.employees) {
+        const employee = week.employees.id(empUpdate._id);
+        if (!employee) continue;
 
-    // Process new employees to add (if provided)
-    const employeesToAdd = [];
-    if (newEmployees && Array.isArray(newEmployees)) {
-      for (const newEmp of newEmployees) {
-        try {
-          // Validate new employee data
-          if (!newEmp.name) {
-            throw new Error(`New employee name is required`);
+        const changes = [];
+
+        // Compare normal fields
+        ["name","transport","cabRoute","teamLeader","shiftStartHour","shiftEndHour"].forEach(field => {
+          if (empUpdate[field] !== undefined && employee[field] !== empUpdate[field]) {
+            changes.push({
+              field,
+              oldValue: employee[field],
+              newValue: empUpdate[field]
+            });
+            employee[field] = empUpdate[field];
           }
+        });
 
-          if (newEmp.shiftStartHour === undefined || newEmp.shiftEndHour === undefined) {
-            throw new Error(`New employee ${newEmp.name} must have both shift start and end hours`);
-          }
-
-          const shiftStartHour = parseInt(newEmp.shiftStartHour);
-          const shiftEndHour = parseInt(newEmp.shiftEndHour);
-
-          if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
-            throw new Error(`New employee ${newEmp.name} has invalid shift hours`);
-          }
-
-          if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
-            throw new Error(`New employee ${newEmp.name}: Shift hours must be between 0 and 23`);
-          }
-
-          // Find user in database if needed
-          let userId = null;
-          if (newEmp.name) {
-            const user = await User.findOne({ username: newEmp.name });
-            if (user) {
-              userId = user._id;
-            }
-          }
-
-          employeesToAdd.push({
-            userId: userId,
-            name: newEmp.name,
-            transport: newEmp.transport || "",
-            cabRoute: newEmp.cabRoute || "",
-            teamLeader: newEmp.teamLeader || "",
-            shiftStartHour: shiftStartHour,
-            shiftEndHour: shiftEndHour,
-            // Daily status will be generated per week
-          });
-        } catch (error) {
-          validationErrors.push({
-            type: 'new_employee_validation',
-            message: error.message,
-            employee: newEmp.name
-          });
-          hasValidationErrors = true;
-        }
-      }
-    }
-
-    // Process each week in the update request
-    if (weeks && Array.isArray(weeks)) {
-      for (const updatedWeek of weeks) {
-        const { weekNumber, employees } = updatedWeek;
-        
-        // Find the week in the roster
-        const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
-        
-        if (weekIndex === -1) {
-          updateResults.push({
-            weekNumber,
-            success: false,
-            message: `Week ${weekNumber} not found in roster`
-          });
-          hasValidationErrors = true;
-          continue;
-        }
-
-        const existingWeek = roster.weeks[weekIndex];
-        const weekEndDate = new Date(existingWeek.endDate);
-        const weekStartDate = new Date(existingWeek.startDate);
-        
-        // Check if week has ended
-        const hasWeekEnded = weekEndDate < currentDate;
-        
-        // Check if week is current or upcoming
-        const isCurrentOrFuture = weekStartDate >= currentDate || (weekStartDate <= currentDate && weekEndDate >= currentDate);
-        
-        // Check authorization for this specific week
-        if (userAccountType === 'HR' && hasWeekEnded) {
-          updateResults.push({
-            weekNumber,
-            success: false,
-            message: `Week ${weekNumber} has ended. Only Super Admin can edit past weeks.`,
-            requiresSuperAdmin: true
-          });
-          hasValidationErrors = true;
-          continue;
-        }
-
-        // Process existing employees for this week
-        const processedEmployees = [];
-        
-        if (employees && Array.isArray(employees)) {
-          for (const emp of employees) {
-            try {
-              // Validate employee data
-              if (!emp.name) {
-                throw new Error(`Employee name is required`);
-              }
-
-              // For editing existing employees, validate shift hours if provided
-              if (emp.shiftStartHour !== undefined || emp.shiftEndHour !== undefined) {
-                const shiftStartHour = parseInt(emp.shiftStartHour);
-                const shiftEndHour = parseInt(emp.shiftEndHour);
-
-                if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
-                  throw new Error(`Employee ${emp.name} has invalid shift hours`);
-                }
-
-                if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
-                  throw new Error(`Employee ${emp.name}: Shift hours must be between 0 and 23`);
-                }
-              }
-
-              // Find the existing employee
-              const existingEmployee = existingWeek.employees.find(e => 
-                e._id.toString() === emp._id || 
-                e.name === emp.name
-              );
-
-              if (!existingEmployee) {
-                throw new Error(`Employee ${emp.name} not found in week ${weekNumber}`);
-              }
-
-              // Create updated employee object WITH TEAMLEADER
-              const employeeData = {
-                _id: existingEmployee._id,
-                userId: emp.userId || existingEmployee.userId,
-                name: emp.name || existingEmployee.name,
-                transport: emp.transport !== undefined ? emp.transport : existingEmployee.transport,
-                cabRoute: emp.cabRoute !== undefined ? emp.cabRoute : existingEmployee.cabRoute,
-                teamLeader: emp.teamLeader !== undefined ? emp.teamLeader : (existingEmployee.teamLeader || ""), // ADDED TEAMLEADER
-                shiftStartHour: emp.shiftStartHour !== undefined ? parseInt(emp.shiftStartHour) : existingEmployee.shiftStartHour,
-                shiftEndHour: emp.shiftEndHour !== undefined ? parseInt(emp.shiftEndHour) : existingEmployee.shiftEndHour,
-                dailyStatus: emp.dailyStatus && Array.isArray(emp.dailyStatus) 
-                  ? emp.dailyStatus.map(status => ({
-                      date: status.date,
-                      status: status.status || "P"
-                    }))
-                  : existingEmployee.dailyStatus
-              };
-
-              // Validate WO count (max 2 per week) if dailyStatus is updated
-              if (emp.dailyStatus) {
-                const woCount = employeeData.dailyStatus.filter(d => d.status === "WO").length;
-                if (woCount > 2) {
-                  throw new Error(`Employee ${emp.name} cannot have more than 2 week-offs in a week`);
-                }
-              }
-
-              processedEmployees.push(employeeData);
-            } catch (error) {
-              validationErrors.push({
-                week: weekNumber,
-                type: 'employee_validation',
-                message: error.message,
-                employee: emp.name
+        // Compare dailyStatus
+        if (empUpdate.dailyStatus) {
+          empUpdate.dailyStatus.forEach((newDay, index) => {
+            const oldDay = employee.dailyStatus[index];
+            if (oldDay && oldDay.status !== newDay.status) {
+              changes.push({
+                field: `dailyStatus (${newDay.date})`,
+                oldValue: oldDay.status,
+                newValue: newDay.status
               });
-              hasValidationErrors = true;
+              employee.dailyStatus[index].status = newDay.status;
             }
-          }
+          });
         }
 
-        // Add new employees to current and future weeks only
-        if (employeesToAdd.length > 0 && (userAccountType === 'superAdmin' || isCurrentOrFuture)) {
-          for (const newEmp of employeesToAdd) {
-            // Check if employee already exists in this week
-            const employeeExists = existingWeek.employees.some(e => e.name === newEmp.name);
-            
-            if (!employeeExists) {
-              // Generate daily status for the new employee for this week
-              const dailyStatus = generateDefaultDailyStatus(weekStartDate, weekEndDate);
-              
-              processedEmployees.push({
-                userId: newEmp.userId,
-                name: newEmp.name,
-                transport: newEmp.transport,
-                cabRoute: newEmp.cabRoute,
-                teamLeader: newEmp.teamLeader || "", // ADDED TEAMLEADER
-                shiftStartHour: newEmp.shiftStartHour,
-                shiftEndHour: newEmp.shiftEndHour,
-                dailyStatus: dailyStatus
-              });
-            }
-          }
-        }
-
-        // Update the week with processed employees
-        if (!hasValidationErrors) {
-          roster.weeks[weekIndex].employees = processedEmployees;
-          updateResults.push({
-            weekNumber,
-            success: true,
-            message: `Week ${weekNumber} updated successfully`,
-            employeesUpdated: processedEmployees.length,
-            newEmployeesAdded: employeesToAdd.length > 0 ? employeesToAdd.length : 0
+        // Push history if changes exist
+        if (changes.length > 0) {
+          roster.editHistory.push({
+            editedBy: user._id,
+            editedByName: user.username,
+            accountType: user.accountType,
+            actionType: "bulk-update",
+            weekNumber: week.weekNumber,
+            employeeId: employee._id,
+            employeeName: employee.name,
+            changes
           });
         }
       }
     }
 
-    // If there are validation errors, return them without saving
-    if (hasValidationErrors) {
-      return res.status(400).json({
-        success: false,
-        message: "Validation errors found",
-        validationErrors: validationErrors,
-        updateResults: updateResults
-      });
-    }
-
-    // Update roster metadata
     roster.updatedBy = user._id;
-    
-    // Save the roster
+    roster.markModified("weeks");
+    roster.markModified("editHistory");
+
     await roster.save();
 
     return res.status(200).json({
       success: true,
-      message: "Bulk update completed successfully",
-      updateResults: updateResults,
-      summary: {
-        totalWeeksUpdated: updateResults.filter(r => r.success).length,
-        totalEmployeesAffected: updateResults.reduce((sum, result) => sum + (result.employeesUpdated || 0), 0),
-        newEmployeesAdded: employeesToAdd.length
-      },
-      rosterInfo: {
-        rosterId: roster._id,
-        month: roster.month,
-        year: roster.year,
-        updatedBy: user.username,
-        updatedAt: new Date()
-      }
+      message: "Bulk update successful",
+      roster
     });
 
   } catch (error) {
-    console.error("Error in bulk update:", error);
+    console.error(error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Failed to perform bulk update"
+      message: error.message
     });
   }
 };
+
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
@@ -3014,173 +2846,93 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
 }; 
 export const updateOpsMetaRoster = async (req, res) => {
   try {
-    const user = req.user;
-    if (user.department !== "Ops - Meta") {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. Only Ops-Meta department employees can access this."
-      });
-    }
-
     const { employeeId, updates } = req.body;
-
-    if (!employeeId || !updates) {
-      return res.status(400).json({
-        success: false,
-        message: "employeeId and updates are required"
-      });
-    }
+    const user = req.user;
 
     const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth() + 1;
-    const roster = await Roster.findOne({ 
-      month: currentMonth, 
-      year: currentYear 
+    const roster = await Roster.findOne({
+      month: currentDate.getMonth() + 1,
+      year: currentDate.getFullYear()
     });
-    
+
     if (!roster) {
-      return res.status(404).json({
-        success: false,
-        message: "No roster found for current month"
-      });
+      return res.status(404).json({ success: false, message: "Roster not found" });
     }
-    const currentWeekIndex = roster.weeks.findIndex(week => {
-      const weekStart = new Date(week.startDate);
-      const weekEnd = new Date(week.endDate);
-      
-      weekStart.setHours(0, 0, 0, 0);
-      weekEnd.setHours(23, 59, 59, 999);
-      
-      return currentDate >= weekStart && currentDate <= weekEnd;
+
+    const week = roster.weeks.find(w => {
+      const start = new Date(w.startDate);
+      const end = new Date(w.endDate);
+      return currentDate >= start && currentDate <= end;
     });
 
-    if (currentWeekIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: "No current week found"
-      });
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Current week not found" });
     }
 
-    const currentWeek = roster.weeks[currentWeekIndex];
-    const weekStartDate = new Date(currentWeek.startDate);
-    const weekEndDate = new Date(currentWeek.endDate);
-    
-    weekStartDate.setHours(0, 0, 0, 0);
-    weekEndDate.setHours(23, 59, 59, 999);
-    
-    if (currentDate < weekStartDate) {
-      return res.status(403).json({
-        success: false,
-        message: "Cannot edit roster before the week starts"
-      });
+    const employee = week.employees.id(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
-    if (currentDate > weekEndDate) {
-      return res.status(403).json({
-        success: false,
-        message: "Cannot edit roster after the week has ended"
-      });
-    }
-    const employeeIndex = currentWeek.employees.findIndex(emp => 
-      emp._id.toString() === employeeId
-    );
+    const changes = [];
 
-    if (employeeIndex === -1) {
-      return res.status(404).json({
-        success: false,
-        message: "Employee not found in roster"
-      });
-    }
-
-    const employee = roster.weeks[currentWeekIndex].employees[employeeIndex];
-    if (!employee.teamLeader || 
-        employee.teamLeader.trim().toLowerCase() !== user.username.toLowerCase()) {
-      return res.status(403).json({
-        success: false,
-        message: "Access denied. You are not the Team Leader for this employee."
-      });
-    }
-    if (updates.shiftStartHour !== undefined || updates.shiftEndHour !== undefined) {
-      if (updates.shiftStartHour === undefined || updates.shiftEndHour === undefined) {
-        return res.status(400).json({
-          success: false,
-          message: "Both shiftStartHour and shiftEndHour are required"
-        });
-      }
-    }
-    let shiftStartHour = employee.shiftStartHour;
-    let shiftEndHour = employee.shiftEndHour;
-    if (updates.shiftStartHour !== undefined) {
-      shiftStartHour = parseInt(updates.shiftStartHour);
-      if (isNaN(shiftStartHour) || shiftStartHour < 0 || shiftStartHour > 23) {
-        return res.status(400).json({
-          success: false,
-          message: "shiftStartHour must be 0-23"
-        });
-      }
-    }
-    
-    if (updates.shiftEndHour !== undefined) {
-      shiftEndHour = parseInt(updates.shiftEndHour);
-      if (isNaN(shiftEndHour) || shiftEndHour < 0 || shiftEndHour > 23) {
-        return res.status(400).json({
-          success: false,
-          message: "shiftEndHour must be 0-23"
-        });
-      }
-    }
-    if (updates.dailyStatus && Array.isArray(updates.dailyStatus)) {
-      const woCount = updates.dailyStatus.filter(d => d && d.status === "WO").length;
-      if (woCount > 2) {
-        return res.status(400).json({
-          success: false,
-          message: "Cannot have more than 2 week-offs"
-        });
-      }
-    }
     Object.keys(updates).forEach(field => {
-      if (field === "teamLeader") { 
-        return;  
-      } else if (field === "dailyStatus" && Array.isArray(updates[field])) {
-        roster.weeks[currentWeekIndex].employees[employeeIndex][field] = updates[field].map(ds => ({
-          date: new Date(ds.date),
-          status: ds.status || "P"
-        }));
+
+      if (field === "dailyStatus") {
+        updates.dailyStatus.forEach((newDay, index) => {
+          const oldDay = employee.dailyStatus[index];
+          if (oldDay && oldDay.status !== newDay.status) {
+            changes.push({
+              field: `dailyStatus (${newDay.date})`,
+              oldValue: oldDay.status,
+              newValue: newDay.status
+            });
+            employee.dailyStatus[index].status = newDay.status;
+          }
+        });
+
       } else {
-        roster.weeks[currentWeekIndex].employees[employeeIndex][field] = updates[field];
+        if (employee[field] !== updates[field]) {
+          changes.push({
+            field,
+            oldValue: employee[field],
+            newValue: updates[field]
+          });
+          employee[field] = updates[field];
+        }
       }
-    }); 
-    roster.weeks[currentWeekIndex].employees[employeeIndex].shiftStartHour = shiftStartHour;
-    roster.weeks[currentWeekIndex].employees[employeeIndex].shiftEndHour = shiftEndHour; 
+
+    });
+
+    if (changes.length > 0) {
+      roster.editHistory.push({
+        editedBy: user._id,
+        editedByName: user.username,
+        accountType: user.accountType,
+        actionType: "update",
+        weekNumber: week.weekNumber,
+        employeeId: employee._id,
+        employeeName: employee.name,
+        changes
+      });
+    }
+
     roster.updatedBy = user._id;
-    roster.markModified('weeks');
+    roster.markModified("weeks");
+    roster.markModified("editHistory");
+
     await roster.save();
 
     return res.status(200).json({
       success: true,
-      message: "Roster updated successfully",
-      data: {
-        employeeId: employeeId,
-        employeeName: employee.name,
-        weekNumber: currentWeek.weekNumber,
-        updatedBy: user.username,
-        teamLeader: user.username,
-        updatedFields: Object.keys(updates).filter(field => field !== "teamLeader"),  
-        updatedAt: new Date(),
-        note: "You can only edit employees assigned to you as Team Leader"
-      }
+      message: "Roster updated successfully"
     });
 
   } catch (error) {
-    console.error("Error updating roster:", error);
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Server error"
-    });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 export const rosterUploadFromExcel = async (req, res) => {
   try {
     const user = req.user;
