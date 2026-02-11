@@ -91,7 +91,7 @@ const Signup = () => {
         <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_85%_15%,rgba(14,116,144,0.18),rgba(245,243,255,0))]" />
         <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_70%_85%,rgba(34,197,94,0.12),rgba(245,243,255,0))]" />
 
-        <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-12">
+        <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-15">
           <div className="w-full overflow-hidden rounded-3xl bg-white shadow-[0_30px_70px_-45px_rgba(30,27,75,0.7)]">
             <div className="grid lg:grid-cols-[1.1fr_1.3fr]">
               <div className="relative flex flex-col justify-between bg-[#111827] p-10 text-white lg:p-12">

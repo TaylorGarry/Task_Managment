@@ -871,7 +871,7 @@ const ChatUI = () => {
   }, [showMessageMenu]);
 
   return (
-    <div className="w-full h-[calc(100vh-50px)] bg-white flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-10 md:mt-10 mb-2 overflow-hidden">
+    <div className="w-full h-[calc(100vh-50px)] bg-white flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-12 md:mt-10 mb-2 overflow-hidden">
       {selectedChat && (
         <div className="md:hidden flex items-center justify-between p-4 bg-white rounded-t-xl mb-2 shadow-sm">
           <div className="flex items-center gap-3">

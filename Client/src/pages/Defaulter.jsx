@@ -284,14 +284,7 @@ const Defaulter = () => {
               <div className="w-4 h-4 bg-[#EAEAEA] rounded-full animate-bounce"></div>
             </div>
           </div>
-        )}
-
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-800">Defaulter Report</h2>
-          <div className="text-sm text-gray-600">
-            Showing {indexOfFirstItem + 1}-{Math.min(indexOfLastItem, defaulters?.length || 0)} of {defaulters?.length || 0} records
-          </div>
-        </div>
+        )} 
         <div className="bg-white p-4 rounded-lg shadow mb-6">
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-4">
             <div>

@@ -126,7 +126,7 @@ const AdminTask = () => {
       <div className="absolute inset-0 bg-[radial-gradient(60%_50%_at_85%_0%,rgba(248,113,113,0.18),rgba(248,247,251,0))]" />
       <div className="absolute inset-0 bg-[radial-gradient(55%_50%_at_0%_30%,rgba(59,130,246,0.16),rgba(248,247,251,0))]" />
 
-      <div className="relative mx-auto max-w-6xl px-4 py-10">
+      <div className="relative mx-auto max-w-6xl py-10">
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-3xl border border-slate-200 bg-white/70 p-6 backdrop-blur">
           <div>
             <p className="text-xs uppercase tracking-[0.35em] text-slate-400">

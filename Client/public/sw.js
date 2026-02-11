@@ -22,12 +22,12 @@ self.addEventListener("push", (event) => {
       payload.body = text;
     }
   }
+const url =
+  payload.url ||
+  (self.location.hostname === "localhost"
+    ? "http://localhost:5173/#/dashboard"
+    : "https://crm.fdbs.in/#/dashboard");
 
-  const url =
-    payload.url ||
-    (self.location.hostname === "localhost"
-      ? "http://localhost:5173/"
-      : "https://crm.fdbs.in/dashboard");
 
   event.waitUntil(
     self.registration.showNotification(payload.title, {

@@ -1038,7 +1038,9 @@ export const bulkUpdateRosterWeeks = createAsyncThunk(
       }); 
       clearAllRosterCaches();
       console.log("Bulk update successful, all caches cleared");
-      return res.data;
+      return {...res.data,
+         actionType: "Bulk Save Weeks"
+      };
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
@@ -1138,7 +1140,10 @@ export const updateRosterWeek = createAsyncThunk(
       
       console.log("Roster week updated, all caches cleared");
 
-      return res.data;
+      return {
+        ...res.data,
+        actionType: "Single Week Update"
+      };
     } catch (err) {
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
@@ -1175,7 +1180,8 @@ export const updateRosterEmployee = createAsyncThunk(
         year,
         weekNumber,
         employeeId,
-        updates: sanitizedUpdates
+        updates: sanitizedUpdates,
+        actionType: "Single Employee Update"
       };
       
     } catch (err) {
@@ -1388,9 +1394,20 @@ export const bulkUpdateWeeks = createAsyncThunk(
       
       console.log("Bulk weeks update, all caches cleared");
       
-      return res.data;
+      return {
+  ...res.data,
+  actionType: "Bulk Week Update"
+};
+
     } catch (err) {
-      return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
+      if (err.response?.status === 403) {
+  return thunkAPI.rejectWithValue("FORBIDDEN");
+}
+
+return thunkAPI.rejectWithValue(
+  err.response?.data?.message || err.message
+);
+
     }
   }
 );
@@ -1427,6 +1444,10 @@ const rosterSlice = createSlice({
     excelUploadData: null,
     
     loading: false,
+    rosterStatus: null,
+canEdit: true,
+// editHistory: [],
+
     isHydrated: false,
     bulkEditHydrated: false,
     error: null,
@@ -1701,10 +1722,20 @@ const rosterSlice = createSlice({
         state.error = null;
       })
       .addCase(fetchRoster.fulfilled, (state, action) => {
-        state.loading = false;
-        state.roster = action.payload;
-        state.isHydrated = true;
-      })
+  state.loading = false;
+
+  if (action.payload?.roster) {
+    state.roster = action.payload.roster;
+  } else {
+    state.roster = action.payload;
+  }
+
+  state.isHydrated = true;
+
+  state.rosterStatus = action.payload?.rosterStatus || null;
+  state.canEdit = action.payload?.canEdit ?? true;
+})
+
       .addCase(fetchRoster.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
@@ -1780,15 +1811,35 @@ const rosterSlice = createSlice({
         state.bulkSaveError = null;
       })
       .addCase(bulkUpdateRosterWeeks.fulfilled, (state, action) => {
-        state.bulkSaveLoading = false;
-        state.bulkSaveSuccess = true;
-        state.bulkEditError = undefined;
-        state.bulkEditRoster = null;
-      })
+  state.bulkSaveLoading = false;
+  state.bulkSaveSuccess = true;
+  state.bulkEditError = undefined;
+
+  // ✅ VERY IMPORTANT — keep updated roster in bulkEditRoster
+  if (action.payload?.roster) {
+    state.bulkEditRoster = action.payload;  // store full response
+    state.roster = action.payload.roster;   // optional if needed elsewhere
+  }
+
+  // ✅ Update permission flags
+  if (action.payload?.rosterStatus !== undefined) {
+    state.rosterStatus = action.payload.rosterStatus;
+  }
+
+  if (action.payload?.canEdit !== undefined) {
+    state.canEdit = action.payload.canEdit;
+  }
+})
+
+
       .addCase(bulkUpdateRosterWeeks.rejected, (state, action) => {
         state.bulkSaveLoading = false;
         state.bulkSaveSuccess = false;
         state.bulkSaveError = action.payload;
+
+        if (action.payload === "FORBIDDEN") {
+    state.canEdit = false;
+  }
       })
       
       // ADDED: OPS-META OPERATIONS
@@ -1847,10 +1898,22 @@ const rosterSlice = createSlice({
       })
       .addCase(updateRosterEmployee.fulfilled, (state, action) => {
         state.loading = false;
+
+        if (action.payload?.rosterStatus !== undefined) {
+    state.rosterStatus = action.payload.rosterStatus;
+  }
+
+  if (action.payload?.canEdit !== undefined) {
+    state.canEdit = action.payload.canEdit;
+  }
       })
       .addCase(updateRosterEmployee.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
+
+         if (action.payload === "FORBIDDEN") {
+    state.canEdit = false;
+  }
       });
   },
 });
