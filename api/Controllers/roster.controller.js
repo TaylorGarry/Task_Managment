@@ -2932,19 +2932,21 @@ export const updateOpsMetaRoster = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
 export const rosterUploadFromExcel = async (req, res) => {
   try {
     const user = req.user;
-    const isAdmin = ["admin", "superAdmin", "HR"].includes(user.accountType);
+    const isSuperAdmin = user.accountType === "superAdmin";
+    const isAdmin = ["admin", "HR"].includes(user.accountType);
     const isOpsMetaEmployee = user.accountType === "employee" && user.department === "Ops - Meta";
     
-    if (!isAdmin && !isOpsMetaEmployee) {
+    // Check permissions
+    if (!isSuperAdmin && !isAdmin && !isOpsMetaEmployee) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. Only admin, HR, or Ops-Meta department employees can upload roster."
+        message: "Access denied. Only superAdmin, admin, HR, or Ops-Meta department employees can upload roster."
       });
     }
+    
     const { startDate, endDate } = req.body;
     
     if (!startDate || !endDate) {
@@ -2953,6 +2955,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         message: "Date range is required. Please select start date and end date."
       });
     }
+    
     const selectedStartDate = new Date(startDate);
     const selectedEndDate = new Date(endDate);
     selectedStartDate.setHours(0, 0, 0, 0);
@@ -2971,6 +2974,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         message: "Start date cannot be after end date."
       });
     }
+    
     const totalDays = Math.round((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24)) + 1;
     
     if (totalDays !== 7) {
@@ -2979,49 +2983,57 @@ export const rosterUploadFromExcel = async (req, res) => {
         message: "Date range must be exactly 7 days for roster upload."
       });
     }
+    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    // DATE VALIDATION BASED ON USER ROLE
     if (isOpsMetaEmployee) {
+      // OPS-META: Can only upload for tomorrow onwards (no past dates)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      if (selectedStartDate < today) {
+      if (selectedStartDate < tomorrow) {
         return res.status(400).json({
           success: false,
-          message: "Ops-Meta employees can only upload roster for future weeks starting from today. Cannot upload for yesterday or past dates."
-        });
-      }
-      if (selectedStartDate < today) {
-        return res.status(400).json({
-          success: false,
-          message: "Ops-Meta employees can only upload roster for dates starting from today onwards."
+          message: "Ops-Meta employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
         });
       }
     } 
-    else {
+    else if (isAdmin) {
+      // ADMIN/HR: Can upload for today and future dates (not past)
       if (selectedStartDate < today) {
         return res.status(400).json({
           success: false,
-          message: "Cannot upload roster for past dates. Please select today or future dates."
+          message: "Admin/HR can only upload roster for today or future dates. Cannot upload for past dates."
         });
       }
     }
+    else if (isSuperAdmin) {
+      // SUPERADMIN: No date restrictions - can upload for any date (past, present, future)
+      // No validation needed - superAdmin can upload for any date
+      console.log(`SuperAdmin ${user.username} uploading roster for date range: ${startDate} to ${endDate}`);
+    }
+    
     if (!req.file) {
       return res.status(400).json({
         success: false,
         message: "Excel file is required"
       });
     }
+    
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
     const excelData = XLSX.utils.sheet_to_json(worksheet);
+    
     if (!excelData || excelData.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Excel file is empty or has no data"
       });
     }
+    
     const requiredExcelColumns = [
       'Name',
       'Transport',
@@ -3042,26 +3054,31 @@ export const rosterUploadFromExcel = async (req, res) => {
         message: `Missing required columns in Excel: ${missingColumns.join(', ')}. Your Excel should have: Name, Transport, Team Leader, Shift Start Hour, Shift End Hour, and date columns (DD/MM)`
       });
     }
+    
     let excelDateColumns = [];
     const pattern1 = /^\d{1,2}\/\d{1,2}(\s+\w+)?$/;
     const pattern2 = /^\d{1,2}\/\d{1,2}$/;
+    
     for (const col of availableColumns) {
       if (pattern1.test(col) || pattern2.test(col)) {
         excelDateColumns.push(col);
       }
     }
+    
     if (excelDateColumns.length === 0) {
       return res.status(400).json({
         success: false,
         message: "No date columns found in Excel. Looking for columns like: 26/01, 26/01 Mon, etc."
       });
     }
+    
     if (excelDateColumns.length !== 7) {
       return res.status(400).json({
         success: false,
         message: `Excel should have exactly 7 date columns (one for each day of the week). Found: ${excelDateColumns.length} columns: ${excelDateColumns.join(', ')}`
       });
     }
+    
     const expectedDateColumns = [];
     const currentDate = new Date(selectedStartDate);
     for (let i = 0; i < 7; i++) {
@@ -3071,25 +3088,32 @@ export const rosterUploadFromExcel = async (req, res) => {
       expectedDateColumns.push(dateColumn);
       currentDate.setDate(currentDate.getDate() + 1);
     }
+    
     const employeesData = [];
     const processedEmployees = new Set();
+    
     for (const [index, row] of excelData.entries()) {
       try {
         if (!row.Name || row.Name.trim() === '') {
           continue;
         }
+        
         const name = (row.Name || "").toString().trim();
         const username = name.toLowerCase().replace(/\s+/g, '.');
         const employeeKey = `${username}-${startDate}-${endDate}`;
+        
         if (processedEmployees.has(employeeKey)) {
           console.warn(`Duplicate entry for employee ${name}, skipping`);
           continue;
         }
         processedEmployees.add(employeeKey);
+        
         const rowTeamLeader = (row['Team Leader'] || "").toString().trim();
+        
         if (isOpsMetaEmployee && rowTeamLeader && rowTeamLeader.toLowerCase() !== user.username.toLowerCase()) {
           console.log(`Ops-Meta employee ${user.username} uploading for team leader: ${rowTeamLeader}`);
         }
+        
         let userRecord = await User.findOne({ username: username });
         if (!userRecord) {
           userRecord = await User.findOne({ 
@@ -3098,9 +3122,6 @@ export const rosterUploadFromExcel = async (req, res) => {
               { username: { $regex: new RegExp(`^${name.split(' ')[0].toLowerCase()}`, 'i') } }
             ]
           });
-          if (!userRecord) {
-            console.warn(`User not found with name: ${name}. Roster entry will be created without userId.`);
-          }
         }
         const transportValue = (row.Transport || "").toString().trim();
         const validTransport = ["Yes", "No", ""];
@@ -3110,27 +3131,34 @@ export const rosterUploadFromExcel = async (req, res) => {
             message: `Invalid transport value for ${name}. Must be "Yes", "No", or empty.`
           });
         }
+        
         const dailyStatus = [];
         const statusDate = new Date(selectedStartDate);
+        
         for (let i = 0; i < excelDateColumns.length; i++) {
           const excelDateColumn = excelDateColumns[i];
           const statusValue = (row[excelDateColumn] || "P").toString().trim().toUpperCase();
           const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", ""];
+          
           if (!validStatus.includes(statusValue)) {
             return res.status(400).json({
               success: false,
               message: `Invalid status "${row[excelDateColumn]}" for ${name} on column ${excelDateColumn}. Valid values: P, WO, L, NCNS, UL, LWP, BL, H, LWD`
             });
           }
+          
           const date = new Date(statusDate);
           date.setHours(0, 0, 0, 0);
+          
           dailyStatus.push({
             date: date,
             status: statusValue || "P",
             originalExcelColumn: excelDateColumn
           });
+          
           statusDate.setDate(statusDate.getDate() + 1);
         }
+        
         const woCount = dailyStatus.filter(d => d.status === "WO").length;
         if (woCount > 2) {
           return res.status(400).json({
@@ -3138,20 +3166,24 @@ export const rosterUploadFromExcel = async (req, res) => {
             message: `Employee ${name} cannot have more than 2 week-offs in a week`
           });
         }
+        
         const shiftStartHour = parseInt(row['Shift Start Hour']);
         const shiftEndHour = parseInt(row['Shift End Hour']);
+        
         if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
           return res.status(400).json({
             success: false,
             message: `Employee ${name} has invalid shift hours`
           });
         }
+        
         if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
           return res.status(400).json({
             success: false,
             message: `Employee ${name}: Shift hours must be between 0 and 23`
           });
         }
+        
         employeesData.push({
           userId: userRecord?._id || null,
           name: name,
@@ -3172,18 +3204,22 @@ export const rosterUploadFromExcel = async (req, res) => {
         });
       }
     }
+    
     if (employeesData.length === 0) {
       return res.status(400).json({
         success: false,
         message: "No valid roster data found in the Excel file."
       });
     }
+    
     const rosterMonth = selectedStartDate.getMonth() + 1;
     const rosterYear = selectedStartDate.getFullYear();
+    
     let roster = await Roster.findOne({ 
       month: rosterMonth, 
       year: rosterYear 
     });
+    
     if (!roster) {
       roster = new Roster({
         month: rosterMonth,
@@ -3198,6 +3234,7 @@ export const rosterUploadFromExcel = async (req, res) => {
       roster.rosterStartDate = selectedStartDate;
       roster.rosterEndDate = selectedEndDate;
     }
+    
     const weekNumber = Math.ceil(selectedStartDate.getDate() / 7);
     const existingWeekIndex = roster.weeks.findIndex(w => 
       w.startDate.getTime() === selectedStartDate.getTime() &&
@@ -3205,21 +3242,12 @@ export const rosterUploadFromExcel = async (req, res) => {
     );
     
     if (existingWeekIndex !== -1) {
-      if (isOpsMetaEmployee) {
-        roster.weeks[existingWeekIndex] = {
-          weekNumber: weekNumber,
-          startDate: selectedStartDate,
-          endDate: selectedEndDate,
-          employees: employeesData
-        };
-      } else {
-        roster.weeks[existingWeekIndex] = {
-          weekNumber: weekNumber,
-          startDate: selectedStartDate,
-          endDate: selectedEndDate,
-          employees: employeesData
-        };
-      }
+      roster.weeks[existingWeekIndex] = {
+        weekNumber: weekNumber,
+        startDate: selectedStartDate,
+        endDate: selectedEndDate,
+        employees: employeesData
+      };
     } else {
       roster.weeks.push({
         weekNumber: weekNumber,
@@ -3228,7 +3256,19 @@ export const rosterUploadFromExcel = async (req, res) => {
         employees: employeesData
       });
     }
+    
     await roster.save();
+    
+    // Determine permission message based on user role
+    let permissionsNote = "";
+    if (isOpsMetaEmployee) {
+      permissionsNote = "Ops-Meta employees: Can upload for any team (future dates from tomorrow only)";
+    } else if (isAdmin) {
+      permissionsNote = "Admin/HR: Can upload for any team (today and future dates only)";
+    } else if (isSuperAdmin) {
+      permissionsNote = "SuperAdmin: Can upload for any team (any date - past, present, future)";
+    }
+    
     return res.status(200).json({
       success: true,
       message: `Roster uploaded successfully for ${startDate} to ${endDate}`,
@@ -3255,9 +3295,7 @@ export const rosterUploadFromExcel = async (req, res) => {
             username: user.username,
             accountType: user.accountType,
             department: user.department,
-            permissions: isOpsMetaEmployee 
-              ? `Ops-Meta employees can upload for any team (future dates only)` 
-              : "Admins/HR can upload for any team and future dates"
+            permissions: permissionsNote
           }
         },
         excelFormat: {
@@ -3265,9 +3303,7 @@ export const rosterUploadFromExcel = async (req, res) => {
           note: `Username is auto-generated from Name. Excel date columns (${excelDateColumns.length} found) will be mapped to selected date range.`,
           transportValues: ['Yes', 'No', ''],
           statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD', ''],
-          permissionsNote: isOpsMetaEmployee 
-            ? `Ops-Meta employees can upload for any team (future dates from tomorrow only)` 
-            : "Admins/HR can upload for any team and future dates",
+          permissionsNote: permissionsNote,
           sampleRow: {
             Name: 'John Doe',
             Transport: 'Yes',

@@ -1014,6 +1014,7 @@ export const getRosterForBulkEdit = createAsyncThunk(
     }
     const token = getToken();
     const res = await axios.get(`${API_URL}/bulk-edit/${rosterId}`, {
+      params: { includePastWeeks: true },
       headers: { Authorization: `Bearer ${token}` },
     });
 

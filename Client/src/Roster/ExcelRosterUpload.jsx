@@ -3,7 +3,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import { uploadRosterFromExcel, clearExcelUploadState } from '../features/slices/rosterSlice.js';
 import { toast } from 'react-toastify';
 import Navbar from '../pages/Navbar.jsx';
-
+import ConditionalNavbar from './ConditionalNavbar.jsx';
 const ExcelRosterUpload = () => {
   const dispatch = useDispatch();
   const { 
@@ -22,16 +22,31 @@ const ExcelRosterUpload = () => {
 
   // User info from localStorage
   const user = JSON.parse(localStorage.getItem('user')) || {};
+  const isSuperAdmin = user.accountType === 'superAdmin';
+  const isAdmin = ['admin', 'HR'].includes(user.accountType);
   const isOpsMeta = user.department === 'Ops - Meta' && user.accountType === 'employee';
-  const canUpload = ['admin', 'superAdmin', 'HR', 'employee'].includes(user.accountType);
+  const canUpload = isSuperAdmin || isAdmin || isOpsMeta;
 
-  // Calculate tomorrow's date for Ops-Meta restriction
-  const tomorrow = new Date();
+  // Calculate dates based on user role
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayFormatted = today.toISOString().split('T')[0];
+  
+  const tomorrow = new Date(today);
   tomorrow.setDate(tomorrow.getDate() + 1);
   const tomorrowFormatted = tomorrow.toISOString().split('T')[0];
-  
-  // Today's date
-  const todayFormatted = new Date().toISOString().split('T')[0];
+
+  // Determine min date based on user role
+  const getMinDate = () => {
+    if (isSuperAdmin) {
+      return '2020-01-01'; // SuperAdmin can select any date (past, present, future)
+    } else if (isAdmin) {
+      return todayFormatted; // Admin/HR can select today and future
+    } else if (isOpsMeta) {
+      return tomorrowFormatted; // Ops-Meta can select tomorrow and future
+    }
+    return todayFormatted; // Default
+  };
 
   const validateForm = () => {
     const errors = {};
@@ -40,16 +55,27 @@ const ExcelRosterUpload = () => {
       errors.startDate = 'Start date is required';
     } else {
       const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
       const today = new Date();
       today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
       
-      if (start < today) {
-        errors.startDate = 'Cannot select past dates';
-      }
-      
-      // Ops-Meta specific restriction
-      if (isOpsMeta && startDate < tomorrowFormatted) {
-        errors.startDate = 'Ops-Meta can only upload roster starting from tomorrow';
+      // Role-based date validation
+      if (isSuperAdmin) {
+        // SuperAdmin: No date restrictions - can select any date
+        // No validation needed
+        console.log('SuperAdmin uploading for date:', startDate);
+      } else if (isAdmin) {
+        // Admin/HR: Can select today and future dates
+        if (start < today) {
+          errors.startDate = 'Admin/HR can only select today or future dates. Cannot select past dates.';
+        }
+      } else if (isOpsMeta) {
+        // Ops-Meta: Can select tomorrow and future dates
+        if (start < tomorrow) {
+          errors.startDate = 'Ops-Meta can only select dates starting from tomorrow. Cannot select today or past dates.';
+        }
       }
     }
 
@@ -191,24 +217,56 @@ const ExcelRosterUpload = () => {
     return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   };
 
+  // Get permission message based on user role
+  const getPermissionMessage = () => {
+    if (isSuperAdmin) {
+      return 'SuperAdmin: Can upload for any date range (past, present, future)';
+    } else if (isAdmin) {
+      return 'Admin/HR: Can upload for today and future dates only';
+    } else if (isOpsMeta) {
+      return 'Ops-Meta: Can upload for future dates (starting from tomorrow) only';
+    }
+    return 'You have limited permissions';
+  };
+
+  // Get min date message
+  const getMinDateMessage = () => {
+    if (isSuperAdmin) {
+      return 'No date restrictions - you can select any date';
+    } else if (isAdmin) {
+      return 'You can select today or any future date';
+    } else if (isOpsMeta) {
+      return 'You can select tomorrow or any future date';
+    }
+    return '';
+  };
+
   return (
-      <div className="max-w-7xl mx-auto p-4 md:p-6">
-        <Navbar />
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold text-blue-600 mb-2">
-          📊 Upload Roster via Excel
-        </h1>
-        <p className="text-gray-600">Upload employee roster for a 7-day period using Excel file</p>
+    <div className="max-w-7xl mx-auto p-4 md:p-6">
+      <ConditionalNavbar />
+      
+      {/* Header with Role Badge */}
+      <div className="mb-8 flex flex-col md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold text-blue-600 mb-2">
+            📊 Upload Roster via Excel
+          </h1>
+          <p className="text-gray-600">Upload employee roster for a 7-day period using Excel file</p>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left Column: Upload Form */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold text-gray-800 mb-4 flex items-center">
-              📅 Select Date Range & Upload File
-            </h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                📅 Select Date Range & Upload File
+              </h2>
+              <span className="text-xs text-gray-500 bg-gray-100 px-3 py-1 rounded-full">
+                {getPermissionMessage()}
+              </span>
+            </div>
             <div className="border-b border-gray-200 mb-6"></div>
 
             <form onSubmit={handleSubmit} noValidate>
@@ -227,13 +285,15 @@ const ExcelRosterUpload = () => {
                         setValidationErrors(prev => ({ ...prev, startDate: '' }));
                       }
                     }}
-                    min={isOpsMeta ? tomorrowFormatted : todayFormatted}
+                    min={getMinDate()}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                       validationErrors.startDate ? 'border-red-500' : 'border-gray-300'
                     }`}
                   />
-                  {validationErrors.startDate && (
+                  {validationErrors.startDate ? (
                     <p className="mt-1 text-sm text-red-600">{validationErrors.startDate}</p>
+                  ) : (
+                    <p className="mt-1 text-sm text-gray-500">{getMinDateMessage()}</p>
                   )}
                 </div>
 
@@ -250,7 +310,7 @@ const ExcelRosterUpload = () => {
                         setValidationErrors(prev => ({ ...prev, endDate: '' }));
                       }
                     }}
-                    min={startDate || todayFormatted}
+                    min={startDate || getMinDate()}
                     className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
                       validationErrors.endDate ? 'border-red-500' : 'border-gray-300'
                     }`}
@@ -391,10 +451,10 @@ const ExcelRosterUpload = () => {
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">•</span>
                 <span className="text-gray-700">
-                  {isOpsMeta 
-                    ? 'Ops-Meta employees can only upload for future dates (starting tomorrow)'
-                    : 'Admins/HR can upload for any future dates'
-                  }
+                  {isSuperAdmin && 'SuperAdmin: Can upload for any date (past, present, future)'}
+                  {isAdmin && 'Admin/HR: Can upload for today and future dates only'}
+                  {isOpsMeta && 'Ops-Meta: Can upload for future dates (starting from tomorrow) only'}
+                  {!isSuperAdmin && !isAdmin && !isOpsMeta && 'Contact admin for permissions'}
                 </span>
               </li>
               <li className="flex items-start">
@@ -466,6 +526,12 @@ const ExcelRosterUpload = () => {
                   <span className="text-gray-700 font-medium">Uploaded By:</span>
                   <span className="text-gray-900">{excelUploadData.data.summary?.uploadedBy?.username}</span>
                 </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-700 font-medium">Permission:</span>
+                  <span className="text-gray-900 text-xs">
+                    {excelUploadData.data.summary?.uploadedBy?.permissions}
+                  </span>
+                </div>
               </div>
             </div>
           )}
@@ -516,12 +582,25 @@ const ExcelRosterUpload = () => {
         <div className="text-sm text-gray-600">
           Logged in as: <strong>{user.username}</strong> • 
           Role: <strong>{user.accountType}</strong> • 
-          Department: <strong>{user.department}</strong>
-          {isOpsMeta && (
-            <span className="ml-2 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
-              Ops-Meta Team Leader
+          Department: <strong>{user.department || 'N/A'}</strong>
+          {isSuperAdmin && (
+            <span className="ml-2 px-2 py-1 text-xs font-medium bg-purple-100 text-purple-800 rounded-full">
+              SuperAdmin - Full Access
             </span>
           )}
+          {isAdmin && (
+            <span className="ml-2 px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+              Admin/HR - Can upload from today
+            </span>
+          )}
+          {isOpsMeta && (
+            <span className="ml-2 px-2 py-1 text-xs font-medium bg-amber-100 text-amber-800 rounded-full">
+              Ops-Meta - Can upload from tomorrow
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-gray-500 mt-1">
+          {getPermissionMessage()}
         </div>
       </div>
     </div>

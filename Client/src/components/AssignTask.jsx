@@ -109,46 +109,46 @@ const AssignTask = () => {
   const departments = [...new Set(employees.map(emp => emp.department))];
 
   return (
-    <div className="relative min-h-screen mt-5 bg-[#0f172a]">
+    <div className="relative min-h-screen mt-5 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
       <Toaster />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');
       `}</style>
 
-      <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_80%_10%,rgba(56,189,248,0.25),rgba(15,23,42,0))]" />
-      <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_15%_85%,rgba(244,63,94,0.18),rgba(15,23,42,0))]" />
-      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(15,23,42,0.25),rgba(15,23,42,0.9))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(70%_50%_at_80%_10%,rgba(37,99,235,0.14),rgba(248,250,252,0))]" />
+      <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_15%_85%,rgba(14,116,144,0.12),rgba(248,250,252,0))]" />
+      <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,250,252,0.15),rgba(248,250,252,0.85))]" />
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-12">
-        <div className="w-full overflow-hidden rounded-3xl border border-white/10 bg-white/5 shadow-[0_40px_90px_-45px_rgba(2,6,23,0.9)] backdrop-blur">
+        <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_70px_-45px_rgba(15,23,42,0.35)]">
           <div className="grid lg:grid-cols-[1.05fr_1.4fr]">
-            <div className="relative p-8 text-white lg:p-10">
+            <div className="relative p-8 lg:p-10 bg-gradient-to-br from-slate-100 via-blue-50 to-white border-r border-slate-200">
               <div
-                className="text-sm uppercase tracking-[0.35em] text-cyan-300/90"
+                className="text-sm uppercase tracking-[0.35em] text-blue-700"
                 style={{ fontFamily: "'IBM Plex Mono', monospace" }}
               >
                 Task Intake
               </div>
               <h2
-                className="mt-5 text-3xl font-semibold leading-tight"
+                className="mt-5 text-3xl font-semibold leading-tight text-slate-900"
                 style={{ fontFamily: "'Space Grotesk', system-ui, sans-serif" }}
               >
                 Assign work with clarity and control.
               </h2>
-              <p className="mt-3 text-sm text-slate-300">
+              <p className="mt-3 text-sm text-slate-600">
                 Segment tasks by team, shift, and priority so delivery stays on track.
               </p>
 
               <div className="mt-10 space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase text-slate-400">Mode</p>
-                  <p className="mt-1 text-base font-semibold text-white">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase text-slate-500">Mode</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">
                     {activeTab === "core" ? "Core Team" : "Normal"}
                   </p>
                 </div>
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                  <p className="text-xs uppercase text-slate-400">Priority</p>
-                  <p className="mt-1 text-base font-semibold text-white">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <p className="text-xs uppercase text-slate-500">Priority</p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">
                     {formData.priority}
                   </p>
                 </div>
@@ -171,7 +171,7 @@ const AssignTask = () => {
                     onClick={() => setActiveTab("normal")}
                     className={`px-4 py-2 text-sm font-semibold transition ${
                       activeTab === "normal"
-                        ? "rounded-full bg-slate-900 text-white"
+                        ? "rounded-full bg-blue-600 text-white"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
@@ -181,7 +181,7 @@ const AssignTask = () => {
                     onClick={() => setActiveTab("core")}
                     className={`px-4 py-2 text-sm font-semibold transition ${
                       activeTab === "core"
-                        ? "rounded-full bg-slate-900 text-white"
+                        ? "rounded-full bg-blue-600 text-white"
                         : "text-slate-600 hover:text-slate-900"
                     }`}
                   >
@@ -202,7 +202,7 @@ const AssignTask = () => {
                     placeholder="e.g. Reconcile onboarding queue"
                     value={formData.title}
                     onChange={handleInputChange}
-                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+                    className="mt-2 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                     required
                   />
                 </div>
@@ -213,7 +213,7 @@ const AssignTask = () => {
                     name="department"
                     value={formData.department}
                     onChange={handleInputChange}
-                    className="mt-2 w-full rounded-2xl cursor-pointer border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+                    className="mt-2 w-full rounded-2xl cursor-pointer border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                     required
                   >
                     <option value="">Select Department</option>
@@ -231,7 +231,7 @@ const AssignTask = () => {
                     name="priority"
                     value={formData.priority}
                     onChange={handleInputChange}
-                    className="mt-2 w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+                    className="mt-2 w-full cursor-pointer rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                   >
                     <option value="High">High</option>
                     <option value="Medium">Medium</option>
@@ -286,7 +286,7 @@ const AssignTask = () => {
                       name="shift"
                       value={formData.shift}
                       onChange={handleInputChange}
-                      className="mt-2 w-full rounded-2xl cursor-pointer border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+                      className="mt-2 w-full rounded-2xl cursor-pointer border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                     >
                       <option value="Start">Start</option>
                       <option value="Mid">Mid</option>
@@ -302,7 +302,7 @@ const AssignTask = () => {
                     placeholder="Add key details, expectations, or links"
                     value={formData.description}
                     onChange={handleInputChange}
-                    className="mt-2 h-28 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+                    className="mt-2 h-28 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                   />
                 </div>
 
@@ -316,14 +316,14 @@ const AssignTask = () => {
                       placeholder="Context for core team execution"
                       value={formData.initialRemark}
                       onChange={handleInputChange}
-                      className="mt-2 h-24 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
+                      className="mt-2 h-24 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                     />
                   </div>
                 )}
 
                 <button
                   type="submit"
-                  className="lg:col-span-2 w-full rounded-2xl bg-slate-900 py-3 cursor-pointer text-base font-semibold text-white transition hover:bg-slate-800"
+                  className="lg:col-span-2 w-full rounded-2xl bg-blue-600 py-3 cursor-pointer text-base font-semibold text-white transition hover:bg-blue-700"
                 >
                   {activeTab === "core" ? "Assign Core Team Task" : "Assign Task"}
                 </button>
@@ -337,4 +337,3 @@ const AssignTask = () => {
 };
 
 export default AssignTask;
-

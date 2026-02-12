@@ -663,17 +663,17 @@ const proceedWithBulkEditAfterFetch = () => {
  const renderSavedRosterTable = () => {
     if (rosterDetailLoading) {
       return (
-        <div className="flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-          <span className="ml-3 text-gray-600">Loading saved roster...</span>
+        <div className="flex justify-center items-center py-10 bg-white rounded-2xl border border-slate-200 shadow-sm">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          <span className="ml-3 text-slate-600 font-medium">Loading saved roster...</span>
         </div>
       );
     }
 
     if (!allRosters || !Array.isArray(allRosters) || allRosters.length === 0) {
       return (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-          <p className="text-yellow-700">No saved roster data found.</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+          <p className="text-amber-800 font-medium">No saved roster data found.</p>
         </div>
       );
     }
@@ -706,7 +706,7 @@ const proceedWithBulkEditAfterFetch = () => {
     // Check if the week exists and has employees
     if (!rosterWeek) {
       return (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center">
           <div className="flex justify-center mb-4">
             <svg className="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.282 16.5c-.77.833.192 2.5 1.732 2.5z" />
@@ -718,7 +718,7 @@ const proceedWithBulkEditAfterFetch = () => {
           </p>
           <button 
             onClick={() => setShowSavedRoster(false)}
-            className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg"
+            className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg"
           >
             Close
           </button>
@@ -737,7 +737,7 @@ const proceedWithBulkEditAfterFetch = () => {
       
       return (
         <div className="mt-6">
-          <div className="bg-gradient-to-r from-yellow-50 to-orange-50 rounded-xl p-6 border border-yellow-200 mb-6">
+          <div className="bg-gradient-to-r from-amber-50 to-orange-50 rounded-2xl p-6 border border-amber-200 mb-6">
             <div className="text-center">
               <div className="flex justify-center mb-4">
                 <svg className="w-12 h-12 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -759,7 +759,7 @@ const proceedWithBulkEditAfterFetch = () => {
                       <button 
                         key={index} 
                         onClick={() => setSelectedWeek(week)} 
-                        className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm transition-colors"
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm transition-colors shadow-sm"
                       >
                         Week {week.weekNumber} ({week.employees.length} employees)
                       </button>
@@ -772,7 +772,7 @@ const proceedWithBulkEditAfterFetch = () => {
               ) : (
                 <button 
                   onClick={() => setShowSavedRoster(false)}
-                  className="px-4 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg"
+                  className="px-4 py-2 bg-slate-700 hover:bg-slate-800 text-white rounded-lg"
                 >
                   Close
                 </button>
@@ -782,8 +782,8 @@ const proceedWithBulkEditAfterFetch = () => {
           
           {/* Show week selector even when current week is empty */}
           {weeks.length > 1 && (
-            <div className="bg-white rounded-lg border p-4">
-              <h4 className="text-sm font-medium text-gray-700 mb-2">All Weeks in Roster:</h4>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+              <h4 className="text-sm font-medium text-slate-700 mb-2">All Weeks in Roster:</h4>
               <div className="flex flex-wrap gap-2">
                 {weeks.map((week, index) => (
                   <button 
@@ -791,9 +791,9 @@ const proceedWithBulkEditAfterFetch = () => {
                     onClick={() => setSelectedWeek(week)} 
                     className={`px-3 py-1 rounded text-sm ${
                       rosterWeek.weekNumber === week.weekNumber 
-                        ? "bg-blue-500 text-white" 
-                        : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                    } ${(!week.employees || week.employees.length === 0) ? 'border border-dashed border-gray-300' : ''}`}
+                        ? "bg-blue-600 text-white" 
+                        : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                    } ${(!week.employees || week.employees.length === 0) ? 'border border-dashed border-slate-300' : ''}`}
                     title={`Week ${week.weekNumber}: ${week.employees?.length || 0} employees`}
                   >
                     Week {week.weekNumber} ({week.employees?.length || 0})
@@ -810,39 +810,40 @@ const proceedWithBulkEditAfterFetch = () => {
 
     return (
       <div className="mt-6">
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200 mb-6">
+        <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm mb-6">
           <div className="flex justify-between items-center">
             <div>
-              <h3 className="text-lg font-semibold text-green-800">Saved Roster</h3>
-              <p className="text-gray-600">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Saved Data</p>
+              <h3 className="text-xl font-semibold text-slate-900">Saved Roster</h3>
+              <p className="text-slate-600">
                 Week {rosterWeek.weekNumber} • {formatDate(rosterWeek.startDate)} to {formatDate(rosterWeek.endDate)}
               </p>
             </div>
-            <button onClick={() => setShowSavedRoster(false)} className="text-gray-500 hover:text-gray-700 cursor-pointer">✕ Close</button>
+            <button onClick={() => setShowSavedRoster(false)} className="px-3 py-2 rounded-lg border border-slate-300 text-slate-600 hover:bg-slate-50">Close</button>
           </div>
 
           <div className="mt-4 grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white p-3 rounded-lg shadow-sm">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="text-xl font-bold text-gray-800">{weeklySummaryLocal.totalEmployees}</div>
               <div className="text-sm text-gray-600">Total Employees</div>
             </div>
-            <div className="bg-white p-3 rounded-lg shadow-sm">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="text-xl font-bold text-green-600">{weeklySummaryLocal.totalPresents}</div>
               <div className="text-sm text-gray-600">Total Presents</div>
             </div>
-            <div className="bg-white p-3 rounded-lg shadow-sm">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="text-xl font-bold text-blue-600">{weeklySummaryLocal.totalWeekOffs}</div>
               <div className="text-sm text-gray-600">Total Week Offs</div>
             </div>
-            <div className="bg-white p-3 rounded-lg shadow-sm">
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
               <div className="text-xl font-bold text-red-600">{weeklySummaryLocal.totalLeaves}</div>
               <div className="text-sm text-gray-600">Total Leaves</div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white rounded-lg border shadow-sm">
-          <div className="p-4 border-b">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          <div className="p-4 border-b border-slate-200">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold text-gray-800">
                 Week {rosterWeek.weekNumber} Employee Roster ({rosterWeek.employees.length})
@@ -857,7 +858,7 @@ const proceedWithBulkEditAfterFetch = () => {
                       const week = weeks.find(w => w.weekNumber === weekNumber);
                       if (week) setSelectedWeek(week);
                     }}
-                    className="border rounded px-3 py-1 text-sm bg-white"
+                    className="border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white text-slate-700"
                   >
                     {weeks.map((week, index) => (
                       <option key={index} value={week.weekNumber}>
@@ -873,29 +874,29 @@ const proceedWithBulkEditAfterFetch = () => {
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-gray-50">
-                  <th className="border p-3 text-left font-semibold text-gray-800">Name</th>
-                  <th className="border p-3 text-left font-semibold text-gray-800">Transport</th>
-                  <th className="border p-3 text-left font-semibold text-gray-800">CAB Route</th>
-                  <th className="border p-3 text-left font-semibold text-gray-800">Team Leader</th>
-                  <th className="border p-3 text-left font-semibold text-gray-800">Shift Hours</th>
-                  <th className="border p-3 text-left font-semibold text-gray-800">Weekly Status</th>
-                  <th className="border p-3 text-left font-semibold text-gray-800">Actions</th>
+                <tr className="bg-slate-100/90">
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Name</th>
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Transport</th>
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">CAB Route</th>
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Team Leader</th>
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Shift Hours</th>
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Weekly Status</th>
+                  <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {rosterWeek.employees.map((emp, index) => {
                   const empSummary = calculateEmployeeSummary(emp.dailyStatus);
                   return (
-                    <tr key={emp._id || index} className="border-b hover:bg-gray-50">
-                      <td className="border p-3 text-gray-800 font-medium">{emp.name}</td>
-                      <td className="border p-3 text-gray-800">{emp.transport || "-"}</td>
-                      <td className="border p-3 text-gray-800">{emp.cabRoute || "-"}</td>
-                     <td className="border p-3 text-gray-800">{emp.teamLeader || "-"}</td>
-                      <td className="border p-3 text-gray-800">
+                    <tr key={emp._id || index} className="border-b border-slate-100 hover:bg-slate-50/80">
+                      <td className="border border-slate-200 p-3 text-gray-800 font-medium">{emp.name}</td>
+                      <td className="border border-slate-200 p-3 text-gray-800">{emp.transport || "-"}</td>
+                      <td className="border border-slate-200 p-3 text-gray-800">{emp.cabRoute || "-"}</td>
+                     <td className="border border-slate-200 p-3 text-gray-800">{emp.teamLeader || "-"}</td>
+                      <td className="border border-slate-200 p-3 text-gray-800">
                         {emp.isCoreTeam ? "N/A" : formatShiftHours(emp.shiftStartHour, emp.shiftEndHour)}
                       </td>
-                      <td className="border p-3">
+                      <td className="border border-slate-200 p-3">
                         <div className="mb-2">
                           <div className="flex space-x-2 mb-1">
                             <span className="text-xs text-green-600">✅ {empSummary.presents}P</span>
@@ -924,18 +925,18 @@ const proceedWithBulkEditAfterFetch = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="border p-3">
+                      <td className="border border-slate-200 p-3">
                         <div className="flex space-x-2">
                           <button 
                             onClick={() => handleEditSaved(emp, rosterWeek)} 
-                            className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm cursor-pointer"
+                            className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-md text-sm"
                           >
                             Edit
                           </button>
                           <button 
                             onClick={() => handleDeleteSaved(emp, rosterWeek)} 
                             disabled={deleteLoading && employeeToDelete?.employeeId === emp._id}
-                            className={`bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm cursor-pointer ${
+                            className={`bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md text-sm ${
                               deleteLoading && employeeToDelete?.employeeId === emp._id 
                                 ? 'opacity-50 cursor-not-allowed' 
                                 : ''
@@ -958,8 +959,8 @@ const proceedWithBulkEditAfterFetch = () => {
 
         {/* Bottom week selector */}
         {weeks.length > 1 && (
-          <div className="mt-4 bg-white rounded-lg border p-4">
-            <h4 className="text-sm font-medium text-gray-700 mb-2">Quick Week Navigation:</h4>
+          <div className="mt-4 bg-white rounded-2xl border border-slate-200 p-4 shadow-sm">
+            <h4 className="text-sm font-medium text-slate-700 mb-2">Quick Week Navigation:</h4>
             <div className="flex flex-wrap gap-2">
               {weeks.map((week, index) => (
                 <button 
@@ -967,9 +968,9 @@ const proceedWithBulkEditAfterFetch = () => {
                   onClick={() => setSelectedWeek(week)} 
                   className={`px-3 py-1 rounded text-sm ${
                     rosterWeek.weekNumber === week.weekNumber 
-                      ? "bg-blue-500 text-white" 
-                      : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  } ${(!week.employees || week.employees.length === 0) ? 'border border-dashed border-gray-300 opacity-75' : ''}`}
+                      ? "bg-blue-600 text-white" 
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  } ${(!week.employees || week.employees.length === 0) ? 'border border-dashed border-slate-300 opacity-75' : ''}`}
                   title={`Week ${week.weekNumber}: ${week.employees?.length || 0} employees`}
                 >
                   Week {week.weekNumber} ({week.employees?.length || 0})
@@ -985,17 +986,18 @@ const proceedWithBulkEditAfterFetch = () => {
   return (    
 <>
   <AdminNavbar />
-  <div className="fixed inset-0 bg-white flex flex-col mt-10">
-    <div className="sticky top-0 z-50 bg-white border-b shadow-sm">
-      <div className="p-4 md:p-6 flex justify-between items-center">
+  <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col mt-10 [&_button]:cursor-pointer [&_select]:cursor-pointer">
+    <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div className="p-4 md:p-6 flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-start">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Roster Management</h1>
-          <p className="text-gray-600 mt-1">Manage weekly roster with day-wise status tracking</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Roster Workspace</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Roster Management</h1>
+          <p className="text-slate-600 mt-2">Manage weekly roster with day-wise status tracking</p>
         </div>
-        <div className="flex flex-col items-end sm:flex-row gap-3 w-full">
+        <div className="flex flex-col items-end sm:flex-row gap-2 w-full lg:w-auto">
   <button
     onClick={handleBulkEditRoster}
-    className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer shadow-md"
+    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center shadow-sm"
   >
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1006,7 +1008,7 @@ const proceedWithBulkEditAfterFetch = () => {
 
   <button
     onClick={() => setShowCopyPopup(true)}
-    className="w-full sm:w-auto bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer shadow-md"
+    className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center shadow-sm"
   >
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1018,7 +1020,7 @@ const proceedWithBulkEditAfterFetch = () => {
   <button
     onClick={handleExportSavedRoster}
     disabled={savedExportLoading}
-    className="w-full sm:w-auto bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer disabled:opacity-70"
+    className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center disabled:opacity-70 disabled:cursor-not-allowed"
   >
     {savedExportLoading ? (
       <>
@@ -1043,7 +1045,7 @@ const proceedWithBulkEditAfterFetch = () => {
 
   <button
     onClick={handleViewSavedRoster}
-    className="w-full sm:w-auto bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded font-medium flex items-center justify-center cursor-pointer"
+    className="w-full sm:w-auto bg-slate-800 hover:bg-slate-900 text-white px-4 py-2 rounded-lg font-medium flex items-center justify-center"
   >
     <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -1069,33 +1071,33 @@ const proceedWithBulkEditAfterFetch = () => {
       <div className="p-4 md:p-6" ref={formRef}>
         {showSavedRoster && renderSavedRosterTable()}
         {!showSavedRoster && employees.length > 0 && (
-          <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
-            <h2 className="text-lg font-semibold text-blue-800 mb-3">📊 Weekly Summary</h2>
+          <div className="mb-6 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">Weekly Summary</h2>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-lg shadow-sm">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="text-2xl font-bold text-gray-800">{weeklySummary.totalEmployees}</div>
                 <div className="text-sm text-gray-600">Total Employees</div>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="text-2xl font-bold text-green-600">{weeklySummary.totalPresents}</div>
                 <div className="text-sm text-gray-600">Total Presents</div>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="text-2xl font-bold text-blue-600">{weeklySummary.totalWeekOffs}</div>
                 <div className="text-sm text-gray-600">Total Week Offs</div>
               </div>
-              <div className="bg-white p-4 rounded-lg shadow-sm">
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
                 <div className="text-2xl font-bold text-red-600">{weeklySummary.totalLeaves}</div>
                 <div className="text-sm text-gray-600">Total Leaves</div>
               </div>
             </div>
             <div className="mt-4">
-              <h3 className="font-medium text-blue-700 mb-2">Day-wise Status Overview</h3>
+              <h3 className="font-medium text-slate-700 mb-2">Day-wise Status Overview</h3>
               <div className="grid grid-cols-7 gap-2">
                 {daysOfWeek.map((day, dayIndex) => {
                   const daySummary = weeklySummary.dayWiseSummary[dayIndex];
                   return (
-                    <div key={dayIndex} className={`bg-white rounded-lg p-3 text-center cursor-pointer border transition-all hover:shadow-md ${selectedDayOverview === dayIndex ? "ring-2 ring-blue-500" : ""}`} onClick={() => setSelectedDayOverview(selectedDayOverview === dayIndex ? null : dayIndex)}>
+                    <div key={dayIndex} className={`bg-slate-50 rounded-xl p-3 text-center border border-slate-200 transition-all hover:shadow-sm ${selectedDayOverview === dayIndex ? "ring-2 ring-blue-500" : ""}`} onClick={() => setSelectedDayOverview(selectedDayOverview === dayIndex ? null : dayIndex)}>
                       <div className="font-semibold text-gray-800">{day}</div>
                       <div className="mt-2 space-y-1">
                         <div className="flex items-center justify-center"><span className="text-green-600 text-sm">✅ {daySummary.presents}</span></div>
@@ -1108,7 +1110,7 @@ const proceedWithBulkEditAfterFetch = () => {
               </div>
             </div>
             {selectedDayOverview !== null && (
-              <div className="mt-4 bg-white rounded-lg p-4 border shadow-sm">
+              <div className="mt-4 bg-slate-50 rounded-xl p-4 border border-slate-200 shadow-sm">
                 <div className="flex justify-between items-center mb-3">
                   <h4 className="font-semibold text-gray-800">{daysOfWeek[selectedDayOverview]} - Employee Details</h4>
                   <button onClick={() => setSelectedDayOverview(null)} className="text-gray-500 hover:text-gray-700">✕</button>
@@ -1145,18 +1147,18 @@ const proceedWithBulkEditAfterFetch = () => {
 
         {!showSavedRoster && (
           <>
-            <div className="bg-gray-50 p-4 rounded-lg mb-6 border">
-              <h2 className="text-lg font-semibold mb-4 text-gray-800">Add Employee</h2>
+            <div className="bg-white p-5 rounded-2xl mb-6 border border-slate-200 shadow-sm">
+              <h2 className="text-lg font-semibold mb-4 text-slate-900">Add Employee</h2>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <input ref={inputRef} type="text" name="name" value={employeeInput.name} onChange={handleInputChange} placeholder="Name *" className="border p-3 rounded text-gray-800 placeholder-gray-500" required />
-                <select name="transport" value={employeeInput.transport} onChange={handleInputChange} className="border p-3 rounded text-gray-800">
+                <input ref={inputRef} type="text" name="name" value={employeeInput.name} onChange={handleInputChange} placeholder="Name *" className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 bg-white" required />
+                <select name="transport" value={employeeInput.transport} onChange={handleInputChange} className="border border-slate-300 p-3 rounded-lg text-gray-800 bg-white">
                   <option value="" className="text-gray-500">Transport?</option>
                   <option value="Yes" className="text-gray-800">Yes</option>
                   <option value="No" className="text-gray-800">No</option>
                 </select>
-                <input type="text" name="cabRoute" value={employeeInput.cabRoute} onChange={handleInputChange} placeholder="CAB Route" className="border p-3 rounded text-gray-800 placeholder-gray-500" />
-                <input type="text" name="teamLeader" value={employeeInput.teamLeader || ""} onChange={handleInputChange} placeholder="Team Leader (Optional)" className="border p-3 rounded text-gray-800 placeholder-gray-500" />
+                <input type="text" name="cabRoute" value={employeeInput.cabRoute} onChange={handleInputChange} placeholder="CAB Route" className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 bg-white" />
+                <input type="text" name="teamLeader" value={employeeInput.teamLeader || ""} onChange={handleInputChange} placeholder="Team Leader (Optional)" className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 bg-white" />
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -1167,7 +1169,7 @@ const proceedWithBulkEditAfterFetch = () => {
                       name="startDate" 
                       value={rosterDates.startDate} 
                       onChange={handleRosterDateChange} 
-                      className="border p-3 rounded text-gray-800 placeholder-gray-500 w-full" 
+                      className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 w-full bg-white" 
                       required 
                     />
                   </div>
@@ -1180,7 +1182,7 @@ const proceedWithBulkEditAfterFetch = () => {
                       name="endDate" 
                       value={rosterDates.endDate} 
                       onChange={handleRosterDateChange} 
-                      className="border p-3 rounded text-gray-800 placeholder-gray-500 w-full" 
+                      className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 w-full bg-white" 
                       required 
                     />
                   </div>
@@ -1189,12 +1191,12 @@ const proceedWithBulkEditAfterFetch = () => {
                 {!employeeInput.isCoreTeam && (
                   <>
                     <div className="grid grid-cols-2 gap-3">
-                      <input type="number" name="shiftStartHour" value={employeeInput.shiftStartHour} onChange={handleInputChange} placeholder="Start Hour (0-23) *" min="0" max="23" className="border p-3 rounded text-gray-800 placeholder-gray-500" required={!employeeInput.isCoreTeam} />
-                      <input type="number" name="shiftEndHour" value={employeeInput.shiftEndHour} onChange={handleInputChange} placeholder="End Hour (0-23) *" min="0" max="23" className="border p-3 rounded text-gray-800 placeholder-gray-500" required={!employeeInput.isCoreTeam} />
+                      <input type="number" name="shiftStartHour" value={employeeInput.shiftStartHour} onChange={handleInputChange} placeholder="Start Hour (0-23) *" min="0" max="23" className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 bg-white" required={!employeeInput.isCoreTeam} />
+                      <input type="number" name="shiftEndHour" value={employeeInput.shiftEndHour} onChange={handleInputChange} placeholder="End Hour (0-23) *" min="0" max="23" className="border border-slate-300 p-3 rounded-lg text-gray-800 placeholder-gray-500 bg-white" required={!employeeInput.isCoreTeam} />
                     </div>
                   </>
                 )}
-                <button type="button" onClick={handleAddEmployee} className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-3 rounded font-medium cursor-pointer">{editIndex !== null ? "Update Employee" : "Add Employee"}</button>
+                <button type="button" onClick={handleAddEmployee} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-medium shadow-sm">{editIndex !== null ? "Update Employee" : "Add Employee"}</button>
               </div>
               <div className="mt-6">
                 <h3 className="font-semibold mb-3 text-gray-800">Daily Status for <span className="text-blue-600">{employeeInput.name || "Selected Employee"}</span></h3>
@@ -1206,7 +1208,7 @@ const proceedWithBulkEditAfterFetch = () => {
                         name={`day${i}`} 
                         value={employeeInput.dailyStatus[i]} 
                         onChange={(e) => handleInputChange(e, i)} 
-                        className={`border p-2 rounded w-full text-center text-gray-800 ${
+                        className={`border p-2 rounded-lg w-full text-center text-gray-800 ${
                           employeeInput.dailyStatus[i] === "P" ? "border-green-300 bg-green-50" : 
                           employeeInput.dailyStatus[i] === "WO" ? "border-blue-300 bg-blue-50" : 
                           employeeInput.dailyStatus[i] === "L" ? "border-red-300 bg-red-50" : 
@@ -1246,8 +1248,8 @@ const proceedWithBulkEditAfterFetch = () => {
               </div>
             </div>
             {employees.length > 0 && (
-              <div className="bg-white rounded-lg border shadow-sm mb-6">
-                <div className="p-4 border-b">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 overflow-hidden">
+                <div className="p-4 border-b border-slate-200">
                   <div className="flex justify-between items-center">
                     <h3 className="text-lg font-semibold text-gray-800">Employee Roster ({employees.length})</h3>
                     {/* <div className="text-sm text-gray-600">
@@ -1258,13 +1260,13 @@ const proceedWithBulkEditAfterFetch = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-gray-50">
-                        <th className="border p-3 text-left font-semibold text-gray-800">Name</th>
-                        <th className="border p-3 text-left font-semibold text-gray-800">Transport</th>
-                        <th className="border p-3 text-left font-semibold text-gray-800">CAB Route</th>
-                        <th className="border p-3 text-left font-semibold text-gray-800">Shift Hours</th>
-                        <th className="border p-3 text-left font-semibold text-gray-800">Weekly Status</th>
-                        <th className="border p-3 text-left font-semibold text-gray-800">Actions</th>
+                      <tr className="bg-slate-100/90">
+                        <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Name</th>
+                        <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Transport</th>
+                        <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">CAB Route</th>
+                        <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Shift Hours</th>
+                        <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Weekly Status</th>
+                        <th className="border border-slate-200 p-3 text-left font-semibold text-gray-800">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1276,13 +1278,13 @@ const proceedWithBulkEditAfterFetch = () => {
                         };
 
                         return (
-                          <tr key={index} className="border-b hover:bg-gray-50">
-                            <td className="border p-3 text-gray-800 font-medium">{emp.name}</td>
-                            <td className="border p-3 text-gray-800">{emp.transport || "-"}</td>
-                            <td className="border p-3 text-gray-800">{emp.cabRoute || "-"}</td>
+                          <tr key={index} className="border-b border-slate-100 hover:bg-slate-50/80">
+                            <td className="border border-slate-200 p-3 text-gray-800 font-medium">{emp.name}</td>
+                            <td className="border border-slate-200 p-3 text-gray-800">{emp.transport || "-"}</td>
+                            <td className="border border-slate-200 p-3 text-gray-800">{emp.cabRoute || "-"}</td>
 
-                            <td className="border p-3 text-gray-800">{emp.isCoreTeam ? "N/A" : `${emp.shiftStartHour || 0}:00 - ${emp.shiftEndHour || 0}:00`}</td>
-                            <td className="border p-3">
+                            <td className="border border-slate-200 p-3 text-gray-800">{emp.isCoreTeam ? "N/A" : `${emp.shiftStartHour || 0}:00 - ${emp.shiftEndHour || 0}:00`}</td>
+                            <td className="border border-slate-200 p-3">
                               <div className="mb-2">
                                 <div className="flex space-x-2 mb-1">
                                   <span className="text-xs text-green-600">✅ {empSummary.presents}P</span>
@@ -1299,10 +1301,10 @@ const proceedWithBulkEditAfterFetch = () => {
                                 </div>
                               </div>
                             </td>
-                            <td className="border p-3">
+                            <td className="border border-slate-200 p-3">
                               <div className="flex space-x-2">
-                                <button onClick={() => handleEdit(index)} className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-1 rounded text-sm">Edit</button>
-                                <button onClick={() => handleRemoveEmployee(index)} className="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">Remove</button>
+                                <button onClick={() => handleEdit(index)} className="bg-amber-500 hover:bg-amber-600 text-white px-3 py-1 rounded-md text-sm">Edit</button>
+                                <button onClick={() => handleRemoveEmployee(index)} className="bg-rose-600 hover:bg-rose-700 text-white px-3 py-1 rounded-md text-sm">Remove</button>
                               </div>
                             </td>
                           </tr>
@@ -1314,7 +1316,7 @@ const proceedWithBulkEditAfterFetch = () => {
               </div>
             )}
 
-            <div className="sticky bottom-0 bg-white border-t py-4 mt-6">
+            <div className="sticky bottom-0 bg-white/90 backdrop-blur border-t border-slate-200 py-4 mt-6">
               <div className="flex flex-col sm:flex-row justify-between items-center space-y-3 sm:space-y-0">
                 <div>
                   {employees.length > 0 && (
@@ -1325,7 +1327,7 @@ const proceedWithBulkEditAfterFetch = () => {
                   )}
                 </div>
                 <div className="flex space-x-3">
-                  <button onClick={handleSaveRoster} disabled={loading || employees.length === 0} className={`px-6 py-3 rounded font-medium ${loading || employees.length === 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-green-500 hover:bg-green-600 text-white cursor-pointer"}`}>
+                  <button onClick={handleSaveRoster} disabled={loading || employees.length === 0} className={`px-6 py-3 rounded-lg font-medium ${loading || employees.length === 0 ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-emerald-600 hover:bg-emerald-700 text-white"}`}>
                     {loading ? (
                       <span className="flex items-center">
                         <svg className="animate-spin h-5 w-5 mr-2" viewBox="0 0 24 24">
