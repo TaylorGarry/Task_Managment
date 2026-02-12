@@ -701,7 +701,8 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-const API_URL = "http://localhost:4000/api/v1/tasks";
+// const API_URL = "http://localhost:4000/api/v1/tasks";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -723,7 +724,6 @@ const isToday = (dateString) => {
   return dateString === getTodayDateString();
 };
 
-// Initialize cache object
 let cache = {
   tasks: {
     data: null,
@@ -1138,57 +1138,18 @@ export const deleteTask = createAsyncThunk(
 );
 
 export const fetchAllTasks = createAsyncThunk(
-  "tasks/fetchAllTasks",
+  "allTasks/fetchAllTasks",
   async (filters = {}, thunkAPI) => {
     try {
       const token = getToken();
-      const todayString = getTodayDateString();
-      
-      // ALWAYS force today's date for dashboard
-      const effectiveFilters = {
-        ...filters,
-        date: filters.date || todayString, // Default to today if no date specified
-      };
-      
-      console.log("Fetching all tasks for date:", effectiveFilters.date, "Today is:", todayString);
-      
-      // Only use cache if it's very fresh (30 seconds) for today's data
-      if (isCacheValid('allTasks', effectiveFilters)) {
-        console.log("Using cached allTasks data for", effectiveFilters.date);
-        return cache.allTasks.data;
-      }
-      
-      console.log("Fetching FRESH allTasks data for", effectiveFilters.date);
       const query = new URLSearchParams();
-      
-      // Always add date parameter
-      query.append("date", effectiveFilters.date);
-      
-      // Add other filters if they exist
-      if (filters.startDate) query.append("startDate", filters.startDate);
-      if (filters.endDate) query.append("endDate", filters.endDate);
+      if (filters.date) query.append("date", filters.date);
       if (filters.shift) query.append("shift", filters.shift);
-      if (filters.department) query.append("department", filters.department);
-      
-      const queryString = query.toString();
-      const url = `${API_URL}/AllTasks?${queryString}`;
-      
-      console.log("API URL:", url);
-      
-      const res = await axios.get(url, {
+      const res = await axios.get(`${API_URL}/AllTasks?${query.toString()}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
-      console.log("Received", res.data?.length || 0, "tasks for date", effectiveFilters.date);
-      
-      // Update cache
-      cache.allTasks.data = res.data;
-      cache.allTasks.timestamp = Date.now();
-      cache.allTasks.filters = effectiveFilters;
-      
       return res.data;
     } catch (err) {
-      console.error("Error fetching all tasks:", err);
       return thunkAPI.rejectWithValue(err.response?.data?.message || err.message);
     }
   }
@@ -1260,6 +1221,56 @@ export const exportTaskStatusExcel = createAsyncThunk(
     }
   }
 );
+
+export const exportEmployeeDefaulterExcel = createAsyncThunk(
+  "tasks/exportEmployeeDefaulterExcel",
+  async ({ employeeId, startDate, endDate }, thunkAPI) => {
+    try {
+      const token = getToken();
+
+      const query = new URLSearchParams({
+        startDate: startDate || "",
+        endDate: endDate || ""
+      }).toString();
+
+      const res = await axios.get(
+        `${API_URL}/export-employee-defaulter/${employeeId}?${query}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept:
+              "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          },
+          responseType: "arraybuffer",
+        }
+      );
+
+      const mime =
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+      const blob = new Blob([res.data], { type: mime });
+
+      let filename = `Employee_Defaulter_${employeeId}.xlsx`;
+
+      const contentDisposition =
+        res.headers &&
+        (res.headers["content-disposition"] ||
+          res.headers["Content-Disposition"]);
+
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?([^"]+)"?/);
+        if (match && match[1]) filename = match[1];
+      }
+
+      return { blob, filename };
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
 
 export const fetchAdminTasks = createAsyncThunk(
   "tasks/fetchAdminTasks",
@@ -1342,6 +1353,33 @@ export const fetchAdminAssignedTasks = createAsyncThunk(
   }
 );
 
+export const fetchEmployeeDefaulters = createAsyncThunk(
+  "tasks/fetchEmployeeDefaulters",
+  async ({ employeeId, page = 1, limit = 30, startDate, endDate }, thunkAPI) => {
+    try {
+      const token = getToken();
+
+      const query = new URLSearchParams({
+        page,
+        limit,
+        startDate: startDate || "",
+        endDate: endDate || ""
+      }).toString();
+
+      const res = await axios.get(
+        `${API_URL}/employee-defaulter/${employeeId}?${query}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
 const taskSlice = createSlice({
   name: "tasks",
   initialState: {
@@ -1356,7 +1394,14 @@ const taskSlice = createSlice({
     totalDefaults: 0,
     loading: false,
     error: null,
-    lastFetchDate: null, // Track when data was last fetched
+    lastFetchDate: null,
+    employeeDefaulters: [],
+employeeName: "",
+employeeDateWiseTotals: [],
+employeeTotalDefaults: 0,
+employeeTotalPages: 0,
+employeeCurrentPage: 1,
+
   },
   reducers: {
     invalidateCache: (state) => {
@@ -1439,6 +1484,26 @@ const taskSlice = createSlice({
         state.loading = false;
         state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
       })
+      .addCase(fetchEmployeeDefaulters.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+.addCase(fetchEmployeeDefaulters.fulfilled, (state, action) => {
+  state.loading = false;
+
+  state.employeeDefaulters = action.payload.data || [];
+  state.employeeName = action.payload.employeeName || "";
+  state.employeeDateWiseTotals = action.payload.dateWiseTotalDefaulters || [];
+  state.employeeTotalDefaults = action.payload.totalDefaults || 0;
+  state.employeeTotalPages = action.payload.totalPages || 0;
+  state.employeeCurrentPage = action.payload.currentPage || 1;
+})
+.addCase(fetchEmployeeDefaulters.rejected, (state, action) => {
+  state.loading = false;
+  state.error = typeof action.payload === "string"
+    ? action.payload
+    : "Something went wrong";
+})
 
       // fetchDefaultList
       .addCase(fetchDefaultList.pending, (state) => {
@@ -1766,7 +1831,17 @@ const taskSlice = createSlice({
       .addCase(exportTaskStatusExcel.rejected, (state, action) => {
         state.loading = false;
         toast.error(action.payload || "Failed to export Excel");
-      });
+      })
+      .addCase(exportEmployeeDefaulterExcel.pending, (state) => {
+  state.loading = true;
+})
+.addCase(exportEmployeeDefaulterExcel.fulfilled, (state) => {
+  state.loading = false;
+})
+.addCase(exportEmployeeDefaulterExcel.rejected, (state, action) => {
+  state.loading = false;
+  toast.error(action.payload || "Failed to export employee defaulter Excel");
+});
   },
 });
 

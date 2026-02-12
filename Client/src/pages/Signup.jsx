@@ -28,7 +28,7 @@ const Signup = () => {
   useEffect(() => {
     const allowed =
       user?.accountType === "admin" ||
-      user?.accountType === "superAdmin" 
+      user?.accountType === "superAdmin" ||
       user?.accountType === "HR";
 
     if (!user || !allowed) {
@@ -82,21 +82,21 @@ const Signup = () => {
     <>
       <Toaster />
       <AdminNavbar />
-      <div className="relative min-h-screen bg-[#f5f3ff]">
+      <div className="relative min-h-screen overflow-y-auto pt-16 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Playfair+Display:wght@600&display=swap');
         `}</style>
 
-        <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_10%_20%,rgba(109,40,217,0.15),rgba(245,243,255,0))]" />
-        <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_85%_15%,rgba(14,116,144,0.18),rgba(245,243,255,0))]" />
-        <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_70%_85%,rgba(34,197,94,0.12),rgba(245,243,255,0))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_10%_20%,rgba(30,64,175,0.14),rgba(248,250,252,0))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_85%_15%,rgba(14,116,144,0.14),rgba(248,250,252,0))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_70%_85%,rgba(15,23,42,0.08),rgba(248,250,252,0))]" />
 
-        <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-15">
-          <div className="w-full overflow-hidden rounded-3xl bg-white shadow-[0_30px_70px_-45px_rgba(30,27,75,0.7)]">
+        <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-start px-4 py-4 md:items-center">
+          <div className="w-full overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.35)]">
             <div className="grid lg:grid-cols-[1.1fr_1.3fr]">
-              <div className="relative flex flex-col justify-between bg-[#111827] p-10 text-white lg:p-12">
+              <div className="relative flex flex-col justify-between bg-gradient-to-br from-slate-100 via-blue-50 to-white p-10 text-slate-900 lg:p-12 border-r border-slate-200">
                 <div>
-                  <span className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs uppercase tracking-[0.2em]">
+                  <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1 text-xs uppercase tracking-[0.2em]">
                     Admin Console
                   </span>
                   <h2
@@ -105,18 +105,18 @@ const Signup = () => {
                   >
                     Create new access
                   </h2>
-                  <p className="mt-3 text-sm text-white/70">
+                  <p className="mt-3 text-sm text-slate-600">
                     Provision accounts with role-based permissions in minutes.
                   </p>
                 </div>
-                <div className="mt-10 grid gap-6 text-sm text-white/80 sm:grid-cols-2">
-                  <div>
-                    <p className="text-2xl font-semibold">Secure</p>
-                    <p className="mt-1">Role-based access</p>
+                <div className="mt-10 grid gap-4 text-sm sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-2xl font-semibold text-slate-900">Secure</p>
+                    <p className="mt-1 text-slate-600">Role-based access</p>
                   </div>
-                  <div>
-                    <p className="text-2xl font-semibold">Fast</p>
-                    <p className="mt-1">One form setup</p>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-2xl font-semibold text-slate-900">Fast</p>
+                    <p className="mt-1 text-slate-600">One form setup</p>
                   </div>
                 </div>
               </div>
@@ -141,7 +141,7 @@ const Signup = () => {
                       type="text"
                       placeholder="e.g. jdoe"
                       {...register("username", { required: true })}
-                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                       disabled={creatingUser}
                     />
                   </div>
@@ -155,7 +155,7 @@ const Signup = () => {
                         type={showPassword ? "text" : "password"}
                         placeholder="Set a temporary password"
                         {...register("password", { required: true })}
-                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-10 text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-10 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                         disabled={creatingUser}
                       />
                       <span
@@ -174,7 +174,7 @@ const Signup = () => {
                       </label>
                       <select
                         {...register("accountType")}
-                        className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                        className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                         disabled={creatingUser}
                       >
                         <option value="employee">Employee</option>
@@ -193,7 +193,7 @@ const Signup = () => {
                         type="text"
                         placeholder="e.g. Operations"
                         {...register("department", { required: true })}
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                         disabled={creatingUser}
                       />
                     </div>
@@ -205,7 +205,7 @@ const Signup = () => {
                       </label>
                       <select
                         {...register("shiftLabel", { required: true })}
-                        className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-indigo-500 focus:bg-white"
+                        className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                         disabled={creatingUser}
                       >
                         {shiftOptions.map((option) => (
@@ -226,7 +226,7 @@ const Signup = () => {
                         type="button"
                         onClick={() => setValue("isCoreTeam", !isCoreTeam)}
                         className={`relative inline-flex cursor-pointer h-6 w-11 items-center rounded-full ${
-                          isCoreTeam ? "bg-indigo-500" : "bg-slate-300"
+                          isCoreTeam ? "bg-blue-600" : "bg-slate-300"
                         }`}
                       >
                         <span
@@ -242,8 +242,8 @@ const Signup = () => {
                     disabled={creatingUser}
                     className={`w-full rounded-xl px-4 py-3 cursor-pointer text-base font-semibold text-white transition ${
                       creatingUser
-                        ? "cursor-not-allowed bg-indigo-300"
-                        : "bg-indigo-600 hover:bg-indigo-700"
+                        ? "cursor-not-allowed bg-blue-300"
+                        : "bg-blue-600 hover:bg-blue-700"
                     }`}
                   >
                     {creatingUser ? "Creating..." : "Create User"}
@@ -259,4 +259,3 @@ const Signup = () => {
 };
 
 export default Signup;
-

@@ -3,6 +3,7 @@ import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
 import XLSX from "xlsx-js-style";
 import Remark from "../Modals/Remark.modal.js";
+import Roster from "../Modals/Roster.modal.js"
 import { getEffectiveTaskDate } from "../utils/getEffectiveTaskDate.js";
 
 
@@ -596,10 +597,6 @@ export const getCoreTeamTasks = async (req, res) => {
 //   }
 // };
 
-
-
-
-
 export const updateTaskStatus = async (req, res) => {
   try {
     if (req.user.accountType !== "employee" && req.user.accountType !== "HR") {
@@ -887,7 +884,6 @@ export const updateTaskStatus = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
-
 
 export const updateTaskStatusCoreTeam = async (req, res) => {
   try {
@@ -1569,335 +1565,267 @@ const isShiftPassed = (shift, date) => {
   return getISTNow() >= d;
 };
 
-export const Defaulter = async (req, res) => {
-  try {
-    const { department, shift, employeeId, startDate, endDate } = req.query;
+// export const Defaulter = async (req, res) => {
+//   try {
+//     const { department, shift, employeeId, startDate, endDate } = req.query;
 
-    const parseDate = (dateStr) => {
-      if (!dateStr) return null;
+//     const parseDate = (dateStr) => {
+//       if (!dateStr) return null;
       
-      if (dateStr.includes('/')) {
-        const [month, day, year] = dateStr.split('/').map(Number);
-        return new Date(year, month - 1, day);
-      } else if (dateStr.includes('-')) {
-        return new Date(dateStr);
-      }
-      return null;
-    };
+//       if (dateStr.includes('/')) {
+//         const [month, day, year] = dateStr.split('/').map(Number);
+//         return new Date(year, month - 1, day);
+//       } else if (dateStr.includes('-')) {
+//         return new Date(dateStr);
+//       }
+//       return null;
+//     };
 
-    let fromDate, toDate;
+//     let fromDate, toDate;
     
-    const previousBusinessDate = getPreviousBusinessDate();
-    previousBusinessDate.setHours(23, 59, 59, 999);
+//     const previousBusinessDate = getPreviousBusinessDate();
+//     previousBusinessDate.setHours(23, 59, 59, 999);
 
-    if (startDate && endDate) {
-      fromDate = parseDate(startDate);
-      toDate = parseDate(endDate);
+//     if (startDate && endDate) {
+//       fromDate = parseDate(startDate);
+//       toDate = parseDate(endDate);
       
-      if (!fromDate || !toDate) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid date format'
-        });
-      }
-      const today = getBusinessDate();
-      today.setHours(0, 0, 0, 0);
+//       if (!fromDate || !toDate) {
+//         return res.status(400).json({
+//           success: false,
+//           message: 'Invalid date format'
+//         });
+//       }
+//       const today = getBusinessDate();
+//       today.setHours(0, 0, 0, 0);
       
-      if (fromDate >= today) {
-        fromDate = new Date(previousBusinessDate);
-        fromDate.setDate(fromDate.getDate() - 1);  
-      }
-      if (toDate >= today) {
-        toDate = new Date(previousBusinessDate);
-      }
+//       if (fromDate >= today) {
+//         fromDate = new Date(previousBusinessDate);
+//         fromDate.setDate(fromDate.getDate() - 1);  
+//       }
+//       if (toDate >= today) {
+//         toDate = new Date(previousBusinessDate);
+//       }
       
-      if (fromDate > toDate) {
-        [fromDate, toDate] = [toDate, fromDate];
-      }
+//       if (fromDate > toDate) {
+//         [fromDate, toDate] = [toDate, fromDate];
+//       }
       
-      fromDate.setHours(0, 0, 0, 0);
-      toDate.setHours(23, 59, 59, 999);
-    } else {
-      fromDate = new Date(previousBusinessDate);
-      toDate = new Date(previousBusinessDate);
-      fromDate.setHours(0, 0, 0, 0);
-      toDate.setHours(23, 59, 59, 999);
-    }
-    const taskFilter = {};
-    if (department && department !== 'All Departments') taskFilter.department = department;
-    if (shift && shift !== 'All Shifts') taskFilter.shift = shift;
-    if (employeeId && employeeId !== 'All Employees') taskFilter.assignedTo = employeeId;
+//       fromDate.setHours(0, 0, 0, 0);
+//       toDate.setHours(23, 59, 59, 999);
+//     } else {
+//       fromDate = new Date(previousBusinessDate);
+//       toDate = new Date(previousBusinessDate);
+//       fromDate.setHours(0, 0, 0, 0);
+//       toDate.setHours(23, 59, 59, 999);
+//     }
+//     const taskFilter = {};
+//     if (department && department !== 'All Departments') taskFilter.department = department;
+//     if (shift && shift !== 'All Shifts') taskFilter.shift = shift;
+//     if (employeeId && employeeId !== 'All Employees') taskFilter.assignedTo = employeeId;
 
-    const tasks = await Task.find(taskFilter)
-      .populate("assignedTo", "username accountType")
-      .lean();
+//     const tasks = await Task.find(taskFilter)
+//       .populate("assignedTo", "username accountType")
+//       .lean();
 
-    if (!tasks.length) {
-      return res.json({
-        success: true,
-        totalDefaulters: 0,
-        overallTotalDefaults: 0,
-        data: []
-      });
-    } 
-    const validTasks = tasks.filter(task =>
-      task.assignedTo.some(u => u.accountType !== "superAdmin")
-    );
+//     if (!tasks.length) {
+//       return res.json({
+//         success: true,
+//         totalDefaulters: 0,
+//         overallTotalDefaults: 0,
+//         data: []
+//       });
+//     } 
+//     const validTasks = tasks.filter(task =>
+//       task.assignedTo.some(u => u.accountType !== "superAdmin")
+//     );
 
-    const taskIds = validTasks.map(t => t._id); 
-    const statuses = await TaskStatus.find({
-      taskId: { $in: taskIds },
-      date: { 
-        $gte: fromDate,
-        $lte: toDate 
-      }
-    }).lean(); 
-    const statusMap = new Map();
-    for (const s of statuses) {
-      const dateKey = new Date(s.date);
-      dateKey.setHours(0, 0, 0, 0);
+//     const taskIds = validTasks.map(t => t._id); 
+//     const statuses = await TaskStatus.find({
+//       taskId: { $in: taskIds },
+//       date: { 
+//         $gte: fromDate,
+//         $lte: toDate 
+//       }
+//     }).lean(); 
+//     const statusMap = new Map();
+//     for (const s of statuses) {
+//       const dateKey = new Date(s.date);
+//       dateKey.setHours(0, 0, 0, 0);
 
-      const key = `${s.taskId}_${s.employeeId}_${dateKey.toISOString()}`;
+//       const key = `${s.taskId}_${s.employeeId}_${dateKey.toISOString()}`;
 
-      if (
-        !statusMap.has(key) ||
-        new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)
-      ) {
-        statusMap.set(key, s);
-      }
-    } 
-    const dailyDefaultsMap = new Map();  
-    const employeeInfoMap = new Map();  
-    const dateSet = new Set(); 
-    for (const task of validTasks) {
-      const taskCreated = new Date(task.createdAt);
-      taskCreated.setHours(0, 0, 0, 0);
+//       if (
+//         !statusMap.has(key) ||
+//         new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)
+//       ) {
+//         statusMap.set(key, s);
+//       }
+//     } 
+//     const dailyDefaultsMap = new Map();  
+//     const employeeInfoMap = new Map();  
+//     const dateSet = new Set(); 
+//     for (const task of validTasks) {
+//       const taskCreated = new Date(task.createdAt);
+//       taskCreated.setHours(0, 0, 0, 0);
 
-      for (const emp of task.assignedTo) {
-        if (emp.accountType === "superAdmin") continue;
-        if (employeeId && emp._id.toString() !== employeeId) continue;
+//       for (const emp of task.assignedTo) {
+//         if (emp.accountType === "superAdmin") continue;
+//         if (employeeId && emp._id.toString() !== employeeId) continue;
 
-        const empId = emp._id.toString(); 
-        if (!employeeInfoMap.has(empId)) {
-          employeeInfoMap.set(empId, {
-            employeeName: emp.username,
-            totalDefaults: 0
-          });
-        } 
-        for (
-          let d = new Date(fromDate);
-          d <= toDate;
-          d.setDate(d.getDate() + 1)
-        ) {
-          const currentDate = new Date(d);
-          currentDate.setHours(0, 0, 0, 0);
-          const dateISO = currentDate.toISOString();
-          dateSet.add(dateISO); 
-          if (currentDate < taskCreated) {
-            continue;
-          } 
-          if (!isShiftPassed(task.shift, currentDate)) {
-            continue;
-          }
+//         const empId = emp._id.toString(); 
+//         if (!employeeInfoMap.has(empId)) {
+//           employeeInfoMap.set(empId, {
+//             employeeName: emp.username,
+//             totalDefaults: 0
+//           });
+//         } 
+//         for (
+//           let d = new Date(fromDate);
+//           d <= toDate;
+//           d.setDate(d.getDate() + 1)
+//         ) {
+//           const currentDate = new Date(d);
+//           currentDate.setHours(0, 0, 0, 0);
+//           const dateISO = currentDate.toISOString();
+//           dateSet.add(dateISO); 
+//           if (currentDate < taskCreated) {
+//             continue;
+//           } 
+//           if (!isShiftPassed(task.shift, currentDate)) {
+//             continue;
+//           }
 
-          const statusKey = `${task._id}_${emp._id}_${dateISO}`;
-          const status = statusMap.get(statusKey)?.status; 
-          if (!status || status === "Not Done") {
-            const dailyKey = `${empId}_${dateISO}`;
-            if (!dailyDefaultsMap.has(dailyKey)) {
-              dailyDefaultsMap.set(dailyKey, {
-                date: new Date(currentDate),
-                employeeId: empId,
-                employeeName: emp.username,
-                notDoneTasksToday: 0,
-                totalDefaultsTillDate: 0
-              });
-            }
-            const dailyData = dailyDefaultsMap.get(dailyKey);
-            dailyData.notDoneTasksToday++; 
-            const empInfo = employeeInfoMap.get(empId);
-            empInfo.totalDefaults++;
-          }
-        }
-      }
-    } 
-    const dateArray = Array.from(dateSet).sort();
-    for (const task of validTasks) {
-      const taskCreated = new Date(task.createdAt);
-      taskCreated.setHours(0, 0, 0, 0);
-      for (const emp of task.assignedTo) {
-        if (emp.accountType === "superAdmin") continue;
-        const empId = emp._id.toString();
-        let cumulativeCount = 0;
-        for (const dateISO of dateArray) {
-          const currentDate = new Date(dateISO);
-          currentDate.setHours(0, 0, 0, 0);
-          if (currentDate < taskCreated) {
-            continue;
-          }
-          if (!isShiftPassed(task.shift, currentDate)) {
-            continue;
-          }
-          const statusKey = `${task._id}_${emp._id}_${dateISO}`;
-          const status = statusMap.get(statusKey)?.status;
-          if (!status || status === "Not Done") {
-            cumulativeCount++;
-          }
-          const dailyKey = `${empId}_${dateISO}`;
-          if (dailyDefaultsMap.has(dailyKey)) {
-            dailyDefaultsMap.get(dailyKey).totalDefaultsTillDate = cumulativeCount;
-          }
-        }
-      }
-    }
-    const data = Array.from(dailyDefaultsMap.values())
-      .filter(item => item.notDoneTasksToday > 0)  
-      .map(item => {
-        const empInfo = employeeInfoMap.get(item.employeeId);
-        return {
-          ...item,
-          totalDefaultsTillDate: empInfo ? empInfo.totalDefaults : item.totalDefaultsTillDate
-        };
-      })
-      .sort((a, b) => new Date(b.date) - new Date(a.date)); 
-    const totalDefaultDay = data.reduce((sum, item) => sum + item.notDoneTasksToday, 0);
-    const totalDefaultsTillDate = Array.from(employeeInfoMap.values())
-      .reduce((sum, emp) => sum + emp.totalDefaults, 0);
+//           const statusKey = `${task._id}_${emp._id}_${dateISO}`;
+//           const status = statusMap.get(statusKey)?.status; 
+//           if (!status || status === "Not Done") {
+//             const dailyKey = `${empId}_${dateISO}`;
+//             if (!dailyDefaultsMap.has(dailyKey)) {
+//               dailyDefaultsMap.set(dailyKey, {
+//                 date: new Date(currentDate),
+//                 employeeId: empId,
+//                 employeeName: emp.username,
+//                 notDoneTasksToday: 0,
+//                 totalDefaultsTillDate: 0
+//               });
+//             }
+//             const dailyData = dailyDefaultsMap.get(dailyKey);
+//             dailyData.notDoneTasksToday++; 
+//             const empInfo = employeeInfoMap.get(empId);
+//             empInfo.totalDefaults++;
+//           }
+//         }
+//       }
+//     } 
+//     const dateArray = Array.from(dateSet).sort();
+//     for (const task of validTasks) {
+//       const taskCreated = new Date(task.createdAt);
+//       taskCreated.setHours(0, 0, 0, 0);
+//       for (const emp of task.assignedTo) {
+//         if (emp.accountType === "superAdmin") continue;
+//         const empId = emp._id.toString();
+//         let cumulativeCount = 0;
+//         for (const dateISO of dateArray) {
+//           const currentDate = new Date(dateISO);
+//           currentDate.setHours(0, 0, 0, 0);
+//           if (currentDate < taskCreated) {
+//             continue;
+//           }
+//           if (!isShiftPassed(task.shift, currentDate)) {
+//             continue;
+//           }
+//           const statusKey = `${task._id}_${emp._id}_${dateISO}`;
+//           const status = statusMap.get(statusKey)?.status;
+//           if (!status || status === "Not Done") {
+//             cumulativeCount++;
+//           }
+//           const dailyKey = `${empId}_${dateISO}`;
+//           if (dailyDefaultsMap.has(dailyKey)) {
+//             dailyDefaultsMap.get(dailyKey).totalDefaultsTillDate = cumulativeCount;
+//           }
+//         }
+//       }
+//     }
+//     const data = Array.from(dailyDefaultsMap.values())
+//       .filter(item => item.notDoneTasksToday > 0)  
+//       .map(item => {
+//         const empInfo = employeeInfoMap.get(item.employeeId);
+//         return {
+//           ...item,
+//           totalDefaultsTillDate: empInfo ? empInfo.totalDefaults : item.totalDefaultsTillDate
+//         };
+//       })
+//       .sort((a, b) => new Date(b.date) - new Date(a.date)); 
+//     const totalDefaultDay = data.reduce((sum, item) => sum + item.notDoneTasksToday, 0);
+//     const totalDefaultsTillDate = Array.from(employeeInfoMap.values())
+//       .reduce((sum, emp) => sum + emp.totalDefaults, 0);
 
-    res.json({
-      success: true,
-      totalDefaulters: employeeInfoMap.size,
-      overallTotalDefaults: totalDefaultDay,
-      data
-    });
+//     res.json({
+//       success: true,
+//       totalDefaulters: employeeInfoMap.size,
+//       overallTotalDefaults: totalDefaultDay,
+//       data
+//     });
 
-  } catch (err) {
-    console.error('Defaulter API Error:', err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
+//   } catch (err) {
+//     console.error('Defaulter API Error:', err);
+//     res.status(500).json({ success: false, message: err.message });
+//   }
+// };
 
-export const getEmployeeDefaulters = async (req, res) => {
-  try {
-    const { employeeId } = req.params;
-    const { page = 1, limit = 30 } = req.query;
-    const pageNum = Math.max(1, parseInt(page));
-    const pageSize = parseInt(limit);
-
-    const employee = await User.findById(employeeId).lean();
-    if (!employee || employee.accountType === "superAdmin") {
-      return res.json({
-        success: true,
-        totalDefaults: 0,
-        data: []
-      });
-    }
-
-    const previousBusinessDate = getPreviousBusinessDate();
-    previousBusinessDate.setHours(23, 59, 59, 999);
-
-    const tasks = await Task.find({ assignedTo: employeeId }).lean();
-    if (!tasks.length) {
-      return res.json({ success: true, totalDefaults: 0, data: [] });
-    }
-
-    const taskIds = tasks.map(t => t._id);
-
-    const statuses = await TaskStatus.find({
-      employeeId,
-      taskId: { $in: taskIds },
-      date: { $lte: previousBusinessDate }
-    }).lean();
-
-    const statusMap = new Map();
-    statuses.forEach(s => {
-      const dateKey = new Date(s.date);
-      dateKey.setHours(0, 0, 0, 0);
-      const key = `${s.taskId}_${dateKey.toISOString()}`;
-      
-      if (!statusMap.has(key) || 
-          new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)) {
-        statusMap.set(key, s.status);
-      }
-    });
-
-    let totalDefaults = 0;
-    const data = [];
-
-    for (const task of tasks) {
-      let taskDefaults = 0;
-
-      const createdAt = new Date(task.createdAt);
-      createdAt.setHours(0, 0, 0, 0);
-
-      for (
-        let d = new Date(createdAt);
-        d <= previousBusinessDate;
-        d.setDate(d.getDate() + 1)
-      ) {
-        const currentDate = new Date(d);
-        currentDate.setHours(0, 0, 0, 0);
-        
-        if (!isShiftPassed(task.shift, currentDate)) {
-          continue;
-        }
-
-        const key = `${task._id}_${currentDate.toISOString()}`;
-        const status = statusMap.get(key);
-        if (!status || status === "Not Done") {
-          taskDefaults++;
-        }
-      }
-
-      if (taskDefaults > 0) {
-        totalDefaults += taskDefaults;
-        data.push({
-          title: task.title,
-          shift: task.shift,
-          department: task.department,
-          priority: task.priority,
-          totalDefaultsTillDate: taskDefaults
-        });
-      }
-    }
-
-    const totalPages = Math.ceil(data.length / pageSize);
-    const paginatedData = data.slice((pageNum - 1) * pageSize, pageNum * pageSize);
-
-    res.json({
-      success: true,
-      employeeName: employee.username,
-      totalDefaults,
-      data: paginatedData,
-      totalPages,
-      currentPage: pageNum
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: err.message });
-  }
-};
 // export const getEmployeeDefaulters = async (req, res) => {
 //   try {
 //     const { employeeId } = req.params;
-//     const { page = 1, limit = 30 } = req.query;
-//     const pageNum = Math.max(1, parseInt(page));
-//     const pageSize = parseInt(limit);
+//     const { startDate, endDate, page = 1, limit = 30 } = req.query;
+
+//     const pageNum = Math.max(parseInt(page) || 1, 1);
+//     const pageSize = Math.max(parseInt(limit) || 30, 1);
+
+//     const parseDate = (dateStr) => {
+//       if (!dateStr) return null;
+//       if (dateStr.includes('/')) {
+//         const [m, d, y] = dateStr.split('/').map(Number);
+//         return new Date(y, m - 1, d);
+//       }
+//       return new Date(dateStr);
+//     };
 
 //     const employee = await User.findById(employeeId).lean();
 //     if (!employee || employee.accountType === "superAdmin") {
 //       return res.json({
 //         success: true,
+//         employeeName: employee?.username || "",
 //         totalDefaults: 0,
-//         data: []
+//         data: [],
+//         totalPages: 0,
+//         currentPage: pageNum
 //       });
 //     }
 
-//     const cutoffDate = getPreviousBusinessDate();
+//     const previousBusinessDate = getPreviousBusinessDate();
+//     previousBusinessDate.setHours(23, 59, 59, 999);
+
+//     let fromDate = startDate ? parseDate(startDate) : null;
+//     let toDate = endDate ? parseDate(endDate) : null;
+
+//     if (!fromDate || !toDate) {
+//       fromDate = new Date(0);
+//       toDate = previousBusinessDate;
+//     }
+
+//     fromDate.setHours(0, 0, 0, 0);
+//     toDate.setHours(23, 59, 59, 999);
 
 //     const tasks = await Task.find({ assignedTo: employeeId }).lean();
 //     if (!tasks.length) {
-//       return res.json({ success: true, totalDefaults: 0, data: [] });
+//       return res.json({
+//         success: true,
+//         employeeName: employee.username,
+//         totalDefaults: 0,
+//         data: [],
+//         totalPages: 0,
+//         currentPage: pageNum
+//       });
 //     }
 
 //     const taskIds = tasks.map(t => t._id);
@@ -1905,53 +1833,67 @@ export const getEmployeeDefaulters = async (req, res) => {
 //     const statuses = await TaskStatus.find({
 //       employeeId,
 //       taskId: { $in: taskIds },
-//       date: { $lte: cutoffDate }
+//       date: { $gte: fromDate, $lte: toDate }
 //     }).lean();
 
 //     const statusMap = new Map();
-//     statuses.forEach(s => {
-//       const key = `${s.taskId}_${new Date(s.date).toISOString()}`;
-//       statusMap.set(key, s.status);
-//     });
 
-//     let totalDefaults = 0;
-//     const data = [];
+//     for (const s of statuses) {
+//       const dateKey = new Date(s.date);
+//       dateKey.setHours(0, 0, 0, 0);
+//       const key = `${s.taskId}_${dateKey.toISOString()}`;
 
-//     for (const task of tasks) {
-//       let taskDefaults = 0;
-
-//       const createdAt = new Date(task.createdAt);
-//       createdAt.setHours(0, 0, 0, 0);
-
-//       for (
-//         let d = new Date(createdAt);
-//         d <= cutoffDate;
-//         d.setDate(d.getDate() + 1)
+//       if (
+//         !statusMap.has(key) ||
+//         new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)
 //       ) {
-//         if (!isShiftPassed(task.shift, d)) continue;
-
-//         const key = `${task._id}_${d.toISOString()}`;
-//         const status = statusMap.get(key);
-
-//         if (status !== "Done") {
-//           taskDefaults++;
-//         }
-//       }
-
-//       if (taskDefaults > 0) {
-//         totalDefaults += taskDefaults;
-//         data.push({
-//           title: task.title,
-//           shift: task.shift,
-//           department: task.department,
-//           priority: task.priority,
-//           totalDefaultsTillDate: taskDefaults
-//         });
+//         statusMap.set(key, s);
 //       }
 //     }
 
-//     const totalPages = Math.ceil(data.length / pageSize);
-//     const paginatedData = data.slice((pageNum - 1) * pageSize, pageNum * pageSize);
+//     const flatDefaults = [];
+//     let totalDefaults = 0;
+
+//     for (const task of tasks) {
+//       const taskCreated = new Date(task.createdAt);
+//       taskCreated.setHours(0, 0, 0, 0);
+
+//       for (
+//         let d = new Date(fromDate);
+//         d <= toDate;
+//         d.setDate(d.getDate() + 1)
+//       ) {
+//         const currentDate = new Date(d);
+//         currentDate.setHours(0, 0, 0, 0);
+
+//         if (currentDate < taskCreated) continue;
+//         if (!isShiftPassed(task.shift, currentDate)) continue;
+
+//         const key = `${task._id}_${currentDate.toISOString()}`;
+//         const status = statusMap.get(key)?.status;
+
+//         if (!status || status === "Not Done") {
+//           totalDefaults++;
+
+//           flatDefaults.push({
+//             date: new Date(currentDate),
+//             title: task.title,
+//             department: task.department,
+//             shift: task.shift,
+//             priority: task.priority
+//           });
+//         }
+//       }
+//     }
+
+//     flatDefaults.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+//     const totalPages = Math.ceil(flatDefaults.length / pageSize);
+
+//     const paginatedData = flatDefaults.slice(
+//       (pageNum - 1) * pageSize,
+//       pageNum * pageSize
+//     );
 
 //     res.json({
 //       success: true,
@@ -1961,11 +1903,13 @@ export const getEmployeeDefaulters = async (req, res) => {
 //       totalPages,
 //       currentPage: pageNum
 //     });
+
 //   } catch (err) {
-//     console.error(err);
+//     console.error("getEmployeeDefaulters Error:", err);
 //     res.status(500).json({ success: false, message: err.message });
 //   }
 // };
+
 export const createCoreTeamTask = async (req, res) => {
   try {
     if (req.user.accountType !== "admin" &&  req.user.accountType !== "superAdmin") 
@@ -2232,6 +2176,736 @@ export const getAdminAssignedTasks = async (req, res) => {
   } catch (error) {
     console.error("Get Admin Assigned Tasks Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const exportEmployeeDefaults = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const {startDate, endDate } = req.query;
+    if (!employeeId) {
+      return res.status(400).json({
+        success: false,
+        message: "Employee ID is required"
+      });
+    }
+
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (dateStr.includes("/")) {
+        const [m, d, y] = dateStr.split("/").map(Number);
+        return new Date(y, m - 1, d);
+      }
+      return new Date(dateStr);
+    };
+
+    const employee = await User.findById(employeeId).lean();
+    if (!employee || employee.accountType === "superAdmin") {
+      return res.status(404).json({
+        success: false,
+        message: "Employee not found"
+      });
+    }
+
+    const previousBusinessDate = getPreviousBusinessDate();
+    previousBusinessDate.setHours(23, 59, 59, 999);
+
+    let fromDate = startDate ? parseDate(startDate) : null;
+    let toDate = endDate ? parseDate(endDate) : null;
+
+    if (!fromDate || !toDate) {
+      fromDate = new Date(0);
+      toDate = previousBusinessDate;
+    }
+
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+
+    const tasks = await Task.find({ assignedTo: employeeId }).lean();
+    if (!tasks.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No tasks found"
+      });
+    }
+
+    const taskIds = tasks.map(t => t._id);
+
+    const statuses = await TaskStatus.find({
+      employeeId,
+      taskId: { $in: taskIds },
+      date: { $gte: fromDate, $lte: toDate }
+    }).lean();
+
+    // ✅ Build latest status map (same as API)
+    const statusMap = new Map();
+
+    for (const s of statuses) {
+      const dateKey = new Date(s.date);
+      dateKey.setHours(0, 0, 0, 0);
+      const key = `${s.taskId}_${dateKey.toISOString()}`;
+
+      if (
+        !statusMap.has(key) ||
+        new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)
+      ) {
+        statusMap.set(key, s);
+      }
+    }
+
+    // ✅ Generate flat defaults (SAME LOGIC)
+    const flatDefaults = [];
+
+    for (const task of tasks) {
+      const taskCreated = new Date(task.createdAt);
+      taskCreated.setHours(0, 0, 0, 0);
+
+      for (
+        let d = new Date(fromDate);
+        d <= toDate;
+        d.setDate(d.getDate() + 1)
+      ) {
+        const currentDate = new Date(d);
+        currentDate.setHours(0, 0, 0, 0);
+
+        if (currentDate < taskCreated) continue;
+        if (!isShiftPassed(task.shift, currentDate)) continue;
+
+        const key = `${task._id}_${currentDate.toISOString()}`;
+        const status = statusMap.get(key)?.status;
+
+        if (!status || status === "Not Done") {
+          flatDefaults.push({
+            date: new Date(currentDate),
+            title: task.title,
+            department: task.department,
+            shift: task.shift,
+            priority: task.priority
+          });
+        }
+      }
+    }
+
+    if (!flatDefaults.length) {
+      return res.status(404).json({
+        success: false,
+        message: "No defaults found"
+      });
+    }
+
+    flatDefaults.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    // ✅ Prepare Excel Data
+    const excelData = flatDefaults.map((item, index) => ({
+      "S.No": index + 1,
+      "Date": item.date.toLocaleDateString("en-GB"),
+      "Task Title": item.title || "N/A",
+      "Department": item.department || "N/A",
+      "Shift": item.shift || "N/A",
+      "Priority": item.priority || "N/A",
+      "Status": "Not Done"
+    }));
+
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(excelData);
+
+    ws["!cols"] = [
+      { wch: 6 },
+      { wch: 12 },
+      { wch: 35 },
+      { wch: 20 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 15 }
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, "Employee Defaults");
+
+    const excelBuffer = XLSX.write(wb, {
+      type: "buffer",
+      bookType: "xlsx"
+    });
+
+    const fileName = `${employee.username.replace(
+      /\s+/g,
+      "_"
+    )}_Defaulters_${new Date().toISOString().split("T")[0]}.xlsx`;
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${fileName}"`
+    );
+
+    res.send(excelBuffer);
+
+  } catch (error) {
+    console.error("exportEmployeeDefaults Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Error exporting to Excel",
+      error: error.message
+    });
+  }
+};
+
+export const Defaulter = async (req, res) => {
+  try {
+    const { department, shift, employeeId, startDate, endDate } = req.query;
+
+    /* ===============================
+       DATE HANDLING WITH OVERNIGHT SHIFT SUPPORT
+    ================================ */
+
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (dateStr.includes('/')) {
+        const [m, d, y] = dateStr.split('/').map(Number);
+        return new Date(y, m - 1, d);
+      }
+      return new Date(dateStr);
+    };
+
+    // Get current IST time for overnight shift calculation
+    const getISTime = () => {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      return new Date(utc + 5.5 * 60 * 60000);
+    };
+
+    const getShiftDate = () => {
+      const ist = getISTime();
+      // For overnight shifts (before 10 AM), use previous day's date
+      if (ist.getHours() < 10) {
+        ist.setDate(ist.getDate() - 1);
+      }
+      ist.setHours(0, 0, 0, 0);
+      return ist;
+    };
+
+    let fromDate, toDate;
+    const shiftDate = getShiftDate();
+    shiftDate.setHours(23, 59, 59, 999);
+
+    if (startDate && endDate) {
+      fromDate = parseDate(startDate);
+      toDate = parseDate(endDate);
+    } else {
+      fromDate = new Date(shiftDate);
+      toDate = new Date(shiftDate);
+    }
+
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+
+    /* ===============================
+       TASK FETCH
+    ================================ */
+
+    const taskFilter = {};
+    if (department && department !== 'All Departments')
+      taskFilter.department = department;
+    if (shift && shift !== 'All Shifts')
+      taskFilter.shift = shift;
+
+    const tasks = await Task.find(taskFilter)
+      .populate("assignedTo", "username accountType shiftStartHour shiftEndHour")
+      .lean();
+
+    if (!tasks.length) {
+      return res.json({
+        success: true,
+        totalDefaulters: 0,
+        overallTotalDefaults: 0,
+        data: []
+      });
+    }
+
+    /* ===============================
+       FILTER VALID TASKS
+    ================================ */
+
+    const validTasks = tasks.filter(task =>
+      task.assignedTo.some(u => u.accountType !== "superAdmin")
+    );
+
+    const taskIds = validTasks.map(t => t._id);
+
+    /* ===============================
+       FETCH STATUSES
+    ================================ */
+
+    const statuses = await TaskStatus.find({
+      taskId: { $in: taskIds },
+      date: { $gte: fromDate, $lte: toDate }
+    }).lean();
+
+    const statusMap = new Map();
+
+    for (const s of statuses) {
+      const dateKey = new Date(s.date);
+      dateKey.setHours(0, 0, 0, 0);
+
+      const key = `${s.taskId}_${s.employeeId}_${dateKey.toISOString()}`;
+
+      if (
+        !statusMap.has(key) ||
+        new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)
+      ) {
+        statusMap.set(key, s);
+      }
+    }
+
+    /* ===============================
+       FETCH ROSTER
+    ================================ */
+
+    const rosters = await Roster.find({
+      'weeks.startDate': { $lte: toDate },
+      'weeks.endDate': { $gte: fromDate }
+    }).lean();
+
+    const employeeRosterMap = new Map();
+
+    for (const roster of rosters) {
+      for (const week of roster.weeks) {
+        for (const emp of week.employees) {
+          const empId = emp.userId?.toString();
+          if (!empId) continue;
+
+          for (const day of emp.dailyStatus) {
+            const d = new Date(day.date);
+            d.setHours(0, 0, 0, 0);
+
+            if (d >= fromDate && d <= toDate) {
+              employeeRosterMap.set(
+                `${empId}_${d.toISOString()}`,
+                day.status
+              );
+            }
+          }
+        }
+      }
+    }
+
+    /* ===============================
+       GENERATE DATE ARRAY
+    ================================ */
+
+    const dateArray = [];
+    for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+      const newDate = new Date(d);
+      newDate.setHours(0, 0, 0, 0);
+      dateArray.push(newDate);
+    }
+
+    /* ===============================
+       OVERNIGHT SHIFT HELPER FUNCTIONS
+    ================================ */
+
+    const getISTTime = () => {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      return new Date(utc + 5.5 * 60 * 60000);
+    };
+
+    const isShiftPassed = (shiftType, date) => {
+      const now = getISTTime();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0);
+      
+      // For dates before today, shift has definitely passed
+      if (checkDate < today) {
+        return true;
+      }
+      
+      // For future dates, shift hasn't passed
+      if (checkDate > today) {
+        return false;
+      }
+      
+      // For today's date, check based on current time and shift
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      switch(shiftType) {
+        case 'Start':
+          // Start shift: 2 hour window from shift start time
+          // For 1 AM workers, this is 1 AM - 3 AM
+          // For 11 PM workers, this is 11 PM - 1 AM (next day)
+          return currentHour >= 3; // Passed after 3 AM
+          
+        case 'Mid':
+          // Mid shift: 4 AM - 7 AM
+          return currentHour >= 7; // Passed after 7 AM
+          
+        case 'End':
+          // End shift: 9:30 AM - 11 AM
+          if (currentHour > 11) return true;
+          if (currentHour === 11 && currentMinute > 0) return true;
+          return false;
+          
+        default:
+          return false;
+      }
+    };
+
+    /* ===============================
+       CALCULATE DEFAULTS
+    ================================ */
+
+    const dailyDefaultsMap = new Map();
+    const employeeInfoMap = new Map();
+
+    for (const task of validTasks) {
+      const taskCreated = new Date(task.createdAt);
+      taskCreated.setHours(0, 0, 0, 0);
+
+      for (const emp of task.assignedTo) {
+        if (emp.accountType === "superAdmin") continue;
+
+        // STRICT EMPLOYEE FILTER
+        if (
+          employeeId &&
+          employeeId !== 'All Employees' &&
+          emp._id.toString() !== employeeId
+        ) continue;
+
+        const empId = emp._id.toString();
+
+        for (const currentDate of dateArray) {
+          if (currentDate < taskCreated) continue;
+          
+          // Use overnight-aware shift passed check
+          if (!isShiftPassed(task.shift, currentDate)) continue;
+
+          const rosterKey = `${empId}_${currentDate.toISOString()}`;
+          const rosterStatus = employeeRosterMap.get(rosterKey);
+
+          if (rosterStatus !== "P") continue;
+
+          const statusKey = `${task._id}_${empId}_${currentDate.toISOString()}`;
+          const status = statusMap.get(statusKey)?.status;
+
+          if (!status || status === "Not Done") {
+            const dailyKey = `${empId}_${currentDate.toISOString()}`;
+
+            if (!dailyDefaultsMap.has(dailyKey)) {
+              dailyDefaultsMap.set(dailyKey, {
+                date: new Date(currentDate),
+                employeeId: empId,
+                employeeName: emp.username,
+                notDoneTasksToday: 0,
+                totalDefaultsTillDate: 0
+              });
+            }
+
+            dailyDefaultsMap.get(dailyKey).notDoneTasksToday++;
+
+            if (!employeeInfoMap.has(empId)) {
+              employeeInfoMap.set(empId, {
+                employeeName: emp.username,
+                totalDefaults: 0
+              });
+            }
+
+            employeeInfoMap.get(empId).totalDefaults++;
+          }
+        }
+      }
+    }
+
+    // Update each daily record with the employee's total cumulative defaults
+    const data = Array.from(dailyDefaultsMap.values()).map(item => {
+      const empTotal = employeeInfoMap.get(item.employeeId)?.totalDefaults || 0;
+      return {
+        ...item,
+        totalDefaultsTillDate: empTotal
+      };
+    }).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const overallTotalDefaults = data.reduce(
+      (sum, item) => sum + item.notDoneTasksToday,
+      0
+    );
+
+    return res.json({
+      success: true,
+      totalDefaulters: employeeInfoMap.size,
+      overallTotalDefaults,
+      data
+    });
+
+  } catch (err) {
+    console.error('Defaulter API Error:', err);
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+
+export const getEmployeeDefaulters = async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const { startDate, endDate, page = 1, limit = 30 } = req.query;
+
+    const pageNum = Math.max(parseInt(page) || 1, 1);
+    const pageSize = Math.max(parseInt(limit) || 30, 1);
+
+    const parseDate = (dateStr) => {
+      if (!dateStr) return null;
+      if (dateStr.includes('/')) {
+        const [m, d, y] = dateStr.split('/').map(Number);
+        return new Date(y, m - 1, d);
+      }
+      return new Date(dateStr);
+    };
+
+    /* ===============================
+       IST TIME HELPERS FOR OVERNIGHT SHIFTS
+    ================================ */
+
+    const getISTime = () => {
+      const now = new Date();
+      const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+      return new Date(utc + 5.5 * 60 * 60000);
+    };
+
+    const getShiftDate = () => {
+      const ist = getISTime();
+      // For overnight shifts (before 10 AM), use previous day's date
+      if (ist.getHours() < 10) {
+        ist.setDate(ist.getDate() - 1);
+      }
+      ist.setHours(0, 0, 0, 0);
+      return ist;
+    };
+
+    const isShiftPassed = (shiftType, date) => {
+      const now = getISTime();
+      const today = new Date(now);
+      today.setHours(0, 0, 0, 0);
+      
+      const checkDate = new Date(date);
+      checkDate.setHours(0, 0, 0, 0);
+      
+      // For dates before today, shift has definitely passed
+      if (checkDate < today) {
+        return true;
+      }
+      
+      // For future dates, shift hasn't passed
+      if (checkDate > today) {
+        return false;
+      }
+      
+      // For today's date, check based on current time and shift
+      const currentHour = now.getHours();
+      const currentMinute = now.getMinutes();
+      
+      switch(shiftType) {
+        case 'Start':
+          // Start shift passed after 3 AM
+          return currentHour >= 3;
+        case 'Mid':
+          // Mid shift passed after 7 AM
+          return currentHour >= 7;
+        case 'End':
+          // End shift passed after 11 AM
+          if (currentHour > 11) return true;
+          if (currentHour === 11 && currentMinute > 0) return true;
+          return false;
+        default:
+          return false;
+      }
+    };
+
+    /* ===============================
+       VALIDATE EMPLOYEE
+    ================================ */
+
+    const employee = await User.findById(employeeId).lean();
+
+    if (!employee || employee.accountType === "superAdmin") {
+      return res.json({
+        success: true,
+        employeeName: employee?.username || "",
+        totalDefaults: 0,
+        data: [],
+        totalPages: 0,
+        currentPage: pageNum
+      });
+    }
+
+    /* ===============================
+       DATE HANDLING WITH OVERNIGHT SUPPORT
+    ================================ */
+
+    const shiftDate = getShiftDate();
+    shiftDate.setHours(23, 59, 59, 999);
+
+    let fromDate = startDate ? parseDate(startDate) : null;
+    let toDate = endDate ? parseDate(endDate) : null;
+
+    if (!fromDate || !toDate) {
+      fromDate = new Date(0);
+      toDate = shiftDate;
+    }
+
+    fromDate.setHours(0, 0, 0, 0);
+    toDate.setHours(23, 59, 59, 999);
+
+    /* ===============================
+       FETCH TASKS
+    ================================ */
+
+    const tasks = await Task.find({ assignedTo: employeeId }).lean();
+
+    if (!tasks.length) {
+      return res.json({
+        success: true,
+        employeeName: employee.username,
+        totalDefaults: 0,
+        data: [],
+        totalPages: 0,
+        currentPage: pageNum
+      });
+    }
+
+    const taskIds = tasks.map(t => t._id);
+
+    /* ===============================
+       FETCH STATUSES
+    ================================ */
+
+    const statuses = await TaskStatus.find({
+      employeeId,
+      taskId: { $in: taskIds },
+      date: { $gte: fromDate, $lte: toDate }
+    }).lean();
+
+    const statusMap = new Map();
+
+    for (const s of statuses) {
+      const dateKey = new Date(s.date);
+      dateKey.setHours(0, 0, 0, 0);
+
+      const key = `${s.taskId}_${dateKey.toISOString()}`;
+
+      if (
+        !statusMap.has(key) ||
+        new Date(s.updatedAt) > new Date(statusMap.get(key).updatedAt)
+      ) {
+        statusMap.set(key, s);
+      }
+    }
+
+    /* ===============================
+       FETCH ROSTER
+    ================================ */
+
+    const rosters = await Roster.find({
+      'weeks.startDate': { $lte: toDate },
+      'weeks.endDate': { $gte: fromDate }
+    }).lean();
+
+    const employeeRosterMap = new Map();
+
+    for (const roster of rosters) {
+      for (const week of roster.weeks) {
+        for (const emp of week.employees) {
+          if (emp.userId?.toString() !== employeeId) continue;
+
+          for (const day of emp.dailyStatus) {
+            const d = new Date(day.date);
+            d.setHours(0, 0, 0, 0);
+
+            if (d >= fromDate && d <= toDate) {
+              employeeRosterMap.set(
+                `${d.toISOString()}`,
+                day.status
+              );
+            }
+          }
+        }
+      }
+    }
+
+    /* ===============================
+       GENERATE DATE ARRAY
+    ================================ */
+
+    const dateArray = [];
+    for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+      const newDate = new Date(d);
+      newDate.setHours(0, 0, 0, 0);
+      dateArray.push(newDate);
+    }
+
+    /* ===============================
+       CALCULATE DEFAULTS WITH OVERNIGHT AWARENESS
+    ================================ */
+
+    const flatDefaults = [];
+    let totalDefaults = 0;
+
+    for (const task of tasks) {
+      const taskCreated = new Date(task.createdAt);
+      taskCreated.setHours(0, 0, 0, 0);
+
+      for (const currentDate of dateArray) {
+        if (currentDate < taskCreated) continue;
+        
+        // Use overnight-aware shift passed check
+        if (!isShiftPassed(task.shift, currentDate)) continue;
+
+        // ONLY COUNT IF PRESENT
+        const rosterStatus = employeeRosterMap.get(currentDate.toISOString());
+        if (rosterStatus !== "P") continue;
+
+        const key = `${task._id}_${currentDate.toISOString()}`;
+        const status = statusMap.get(key)?.status;
+
+        if (!status || status === "Not Done") {
+          totalDefaults++;
+
+          flatDefaults.push({
+            date: new Date(currentDate),
+            title: task.title,
+            department: task.department,
+            shift: task.shift,
+            priority: task.priority
+          });
+        }
+      }
+    }
+
+    flatDefaults.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const totalPages = Math.ceil(flatDefaults.length / pageSize);
+
+    const paginatedData = flatDefaults.slice(
+      (pageNum - 1) * pageSize,
+      pageNum * pageSize
+    );
+
+    return res.json({
+      success: true,
+      employeeName: employee.username,
+      totalDefaults,
+      data: paginatedData,
+      totalPages,
+      currentPage: pageNum
+    });
+
+  } catch (err) {
+    console.error("getEmployeeDefaulters Error:", err);
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 

@@ -170,8 +170,6 @@ import ExcelRosterUpload from "./Roster/ExcelRosterUpload.jsx";
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
-  console.log("VAPID PUBLIC KEY::::::",import.meta.env.VITE_VAPID_PUBLIC_KEY);
-
   if (!user) return <Navigate to="/login" replace />;
 
   if (adminOnly && !["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {

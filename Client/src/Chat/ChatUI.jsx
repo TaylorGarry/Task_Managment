@@ -262,9 +262,9 @@ const ChatUI = () => {
     if (!showFilePreview || selectedFiles.length === 0) return null;
 
     return (
-      <div className="mb-3 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+      <div className="mb-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
         <div className="flex justify-between items-center mb-2">
-          <h4 className="text-sm font-medium text-gray-700">
+          <h4 className="text-sm font-medium text-slate-700">
             Files to send ({selectedFiles.length})
           </h4>
           <button
@@ -272,7 +272,7 @@ const ChatUI = () => {
               setSelectedFiles([]);
               setShowFilePreview(false);
             }}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-slate-500 hover:text-slate-700"
           >
             <FiXCircle size={18} />
           </button>
@@ -280,16 +280,16 @@ const ChatUI = () => {
 
         <div className="space-y-2 max-h-40 overflow-y-auto">
           {selectedFiles.map((file, index) => (
-            <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+            <div key={index} className="flex items-center justify-between p-2 bg-white rounded-lg border border-slate-200">
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <div className="text-lg">
                   {getFileIcon(file)}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-800 truncate">
+                  <p className="text-sm font-medium text-slate-800 truncate">
                     {file.name}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-slate-500">
                     {formatFileSize(file.size)}
                   </p>
                 </div>
@@ -297,7 +297,7 @@ const ChatUI = () => {
               <div className="flex items-center gap-2 ml-2">
                 <button
                   onClick={() => removeSelectedFile(index)}
-                  className="text-red-500 hover:text-red-700 p-1"
+                  className="text-rose-500 hover:text-rose-700 p-1"
                 >
                   <FiXCircle size={16} />
                 </button>
@@ -387,7 +387,7 @@ const ChatUI = () => {
           return (
             <div key={index} className="max-w-xs">
               {isImage ? (
-                <div className="rounded-lg overflow-hidden border border-gray-200">
+                <div className="rounded-lg overflow-hidden border border-slate-200">
                   <img
                     src={item.url}
                     alt={item.filename || 'Image'}
@@ -399,13 +399,13 @@ const ChatUI = () => {
                     }}
                   />
                   {item.filename && (
-                    <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
+                    <div className="p-2 bg-slate-50 text-xs text-slate-600 truncate">
                       {item.filename}
                     </div>
                   )}
                 </div>
               ) : isVideo ? (
-                <div className="rounded-lg overflow-hidden border border-gray-200">
+                <div className="rounded-lg overflow-hidden border border-slate-200">
                   <video
                     src={item.url}
                     controls
@@ -413,12 +413,12 @@ const ChatUI = () => {
                     onError={(e) => {
                     }}
                   />
-                  <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
+                  <div className="p-2 bg-slate-50 text-xs text-slate-600 truncate">
                     {item.filename || 'Video file'}
                   </div>
                 </div>
               ) : isAudio ? (
-                <div className="rounded-lg overflow-hidden border border-gray-200">
+                <div className="rounded-lg overflow-hidden border border-slate-200">
                   <audio
                     src={item.url}
                     controls
@@ -426,14 +426,14 @@ const ChatUI = () => {
                     onError={(e) => {
                     }}
                   />
-                  <div className="p-2 bg-gray-50 text-xs text-gray-600 truncate">
+                  <div className="p-2 bg-slate-50 text-xs text-slate-600 truncate">
                     {item.filename || 'Audio file'}
                   </div>
                 </div>
               ) : isDownloadableDocument ? (
                 <button
                   onClick={() => handleFileDownload(item)}
-                  className="w-full flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors text-left"
+                  className="w-full flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors text-left"
                 >
                   {isExcel ? (
                     <div className="text-green-600">
@@ -472,14 +472,14 @@ const ChatUI = () => {
                       </svg>
                     </div>
                   ) : (
-                    <IoDocument className="text-gray-500 text-2xl" />
+                    <IoDocument className="text-slate-500 text-2xl" />
                   )}
 
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">
+                    <p className="text-sm font-medium text-slate-800 truncate">
                       {item.filename || 'Document'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500">
                       {item.size ? formatFileSize(item.size) : 'Unknown size'}
                       {isExcel && ' • Excel'}
                       {isPDF && ' • PDF'}
@@ -490,7 +490,7 @@ const ChatUI = () => {
                     </p>
                   </div>
 
-                  <div className="text-gray-400">
+                  <div className="text-slate-400">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                     </svg>
@@ -501,18 +501,18 @@ const ChatUI = () => {
                   href={item.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors"
+                  className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors"
                 >
-                  <IoDocument className="text-gray-500 text-2xl" />
+                  <IoDocument className="text-slate-500 text-2xl" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-gray-800 truncate">
+                    <p className="text-sm font-medium text-slate-800 truncate">
                       {item.filename || 'File'}
                     </p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-slate-500">
                       {item.size ? formatFileSize(item.size) : 'Click to open'}
                     </p>
                   </div>
-                  <div className="text-gray-400">
+                  <div className="text-slate-400">
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
                     </svg>
@@ -871,16 +871,16 @@ const ChatUI = () => {
   }, [showMessageMenu]);
 
   return (
-    <div className="w-full h-[calc(100vh-50px)] bg-white flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-12 md:mt-10 mb-2 overflow-hidden">
+    <div className="w-full h-[calc(100vh-50px)] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-12 md:mt-10 mb-2 overflow-hidden">
       {selectedChat && (
-        <div className="md:hidden flex items-center justify-between p-4 bg-white rounded-t-xl mb-2 shadow-sm">
+        <div className="md:hidden flex items-center justify-between p-4 bg-white/90 border border-slate-200 rounded-t-xl mb-2 shadow-sm">
           <div className="flex items-center gap-3">
             <FiArrowLeft
               size={24}
-              className="text-gray-600 cursor-pointer"
+              className="text-slate-600 cursor-pointer"
               onClick={() => setSelectedChat(null)}
             />
-            <FaUserCircle size={40} className="text-gray-500" />
+            <FaUserCircle size={40} className="text-slate-500" />
             <div>
               <p className="font-semibold text-sm">
                 {selectedChat.otherUser?.username || "Unknown"}
@@ -890,18 +890,18 @@ const ChatUI = () => {
               </span>
             </div>
           </div>
-          <FiMoreVertical size={22} className="text-gray-600" />
+            <FiMoreVertical size={22} className="text-slate-600" />
         </div>
       )}
       <div
-        className={`bg-white rounded-xl p-3 sm:p-4 flex flex-col shadow-md 
+        className={`bg-white/90 border border-slate-200 rounded-xl p-3 sm:p-4 flex flex-col shadow-sm 
           ${selectedChat ? "hidden md:flex" : "flex"}
           w-full md:w-1/4 lg:w-1/5 xl:w-1/6 overflow-hidden`}
       >
         <div className="flex items-center gap-3 mb-4 md:mb-0">
-          <FaUserCircle size={40} className="text-gray-500 hidden md:block" />
+          <FaUserCircle size={40} className="text-slate-500 hidden md:block" />
           <div className="md:hidden flex items-center gap-3">
-            <FaUserCircle size={45} className="text-gray-500" />
+            <FaUserCircle size={45} className="text-slate-500" />
             <div>
               <p className="font-semibold text-sm lg:text-base">{user?.name || user?.username}</p>
               <span className={`text-xs ${socketConnected ? "text-green-600" : "text-red-600"}`}>
@@ -918,20 +918,20 @@ const ChatUI = () => {
         </div>
 
         <div className="mt-3 md:mt-5 relative">
-          <FiSearch className="absolute top-3 left-3 text-gray-400" size={18} />
+          <FiSearch className="absolute top-3 left-3 text-slate-400" size={18} />
           <input
-            className="w-full py-2 pl-10 pr-4 rounded-full border border-[#EAEAEA] bg-gray-50 text-sm md:text-base"
+            className="w-full py-2 pl-10 pr-4 rounded-full border border-slate-200 bg-slate-50 text-sm md:text-base focus:outline-none focus:border-blue-500"
             placeholder="Search users..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
           {searchQuery && searchResults.length > 0 && (
-            <div className="absolute top-12 w-full bg-white border rounded shadow-md max-h-64 overflow-y-auto z-50">
+            <div className="absolute top-12 w-full bg-white border border-slate-200 rounded-xl shadow-md max-h-64 overflow-y-auto z-50">
               {searchResults.map((u) => (
                 <div
                   key={u._id}
                   onClick={() => handleSelectUser(u)}
-                  className="p-3 cursor-pointer hover:bg-gray-100 text-sm md:text-base"
+                  className="p-3 cursor-pointer hover:bg-slate-100 text-sm md:text-base"
                 >
                   {u.username} - {u.department}
                 </div>
@@ -940,7 +940,7 @@ const ChatUI = () => {
           )}
         </div>
 
-        <h3 className="mt-4 md:mt-6 font-semibold text-gray-700 text-sm md:text-base">Last chats</h3>
+        <h3 className="mt-4 md:mt-6 font-semibold text-slate-700 text-sm md:text-base">Last chats</h3>
         <div className="mt-2 md:mt-4 space-y-2 md:space-y-4 flex-1 overflow-y-auto min-h-0">
           {chats.map((c) => {
             const otherUser = c.otherUser;
@@ -950,19 +950,19 @@ const ChatUI = () => {
               <div
                 key={c._id}
                 onClick={() => openChat(c)}
-                className={`p-2 md:p-3 flex justify-between rounded-lg hover:bg-gray-100 cursor-pointer transition-colors ${selectedChat?._id === c._id ? "bg-blue-50" : ""
+                className={`p-2 md:p-3 flex justify-between rounded-lg hover:bg-slate-100 cursor-pointer transition-colors ${selectedChat?._id === c._id ? "bg-blue-50 border border-blue-200" : ""
                   }`}
               >
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800 text-sm md:text-base truncate">
+                  <p className="font-medium text-slate-800 text-sm md:text-base truncate">
                     {displayName}
                   </p>
-                  <p className="text-gray-500 text-xs md:text-sm truncate">
+                  <p className="text-slate-500 text-xs md:text-sm truncate">
                     {c.lastMessage?.content?.text || "Start chatting..."}
                   </p>
                 </div>
                 {c.lastMessage && (
-                  <span className="text-gray-400 text-xs ml-2 flex-shrink-0">
+                  <span className="text-slate-400 text-xs ml-2 flex-shrink-0">
                     {new Date(c.lastMessage.createdAt).toLocaleTimeString([], {
                       hour: '2-digit',
                       minute: '2-digit'
@@ -976,11 +976,11 @@ const ChatUI = () => {
       </div>
 
       {selectedChat ? (
-        <div className="bg-[#EDF0F5] rounded-xl flex flex-col shadow-md mx-0 md:mx-2 lg:mx-4 w-full md:w-3/4 lg:w-4/5 xl:w-5/6 flex-1 min-h-0 overflow-hidden">
-          <div className="hidden md:flex p-4 justify-between items-center bg-white rounded-t-xl">
+        <div className="bg-white/80 border border-slate-200 rounded-xl flex flex-col shadow-sm mx-0 md:mx-2 lg:mx-4 w-full md:w-3/4 lg:w-4/5 xl:w-5/6 flex-1 min-h-0 overflow-hidden">
+          <div className="hidden md:flex p-4 justify-between items-center bg-white border-b border-slate-200 rounded-t-xl">
             <div className="flex items-center gap-3">
               <div className="flex items-center gap-3">
-                <FaUserCircle size={40} className="text-gray-500" />
+                <FaUserCircle size={40} className="text-slate-500" />
                 <div>
                   <h2 className="font-semibold text-lg">
                     {selectedChat.otherUser?.username || "Unknown"}
@@ -991,12 +991,12 @@ const ChatUI = () => {
                 </div>
               </div>
             </div>
-            <FiMoreVertical size={22} className="text-gray-600" />
+            <FiMoreVertical size={22} className="text-slate-600" />
           </div>
 
           <div
             ref={messagesContainerRef}
-            className="flex-1 p-2 md:p-4 overflow-y-auto min-h-0"
+            className="flex-1 p-2 md:p-4 overflow-y-auto min-h-0 bg-slate-50/70"
              style={{ 
               maxHeight: 'calc(100vh - 250px)',  
               height: 'auto'
@@ -1007,8 +1007,8 @@ const ChatUI = () => {
                 <div className="animate-spin rounded-full h-6 w-6 md:h-8 md:w-8 border-b-2 border-blue-500"></div>
               </div>
             ) : filteredMessages.length === 0 ? (
-              <div className="flex flex-col justify-center items-center h-full text-gray-500 p-4 text-center">
-                <FaUserCircle size={60} className="text-gray-300 mb-4 md:h-20 md:w-20" />
+              <div className="flex flex-col justify-center items-center h-full text-slate-500 p-4 text-center">
+                <FaUserCircle size={60} className="text-slate-300 mb-4 md:h-20 md:w-20" />
                 <p className="text-base md:text-lg font-medium">No messages yet</p>
                 <p className="text-xs md:text-sm mt-2">Say hello to start the conversation!</p>
               </div>
@@ -1050,7 +1050,7 @@ const ChatUI = () => {
                     <div key={m._id}>
                       {shouldShowDate && !isTempMessage && (
                         <div className="flex justify-center my-4">
-                          <div className="bg-gray-200 text-gray-600 text-xs px-3 py-1 rounded-full">
+                          <div className="bg-slate-200 text-slate-600 text-xs px-3 py-1 rounded-full">
                             {new Date(m.createdAt).toLocaleDateString('en-US', {
                               weekday: 'long',
                               year: 'numeric',
@@ -1067,7 +1067,7 @@ const ChatUI = () => {
                       >
                         {isMyMessage && !isTempMessage && (
                           <div
-                            className={`absolute right-0 top-0 message-menu bg-white border border-gray-200 rounded-md shadow-md z-10 flex flex-col overflow-hidden transition-all duration-200 ${showMessageMenu === m._id
+                            className={`absolute right-0 top-0 message-menu bg-white border border-slate-200 rounded-md shadow-md z-10 flex flex-col overflow-hidden transition-all duration-200 ${showMessageMenu === m._id
                                 ? "opacity-100 visible scale-100"
                                 : "opacity-0 invisible scale-95"
                               }`}
@@ -1080,7 +1080,7 @@ const ChatUI = () => {
                             >
                               edit
                             </button>
-                            <div className="border-t border-gray-100"></div>
+                            <div className="border-t border-slate-100"></div>
                             <button
                               onClick={() => handleDeleteMessage(m._id)}
                               className="px-3 py-2 text-xs sm:text-sm cursor-pointer text-red-600 hover:bg-red-50 text-left hover:text-red-700 transition-colors"
@@ -1092,7 +1092,7 @@ const ChatUI = () => {
                         )}
                         <div className={`max-w-[85%] sm:max-w-[80%] md:max-w-[70%] ${isMyMessage ? "text-right" : "text-left"}`}>
                           {!isMyMessage && (
-                            <p className="text-xs font-medium text-gray-600 mb-1 ml-1">
+                            <p className="text-xs font-medium text-slate-600 mb-1 ml-1">
                               {m.sender?.username || "User"}
                             </p>
                           )}
@@ -1101,14 +1101,14 @@ const ChatUI = () => {
                               <textarea
                                 value={editingText}
                                 onChange={(e) => setEditingText(e.target.value)}
-                                className="w-full p-2 border rounded-lg bg-white text-sm md:text-base"
+                                className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm md:text-base"
                                 rows="2"
                                 autoFocus
                               />
                               <div className="flex justify-end space-x-2 mt-2">
                                 <button
                                   onClick={handleCancelEdit}
-                                  className="px-2 py-1 text-xs md:text-sm bg-gray-200 rounded hover:bg-gray-300 flex items-center"
+                                  className="px-2 py-1 text-xs md:text-sm bg-slate-200 rounded hover:bg-slate-300 flex items-center"
                                 >
                                   <FiX className="mr-1" /> Cancel
                                 </button>
@@ -1123,8 +1123,8 @@ const ChatUI = () => {
                           ) : (
                             <div
                               className={`inline-block px-3 py-2 md:px-4 md:py-2 rounded-2xl ${isMyMessage
-                                  ? "bg-blue-500 text-white rounded-br-none"
-                                  : "bg-white text-gray-800 rounded-bl-none border border-gray-200"
+                                  ? "bg-blue-600 text-white rounded-br-none"
+                                  : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
                                 } ${isTempMessage ? "opacity-80" : ""} ${isDeleting ? "opacity-50" : ""}`}
                             >
                               {isTempMessage && (
@@ -1149,9 +1149,9 @@ const ChatUI = () => {
                             </div>
                           )}
                           <div className={`mt-1 flex items-center ${isMyMessage ? "justify-end" : "justify-start"}`}>
-                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                            <span className="text-xs text-slate-500 flex items-center gap-1">
                               {!isTempMessage && (
-                                <span className="text-gray-400">
+                                <span className="text-slate-400">
                                   {new Date(m.createdAt).toLocaleDateString([], {
                                     month: 'short',
                                     day: 'numeric'
@@ -1167,7 +1167,7 @@ const ChatUI = () => {
                                   })}
                               </span>
                               {m.isEdited && !isEditing && (
-                                <span className="ml-1 text-gray-400 italic">(edited)</span>
+                                <span className="ml-1 text-slate-400 italic">(edited)</span>
                               )}
                               {isMyMessage && !isTempMessage && !isEditing && (
                                 <span className="ml-1">
@@ -1184,11 +1184,11 @@ const ChatUI = () => {
                 {Object.keys(typingUsers).length > 0 && (
                   <div className="flex items-center gap-2 px-4 py-2">
                     <div className="flex items-center gap-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse"></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse"></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-2 h-2 bg-slate-400 rounded-full animate-pulse" style={{ animationDelay: '0.4s' }}></div>
                     </div>
-                    <span className="text-xs text-gray-500">
+                    <span className="text-xs text-slate-500">
                       {Object.keys(typingUsers).length === 1
                         ? 'Typing...'
                         : `${Object.keys(typingUsers).length} people typing...`
@@ -1200,11 +1200,11 @@ const ChatUI = () => {
               </div>
             )}
           </div>
-          <div className="p-3 md:p-4 bg-white rounded-b-xl">
+          <div className="p-3 md:p-4 bg-white border-t border-slate-200 rounded-b-xl">
             {renderFilePreview()}
             <div className="flex items-center gap-2 md:gap-3">
               <label className="cursor-pointer">
-                <FiPaperclip size={20} className="text-gray-500 hover:text-blue-500 transition" />
+                <FiPaperclip size={20} className="text-slate-500 hover:text-blue-600 transition" />
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -1216,7 +1216,7 @@ const ChatUI = () => {
               <div className="flex-1 relative">
                 <textarea
                   ref={textareaRef}
-                  className="w-full md:p-3 pl-4 pr-10 md:pr-12 border border-[#EAEAEA] rounded-2xl bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 transition text-sm md:text-base resize-none overflow-y-auto"
+                  className="w-full md:p-3 pl-4 pr-10 md:pr-12 border border-slate-200 rounded-2xl bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-300 transition text-sm md:text-base resize-none overflow-y-auto"
                   placeholder="Type a message..."
                   value={text}
                   onChange={(e) => {
@@ -1238,7 +1238,7 @@ const ChatUI = () => {
                 {(text.trim() || selectedFiles.length > 0) && (
                   <button
                     onClick={handleSend}
-                    className="absolute right-1 md:right-2 top-3 md:top-1/2 transform -translate-y-1/2 bg-blue-500 text-white p-1.5 md:p-2 rounded-full hover:bg-blue-600 transition"
+                    className="absolute right-1 md:right-2 top-3 md:top-1/2 transform -translate-y-1/2 bg-blue-600 text-white p-1.5 md:p-2 rounded-full hover:bg-blue-700 transition"
                     disabled={uploading}
                   >
                     {uploading ? (
@@ -1252,7 +1252,7 @@ const ChatUI = () => {
               {!text.trim() && selectedFiles.length === 0 && (
                 <button
                   onClick={handleSend}
-                  className="bg-gray-200 text-gray-500 p-2 md:p-3 rounded-full hover:bg-gray-300 transition"
+                  className="bg-slate-200 text-slate-500 p-2 md:p-3 rounded-full hover:bg-slate-300 transition"
                   disabled={!text.trim() && selectedFiles.length === 0}
                 >
                   <FiSend size={18} className="md:h-5 md:w-5" />
@@ -1267,9 +1267,9 @@ const ChatUI = () => {
           </div>
         </div>
       ) : (
-        <div className="hidden md:flex bg-[#EDF0F5] rounded-xl flex-col shadow-md mx-0 md:mx-2 lg:mx-4 w-full md:w-3/4 lg:w-4/5 xl:w-5/6 justify-center items-center p-4">
-          <div className="text-center text-gray-500">
-            <FaUserCircle size={80} className="mx-auto text-gray-400" />
+        <div className="hidden md:flex bg-white/80 border border-slate-200 rounded-xl flex-col shadow-sm mx-0 md:mx-2 lg:mx-4 w-full md:w-3/4 lg:w-4/5 xl:w-5/6 justify-center items-center p-4">
+          <div className="text-center text-slate-500">
+            <FaUserCircle size={80} className="mx-auto text-slate-400" />
             <h3 className="mt-4 text-xl font-semibold">Welcome to Chat</h3>
             <p className="mt-2">Select a conversation to start messaging</p>
           </div>

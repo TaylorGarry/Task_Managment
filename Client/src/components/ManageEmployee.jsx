@@ -179,23 +179,50 @@ const ManageEmployee = () => {
 
   if (loading && localEmployees.length === 0)
     return (
-      <div className="flex justify-center items-center h-screen">
-        <CircularProgress />
+      <div className="flex min-h-[60vh] items-center justify-center bg-slate-50 rounded-2xl border border-slate-200">
+        <div className="flex items-center gap-3 text-slate-600">
+          <CircularProgress size={24} />
+          <span className="text-sm font-medium">Loading employees...</span>
+        </div>
       </div>
     );
 
   return (
-    <div className="p-6 mt-10 ">
-      <Paper elevation={3}>
+    <div className="min-h-screen bg-slate-50 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-5 mt-10 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Employee Workspace</p>
+        <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Manage Employees</h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Update department, shift, core team status, and password in one place.
+            </p>
+          </div>
+          <div className="inline-flex items-center rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-800">
+            Total Employees: {localEmployees.length}
+          </div>
+        </div>
+      </div>
+
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: "16px",
+          border: "1px solid #e2e8f0",
+          overflow: "hidden",
+          boxShadow: "0 10px 30px rgba(15,23,42,0.06)",
+          backgroundColor: "#ffffff",
+        }}
+      >
         <TableContainer>
           <Table>
-            <TableHead sx={{ backgroundColor: "oklch(70.4% 0.04 256.788)" }}>
+            <TableHead sx={{ backgroundColor: "#f1f5f9" }}>
               <TableRow>
-                <TableCell sx={{ color: "white", fontWeight: "bold" }}>Username</TableCell>
-                <TableCell sx={{ color: "white", fontWeight: "bold" }}>Department</TableCell>
-                <TableCell sx={{ color: "white", fontWeight: "bold" }}>Shift</TableCell>
-                <TableCell sx={{ color: "white", fontWeight: "bold" }}>Core Team</TableCell>
-                <TableCell sx={{ color: "white", fontWeight: "bold" }}>Action</TableCell>
+                <TableCell sx={{ color: "#0f172a", fontWeight: 700, borderBottom: "1px solid #e2e8f0" }}>Username</TableCell>
+                <TableCell sx={{ color: "#0f172a", fontWeight: 700, borderBottom: "1px solid #e2e8f0" }}>Department</TableCell>
+                <TableCell sx={{ color: "#0f172a", fontWeight: 700, borderBottom: "1px solid #e2e8f0" }}>Shift</TableCell>
+                <TableCell sx={{ color: "#0f172a", fontWeight: 700, borderBottom: "1px solid #e2e8f0" }}>Core Team</TableCell>
+                <TableCell sx={{ color: "#0f172a", fontWeight: 700, borderBottom: "1px solid #e2e8f0" }}>Action</TableCell>
               </TableRow>
             </TableHead>
 
@@ -203,21 +230,52 @@ const ManageEmployee = () => {
               {localEmployees
                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                 .map((user) => (
-                  <TableRow key={user._id}>
-                    <TableCell>{user.username}</TableCell>
-                    <TableCell>{user.department || "N/A"}</TableCell>
+                  <TableRow
+                    key={user._id}
+                    hover
+                    sx={{
+                      "& td": { borderBottom: "1px solid #f1f5f9" },
+                      "&:last-child td": { borderBottom: "none" },
+                    }}
+                  >
+                    <TableCell sx={{ color: "#0f172a", fontWeight: 600 }}>{user.username}</TableCell>
+                    <TableCell sx={{ color: "#334155" }}>{user.department || "N/A"}</TableCell>
                     <TableCell>
                       {user.shiftLabel
                         ? user.shiftLabel
                         : getShiftLabel(user.shiftStartHour, user.shiftEndHour)}
                     </TableCell>
-                    <TableCell>{user.isCoreTeam ? "Yes" : "No"}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          user.isCoreTeam
+                            ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                            : "bg-slate-100 text-slate-600 border border-slate-200"
+                        }`}
+                      >
+                        {user.isCoreTeam ? "Yes" : "No"}
+                      </span>
+                    </TableCell>
                     <TableCell>
                       <Button
-                        variant="contained"
-                        color="primary"
+                        variant="outlined"
                         size="small"
                         onClick={() => handleOpenDialog(user)}
+                        sx={{
+                          textTransform: "none",
+                          fontWeight: 600,
+                          borderRadius: "9999px",
+                          px: 1.8,
+                          py: 0.35,
+                          minWidth: 0,
+                          borderColor: "#93c5fd",
+                          color: "#1d4ed8",
+                          "&:hover": {
+                            borderColor: "#60a5fa",
+                            backgroundColor: "#eff6ff",
+                          },
+                          cursor: "pointer",
+                        }}
                       >
                         Manage
                       </Button>
@@ -238,12 +296,30 @@ const ManageEmployee = () => {
             setRowsPerPage(parseInt(e.target.value, 10));
             setPage(0);
           }}
+          sx={{
+            borderTop: "1px solid #e2e8f0",
+            backgroundColor: "#f8fafc",
+          }}
         />
       </Paper>
 
-      <Dialog open={!!selectedUser} onClose={handleCloseDialog} fullWidth maxWidth="sm">
-        <DialogTitle>Edit Employee</DialogTitle>
-        <DialogContent>
+      <Dialog
+        open={!!selectedUser}
+        onClose={handleCloseDialog}
+        fullWidth
+        maxWidth="sm"
+        PaperProps={{
+          sx: {
+            borderRadius: "16px",
+            border: "1px solid #e2e8f0",
+            boxShadow: "0 20px 40px rgba(15,23,42,0.18)",
+          },
+        }}
+      >
+        <DialogTitle sx={{ borderBottom: "1px solid #e2e8f0", fontWeight: 700, color: "#0f172a" }}>
+          Edit Employee
+        </DialogTitle>
+        <DialogContent sx={{ backgroundColor: "#f8fafc" }}>
           <div className="flex flex-col gap-4 mt-2">
             <TextField
               label="Username"
@@ -252,6 +328,7 @@ const ManageEmployee = () => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "#fff" } }}
             />
             <TextField
               label="Department"
@@ -260,6 +337,7 @@ const ManageEmployee = () => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "#fff" } }}
             />
             <TextField
               select
@@ -269,6 +347,7 @@ const ManageEmployee = () => {
               onChange={handleChange}
               fullWidth
               margin="normal"
+              sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "#fff" } }}
             >
               {shiftOptions.map((shift) => (
                 <MenuItem key={shift.value} value={shift.value}>
@@ -301,10 +380,11 @@ const ManageEmployee = () => {
                 onChange={handleChange}
                 fullWidth
                 margin="normal"
+                sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "#fff" } }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton onClick={togglePasswordVisibility} edge="end">
+                      <IconButton onClick={togglePasswordVisibility} edge="end" sx={{ cursor: "pointer" }}>
                         {showPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
                     </InputAdornment>
@@ -320,10 +400,11 @@ const ManageEmployee = () => {
                 onChange={handleChange}
                 fullWidth
                 margin="normal"
+                sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "#fff" } }}
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton onClick={toggleConfirmPasswordVisibility} edge="end">
+                      <IconButton onClick={toggleConfirmPasswordVisibility} edge="end" sx={{ cursor: "pointer" }}>
                         {showConfirmPassword ? <VisibilityOff /> : <Visibility />}
                       </IconButton>
                     </InputAdornment>
@@ -342,16 +423,24 @@ const ManageEmployee = () => {
           </div>
         </DialogContent>
 
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
+        <DialogActions sx={{ borderTop: "1px solid #e2e8f0", px: 3, py: 2, backgroundColor: "#fff" }}>
+          <Button onClick={handleCloseDialog} sx={{ textTransform: "none", color: "#475569", cursor: "pointer" }}>
+            Cancel
+          </Button>
           <Button 
-            variant="contained" 
-            color="primary" 
+            variant="contained"
             onClick={handleSave}
             disabled={
               (formData.password || formData.confirmPassword) && 
               (formData.password !== formData.confirmPassword || formData.password.length < 6)
             }
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              backgroundColor: "#2563eb",
+              "&:hover": { backgroundColor: "#1d4ed8" },
+              cursor: "pointer",
+            }}
           >
             Save Changes
           </Button>
