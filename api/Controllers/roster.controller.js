@@ -3002,7 +3002,6 @@ export const rosterUploadFromExcel = async (req, res) => {
     
     // DATE VALIDATION BASED ON USER ROLE
     if (isAllowedDepartmentEmployee) {
-      // OPS-META: Can only upload for tomorrow onwards (no past dates)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
@@ -3014,7 +3013,6 @@ export const rosterUploadFromExcel = async (req, res) => {
       }
     } 
     else if (isAdmin) {
-      // ADMIN/HR: Can upload for today and future dates (not past)
       if (selectedStartDate < today) {
         return res.status(400).json({
           success: false,
@@ -3023,8 +3021,6 @@ export const rosterUploadFromExcel = async (req, res) => {
       }
     }
     else if (isSuperAdmin) {
-      // SUPERADMIN: No date restrictions - can upload for any date (past, present, future)
-      // No validation needed - superAdmin can upload for any date
       console.log(`SuperAdmin ${user.username} uploading roster for date range: ${startDate} to ${endDate}`);
     }
     
@@ -3038,16 +3034,55 @@ export const rosterUploadFromExcel = async (req, res) => {
     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
     const worksheet = workbook.Sheets[sheetName];
-    const excelData = XLSX.utils.sheet_to_json(worksheet);
+    const excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
     
-    if (!excelData || excelData.length === 0) {
+    // DEBUGGING: Log raw headers
+    console.log("Raw Excel Headers (first row):", excelData[0]);
+    
+    // Check if first row is info text, then use second row as headers
+    let headerRowIndex = 0;
+    let dataStartRowIndex = 1;
+    
+    // If first row contains instruction text, headers are in second row
+    if (excelData[0] && excelData[0][0] && excelData[0][0].toString().includes('IMPORTANT')) {
+      headerRowIndex = 1;
+      dataStartRowIndex = 2;
+    }
+    
+    const headers = excelData[headerRowIndex];
+    const dataRows = excelData.slice(dataStartRowIndex);
+    
+    // Clean headers - remove BOM, trim spaces, normalize
+    const cleanHeaders = headers.map(header => {
+      if (!header) return '';
+      // Remove BOM character if present, trim spaces
+      return header.toString().replace(/^\uFEFF/, '').trim();
+    });
+    
+    console.log("Cleaned Headers:", cleanHeaders);
+    
+    // Convert to array of objects with cleaned headers
+    const formattedData = dataRows.map(row => {
+      const obj = {};
+      cleanHeaders.forEach((header, index) => {
+        if (header) {
+          obj[header] = row[index] || '';
+        }
+      });
+      return obj;
+    }).filter(row => row.Name && row.Name.toString().trim() !== ''); // Filter out empty rows
+    
+    console.log("First formatted row:", formattedData[0]);
+    
+    if (!formattedData || formattedData.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Excel file is empty or has no data"
       });
     }
     
-    const requiredExcelColumns = [
+    // Define required columns (including date columns which will be validated separately)
+    const baseRequiredColumns = [
       'Name',
       'Transport',
       'Team Leader',
@@ -3055,40 +3090,90 @@ export const rosterUploadFromExcel = async (req, res) => {
       'Shift End Hour'
     ];
 
-    const firstRow = excelData[0];
-    const availableColumns = Object.keys(firstRow);
-    console.log("Available columns:", availableColumns);
+    // Optional columns that we don't want to block upload if missing
+    const optionalColumns = [
+      'CAB Route',
+      'Total Present',
+      'Total Week Off',
+      'Total Leave',
+      'Total No Call No Show',
+      'Total Unpaid Leave',
+      'Total Leave Without Pay',
+      'Total Bereavement Leave',
+      'Total Holiday',
+      'Total Last Working Day'
+    ];
 
-    const missingColumns = requiredExcelColumns.filter(col => !availableColumns.includes(col));
+    const firstRow = formattedData[0];
+    const availableColumns = Object.keys(firstRow);
+    console.log("Available columns after formatting:", availableColumns);
+
+    // Case-insensitive column matching for required columns
+    const columnMap = {};
+    const requiredColumnMap = {};
     
-    if (missingColumns.length > 0) {
+    availableColumns.forEach(col => {
+      const colLower = col.toLowerCase().trim();
+      
+      // Map base required columns
+      if (colLower === 'name') {
+        columnMap['Name'] = col;
+        requiredColumnMap['Name'] = col;
+      }
+      else if (colLower === 'transport') {
+        columnMap['Transport'] = col;
+        requiredColumnMap['Transport'] = col;
+      }
+      else if (colLower === 'team leader') {
+        columnMap['Team Leader'] = col;
+        requiredColumnMap['Team Leader'] = col;
+      }
+      else if (colLower === 'shift start hour') {
+        columnMap['Shift Start Hour'] = col;
+        requiredColumnMap['Shift Start Hour'] = col;
+      }
+      else if (colLower === 'shift end hour') {
+        columnMap['Shift End Hour'] = col;
+        requiredColumnMap['Shift End Hour'] = col;
+      }
+      // Map optional columns (but don't add to requiredColumnMap)
+      else if (colLower === 'cab route') {
+        columnMap['CAB Route'] = col;
+      }
+    });
+
+    // Check for base required columns
+    const missingBaseColumns = baseRequiredColumns.filter(col => !requiredColumnMap[col]);
+    
+    if (missingBaseColumns.length > 0) {
       return res.status(400).json({
         success: false,
-        message: `Missing required columns in Excel: ${missingColumns.join(', ')}. Your Excel should have: Name, Transport, Team Leader, Shift Start Hour, Shift End Hour, and date columns (DD/MM)`
+        message: `Missing required columns in Excel: ${missingBaseColumns.join(', ')}. Found columns: ${availableColumns.join(', ')}. Your Excel should have at least: Name, Transport, Team Leader, Shift Start Hour, Shift End Hour, and 7 date columns (DD/MM)`
       });
     }
     
+    // Now identify and validate date columns (these are also required)
     let excelDateColumns = [];
-    const pattern1 = /^\d{1,2}\/\d{1,2}(\s+\w+)?$/;
-    const pattern2 = /^\d{1,2}\/\d{1,2}$/;
+    const datePattern = /^\d{1,2}\/\d{1,2}/; // Pattern for DD/MM format
     
     for (const col of availableColumns) {
-      if (pattern1.test(col) || pattern2.test(col)) {
+      if (datePattern.test(col)) {
         excelDateColumns.push(col);
       }
     }
     
+    // Date columns are required - must have exactly 7
     if (excelDateColumns.length === 0) {
       return res.status(400).json({
         success: false,
-        message: "No date columns found in Excel. Looking for columns like: 26/01, 26/01 Mon, etc."
+        message: `No date columns found in Excel. Date columns are required. Looking for columns like: 02/03, 02/03 Mon, etc. Found columns: ${availableColumns.join(', ')}`
       });
     }
     
     if (excelDateColumns.length !== 7) {
       return res.status(400).json({
         success: false,
-        message: `Excel should have exactly 7 date columns (one for each day of the week). Found: ${excelDateColumns.length} columns: ${excelDateColumns.join(', ')}`
+        message: `Excel must have exactly 7 date columns (one for each day of the week). Found: ${excelDateColumns.length} columns: ${excelDateColumns.join(', ')}`
       });
     }
     
@@ -3105,13 +3190,13 @@ export const rosterUploadFromExcel = async (req, res) => {
     const employeesData = [];
     const processedEmployees = new Set();
     
-    for (const [index, row] of excelData.entries()) {
+    for (const [index, row] of formattedData.entries()) {
       try {
-        if (!row.Name || row.Name.trim() === '') {
+        const name = (row[columnMap['Name']] || "").toString().trim();
+        if (!name) {
           continue;
         }
         
-        const name = (row.Name || "").toString().trim();
         const username = name.toLowerCase().replace(/\s+/g, '.');
         const employeeKey = `${username}-${startDate}-${endDate}`;
         
@@ -3121,7 +3206,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         }
         processedEmployees.add(employeeKey);
         
-        const rowTeamLeader = (row['Team Leader'] || "").toString().trim();
+        const rowTeamLeader = (row[columnMap['Team Leader']] || "").toString().trim();
         
         if (isAllowedDepartmentEmployee && rowTeamLeader && rowTeamLeader.toLowerCase() !== user.username.toLowerCase()) {
           console.log(`Department employee ${user.username} uploading for team leader: ${rowTeamLeader}`);
@@ -3136,7 +3221,8 @@ export const rosterUploadFromExcel = async (req, res) => {
             ]
           });
         }
-        const transportValue = (row.Transport || "").toString().trim();
+        
+        const transportValue = (row[columnMap['Transport']] || "").toString().trim();
         const validTransport = ["Yes", "No", ""];
         if (!validTransport.includes(transportValue)) {
           return res.status(400).json({
@@ -3148,15 +3234,16 @@ export const rosterUploadFromExcel = async (req, res) => {
         const dailyStatus = [];
         const statusDate = new Date(selectedStartDate);
         
+        // Validate that all date columns have status values
         for (let i = 0; i < excelDateColumns.length; i++) {
           const excelDateColumn = excelDateColumns[i];
           const statusValue = (row[excelDateColumn] || "P").toString().trim().toUpperCase();
-          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD","HD", ""];
+          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""];
           
           if (!validStatus.includes(statusValue)) {
             return res.status(400).json({
               success: false,
-              message: `Invalid status "${row[excelDateColumn]}" for ${name} on column ${excelDateColumn}. Valid values: P, WO, L, NCNS, UL, LWP, BL, H, LWD`
+              message: `Invalid status "${row[excelDateColumn]}" for ${name} on column ${excelDateColumn}. Valid values: P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD`
             });
           }
           
@@ -3180,8 +3267,8 @@ export const rosterUploadFromExcel = async (req, res) => {
           });
         }
         
-        const shiftStartHour = parseInt(row['Shift Start Hour']);
-        const shiftEndHour = parseInt(row['Shift End Hour']);
+        const shiftStartHour = parseInt(row[columnMap['Shift Start Hour']]);
+        const shiftEndHour = parseInt(row[columnMap['Shift End Hour']]);
         
         if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
           return res.status(400).json({
@@ -3202,7 +3289,7 @@ export const rosterUploadFromExcel = async (req, res) => {
           name: name,
           username: username,
           transport: transportValue,
-          cabRoute: (row['CAB Route'] || "").toString().trim(),
+          cabRoute: (columnMap['CAB Route'] ? row[columnMap['CAB Route']] || "" : "").toString().trim(),
           shiftStartHour: shiftStartHour,
           shiftEndHour: shiftEndHour,
           dailyStatus: dailyStatus,
@@ -3210,10 +3297,10 @@ export const rosterUploadFromExcel = async (req, res) => {
           excelDateMapping: excelDateColumns
         });
       } catch (rowError) {
-        console.error(`Error processing row ${index + 2}:`, rowError);
+        console.error(`Error processing row ${index + dataStartRowIndex + 1}:`, rowError);
         return res.status(400).json({
           success: false,
-          message: `Error in row ${index + 2}: ${rowError.message}`
+          message: `Error in row ${index + dataStartRowIndex + 1}: ${rowError.message}`
         });
       }
     }
@@ -3272,7 +3359,6 @@ export const rosterUploadFromExcel = async (req, res) => {
     
     await roster.save();
     
-    // Determine permission message based on user role
     let permissionsNote = "";
     if (isAllowedDepartmentEmployee) {
       permissionsNote = "Ops-Meta, Marketing, and CS employees: Can upload for any team (future dates from tomorrow only)";
@@ -3312,20 +3398,12 @@ export const rosterUploadFromExcel = async (req, res) => {
           }
         },
         excelFormat: {
-          acceptedColumns: [...requiredExcelColumns, ...excelDateColumns],
-          note: `Username is auto-generated from Name. Excel date columns (${excelDateColumns.length} found) will be mapped to selected date range.`,
+          requiredColumns: [...baseRequiredColumns, ...excelDateColumns],
+          optionalColumns: optionalColumns,
+          note: "Username is auto-generated from Name. Date columns (7 days) are required. Total count columns are optional.",
           transportValues: ['Yes', 'No', ''],
-          statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD',"HD", ''],
-          permissionsNote: permissionsNote,
-          sampleRow: {
-            Name: 'John Doe',
-            Transport: 'Yes',
-            'CAB Route': 'Route A',
-            'Team Leader': 'AnyTeamLeaderName',  
-            'Shift Start Hour': 9,
-            'Shift End Hour': 17,
-            ...Object.fromEntries(excelDateColumns.map(col => [col, 'P']))
-          }
+          statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD', "HD", ''],
+          permissionsNote: permissionsNote
         }
       }
     });
@@ -3354,8 +3432,6 @@ export const exportRosterTemplate = async (req, res) => {
     const toDate = new Date(endDate);
     toDate.setHours(23, 59, 59, 999);
 
-  
-    
     const dateHeaders = [];
     const currentDate = new Date(fromDate);
     
@@ -3367,16 +3443,21 @@ export const exportRosterTemplate = async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-   
-    
-    const headers = [
+    // Base required columns (always included)
+    const baseRequiredColumns = [
       'Name',
       'Transport',
       'CAB Route',
       'Team Leader',
       'Shift Start Hour',
-      'Shift End Hour',
-      ...dateHeaders,
+      'Shift End Hour'
+    ];
+
+    // Date columns (required - 7 days)
+    const dateColumns = [...dateHeaders];
+
+    // Optional summary columns (can be empty or missing during upload)
+    const optionalSummaryColumns = [
       'Total Present',
       'Total Week Off',
       'Total Leave',
@@ -3388,8 +3469,13 @@ export const exportRosterTemplate = async (req, res) => {
       'Total Last Working Day'
     ];
 
- 
-    
+    // Combine all headers
+    const headers = [
+      ...baseRequiredColumns,
+      ...dateColumns,
+      ...optionalSummaryColumns
+    ];
+
     const workbook = XLSX.utils.book_new();
     workbook.Props = {
       Title: `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1)}-${fromDate.getDate()}`,
@@ -3399,9 +3485,8 @@ export const exportRosterTemplate = async (req, res) => {
 
     const data = [];
 
-  
-    
-    const infoText = 'IMPORTANT: All status code must be in capital letters only (P, WO, L, NCNS, UL, LWP, BL, H,LWD,HD)';
+    // Instruction row with column requirements
+    const infoText = 'IMPORTANT: All status codes must be in capital letters only (P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD). Name, Transport, Team Leader, Shift Start/End Hours, and Date columns are REQUIRED. Total columns are OPTIONAL.';
     const infoRow = [infoText];
     
     while (infoRow.length < headers.length) {
@@ -3410,28 +3495,33 @@ export const exportRosterTemplate = async (req, res) => {
     
     data.push(infoRow); 
 
+    // Add headers row
     data.push(headers);
+
+    // Add a sample data row to demonstrate format
+    const sampleRow = [];
+    
+    // Base required columns sample values
+    sampleRow.push('John Doe'); // Name
+    sampleRow.push('Yes'); // Transport
+    sampleRow.push('Route A'); // CAB Route
+    sampleRow.push('Jane Smith'); // Team Leader
+    sampleRow.push('9'); // Shift Start Hour
+    sampleRow.push('18'); // Shift End Hour
+    
+    // Date columns - all set to 'P' as sample
+    dateColumns.forEach(() => sampleRow.push('P'));
+    
+    // Optional summary columns - left empty in sample
+    optionalSummaryColumns.forEach(() => sampleRow.push(''));
+    
+    data.push(sampleRow);
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     
     const range = XLSX.utils.decode_range(worksheet['!ref']);
 
-   
-    
-    const statusColors = {
-      'P': 'C6EFCE',     
-      'WO': 'FFC7CE',    
-      'L': 'FFEB9C',     
-      'NCNS': 'E7E6E6',  
-      'UL': 'B4C6E7',    
-      'LWP': 'F8CBAD',  
-      'BL': 'D9D9D9',   
-      'H': 'FFF2CC',     
-      
-    };
-
-
-
+    // Style for instruction row (row 0) - Yellow background
     for (let C = range.s.c; C <= range.e.c; C++) {
       const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
       
@@ -3452,7 +3542,7 @@ export const exportRosterTemplate = async (req, res) => {
         alignment: { 
           horizontal: "left", 
           vertical: "center",
-          wrapText: false  
+          wrapText: true  
         },
         border: {
           top: { style: "thin", color: { rgb: "000000" } },
@@ -3463,19 +3553,25 @@ export const exportRosterTemplate = async (req, res) => {
       };
     }
 
+    // Merge instruction row cells for better visibility
     if (!worksheet['!merges']) worksheet['!merges'] = [];
     worksheet['!merges'].push(
-      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.min(10, range.e.c) } } 
+      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.min(15, range.e.c) } } 
     );
 
-    
-
+    // Style for header row (row 1) - Blue background
     for (let C = range.s.c; C <= range.e.c; C++) {
       const cellAddress = XLSX.utils.encode_cell({ r: 1, c: C });
+      const columnName = headers[C] || "";
       
       if (!worksheet[cellAddress]) {
-        worksheet[cellAddress] = { v: headers[C] || "" };
+        worksheet[cellAddress] = { v: columnName };
       }
+      
+      // Different styling for required vs optional columns
+      const isRequiredColumn = 
+        C < baseRequiredColumns.length || // Base required columns
+        (C >= baseRequiredColumns.length && C < baseRequiredColumns.length + dateColumns.length); // Date columns
       
       worksheet[cellAddress].s = {
         font: { 
@@ -3485,7 +3581,7 @@ export const exportRosterTemplate = async (req, res) => {
           sz: 11 
         },
         fill: { 
-          fgColor: { rgb: "4472C4" } 
+          fgColor: { rgb: isRequiredColumn ? "4472C4" : "70AD47" } // Blue for required, Green for optional
         },
         alignment: { 
           horizontal: "center", 
@@ -3501,16 +3597,58 @@ export const exportRosterTemplate = async (req, res) => {
       };
     }
 
-    
-    
+    // Style for sample data row (row 2) - Light gray background
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 2, c: C });
+      
+      if (!worksheet[cellAddress]) {
+        worksheet[cellAddress] = { v: '' };
+      }
+      
+      worksheet[cellAddress].s = {
+        font: { 
+          color: { rgb: "000000" },
+          name: "Arial",
+          sz: 10 
+        },
+        fill: { 
+          fgColor: { rgb: "F2F2F2" } 
+        },
+        alignment: { 
+          horizontal: "center", 
+          vertical: "center"
+        },
+        border: {
+          top: { style: "thin", color: { rgb: "CCCCCC" } },
+          bottom: { style: "thin", color: { rgb: "CCCCCC" } },
+          left: { style: "thin", color: { rgb: "CCCCCC" } },
+          right: { style: "thin", color: { rgb: "CCCCCC" } }
+        }
+      };
+    }
+
+    // Add data validation for status columns (date columns)
+    for (let C = baseRequiredColumns.length; C < baseRequiredColumns.length + dateColumns.length; C++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 2, c: C });
+      if (worksheet[cellAddress]) {
+        // Add comment with valid status values
+        worksheet[cellAddress].c = [{
+          t: 'Valid statuses: P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD',
+          a: 'System',
+          ix: 0
+        }];
+      }
+    }
+
+    // Set column widths
     const colWidths = [
-      { wch: 25 },  // Name (slightly wider for info text)
+      { wch: 25 },  // Name
       { wch: 15 },  // Transport
       { wch: 15 },  // CAB Route
       { wch: 15 },  // Team Leader
       { wch: 15 },  // Shift Start Hour
       { wch: 15 },  // Shift End Hour
-      ...Array(dateHeaders.length).fill({ wch: 12 }), // Date columns
+      ...Array(dateColumns.length).fill({ wch: 12 }), // Date columns
       { wch: 12 },  // Total Present
       { wch: 12 },  // Total Week Off
       { wch: 12 },  // Total Leave
@@ -3524,17 +3662,66 @@ export const exportRosterTemplate = async (req, res) => {
     
     worksheet['!cols'] = colWidths;
 
-   
-    
+    // Set row heights
     worksheet['!rows'] = [
-      { hpt: 25 }, 
-      { hpt: 25 }  
+      { hpt: 40 },  // Instruction row - taller for wrapped text
+      { hpt: 25 },  // Header row
+      { hpt: 20 }   // Sample data row
     ];
 
-     XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
+    // Add a second sheet with instructions
+    const instructionsSheet = XLSX.utils.aoa_to_sheet([
+      ['ROSTER UPLOAD INSTRUCTIONS'],
+      [''],
+      ['REQUIRED COLUMNS (Must be filled):'],
+      ['1. Name - Employee full name'],
+      ['2. Transport - "Yes", "No", or empty'],
+      ['3. CAB Route - Route information'],
+      ['4. Team Leader - Team leader name'],
+      ['5. Shift Start Hour - Hour number (0-23)'],
+      ['6. Shift End Hour - Hour number (0-23)'],
+      ['7. Date Columns (7 days) - Status codes for each day'],
+      [''],
+      ['OPTIONAL COLUMNS (Can be left empty):'],
+      ['- Total Present'],
+      ['- Total Week Off'],
+      ['- Total Leave'],
+      ['- Total No Call No Show'],
+      ['- Total Unpaid Leave'],
+      ['- Total Leave Without Pay'],
+      ['- Total Bereavement Leave'],
+      ['- Total Holiday'],
+      ['- Total Last Working Day'],
+      [''],
+      ['VALID STATUS CODES:'],
+      ['P   - Present'],
+      ['WO  - Week Off'],
+      ['L   - Leave'],
+      ['NCNS- No Call No Show'],
+      ['UL  - Unpaid Leave'],
+      ['LWP - Leave Without Pay'],
+      ['BL  - Bereavement Leave'],
+      ['H   - Holiday'],
+      ['LWD - Last Working Day'],
+      ['HD  - Half Day'],
+      [''],
+      ['NOTES:'],
+      ['- All status codes must be in CAPITAL LETTERS'],
+      ['- Maximum 2 Week Offs (WO) per week per employee'],
+      ['- Username is auto-generated from Name'],
+      ['- Blue headers = REQUIRED columns'],
+      ['- Green headers = OPTIONAL columns']
+    ]);
 
- 
+    // Style the instructions sheet
+    if (!instructionsSheet['!cols']) instructionsSheet['!cols'] = [];
+    instructionsSheet['!cols'] = [{ wch: 40 }];
     
+    XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instructions');
+
+    // Append the main roster sheet
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
+
     const fileName = `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1).toString().padStart(2,'0')}-${fromDate.getDate().toString().padStart(2,'0')}_to_${toDate.getFullYear()}-${(toDate.getMonth()+1).toString().padStart(2,'0')}-${toDate.getDate().toString().padStart(2,'0')}.xlsx`;
     
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
