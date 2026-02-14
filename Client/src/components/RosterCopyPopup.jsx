@@ -401,6 +401,7 @@ const RosterCopyPopup = ({ isOpen, onClose, currentRosterData }) => {
                                   <option value="LWP">LWP</option>
                                   <option value="BL">BL</option>
                                   <option value="H">H</option>
+                                  <option value="HD">HD</option>
                                 </select>
                               </div>
                             ))}

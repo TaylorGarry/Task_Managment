@@ -18,6 +18,7 @@ import {
   getOpsMetaCurrentWeekRoster,
   updateOpsMetaRoster,
   rosterUploadFromExcel,
+  exportRosterTemplate,
 } from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
@@ -102,5 +103,5 @@ router.post("/upload-excel",
   rosterUploadFromExcel
 );
 
-
+router.get('/export-template',authMiddleware, exportRosterTemplate);
 export default router;

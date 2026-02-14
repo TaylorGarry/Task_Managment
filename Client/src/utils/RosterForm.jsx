@@ -475,6 +475,10 @@ const proceedWithBulkEditAfterFetch = () => {
       return "⚫";
     case "H":
       return "🎉";
+    case "HD":
+      return "🌓";
+    case "LWD":
+      return "📅";
     default:
       return "📝";
   }
@@ -482,7 +486,7 @@ const proceedWithBulkEditAfterFetch = () => {
 
   const calculateEmployeeSummary = (dailyStatus) => {
     if (!dailyStatus || !Array.isArray(dailyStatus)) {
-      return { presents: 0, weekOffs: 0, leaves: 0, holidays: 0 };
+      return { presents: 0, weekOffs: 0, leaves: 0, holidays: 0, halfDays: 0 };
     }
 
     const presents = dailyStatus.filter((ds) => {
@@ -505,7 +509,12 @@ const proceedWithBulkEditAfterFetch = () => {
       return status === "H";
     }).length;
 
-    return { presents, weekOffs, leaves, holidays };
+    const halfDays = dailyStatus.filter((ds) => {
+      const status = typeof ds === "object" ? ds.status : ds;
+      return status === "HD";
+    }).length;
+
+    return { presents, weekOffs, leaves, holidays, halfDays };
   };
 
   const formatShiftHours = (startHour, endHour) => {
@@ -903,6 +912,7 @@ const proceedWithBulkEditAfterFetch = () => {
                             <span className="text-xs text-blue-600">🗓️ {empSummary.weekOffs}WO</span>
                             <span className="text-xs text-red-600">❌ {empSummary.leaves}L</span>
                             {empSummary.holidays > 0 && <span className="text-xs text-purple-600">🎉 {empSummary.holidays}H</span>}
+                            {empSummary.halfDays > 0 && <span className="text-xs text-amber-600">🌓 {empSummary.halfDays}HD</span>}
                           </div>
                           <div className="flex space-x-1">
                             {emp.dailyStatus && emp.dailyStatus.map((ds, dayIndex) => {
@@ -913,10 +923,11 @@ const proceedWithBulkEditAfterFetch = () => {
                                   className={`w-8 h-8 flex items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" :
                                     status === "WO" ? "bg-blue-100 border-blue-300" :
                                       status === "L" ? "bg-red-100 border-red-300" :
+                                        status === "HD" ? "bg-amber-100 border-amber-300" :
                                         status === "H" ? "bg-purple-100 border-purple-300" :
                                           "bg-gray-100 border-gray-300"
                                     }`}
-                                  title={`${daysOfWeek[dayIndex % 7]}: ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : "Holiday"}`}
+                                  title={`${daysOfWeek[dayIndex % 7]}: ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : status === "HD" ? "Half Day" : status === "H" ? "Holiday" : status}`}
                                 >
                                   <span className="text-base">{getStatusIcon(status)}</span>
                                 </div>
@@ -1217,6 +1228,7 @@ const proceedWithBulkEditAfterFetch = () => {
                           employeeInput.dailyStatus[i] === "LWP" ? "border-yellow-300 bg-yellow-50" : 
                           employeeInput.dailyStatus[i] === "BL" ? "border-purple-300 bg-purple-50" : 
                           employeeInput.dailyStatus[i] === "H" ? "border-purple-400 bg-purple-100" : 
+                          employeeInput.dailyStatus[i] === "HD" ? "border-amber-400 bg-amber-100" :
                           employeeInput.dailyStatus[i] === "LWD" ? "border-yellow-400 bg-yellow-100" :
                           "border-gray-300"
                         }`}
@@ -1229,6 +1241,7 @@ const proceedWithBulkEditAfterFetch = () => {
                         <option value="LWP" className="text-yellow-600">Leave Without Pay (LWP)</option>
                         <option value="BL" className="text-purple-600">Bereavement Leave (BL)</option>
                         <option value="H" className="text-purple-700">Holiday (H)</option>
+                        <option value="HD" className="text-amber-700">Half Day (HD)</option>
                         <option value="LWD" className="text-yellow-700">Last Working Day (LWD)</option>
                       </select>
                       <div className="mt-1 text-lg">
@@ -1240,6 +1253,7 @@ const proceedWithBulkEditAfterFetch = () => {
                         {employeeInput.dailyStatus[i] === "LWP" && "💰"}
                         {employeeInput.dailyStatus[i] === "BL" && "⚫"}
                         {employeeInput.dailyStatus[i] === "H" && "🎉"}
+                        {employeeInput.dailyStatus[i] === "HD" && "🌓"}
                         {employeeInput.dailyStatus[i] === "LWD" && "📅"}
                       </div>
                     </div>
@@ -1294,7 +1308,7 @@ const proceedWithBulkEditAfterFetch = () => {
                                 </div>
                                 <div className="flex space-x-1">
                                   {emp.dailyStatus.map((status, dayIndex) => (
-                                    <div key={dayIndex} className={`w-8 h-8 flex items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" : status === "WO" ? "bg-blue-100 border-blue-300" : status === "L" ? "bg-red-100 border-red-300" : "bg-gray-100 border-gray-300"}`} title={`${daysOfWeek[dayIndex]}: ${status === "P" ? "Present" : status === "WO" ? "Week Off" : "Leave"}`}>
+                                    <div key={dayIndex} className={`w-8 h-8 flex items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" : status === "WO" ? "bg-blue-100 border-blue-300" : status === "L" ? "bg-red-100 border-red-300" : status === "HD" ? "bg-amber-100 border-amber-300" : "bg-gray-100 border-gray-300"}`} title={`${daysOfWeek[dayIndex]}: ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : status === "HD" ? "Half Day" : status}`}>
                                       <span className="text-base">{getStatusIcon(status)}</span>
                                     </div>
                                   ))}
@@ -1693,6 +1707,7 @@ const proceedWithBulkEditAfterFetch = () => {
                   <option value="LWP">LWP (L)</option>
                   <option value="BL">BL (L)</option>
                   <option value="H">Holiday (H)</option>
+                  <option value="HD">Half Day (HD)</option>
                   <option value="LWD">Last Working Day(LWD)</option>
                 </select>
               </div>

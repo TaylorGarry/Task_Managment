@@ -210,6 +210,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
             case 'LWP': return '💰';
             case 'BL': return '⚫';
             case 'H': return '🎉';
+            case 'HD': return '🌓';
             case 'LWD': return '📅';
             default: return '📝';
         }
@@ -652,6 +653,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                     <option value="LWP">LWP</option>
                                                     <option value="BL">BL</option>
                                                     <option value="H">H</option>
+                                                    <option value="HD">HD</option>
                                                     <option value="LWD">LWD</option>
                                                 </select>
                                                 <div className="mt-1 text-lg">
@@ -670,6 +672,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     <span className="px-2 py-1 rounded border border-green-200 bg-green-50 text-green-700">P Present</span>
                                     <span className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700">WO Week Off</span>
                                     <span className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700">L Leave</span>
+                                    <span className="px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-700">HD Half Day</span>
                                     <span className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600">Other codes available in dropdown</span>
                                 </div>
                             </div>
@@ -779,6 +782,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                     className={`w-8 h-8 border rounded text-center text-xs ${status.status === 'P' ? 'border-green-300 bg-green-50' :
                                                         status.status === 'WO' ? 'border-blue-300 bg-blue-50' :
                                                                                     status.status === 'L' ? 'border-red-300 bg-red-50' :
+                                                                                        status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
                                                                                         status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
                                                                                             'border-gray-300 bg-gray-50'
                                                                                 }`}
@@ -791,6 +795,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                             <option value="LWP">LWP</option>
                                                                             <option value="BL">BL</option>
                                                                             <option value="H">H</option>
+                                                                            <option value="HD">HD</option>
                                                                             <option value="LWD">LWD</option>
                                                                         </select>
                                                                         <span className="text-xs mt-0.5">{getStatusIcon(status.status)}</span>

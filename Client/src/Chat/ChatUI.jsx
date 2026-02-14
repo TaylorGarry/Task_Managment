@@ -17,6 +17,7 @@ import {
 import { FaUserCircle } from "react-icons/fa";
 import { IoDocument } from "react-icons/io5";
 import { useDispatch, useSelector } from "react-redux";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   getUserChats,
   getOrCreateOneToOneChat,
@@ -44,6 +45,8 @@ import api from "../../api.js";
 
 const ChatUI = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
+  const navigate = useNavigate();
   const { chats, searchResults } = useSelector((state) => state.chat);
   const {
     messagesByChat,
@@ -66,15 +69,44 @@ const ChatUI = () => {
   const [editingText, setEditingText] = useState("");
   const [showMessageMenu, setShowMessageMenu] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
+  const [liveNotifications, setLiveNotifications] = useState([]);
+  const unreadNotificationCountRef = useRef(0);
+  const defaultTitleRef = useRef(document.title);
 
   const [typingUsers, setTypingUsers] = useState({});
-  const [isTyping, setIsTyping] = useState(false);
+  const [, setIsTyping] = useState(false);
   const typingTimeoutRef = useRef(null);
+  const isTypingRef = useRef(false);
+  const remoteTypingTimeoutsRef = useRef({});
   const textareaRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
+  const openedFromNotificationRef = useRef(null);
+
+  const pushLiveNotification = useCallback((senderName, messageText, chatId) => {
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    setLiveNotifications((prev) => [
+      { id, senderName, messageText, chatId },
+      ...prev.slice(0, 2),
+    ]);
+
+    setTimeout(() => {
+      setLiveNotifications((prev) => prev.filter((item) => item.id !== id));
+    }, 5000);
+  }, []);
+
+  const updateTitleWithUnreadCount = useCallback(() => {
+    unreadNotificationCountRef.current += 1;
+    document.title = `(${unreadNotificationCountRef.current}) New Message${unreadNotificationCountRef.current > 1 ? "s" : ""} | Chat`;
+  }, []);
+
+  const clearUnreadTitleCount = useCallback(() => {
+    unreadNotificationCountRef.current = 0;
+    document.title = defaultTitleRef.current;
+  }, []);
 
   const autoResizeTextarea = () => {
     const textarea = textareaRef.current;
@@ -133,8 +165,9 @@ const ChatUI = () => {
       clearTimeout(typingTimeoutRef.current);
     }
 
-    if (isTyping && selectedChat && socketConnected) {
+    if (isTypingRef.current && selectedChat && socketConnected) {
       setIsTyping(false);
+      isTypingRef.current = false;
       socket.emit("stop_typing", {
         chatId: selectedChat._id
       });
@@ -554,22 +587,56 @@ const ChatUI = () => {
   }, [userId]);
 
   useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        clearUnreadTitleCount();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      clearUnreadTitleCount();
+    };
+  }, [clearUnreadTitleCount]);
+
+  useEffect(() => {
     const handleUserTyping = (data) => {
-      if (data.chatId === selectedChat?._id && data.userId !== userId) {
+      const sameChat = String(data?.chatId || "") === String(selectedChat?._id || "");
+      if (sameChat && String(data.userId) !== String(userId)) {
         setTypingUsers(prev => ({
           ...prev,
           [data.userId]: true
         }));
+
+        if (remoteTypingTimeoutsRef.current[data.userId]) {
+          clearTimeout(remoteTypingTimeoutsRef.current[data.userId]);
+        }
+
+        remoteTypingTimeoutsRef.current[data.userId] = setTimeout(() => {
+          setTypingUsers(prev => {
+            const newTyping = { ...prev };
+            delete newTyping[data.userId];
+            return newTyping;
+          });
+          delete remoteTypingTimeoutsRef.current[data.userId];
+        }, 2500);
       }
     };
 
     const handleUserStopTyping = (data) => {
-      if (data.chatId === selectedChat?._id && data.userId !== userId) {
+      const sameChat = String(data?.chatId || "") === String(selectedChat?._id || "");
+      if (sameChat && String(data.userId) !== String(userId)) {
         setTypingUsers(prev => {
           const newTyping = { ...prev };
           delete newTyping[data.userId];
           return newTyping;
         });
+
+        if (remoteTypingTimeoutsRef.current[data.userId]) {
+          clearTimeout(remoteTypingTimeoutsRef.current[data.userId]);
+          delete remoteTypingTimeoutsRef.current[data.userId];
+        }
       }
     };
 
@@ -579,6 +646,8 @@ const ChatUI = () => {
     return () => {
       socket.off("user_typing", handleUserTyping);
       socket.off("user_stop_typing", handleUserStopTyping);
+      Object.values(remoteTypingTimeoutsRef.current).forEach(clearTimeout);
+      remoteTypingTimeoutsRef.current = {};
     };
   }, [selectedChat, userId]);
 
@@ -626,6 +695,46 @@ const ChatUI = () => {
             if (!messageExists) {
               dispatch(addIncomingMessage({ chatId, message }));
             }
+
+            const isCurrentChatOpen = selectedChat?._id === chatId;
+            const senderName =
+              message.sender?.username ||
+              message.sender?.name ||
+              "New message";
+            const messageText =
+              message.content?.text?.trim() ||
+              (message.content?.media?.length ? "Sent an attachment" : "You received a new message");
+
+            if (!isCurrentChatOpen || document.hidden) {
+              pushLiveNotification(senderName, messageText, chatId);
+            }
+
+            if (document.hidden || !isCurrentChatOpen) {
+              updateTitleWithUnreadCount();
+            }
+
+            if (document.hidden && "Notification" in window) {
+              const showBrowserNotification = () => {
+                const notification = new Notification(`Message from ${senderName}`, {
+                  body: messageText,
+                  icon: "/favicon.ico",
+                  tag: `chat-${chatId}`,
+                });
+                notification.onclick = () => {
+                  window.focus();
+                };
+              };
+
+              if (Notification.permission === "granted") {
+                showBrowserNotification();
+              } else if (Notification.permission === "default") {
+                Notification.requestPermission().then((permission) => {
+                  if (permission === "granted") {
+                    showBrowserNotification();
+                  }
+                });
+              }
+            }
           }
         }
       }
@@ -667,7 +776,7 @@ const ChatUI = () => {
       socket.off("message_edited", handleMessageEdited);
       socket.off("message_deleted", handleMessageDeleted);
     };
-  }, [dispatch, selectedChat, messagesByChat, userId, editingMessageId]);
+  }, [dispatch, selectedChat, messagesByChat, userId, editingMessageId, pushLiveNotification, updateTitleWithUnreadCount]);
 
   useEffect(() => {
     dispatch(getUserChats());
@@ -701,6 +810,7 @@ const ChatUI = () => {
     setSelectedChat(chat);
     setShowMessageMenu(null);
     setTypingUsers({});
+    clearUnreadTitleCount();
     dispatch(clearEditingState());
     setEditingText("");
 
@@ -714,13 +824,27 @@ const ChatUI = () => {
         userId: userId
       });
     }
-  }, [fetchMessages, userId, dispatch]);
+  }, [fetchMessages, userId, dispatch, clearUnreadTitleCount]);
+
+  useEffect(() => {
+    const openChatId = location.state?.openChatId;
+    if (!openChatId) return;
+    if (openedFromNotificationRef.current === openChatId) return;
+
+    const targetChat = chats.find((c) => String(c._id) === String(openChatId));
+    if (!targetChat) return;
+
+    openedFromNotificationRef.current = openChatId;
+    openChat(targetChat);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.state, chats, openChat, navigate, location.pathname]);
 
   const handleTyping = useCallback(() => {
     if (!selectedChat || !socketConnected) return;
 
-    if (!isTyping) {
+    if (!isTypingRef.current) {
       setIsTyping(true);
+      isTypingRef.current = true;
       socket.emit("typing", {
         chatId: selectedChat._id
       });
@@ -731,14 +855,15 @@ const ChatUI = () => {
     }
 
     typingTimeoutRef.current = setTimeout(() => {
-      if (isTyping) {
+      if (isTypingRef.current) {
         setIsTyping(false);
+        isTypingRef.current = false;
         socket.emit("stop_typing", {
           chatId: selectedChat._id
         });
       }
     }, 1500);
-  }, [selectedChat, socketConnected, isTyping]);
+  }, [selectedChat, socketConnected]);
 
   useEffect(() => {
     return () => {
@@ -746,19 +871,21 @@ const ChatUI = () => {
         clearTimeout(typingTimeoutRef.current);
       }
 
-      if (isTyping && selectedChat && socketConnected) {
+      if (isTypingRef.current && selectedChat && socketConnected) {
+        isTypingRef.current = false;
         socket.emit("stop_typing", {
           chatId: selectedChat._id
         });
       }
     };
-  }, [isTyping, selectedChat, socketConnected]);
+  }, [selectedChat, socketConnected]);
 
   const handleSelectUser = async (userObj) => {
     try {
       const chat = await dispatch(getOrCreateOneToOneChat(userObj._id)).unwrap();
       setSelectedChat(chat);
       setSearchQuery("");
+      clearUnreadTitleCount();
       dispatch(getUserChats());
 
       socket.emit("join_chat", chat._id);
@@ -872,6 +999,39 @@ const ChatUI = () => {
 
   return (
     <div className="w-full h-[calc(100vh-50px)] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-12 md:mt-10 mb-2 overflow-hidden">
+      {liveNotifications.length > 0 && (
+        <div className="fixed right-4 top-16 z-[70] flex flex-col gap-3 w-[calc(100%-2rem)] sm:w-[26rem]">
+          {liveNotifications.map((notif) => (
+            <button
+              key={notif.id}
+              onClick={() => {
+                const matchingChat = chats.find((c) => c._id === notif.chatId);
+                if (matchingChat) {
+                  openChat(matchingChat);
+                }
+                setLiveNotifications((prev) => prev.filter((item) => item.id !== notif.id));
+              }}
+              className="group text-left rounded-2xl overflow-hidden border border-cyan-100 shadow-[0_14px_40px_rgba(8,145,178,0.18)] bg-gradient-to-br from-white via-cyan-50 to-blue-50 hover:-translate-y-0.5 hover:shadow-[0_18px_46px_rgba(8,145,178,0.22)] transition-all"
+            >
+              <div className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white grid place-content-center font-semibold">
+                    {notif.senderName?.charAt(0)?.toUpperCase() || "M"}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] uppercase tracking-[0.15em] text-cyan-700 font-semibold">Incoming Message</p>
+                    <p className="text-sm font-semibold text-slate-900 truncate">{notif.senderName}</p>
+                    <p className="text-sm text-slate-600 truncate">{notif.messageText}</p>
+                  </div>
+                </div>
+                <div className="mt-3 h-1.5 rounded-full bg-white/80 border border-cyan-100 overflow-hidden">
+                  <div className="h-full w-full bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse" />
+                </div>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
       {selectedChat && (
         <div className="md:hidden flex items-center justify-between p-4 bg-white/90 border border-slate-200 rounded-t-xl mb-2 shadow-sm">
           <div className="flex items-center gap-3">

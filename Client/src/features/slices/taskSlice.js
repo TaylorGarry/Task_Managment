@@ -702,12 +702,47 @@ import axios from "axios";
 import { toast } from "react-toastify";
 
 // const API_URL = "http://localhost:4000/api/v1/tasks";
-const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalodcean.app/api/v1/tasks";
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token || null;
 };
+
+const getUser = () => {
+  try {
+    
+    const userStr = localStorage.getItem("user");
+    
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user && (user.id || user._id)) {
+          const normalizedUser = { ...user };
+          if (user.id && !user._id) {
+            normalizedUser._id = user.id;
+          }
+          console.log("✅ User found in localStorage 'user':", { 
+            _id: normalizedUser._id, 
+            id: normalizedUser.id,
+            username: normalizedUser.username,
+            accountType: normalizedUser.accountType 
+          });
+          return normalizedUser;
+        }
+      } catch (e) {
+        console.error("❌ Error parsing localStorage 'user':", e);
+      }
+    }
+    
+    console.error("❌ No user found in any storage location");
+    return null;
+  } catch (error) {
+    console.error("❌ Error in getUser function:", error);
+    return null;
+  }
+};
+
 
 // Helper to get today's date string in YYYY-MM-DD format
 const getTodayDateString = () => {
@@ -754,6 +789,12 @@ let cache = {
     data: null,
     timestamp: null,
     filters: null,
+  },
+  employeeMyDefaults: {
+    data: null,
+    timestamp: null,
+    filters: null,
+    CACHE_DURATION: 5 * 60 * 1000,
   }
 };
 
@@ -1380,6 +1421,55 @@ export const fetchEmployeeDefaulters = createAsyncThunk(
   }
 );
 
+// Get employee's own default tasks
+export const fetchEmployeeMyDefaults = createAsyncThunk(
+  "tasks/fetchEmployeeMyDefaults",
+  async (filters = {}, thunkAPI) => {
+    try {
+      const cacheKey = "employeeMyDefaults";
+
+      if (isCacheValid(cacheKey, filters)) {
+        return cache[cacheKey].data;
+      }
+
+      const token = getToken();
+      const user = getUser();
+
+      if (!user || user.accountType !== "employee") {
+        return thunkAPI.rejectWithValue("Access denied");
+      }
+
+      const queryParams = new URLSearchParams();
+
+      if (filters.page) queryParams.append("page", filters.page);
+      if (filters.limit) queryParams.append("limit", filters.limit);
+
+      const queryString = queryParams.toString();
+
+      const url = queryString
+        ? `${API_URL}/my-missed-tasks?${queryString}`
+        : `${API_URL}/my-missed-tasks`;
+
+      const res = await axios.get(url, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      // DIRECTLY USE BACKEND RESPONSE
+      const responseData = res.data;
+
+      cache[cacheKey].data = responseData;
+      cache[cacheKey].timestamp = Date.now();
+      cache[cacheKey].filters = filters;
+
+      return responseData;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to fetch your default tasks"
+      );
+    }
+  }
+);
+
 const taskSlice = createSlice({
   name: "tasks",
   initialState: {
@@ -1421,6 +1511,10 @@ employeeCurrentPage: 1,
       state.loading = false;
       state.error = null;
       state.lastFetchDate = null;
+    },
+    clearEmployeeMyDefaults: (state) => {
+      state.employeeMyDefaults = null;
+      state.error = null;
     },
     // New action to force refresh today's data
     forceRefreshToday: (state) => {
@@ -1504,6 +1598,27 @@ employeeCurrentPage: 1,
     ? action.payload
     : "Something went wrong";
 })
+  .addCase(fetchEmployeeMyDefaults.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(fetchEmployeeMyDefaults.fulfilled, (state, action) => {
+  state.loading = false;
+
+  const data = action.payload.data;
+
+  state.employeeMyDefaults = data.tasks;
+  state.employeeTotalDefaults = data.totalDefaults;
+  state.employeeCurrentPage = data.pagination?.currentPage || 1;
+  state.employeeTotalPages = data.pagination?.totalPages || 1;
+
+  state.error = null;
+})
+      .addCase(fetchEmployeeMyDefaults.rejected, (state, action) => {
+        state.loading = false;
+        state.error = typeof action.payload === "string" ? action.payload : "Failed to fetch your default tasks";
+        state.employeeMyDefaults = null;
+      })
 
       // fetchDefaultList
       .addCase(fetchDefaultList.pending, (state) => {
@@ -1845,5 +1960,5 @@ employeeCurrentPage: 1,
   },
 });
 
-export const { invalidateCache, resetTasks, forceRefreshToday, ensureTodayData } = taskSlice.actions;
+export const { invalidateCache, resetTasks, forceRefreshToday, ensureTodayData,clearEmployeeMyDefaults } = taskSlice.actions;
 export default taskSlice.reducer;
