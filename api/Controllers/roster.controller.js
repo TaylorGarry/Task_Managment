@@ -3481,7 +3481,6 @@ export const exportRosterTemplate = async (req, res) => {
       'Total Last Working Day'
     ];
 
-    // Combine all headers
     const headers = [
       ...baseRequiredColumns,
       ...dateColumns,
@@ -3497,14 +3496,12 @@ export const exportRosterTemplate = async (req, res) => {
 
     const data = [];
 
-    // Add headers row only (no instruction row)
     data.push(headers);
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     
     const range = XLSX.utils.decode_range(worksheet['!ref']);
 
-    // Style for header row - Blue background for all headers
     for (let C = range.s.c; C <= range.e.c; C++) {
       const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
       const columnName = headers[C] || "";
@@ -3513,7 +3510,6 @@ export const exportRosterTemplate = async (req, res) => {
         worksheet[cellAddress] = { v: columnName };
       }
       
-      // Simple styling - all headers same color (blue)
       worksheet[cellAddress].s = {
         font: { 
           bold: true, 
@@ -3522,7 +3518,7 @@ export const exportRosterTemplate = async (req, res) => {
           sz: 11 
         },
         fill: { 
-          fgColor: { rgb: "4472C4" } // Blue for all headers
+          fgColor: { rgb: "4472C4" }  
         },
         alignment: { 
           horizontal: "center", 
@@ -3538,24 +3534,23 @@ export const exportRosterTemplate = async (req, res) => {
       };
     }
 
-    // Set column widths
     const colWidths = [
-      { wch: 25 },  // Name
-      { wch: 15 },  // Transport
-      { wch: 15 },  // CAB Route
-      { wch: 15 },  // Team Leader
-      { wch: 15 },  // Shift Start Hour
-      { wch: 15 },  // Shift End Hour
-      ...Array(dateColumns.length).fill({ wch: 12 }), // Date columns
-      { wch: 12 },  // Total Present
-      { wch: 12 },  // Total Week Off
-      { wch: 12 },  // Total Leave
-      { wch: 12 },  // Total No Call No Show
-      { wch: 12 },  // Total Unpaid Leave
-      { wch: 12 },  // Total Leave Without Pay
-      { wch: 12 },  // Total Bereavement Leave
-      { wch: 12 },  // Total Holiday
-      { wch: 12 }   // Total Last Working Day
+      { wch: 25 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      ...Array(dateColumns.length).fill({ wch: 12 }),  
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 }    
     ];
     
     worksheet['!cols'] = colWidths;
