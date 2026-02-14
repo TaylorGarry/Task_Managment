@@ -3188,6 +3188,7 @@ export const rosterUploadFromExcel = async (req, res) => {
     
     const employeesData = [];
     const processedEmployees = new Set();
+    const errors = [];
     
     for (const [index, row] of formattedData.entries()) {
       try {
@@ -3221,28 +3222,38 @@ export const rosterUploadFromExcel = async (req, res) => {
           });
         }
         
+        // TRANSPORT: Case-insensitive validation
         const transportValue = (row[columnMap['Transport']] || "").toString().trim();
-        const validTransport = ["Yes", "No", ""];
-        if (!validTransport.includes(transportValue)) {
-          return res.status(400).json({
-            success: false,
-            message: `Invalid transport value for ${name}. Must be "Yes", "No", or empty.`
-          });
+        const transportUpper = transportValue.toUpperCase();
+        const validTransport = ["YES", "NO", ""];
+        
+        if (!validTransport.includes(transportUpper)) {
+          errors.push(`Row ${index + dataStartRowIndex + 1} (${name}): Invalid transport value "${transportValue}". Must be "Yes", "No", or empty (case-insensitive).`);
+          continue;
         }
+        
+        // Store the original case value but normalize for display
+        const normalizedTransport = transportUpper === "YES" ? "Yes" : transportUpper === "NO" ? "No" : "";
+        
+        // CAB ROUTE: Accept any value (string or number)
+        const cabRouteValue = columnMap['CAB Route'] 
+          ? (row[columnMap['CAB Route']] || "").toString().trim() 
+          : "";
         
         const dailyStatus = [];
         const statusDate = new Date(selectedStartDate);
         
         for (let i = 0; i < excelDateColumns.length; i++) {
           const excelDateColumn = excelDateColumns[i];
-          const statusValue = (row[excelDateColumn] || "P").toString().trim().toUpperCase();
+          const rawStatusValue = (row[excelDateColumn] || "P").toString().trim();
+          const statusValue = rawStatusValue.toUpperCase(); // Convert to uppercase for validation
+          
+          // Valid status values (uppercase for comparison)
           const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""];
           
           if (!validStatus.includes(statusValue)) {
-            return res.status(400).json({
-              success: false,
-              message: `Invalid status "${row[excelDateColumn]}" for ${name} on column ${excelDateColumn}. Valid values: P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD`
-            });
+            errors.push(`Row ${index + dataStartRowIndex + 1} (${name}): Invalid status "${rawStatusValue}" on column ${excelDateColumn}. Valid values: P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD (case-insensitive).`);
+            continue;
           }
           
           const date = new Date(statusDate);
@@ -3250,44 +3261,43 @@ export const rosterUploadFromExcel = async (req, res) => {
           
           dailyStatus.push({
             date: date,
-            status: statusValue || "P",
+            status: statusValue || "P", // Store uppercase
             originalExcelColumn: excelDateColumn
           });
           
           statusDate.setDate(statusDate.getDate() + 1);
         }
         
+        // Check if there were any errors in status processing
+        if (errors.length > 0) {
+          continue;
+        }
+        
         const woCount = dailyStatus.filter(d => d.status === "WO").length;
         if (woCount > 2) {
-          return res.status(400).json({
-            success: false,
-            message: `Employee ${name} cannot have more than 2 week-offs in a week`
-          });
+          errors.push(`Row ${index + dataStartRowIndex + 1} (${name}): Cannot have more than 2 week-offs (WO) in a week. Found: ${woCount}`);
+          continue;
         }
         
         const shiftStartHour = parseInt(row[columnMap['Shift Start Hour']]);
         const shiftEndHour = parseInt(row[columnMap['Shift End Hour']]);
         
         if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
-          return res.status(400).json({
-            success: false,
-            message: `Employee ${name} has invalid shift hours`
-          });
+          errors.push(`Row ${index + dataStartRowIndex + 1} (${name}): Invalid shift hours. Must be numbers between 0-23.`);
+          continue;
         }
         
         if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
-          return res.status(400).json({
-            success: false,
-            message: `Employee ${name}: Shift hours must be between 0 and 23`
-          });
+          errors.push(`Row ${index + dataStartRowIndex + 1} (${name}): Shift hours must be between 0 and 23.`);
+          continue;
         }
         
         employeesData.push({
           userId: userRecord?._id || null,
           name: name,
           username: username,
-          transport: transportValue,
-          cabRoute: (columnMap['CAB Route'] ? row[columnMap['CAB Route']] || "" : "").toString().trim(),
+          transport: normalizedTransport, // Store normalized value
+          cabRoute: cabRouteValue, // Any value accepted
           shiftStartHour: shiftStartHour,
           shiftEndHour: shiftEndHour,
           dailyStatus: dailyStatus,
@@ -3296,11 +3306,18 @@ export const rosterUploadFromExcel = async (req, res) => {
         });
       } catch (rowError) {
         console.error(`Error processing row ${index + dataStartRowIndex + 1}:`, rowError);
-        return res.status(400).json({
-          success: false,
-          message: `Error in row ${index + dataStartRowIndex + 1}: ${rowError.message}`
-        });
+        errors.push(`Row ${index + dataStartRowIndex + 1}: ${rowError.message}`);
       }
+    }
+    
+    // If there are any errors, return them all at once
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Validation errors found in Excel file",
+        errors: errors.slice(0, 10), // Return first 10 errors to avoid huge response
+        totalErrors: errors.length
+      });
     }
     
     if (employeesData.length === 0) {
@@ -3398,7 +3415,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         excelFormat: {
           requiredColumns: [...baseRequiredColumns, ...excelDateColumns],
           optionalColumns: optionalColumns,
-          note: "Username is auto-generated from Name. Date columns (7 days) are required. Total count columns are optional.",
+          note: "Username is auto-generated from Name. Date columns (7 days) are required. Total count columns are optional. All text fields are case-insensitive.",
           transportValues: ['Yes', 'No', ''],
           statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD', "HD", ''],
           permissionsNote: permissionsNote
