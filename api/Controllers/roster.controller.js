@@ -1072,6 +1072,7 @@ export const exportRosterToExcel = async (req, res) => {
         "Total UL",
         "Total LWP", 
         "Total BL",
+        "Total HD",
         "Total Empty"
       ];
       
@@ -1096,6 +1097,7 @@ export const exportRosterToExcel = async (req, res) => {
         let totalUL = 0;
         let totalLWP = 0;
         let totalBL = 0;
+        let totalHD = 0;
         let totalEmpty = 0;
         
         if (emp.dailyStatus && emp.dailyStatus.length > 0) {
@@ -1131,6 +1133,9 @@ export const exportRosterToExcel = async (req, res) => {
                 case "BL": 
                   totalBL++; 
                   break;
+                case "HD":
+                  totalHD++;
+                  break;
                 default:
                   totalEmpty++;
               }
@@ -1153,6 +1158,7 @@ export const exportRosterToExcel = async (req, res) => {
         row.push(totalUL);
         row.push(totalLWP);
         row.push(totalBL);
+        row.push(totalHD);
         row.push(totalEmpty);
         
         data.push(row);
@@ -1172,7 +1178,7 @@ export const exportRosterToExcel = async (req, res) => {
         
         
         const totals = {
-          WO: 0, L: 0, P: 0, NCNS: 0, UL: 0, LWP: 0, BL: 0, Empty: 0
+          WO: 0, L: 0, P: 0, NCNS: 0, UL: 0, LWP: 0, BL: 0, HD:0, Empty: 0
         };
         
         week.employees.forEach(emp => {
@@ -1190,6 +1196,7 @@ export const exportRosterToExcel = async (req, res) => {
                   case "UL": totals.UL++; break;
                   case "LWP": totals.LWP++; break;
                   case "BL": totals.BL++; break;
+                  case "HD": totals.HD++; break;
                   default:
                     totals.Empty++;
                 }
@@ -1206,6 +1213,7 @@ export const exportRosterToExcel = async (req, res) => {
         summaryRow.push(`UL: ${totals.UL}`);
         summaryRow.push(`LWP: ${totals.LWP}`);
         summaryRow.push(`BL: ${totals.BL}`);
+        summaryRow.push(`HD: ${totals.HD}`);
         summaryRow.push(`Empty: ${totals.Empty}`);
         
         data.push(summaryRow);
@@ -1289,7 +1297,10 @@ export const exportRosterToExcel = async (req, res) => {
                 cellStyle.fill = { fgColor: { rgb: "F8CBAD" } };  
               } else if (status === "BL") {
                 cellStyle.fill = { fgColor: { rgb: "D9D9D9" } };  
-              } else if (status === "" || status === null) {
+              } else if (status === "HD") {
+                cellStyle.fill = {  fgColor: {rgb: "#FFD966"} };
+              }
+               else if (status === "" || status === null) {
                 cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  
               } else {
                 cellStyle.fill = { fgColor: { rgb: "FFFFFF" } };  
@@ -3138,7 +3149,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         for (let i = 0; i < excelDateColumns.length; i++) {
           const excelDateColumn = excelDateColumns[i];
           const statusValue = (row[excelDateColumn] || "P").toString().trim().toUpperCase();
-          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", ""];
+          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD","HD", ""];
           
           if (!validStatus.includes(statusValue)) {
             return res.status(400).json({
@@ -3302,7 +3313,7 @@ export const rosterUploadFromExcel = async (req, res) => {
           acceptedColumns: [...requiredExcelColumns, ...excelDateColumns],
           note: `Username is auto-generated from Name. Excel date columns (${excelDateColumns.length} found) will be mapped to selected date range.`,
           transportValues: ['Yes', 'No', ''],
-          statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD', ''],
+          statusValues: ['P', 'WO', 'L', 'NCNS', 'UL', 'LWP', 'BL', 'H', 'LWD',"HD", ''],
           permissionsNote: permissionsNote,
           sampleRow: {
             Name: 'John Doe',
@@ -3321,6 +3332,222 @@ export const rosterUploadFromExcel = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to upload roster from Excel"
+    });
+  }
+};
+export const exportRosterTemplate = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date and end date are required"
+      });
+    }
+
+    const fromDate = new Date(startDate);
+    fromDate.setHours(0, 0, 0, 0);
+    
+    const toDate = new Date(endDate);
+    toDate.setHours(23, 59, 59, 999);
+
+  
+    
+    const dateHeaders = [];
+    const currentDate = new Date(fromDate);
+    
+    while (currentDate <= toDate) {
+      const day = currentDate.getDate().toString().padStart(2, '0');
+      const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+      const weekday = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+      dateHeaders.push(`${day}/${month} ${weekday}`);
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+
+   
+    
+    const headers = [
+      'Name',
+      'Transport',
+      'CAB Route',
+      'Team Leader',
+      'Shift Start Hour',
+      'Shift End Hour',
+      ...dateHeaders,
+      'Total Present',
+      'Total Week Off',
+      'Total Leave',
+      'Total No Call No Show',
+      'Total Unpaid Leave',
+      'Total Leave Without Pay',
+      'Total Bereavement Leave',
+      'Total Holiday',
+      'Total Last Working Day'
+    ];
+
+ 
+    
+    const workbook = XLSX.utils.book_new();
+    workbook.Props = {
+      Title: `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1)}-${fromDate.getDate()}`,
+      Author: "Task Management CRM",
+      CreatedDate: new Date()
+    };
+
+    const data = [];
+
+  
+    
+    const infoText = 'IMPORTANT: All status code must be in capital letters only (P, WO, L, NCNS, UL, LWP, BL, H,LWD,HD)';
+    const infoRow = [infoText];
+    
+    while (infoRow.length < headers.length) {
+      infoRow.push('');
+    }
+    
+    data.push(infoRow); 
+
+    data.push(headers);
+
+    const worksheet = XLSX.utils.aoa_to_sheet(data);
+    
+    const range = XLSX.utils.decode_range(worksheet['!ref']);
+
+   
+    
+    const statusColors = {
+      'P': 'C6EFCE',     
+      'WO': 'FFC7CE',    
+      'L': 'FFEB9C',     
+      'NCNS': 'E7E6E6',  
+      'UL': 'B4C6E7',    
+      'LWP': 'F8CBAD',  
+      'BL': 'D9D9D9',   
+      'H': 'FFF2CC',     
+      
+    };
+
+
+
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
+      
+      if (!worksheet[cellAddress]) {
+        worksheet[cellAddress] = { v: '' };
+      }
+      
+      worksheet[cellAddress].s = {
+        font: { 
+          bold: true, 
+          color: { rgb: "000000" },
+          name: "Arial",
+          sz: 11  
+        },
+        fill: { 
+          fgColor: { rgb: "FFEB9C" } 
+        },
+        alignment: { 
+          horizontal: "left", 
+          vertical: "center",
+          wrapText: false  
+        },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        }
+      };
+    }
+
+    if (!worksheet['!merges']) worksheet['!merges'] = [];
+    worksheet['!merges'].push(
+      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.min(10, range.e.c) } } 
+    );
+
+    
+
+    for (let C = range.s.c; C <= range.e.c; C++) {
+      const cellAddress = XLSX.utils.encode_cell({ r: 1, c: C });
+      
+      if (!worksheet[cellAddress]) {
+        worksheet[cellAddress] = { v: headers[C] || "" };
+      }
+      
+      worksheet[cellAddress].s = {
+        font: { 
+          bold: true, 
+          color: { rgb: "FFFFFF" },
+          name: "Arial",
+          sz: 11 
+        },
+        fill: { 
+          fgColor: { rgb: "4472C4" } 
+        },
+        alignment: { 
+          horizontal: "center", 
+          vertical: "center",
+          wrapText: false
+        },
+        border: {
+          top: { style: "thin", color: { rgb: "000000" } },
+          bottom: { style: "thin", color: { rgb: "000000" } },
+          left: { style: "thin", color: { rgb: "000000" } },
+          right: { style: "thin", color: { rgb: "000000" } }
+        }
+      };
+    }
+
+    
+    
+    const colWidths = [
+      { wch: 25 },  // Name (slightly wider for info text)
+      { wch: 15 },  // Transport
+      { wch: 15 },  // CAB Route
+      { wch: 15 },  // Team Leader
+      { wch: 15 },  // Shift Start Hour
+      { wch: 15 },  // Shift End Hour
+      ...Array(dateHeaders.length).fill({ wch: 12 }), // Date columns
+      { wch: 12 },  // Total Present
+      { wch: 12 },  // Total Week Off
+      { wch: 12 },  // Total Leave
+      { wch: 12 },  // Total No Call No Show
+      { wch: 12 },  // Total Unpaid Leave
+      { wch: 12 },  // Total Leave Without Pay
+      { wch: 12 },  // Total Bereavement Leave
+      { wch: 12 },  // Total Holiday
+      { wch: 12 }   // Total Last Working Day
+    ];
+    
+    worksheet['!cols'] = colWidths;
+
+   
+    
+    worksheet['!rows'] = [
+      { hpt: 25 }, 
+      { hpt: 25 }  
+    ];
+
+     XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
+
+ 
+    
+    const fileName = `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1).toString().padStart(2,'0')}-${fromDate.getDate().toString().padStart(2,'0')}_to_${toDate.getFullYear()}-${(toDate.getMonth()+1).toString().padStart(2,'0')}-${toDate.getDate().toString().padStart(2,'0')}.xlsx`;
+    
+    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    
+    res.send(buffer);
+
+  } catch (error) {
+    console.error('Export Roster Template Error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error exporting roster template',
+      error: error.message
     });
   }
 };

@@ -167,6 +167,7 @@ import ChatUI from "./Chat/ChatUI.jsx";
 import { ToastContainer } from "react-toastify";
 import OpsRoster from "./Roster/OpsRoster.jsx";
 import ExcelRosterUpload from "./Roster/ExcelRosterUpload.jsx";  
+import MyDefaults from "./pages/MyDefaults.jsx";
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
@@ -203,6 +204,23 @@ const OpsMetaRoute = ({ children }) => {
   return children;
 };
 
+// ADD THIS: Route for Employee Defaulters (only for employees)
+const EmployeeOnlyRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  // Only employees can access this route
+  if (user.accountType !== "employee") {
+    // Admins/HR/superAdmin go to admin panel
+    if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+      return <Navigate to="/admin/admintask" replace />;
+    }
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
 // ADD THIS: Route for Ops-Meta Excel Upload (with Ops-Meta employees)
 const OpsMetaUploadRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
@@ -253,7 +271,14 @@ function App() {
             </OpsMetaUploadRoute>
           }
         />
-
+        <Route
+          path="/my-defaults"
+          element={
+            <EmployeeOnlyRoute>
+              <MyDefaults />
+            </EmployeeOnlyRoute>
+          }
+        />
         {/* Ops-Meta Current Week Roster */}
         <Route
           path="/ops-meta-roster"
@@ -282,6 +307,7 @@ function App() {
           <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
           <Route path="chat" element={<ChatUI />} />
           <Route index element={<Navigate to="tasks" replace />} />
+          
         </Route>
 
         <Route

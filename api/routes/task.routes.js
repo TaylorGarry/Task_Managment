@@ -18,6 +18,9 @@ import {
   updateAdminTaskStatus,
   getAdminAssignedTasks,
   exportEmployeeDefaults,
+  getEmployeeOwnDefaults,
+  getEmployeeTaskDetails,
+  getEmployeeMissedStats,
   
 } from "../Controllers/task.controller.js";
 
@@ -42,6 +45,8 @@ router.get("/admintask", authMiddleware, getAdminTasks);
 router.put("/admin/status/:taskId", authMiddleware, updateAdminTaskStatus);
 router.get('/admin-assigned-tasks', authMiddleware, getAdminAssignedTasks);
 router.get("/export-employee-defaulter/:employeeId",authMiddleware,exportEmployeeDefaults);
-
+router.get("/my-missed-tasks", authMiddleware, getEmployeeOwnDefaults);
+ router.get("/task/:taskId", authMiddleware, getEmployeeTaskDetails);
+ router.get("/missed-stats", authMiddleware, getEmployeeMissedStats);
 
 export default router;

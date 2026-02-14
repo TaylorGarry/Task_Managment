@@ -6,6 +6,7 @@ import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar } from "react-icons/fi";
 import toast from "react-hot-toast";
+import { socket } from "../socket.js";
 
 // const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7e5os.ondigitalocean.app/api/v1";
@@ -24,8 +25,13 @@ const AdminNavbar = () => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [chatNotification, setChatNotification] = useState(null);
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   const dropdownRef = useRef();
+  const titleResetTimerRef = useRef(null);
+  const defaultTitleRef = useRef(document.title);
+  const processedMessageIdsRef = useRef(new Set());
 
   // Check if user is Ops-Meta employee
   const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
@@ -61,6 +67,116 @@ const AdminNavbar = () => {
     setShowMobileMenu(false);
     document.body.style.overflow = "";
   }, [location.pathname]);
+
+  useEffect(() => {
+    const isChatRoute = location.pathname.startsWith("/admin/chat");
+    if (isChatRoute) {
+      setUnreadChatCount(0);
+      document.title = defaultTitleRef.current;
+      setChatNotification(null);
+    }
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && location.pathname.startsWith("/admin/chat")) {
+        setUnreadChatCount(0);
+        document.title = defaultTitleRef.current;
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const currentUserId = user?.id || user?._id;
+    if (!currentUserId) return;
+
+    const handleNewMessageNotification = (payload) => {
+      if (!payload?.message) return;
+
+      const messageId =
+        payload.message._id ||
+        `${payload.chatId || payload.message.chatId}-${payload.message.createdAt || ""}-${payload.message.sender?._id || payload.message.sender?.id || payload.message.sender || ""}-${payload.message.content?.text || ""}`;
+
+      if (processedMessageIdsRef.current.has(messageId)) {
+        return;
+      }
+      processedMessageIdsRef.current.add(messageId);
+      setTimeout(() => {
+        processedMessageIdsRef.current.delete(messageId);
+      }, 15000);
+
+      const senderId =
+        payload.message.sender?._id ||
+        payload.message.sender?.id ||
+        payload.message.sender;
+
+      if (!senderId || String(senderId) === String(currentUserId)) return;
+
+      const isChatRoute = location.pathname.startsWith("/admin/chat");
+      const senderName =
+        payload.message.sender?.username ||
+        payload.message.sender?.name ||
+        "New message";
+      const messageText =
+        payload.message.content?.text?.trim() ||
+        (payload.message.content?.media?.length ? "Sent an attachment" : "You received a new message");
+
+      if (!isChatRoute) {
+        setChatNotification({
+          id: payload.message._id || `${Date.now()}`,
+          chatId: payload.chatId || payload.message.chatId,
+          senderName,
+          messageText,
+        });
+
+        setUnreadChatCount((prev) => {
+          const next = prev + 1;
+          document.title = `(${next}) New Message${next > 1 ? "s" : ""} | Task Management`;
+          return next;
+        });
+
+        if (titleResetTimerRef.current) {
+          clearTimeout(titleResetTimerRef.current);
+        }
+
+        titleResetTimerRef.current = setTimeout(() => {
+          setChatNotification(null);
+        }, 5500);
+      }
+
+      if (document.hidden && "Notification" in window) {
+        const showBrowserNotification = () => {
+          new Notification(`Message from ${senderName}`, {
+            body: messageText,
+            icon: "/favicon.ico",
+            tag: `chat-${payload.chatId || payload.message.chatId || "general"}`,
+          });
+        };
+
+        if (Notification.permission === "granted") {
+          showBrowserNotification();
+        } else if (Notification.permission === "default") {
+          Notification.requestPermission().then((permission) => {
+            if (permission === "granted") {
+              showBrowserNotification();
+            }
+          });
+        }
+      }
+    };
+
+    socket.on("new_message", handleNewMessageNotification);
+    return () => {
+      socket.off("new_message", handleNewMessageNotification);
+      if (titleResetTimerRef.current) {
+        clearTimeout(titleResetTimerRef.current);
+      }
+      processedMessageIdsRef.current.clear();
+    };
+  }, [location.pathname, user?.id, user?._id]);
 
   const getInitials = (name) => {
     if (!name) return "U";
@@ -186,15 +302,20 @@ const AdminNavbar = () => {
                   Upload Roster (Excel)
                 </button>
               )}
-              
+{/*               
               <Link to="/admin/adminDashboard" className={navLinkClass("/admin/adminDashboard")}>
                 Admin
-              </Link>
+              </Link> */}
               <Link to="/admin/admintask" className={navLinkClass("/admin/admintask")}>
                 Your Task
               </Link>
-              <Link to="/admin/chat" className={navLinkClass("/admin/chat")}>
+              <Link to="/admin/chat" className={`relative ${navLinkClass("/admin/chat")}`}>
                 Chat
+                {unreadChatCount > 0 && (
+                  <span className="absolute -top-2 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-semibold">
+                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                  </span>
+                )}
               </Link>
              
               {canManageAdmin && (
@@ -352,10 +473,15 @@ const AdminNavbar = () => {
               </Link>
               <Link
                 to="/admin/chat"
-                className="text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
+                className="relative text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Chat
+                {unreadChatCount > 0 && (
+                  <span className="absolute top-1 right-2 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-semibold">
+                    {unreadChatCount > 99 ? "99+" : unreadChatCount}
+                  </span>
+                )}
               </Link>
               <Link
                 to="/admin/tasks"
@@ -494,6 +620,36 @@ const AdminNavbar = () => {
           </div>
         )}
       </nav>
+      {chatNotification && !location.pathname.startsWith("/admin/chat") && (
+        <div className="fixed right-4 top-16 z-[80] max-w-sm w-[calc(100%-2rem)] sm:w-[26rem] rounded-2xl overflow-hidden border border-cyan-100 shadow-[0_14px_38px_rgba(14,116,144,0.22)] bg-gradient-to-br from-white via-cyan-50 to-blue-50">
+          <button
+            onClick={() => {
+              const targetChatId = chatNotification.chatId;
+              setChatNotification(null);
+              setUnreadChatCount(0);
+              document.title = defaultTitleRef.current;
+              navigate("/admin/chat", {
+                state: targetChatId ? { openChatId: targetChatId, openFromNotification: true } : undefined,
+              });
+            }}
+            className="w-full text-left p-4 hover:bg-white/70 transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white grid place-content-center font-semibold">
+                {chatNotification.senderName?.charAt(0)?.toUpperCase() || "M"}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.15em] text-cyan-700 font-semibold">New Chat Message</p>
+                <p className="text-sm font-semibold text-slate-900 truncate">{chatNotification.senderName}</p>
+                <p className="text-sm text-slate-600 truncate">{chatNotification.messageText}</p>
+              </div>
+            </div>
+            <div className="mt-3 h-1.5 rounded-full bg-white/80 border border-cyan-100 overflow-hidden">
+              <div className="h-full w-full bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse" />
+            </div>
+          </button>
+        </div>
+      )}
       <Outlet />
     </>
   );

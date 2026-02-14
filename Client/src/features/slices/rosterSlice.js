@@ -824,7 +824,6 @@ const getToken = () => {
   return user?.token || null;
 };
 
-// Enhanced cache management
 const cache = {
   roster: {
     data: null,
@@ -1191,7 +1190,6 @@ export const updateRosterEmployee = createAsyncThunk(
   }
 ); 
 
-// DELETE OPERATIONS
 export const deleteEmployeeFromRoster = createAsyncThunk(
   "roster/deleteEmployeeFromRoster",
   async ({ rosterId, weekNumber, employeeId }, thunkAPI) => {
@@ -1413,6 +1411,78 @@ return thunkAPI.rejectWithValue(
   }
 );
 
+// ========== EXCEL TEMPLATE EXPORT THUNK (ONLY HEADERS) ==========
+export const exportRosterTemplate = createAsyncThunk(
+  'roster/exportTemplate',
+  async ({ startDate, endDate }, { rejectWithValue }) => {
+    try {
+      const token = getToken();
+      
+      // Make API call to get the Excel file
+      const response = await axios.get(`${API_URL}/export-template`, {
+        params: { startDate, endDate },
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: 'blob', // Important for file download
+      });
+
+      // Create download link
+      const blob = new Blob([response.data], { 
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' 
+      });
+      
+      // Extract filename from Content-Disposition header or create default
+      let filename = `Roster_Template_${startDate}_to_${endDate}.xlsx`;
+      const contentDisposition = response.headers['content-disposition'];
+      if (contentDisposition) {
+        const match = contentDisposition.match(/filename="?(.+)"?/);
+        if (match && match[1]) {
+          filename = match[1];
+        }
+      }
+
+      // Create download link and trigger click
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Roster template downloaded successfully');
+      
+      return { 
+        success: true, 
+        message: 'Template downloaded successfully' 
+      };
+      
+    } catch (error) {
+      // Handle error response (which might be JSON even though we requested blob)
+      if (error.response?.data instanceof Blob) {
+        // Try to parse error as JSON
+        const errorText = await error.response.data.text();
+        try {
+          const errorJson = JSON.parse(errorText);
+          toast.error(errorJson.message || 'Failed to download template');
+          return rejectWithValue(errorJson.message);
+        } catch (e) {
+          // Not JSON, use default message
+          toast.error('Failed to download template');
+          return rejectWithValue('Failed to download template');
+        }
+      }
+      
+      const message = error.response?.data?.message || error.message;
+      toast.error(message);
+      return rejectWithValue(message);
+    }
+  }
+);
+
+
 // Helper function
 const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   if (!roster?.weeks) return -1;
@@ -1505,6 +1575,12 @@ canEdit: true,
       state.excelUploadSuccess = false;
       state.excelUploadError = null;
       state.excelUploadData = null;
+    },
+     // ===== ADDED: Template export reducer =====
+    clearTemplateExportState: (state) => {
+      state.templateExportLoading = false;
+      state.templateExportSuccess = false;
+      state.templateExportError = null;
     },
     clearRosterDetailState: (state) => {
       state.allRosters = null;
@@ -1890,6 +1966,20 @@ canEdit: true,
       .addCase(uploadRosterFromExcel.rejected, (state, action) => {
         state.excelUploadLoading = false;
         state.excelUploadError = action.payload;
+      })
+       // ===== ADDED: TEMPLATE EXPORT OPERATIONS =====
+      .addCase(exportRosterTemplate.pending, (state) => {
+        state.templateExportLoading = true;
+        state.templateExportSuccess = false;
+        state.templateExportError = null;
+      })
+      .addCase(exportRosterTemplate.fulfilled, (state, action) => {
+        state.templateExportLoading = false;
+        state.templateExportSuccess = true;
+      })
+      .addCase(exportRosterTemplate.rejected, (state, action) => {
+        state.templateExportLoading = false;
+        state.templateExportError = action.payload;
       })
       
       // Existing cases...
