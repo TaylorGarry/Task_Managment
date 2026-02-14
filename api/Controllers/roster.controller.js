@@ -3481,7 +3481,6 @@ export const exportRosterTemplate = async (req, res) => {
       'Total Last Working Day'
     ];
 
-    // Combine all headers
     const headers = [
       ...baseRequiredColumns,
       ...dateColumns,
@@ -3497,93 +3496,19 @@ export const exportRosterTemplate = async (req, res) => {
 
     const data = [];
 
-    // Instruction row with column requirements
-    const infoText = 'IMPORTANT: All status codes must be in capital letters only (P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD). Name, Transport, Team Leader, Shift Start/End Hours, and Date columns are REQUIRED. Total columns are OPTIONAL.';
-    const infoRow = [infoText];
-    
-    while (infoRow.length < headers.length) {
-      infoRow.push('');
-    }
-    
-    data.push(infoRow); 
-
-    // Add headers row
     data.push(headers);
-
-    // Add a sample data row to demonstrate format
-    const sampleRow = [];
-    
-    // Base required columns sample values
-    sampleRow.push('John Doe'); // Name
-    sampleRow.push('Yes'); // Transport
-    sampleRow.push('Route A'); // CAB Route
-    sampleRow.push('Jane Smith'); // Team Leader
-    sampleRow.push('9'); // Shift Start Hour
-    sampleRow.push('18'); // Shift End Hour
-    
-    // Date columns - all set to 'P' as sample
-    dateColumns.forEach(() => sampleRow.push('P'));
-    
-    // Optional summary columns - left empty in sample
-    optionalSummaryColumns.forEach(() => sampleRow.push(''));
-    
-    data.push(sampleRow);
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     
     const range = XLSX.utils.decode_range(worksheet['!ref']);
 
-    // Style for instruction row (row 0) - Yellow background
     for (let C = range.s.c; C <= range.e.c; C++) {
       const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
-      
-      if (!worksheet[cellAddress]) {
-        worksheet[cellAddress] = { v: '' };
-      }
-      
-      worksheet[cellAddress].s = {
-        font: { 
-          bold: true, 
-          color: { rgb: "000000" },
-          name: "Arial",
-          sz: 11  
-        },
-        fill: { 
-          fgColor: { rgb: "FFEB9C" } 
-        },
-        alignment: { 
-          horizontal: "left", 
-          vertical: "center",
-          wrapText: true  
-        },
-        border: {
-          top: { style: "thin", color: { rgb: "000000" } },
-          bottom: { style: "thin", color: { rgb: "000000" } },
-          left: { style: "thin", color: { rgb: "000000" } },
-          right: { style: "thin", color: { rgb: "000000" } }
-        }
-      };
-    }
-
-    // Merge instruction row cells for better visibility
-    if (!worksheet['!merges']) worksheet['!merges'] = [];
-    worksheet['!merges'].push(
-      { s: { r: 0, c: 0 }, e: { r: 0, c: Math.min(15, range.e.c) } } 
-    );
-
-    // Style for header row (row 1) - Blue background
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 1, c: C });
       const columnName = headers[C] || "";
       
       if (!worksheet[cellAddress]) {
         worksheet[cellAddress] = { v: columnName };
       }
-      
-      // Different styling for required vs optional columns
-      const isRequiredColumn = 
-        C < baseRequiredColumns.length || // Base required columns
-        (C >= baseRequiredColumns.length && C < baseRequiredColumns.length + dateColumns.length); // Date columns
       
       worksheet[cellAddress].s = {
         font: { 
@@ -3593,7 +3518,7 @@ export const exportRosterTemplate = async (req, res) => {
           sz: 11 
         },
         fill: { 
-          fgColor: { rgb: isRequiredColumn ? "4472C4" : "70AD47" } // Blue for required, Green for optional
+          fgColor: { rgb: "4472C4" }  
         },
         alignment: { 
           horizontal: "center", 
@@ -3609,129 +3534,33 @@ export const exportRosterTemplate = async (req, res) => {
       };
     }
 
-    // Style for sample data row (row 2) - Light gray background
-    for (let C = range.s.c; C <= range.e.c; C++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 2, c: C });
-      
-      if (!worksheet[cellAddress]) {
-        worksheet[cellAddress] = { v: '' };
-      }
-      
-      worksheet[cellAddress].s = {
-        font: { 
-          color: { rgb: "000000" },
-          name: "Arial",
-          sz: 10 
-        },
-        fill: { 
-          fgColor: { rgb: "F2F2F2" } 
-        },
-        alignment: { 
-          horizontal: "center", 
-          vertical: "center"
-        },
-        border: {
-          top: { style: "thin", color: { rgb: "CCCCCC" } },
-          bottom: { style: "thin", color: { rgb: "CCCCCC" } },
-          left: { style: "thin", color: { rgb: "CCCCCC" } },
-          right: { style: "thin", color: { rgb: "CCCCCC" } }
-        }
-      };
-    }
-
-    // Add data validation for status columns (date columns)
-    for (let C = baseRequiredColumns.length; C < baseRequiredColumns.length + dateColumns.length; C++) {
-      const cellAddress = XLSX.utils.encode_cell({ r: 2, c: C });
-      if (worksheet[cellAddress]) {
-        // Add comment with valid status values
-        worksheet[cellAddress].c = [{
-          t: 'Valid statuses: P, WO, L, NCNS, UL, LWP, BL, H, LWD, HD',
-          a: 'System',
-          ix: 0
-        }];
-      }
-    }
-
-    // Set column widths
     const colWidths = [
-      { wch: 25 },  // Name
-      { wch: 15 },  // Transport
-      { wch: 15 },  // CAB Route
-      { wch: 15 },  // Team Leader
-      { wch: 15 },  // Shift Start Hour
-      { wch: 15 },  // Shift End Hour
-      ...Array(dateColumns.length).fill({ wch: 12 }), // Date columns
-      { wch: 12 },  // Total Present
-      { wch: 12 },  // Total Week Off
-      { wch: 12 },  // Total Leave
-      { wch: 12 },  // Total No Call No Show
-      { wch: 12 },  // Total Unpaid Leave
-      { wch: 12 },  // Total Leave Without Pay
-      { wch: 12 },  // Total Bereavement Leave
-      { wch: 12 },  // Total Holiday
-      { wch: 12 }   // Total Last Working Day
+      { wch: 25 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      { wch: 15 },   
+      ...Array(dateColumns.length).fill({ wch: 12 }),  
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 },   
+      { wch: 12 }    
     ];
     
     worksheet['!cols'] = colWidths;
 
-    // Set row heights
+    // Set row height for header
     worksheet['!rows'] = [
-      { hpt: 40 },  // Instruction row - taller for wrapped text
-      { hpt: 25 },  // Header row
-      { hpt: 20 }   // Sample data row
+      { hpt: 25 }  // Header row only
     ];
 
-    // Add a second sheet with instructions
-    const instructionsSheet = XLSX.utils.aoa_to_sheet([
-      ['ROSTER UPLOAD INSTRUCTIONS'],
-      [''],
-      ['REQUIRED COLUMNS (Must be filled):'],
-      ['1. Name - Employee full name'],
-      ['2. Transport - "Yes", "No", or empty'],
-      ['3. CAB Route - Route information'],
-      ['4. Team Leader - Team leader name'],
-      ['5. Shift Start Hour - Hour number (0-23)'],
-      ['6. Shift End Hour - Hour number (0-23)'],
-      ['7. Date Columns (7 days) - Status codes for each day'],
-      [''],
-      ['OPTIONAL COLUMNS (Can be left empty):'],
-      ['- Total Present'],
-      ['- Total Week Off'],
-      ['- Total Leave'],
-      ['- Total No Call No Show'],
-      ['- Total Unpaid Leave'],
-      ['- Total Leave Without Pay'],
-      ['- Total Bereavement Leave'],
-      ['- Total Holiday'],
-      ['- Total Last Working Day'],
-      [''],
-      ['VALID STATUS CODES:'],
-      ['P   - Present'],
-      ['WO  - Week Off'],
-      ['L   - Leave'],
-      ['NCNS- No Call No Show'],
-      ['UL  - Unpaid Leave'],
-      ['LWP - Leave Without Pay'],
-      ['BL  - Bereavement Leave'],
-      ['H   - Holiday'],
-      ['LWD - Last Working Day'],
-      ['HD  - Half Day'],
-      [''],
-      ['NOTES:'],
-      ['- All status codes must be in CAPITAL LETTERS'],
-      ['- Maximum 2 Week Offs (WO) per week per employee'],
-      ['- Username is auto-generated from Name'],
-      ['- Blue headers = REQUIRED columns'],
-      ['- Green headers = OPTIONAL columns']
-    ]);
-
-    // Style the instructions sheet
-    if (!instructionsSheet['!cols']) instructionsSheet['!cols'] = [];
-    instructionsSheet['!cols'] = [{ wch: 40 }];
-    
-    XLSX.utils.book_append_sheet(workbook, instructionsSheet, 'Instructions');
-
-    // Append the main roster sheet
+    // Append the roster sheet
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
 
     const fileName = `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1).toString().padStart(2,'0')}-${fromDate.getDate().toString().padStart(2,'0')}_to_${toDate.getFullYear()}-${(toDate.getMonth()+1).toString().padStart(2,'0')}-${toDate.getDate().toString().padStart(2,'0')}.xlsx`;
