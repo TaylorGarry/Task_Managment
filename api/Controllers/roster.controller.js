@@ -2952,7 +2952,6 @@ export const rosterUploadFromExcel = async (req, res) => {
     const allowedEmployeeDepartments = ["Ops - Meta", "Marketing", "CS"];
     const isAllowedDepartmentEmployee = user.accountType === "employee" && allowedEmployeeDepartments.includes(user.department);
     
-    // Check permissions
     if (!isSuperAdmin && !isAdmin && !isAllowedDepartmentEmployee) {
       return res.status(403).json({
         success: false,
@@ -3234,7 +3233,6 @@ export const rosterUploadFromExcel = async (req, res) => {
         const dailyStatus = [];
         const statusDate = new Date(selectedStartDate);
         
-        // Validate that all date columns have status values
         for (let i = 0; i < excelDateColumns.length; i++) {
           const excelDateColumn = excelDateColumns[i];
           const statusValue = (row[excelDateColumn] || "P").toString().trim().toUpperCase();
@@ -3443,7 +3441,6 @@ export const exportRosterTemplate = async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
 
-    // Base required columns (always included)
     const baseRequiredColumns = [
       'Name',
       'Transport',
@@ -3453,10 +3450,8 @@ export const exportRosterTemplate = async (req, res) => {
       'Shift End Hour'
     ];
 
-    // Date columns (required - 7 days)
     const dateColumns = [...dateHeaders];
 
-    // Optional summary columns (can be empty or missing during upload)
     const optionalSummaryColumns = [
       'Total Present',
       'Total Week Off',
