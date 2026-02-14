@@ -702,7 +702,7 @@ import axios from "axios";
 import { toast } from "react-toastify";
 
 // const API_URL = "http://localhost:4000/api/v1/tasks";
-const API_URL = "https://fdbs-server-a9gqg.ondigitalodcean.app/api/v1/tasks";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -744,7 +744,6 @@ const getUser = () => {
 };
 
 
-// Helper to get today's date string in YYYY-MM-DD format
 const getTodayDateString = () => {
   const today = new Date();
   const year = today.getFullYear();
@@ -753,7 +752,6 @@ const getTodayDateString = () => {
   return `${year}-${month}-${day}`;
 };
 
-// Helper to check if date is today
 const isToday = (dateString) => {
   if (!dateString) return false;
   return dateString === getTodayDateString();

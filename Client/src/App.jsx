@@ -169,6 +169,8 @@ import OpsRoster from "./Roster/OpsRoster.jsx";
 import ExcelRosterUpload from "./Roster/ExcelRosterUpload.jsx";  
 import MyDefaults from "./pages/MyDefaults.jsx";
 
+const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS"];
+
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
   if (!user) return <Navigate to="/login" replace />;
@@ -189,8 +191,10 @@ const OpsMetaRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // STRICT CHECK: Only "employee" accountType from "Ops - Meta" department
-  const isEligible = user.accountType === "employee" && user.department === "Ops - Meta";
+  // Allow employee users from Ops - Meta, Marketing, and CS
+  const isEligible =
+    user.accountType === "employee" &&
+    ALLOWED_ROSTER_DEPARTMENTS.includes(user.department);
 
   if (!isEligible) {
     // Everyone else goes to their respective dashboards
@@ -221,15 +225,15 @@ const EmployeeOnlyRoute = ({ children }) => {
 
   return children;
 };
-// ADD THIS: Route for Ops-Meta Excel Upload (with Ops-Meta employees)
+// Route for roster Excel Upload (allowed departments + admin roles)
 const OpsMetaUploadRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Check if user can upload (Ops-Meta employees, admin, HR, superAdmin)
+  // Check if user can upload (allowed department employees, admin, HR, superAdmin)
   const canUploadExcel = 
-    (user.accountType === "employee" && user.department === "Ops - Meta") ||
+    (user.accountType === "employee" && ALLOWED_ROSTER_DEPARTMENTS.includes(user.department)) ||
     ["admin", "superAdmin", "HR"].includes(user.accountType);
 
   if (!canUploadExcel) {

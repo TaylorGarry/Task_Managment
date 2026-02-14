@@ -2685,10 +2685,11 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
-    if (user.department !== "Ops - Meta") {
+    const allowedTeamLeaderDepartments = ["Ops - Meta", "Marketing", "CS"];
+    if (!allowedTeamLeaderDepartments.includes(user.department)) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. Only Ops-Meta department employees can access this."
+        message: "Access denied. Only Ops-Meta, Marketing, or CS department employees can access this."
       });
     }
 
@@ -2948,13 +2949,14 @@ export const rosterUploadFromExcel = async (req, res) => {
     const user = req.user;
     const isSuperAdmin = user.accountType === "superAdmin";
     const isAdmin = ["admin", "HR"].includes(user.accountType);
-    const isOpsMetaEmployee = user.accountType === "employee" && user.department === "Ops - Meta";
+    const allowedEmployeeDepartments = ["Ops - Meta", "Marketing", "CS"];
+    const isAllowedDepartmentEmployee = user.accountType === "employee" && allowedEmployeeDepartments.includes(user.department);
     
     // Check permissions
-    if (!isSuperAdmin && !isAdmin && !isOpsMetaEmployee) {
+    if (!isSuperAdmin && !isAdmin && !isAllowedDepartmentEmployee) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. Only superAdmin, admin, HR, or Ops-Meta department employees can upload roster."
+        message: "Access denied. Only superAdmin, admin, HR, or Ops-Meta/Marketing/CS department employees can upload roster."
       });
     }
     
@@ -2999,7 +3001,7 @@ export const rosterUploadFromExcel = async (req, res) => {
     today.setHours(0, 0, 0, 0);
     
     // DATE VALIDATION BASED ON USER ROLE
-    if (isOpsMetaEmployee) {
+    if (isAllowedDepartmentEmployee) {
       // OPS-META: Can only upload for tomorrow onwards (no past dates)
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
@@ -3007,7 +3009,7 @@ export const rosterUploadFromExcel = async (req, res) => {
       if (selectedStartDate < tomorrow) {
         return res.status(400).json({
           success: false,
-          message: "Ops-Meta employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
+          message: "Ops-Meta, Marketing, and CS employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
         });
       }
     } 
@@ -3121,8 +3123,8 @@ export const rosterUploadFromExcel = async (req, res) => {
         
         const rowTeamLeader = (row['Team Leader'] || "").toString().trim();
         
-        if (isOpsMetaEmployee && rowTeamLeader && rowTeamLeader.toLowerCase() !== user.username.toLowerCase()) {
-          console.log(`Ops-Meta employee ${user.username} uploading for team leader: ${rowTeamLeader}`);
+        if (isAllowedDepartmentEmployee && rowTeamLeader && rowTeamLeader.toLowerCase() !== user.username.toLowerCase()) {
+          console.log(`Department employee ${user.username} uploading for team leader: ${rowTeamLeader}`);
         }
         
         let userRecord = await User.findOne({ username: username });
@@ -3272,8 +3274,8 @@ export const rosterUploadFromExcel = async (req, res) => {
     
     // Determine permission message based on user role
     let permissionsNote = "";
-    if (isOpsMetaEmployee) {
-      permissionsNote = "Ops-Meta employees: Can upload for any team (future dates from tomorrow only)";
+    if (isAllowedDepartmentEmployee) {
+      permissionsNote = "Ops-Meta, Marketing, and CS employees: Can upload for any team (future dates from tomorrow only)";
     } else if (isAdmin) {
       permissionsNote = "Admin/HR: Can upload for any team (today and future dates only)";
     } else if (isSuperAdmin) {
@@ -3551,3 +3553,4 @@ export const exportRosterTemplate = async (req, res) => {
     });
   }
 };
+
