@@ -8,8 +8,6 @@ const ConditionalNavbar = () => {
   
   const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(user?.accountType);
   
-  const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
-  
   if (!isAdminUser) {
     return <Navbar />;
   }

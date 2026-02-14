@@ -27,7 +27,7 @@
 //   };
 
 //   // ADD THIS LINE: Check if user is Ops-Meta employee
-//   const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
+//   const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
 
 //   return (
 //    <>
@@ -52,7 +52,7 @@
 //           </button>
           
 //           {/* Ops-Meta Roster Button - Only for Ops-Meta employees */}
-//           {isOpsMeta && (
+//           {isAllowedRosterDepartmentEmployee && (
 //             <button
 //               onClick={() => navigate("/ops-meta-roster")}
 //               className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-700 font-medium hover:bg-amber-100 transition-all cursor-pointer"
@@ -217,11 +217,12 @@
 //   };
 
 //   // Check if user is Ops-Meta employee
-//   const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
+//   const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
+  // const isAllowedRosterDepartmentEmployee = user?.accountType === "employee" && allowedRosterDepartments.includes(user?.department);
   
 //   // Check if user can upload Excel (Ops-Meta employees + Admin/HR/superAdmin)
 //   const canUploadExcel = 
-//     (user?.accountType === "employee" && user?.department === "Ops - Meta") ||
+//     (user?.accountType === "employee" && allowedRosterDepartments.includes(user?.department)) ||
 //     ["admin", "superAdmin", "HR"].includes(user?.accountType);
 
 //   return (
@@ -261,7 +262,7 @@
 //           )}
           
 //           {/* Ops-Meta Roster Button - Only for Ops-Meta employees */}
-//           {isOpsMeta && (
+//           {isAllowedRosterDepartmentEmployee && (
 //             <button
 //               onClick={() => navigate("/ops-meta-roster")}
 //               className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-700 font-medium hover:bg-amber-100 transition-all cursor-pointer"
@@ -346,7 +347,7 @@
 //           )}
           
 //           {/* Mobile Ops-Meta Roster Button */}
-//           {isOpsMeta && (
+//           {isAllowedRosterDepartmentEmployee && (
 //             <button
 //               onClick={() => navigate("/ops-meta-roster")}
 //               className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-700 font-medium hover:bg-amber-100 transition-all"
@@ -446,11 +447,14 @@ const Navbar = () => {
   };
 
   // Check if user is Ops-Meta employee
-  const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
+  const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
+  const isAllowedRosterDepartmentEmployee =
+    user?.accountType === "employee" &&
+    allowedRosterDepartments.includes(user?.department);
   
   // Check if user can upload Excel (Ops-Meta employees + Admin/HR/superAdmin)
   const canUploadExcel = 
-    (user?.accountType === "employee" && user?.department === "Ops - Meta") ||
+    (user?.accountType === "employee" && allowedRosterDepartments.includes(user?.department)) ||
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
   
   // Check if user is employee (for showing Defaulter link)
@@ -503,7 +507,7 @@ const Navbar = () => {
           )}
           
           {/* Ops-Meta Roster Button - Only for Ops-Meta employees */}
-          {isOpsMeta && (
+          {isAllowedRosterDepartmentEmployee && (
             <button
               onClick={() => navigate("/ops-meta-roster")}
               className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-700 font-medium hover:bg-amber-100 transition-all cursor-pointer"
@@ -613,7 +617,7 @@ const Navbar = () => {
           )}
           
           {/* Mobile Ops-Meta Roster Button */}
-          {isOpsMeta && (
+          {isAllowedRosterDepartmentEmployee && (
             <button
               onClick={() => {
                 navigate("/ops-meta-roster");
