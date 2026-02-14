@@ -446,18 +446,15 @@ const Navbar = () => {
     navigate("/login");
   };
 
-  // Check if user is Ops-Meta employee
   const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
   const isAllowedRosterDepartmentEmployee =
     user?.accountType === "employee" &&
     allowedRosterDepartments.includes(user?.department);
   
-  // Check if user can upload Excel (Ops-Meta employees + Admin/HR/superAdmin)
   const canUploadExcel = 
     (user?.accountType === "employee" && allowedRosterDepartments.includes(user?.department)) ||
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
   
-  // Check if user is employee (for showing Defaulter link)
   const isEmployee = user?.accountType === "employee";
 
   return (
@@ -492,7 +489,6 @@ const Navbar = () => {
             </button>
           )}
           
-          {/* Excel Upload Button - For Ops-Meta + Admin/HR/superAdmin */}
           {canUploadExcel && (
             <button
               onClick={() => navigate("/upload-roster")}
@@ -506,7 +502,6 @@ const Navbar = () => {
             </button>
           )}
           
-          {/* Ops-Meta Roster Button - Only for Ops-Meta employees */}
           {isAllowedRosterDepartmentEmployee && (
             <button
               onClick={() => navigate("/ops-meta-roster")}
@@ -572,7 +567,6 @@ const Navbar = () => {
         </button>
       </div>
 
-      {/* Mobile Menu */}
       {isMenuOpen && (
         <div className="md:hidden flex flex-col mt-3 space-y-2 bg-white border-t border-[#EAEAEA] py-3">
           <button
@@ -585,7 +579,6 @@ const Navbar = () => {
             Today
           </button>
           
-          {/* Mobile Defaulter Link - Only for employees */}
           {isEmployee && (
             <button
               onClick={() => {
@@ -599,7 +592,6 @@ const Navbar = () => {
             </button>
           )}
           
-          {/* Mobile Excel Upload Button */}
           {canUploadExcel && (
             <button
               onClick={() => {
@@ -616,7 +608,6 @@ const Navbar = () => {
             </button>
           )}
           
-          {/* Mobile Ops-Meta Roster Button */}
           {isAllowedRosterDepartmentEmployee && (
             <button
               onClick={() => {

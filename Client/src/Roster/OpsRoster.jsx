@@ -416,7 +416,7 @@ const OpsRoster = () => {
                     Team Leader
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    Status (Date-wise)
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Actions
@@ -443,21 +443,24 @@ const OpsRoster = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {employee.teamLeader || '-'}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex flex-wrap gap-1">
-                        {employee.dailyStatus?.slice(0, 3).map((day, index) => (
-                          <div 
-                            key={index}
-                            className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium border ${getStatusColor(day.status)}`}
-                            title={`${formatDate(day.date)}: ${getStatusLabel(day.status)}`}
-                          >
-                            {getStatusIcon(day.status)} {day.status}
-                          </div>
-                        ))}
-                        {employee.dailyStatus?.length > 3 && (
-                          <div className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-gray-100 text-gray-800 border border-gray-200">
-                            +{employee.dailyStatus.length - 3}
-                          </div>
+                    <td className="px-6 py-4 text-sm text-gray-900">
+                      <div className="min-w-[420px] flex items-start gap-2 overflow-x-auto">
+                        {employee.dailyStatus?.length ? (
+                          employee.dailyStatus.map((day, index) => (
+                            <div key={index} className="rounded border border-gray-200 p-1.5 text-center">
+                              <div className="text-[11px] text-gray-600 mb-1 whitespace-nowrap">
+                                {formatDate(day.date)}
+                              </div>
+                              <span
+                                className={`inline-flex items-center justify-center px-2 py-1 rounded text-xs font-medium border ${getStatusColor(day.status)}`}
+                                title={`${formatDate(day.date)}: ${getStatusLabel(day.status)}`}
+                              >
+                                {getStatusIcon(day.status)} {day.status}
+                              </span>
+                            </div>
+                          ))
+                        ) : (
+                          <span className="text-xs text-gray-500">No status</span>
                         )}
                       </div>
                     </td>
