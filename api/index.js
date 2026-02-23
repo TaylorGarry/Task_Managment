@@ -1,6 +1,11 @@
 import "dotenv/config";
 import app from "./app.js";
+<<<<<<< HEAD
 import connectDB from "./DB/connnection.js";  
+=======
+import connectDB from "./DB/connnection.js"; 
+import "./jobs/shiftNotification.job.js"; 
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 import Task from "./Modals/Task.modal.js";
 import TaskStatus from "./Modals/TaskStatus.modal.js";
 

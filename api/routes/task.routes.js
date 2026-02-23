@@ -17,6 +17,13 @@ import {
   getAdminTasks,
   updateAdminTaskStatus,
   getAdminAssignedTasks,
+<<<<<<< HEAD
+=======
+  exportEmployeeDefaults,
+  getEmployeeOwnDefaults,
+  getEmployeeTaskDetails,
+  getEmployeeMissedStats,
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   
 } from "../Controllers/task.controller.js";
 
@@ -34,13 +41,24 @@ router.put("/status/:taskId", authMiddleware, updateTaskStatus);
 router.get("/AllTasks", authMiddleware, getAllTasks);
 router.get("/export-status", authMiddleware, exportTaskStatusExcel);
 router.get("/defaulter", authMiddleware, Defaulter);
+<<<<<<< HEAD
 router.get("/employee-defaulters/:employeeId", getEmployeeDefaulters);
+=======
+router.get("/employee-defaulter/:employeeId", getEmployeeDefaulters);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 router.post("/create/coretask", authMiddleware, createCoreTeamTask);
 router.get("/coreteamTask", authMiddleware, getCoreTeamTasks);
 router.get("/admintask", authMiddleware, getAdminTasks);
 router.put("/admin/status/:taskId", authMiddleware, updateAdminTaskStatus);
 router.get('/admin-assigned-tasks', authMiddleware, getAdminAssignedTasks);
+<<<<<<< HEAD
 
 
+=======
+router.get("/export-employee-defaulter/:employeeId",authMiddleware,exportEmployeeDefaults);
+router.get("/my-missed-tasks", authMiddleware, getEmployeeOwnDefaults);
+ router.get("/task/:taskId", authMiddleware, getEmployeeTaskDetails);
+ router.get("/missed-stats", authMiddleware, getEmployeeMissedStats);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
 export default router;

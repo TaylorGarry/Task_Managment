@@ -18,6 +18,7 @@ const Signup = () => {
       isCoreTeam: false,
     },
   });
+<<<<<<< HEAD
 
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -33,13 +34,29 @@ const Signup = () => {
     const allowed =
       user?.accountType === "admin" ||
       user?.accountType === "superAdmin" 
+=======
+  const dispatch = useDispatch();
+  const navigate = useNavigate();
+  const { user } = useSelector((state) => state.auth);
+  const [showPassword, setShowPassword] = useState(false);
+  const [creatingUser, setCreatingUser] = useState(false);
+  const accountType = watch("accountType");
+  const isCoreTeam = watch("isCoreTeam");
+  useEffect(() => {
+    const allowed =
+      user?.accountType === "admin" ||
+      user?.accountType === "superAdmin" ||
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       user?.accountType === "HR";
 
     if (!user || !allowed) {
       navigate(user ? "/dashboard" : "/login", { replace: true });
     }
   }, [user, navigate]);
+<<<<<<< HEAD
 
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   const shiftOptions = [
     { label: "1 AM - 10 AM", shiftLabel: "1am-10am" },
     { label: "4 PM - 1 AM", shiftLabel: "4pm-1am" },
@@ -48,11 +65,17 @@ const Signup = () => {
     { label: "8 PM - 5 AM", shiftLabel: "8pm-5am" },
     { label: "11 PM - 8 AM", shiftLabel: "11pm-8am" },
   ];
+<<<<<<< HEAD
 
   const onSubmit = async (data) => {
     if (creatingUser) return;
     setCreatingUser(true);
 
+=======
+  const onSubmit = async (data) => {
+    if (creatingUser) return;
+    setCreatingUser(true);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     try {
       const payload = {
         username: data.username,
@@ -61,13 +84,17 @@ const Signup = () => {
         department: data.department,
         isCoreTeam: data.isCoreTeam || false,
       };
+<<<<<<< HEAD
 
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       if (
         data.accountType === "employee" &&
         !data.isCoreTeam
       ) {
         payload.shiftLabel = data.shiftLabel;
       }
+<<<<<<< HEAD
 
       const resultAction = data.isCoreTeam
         ? await dispatch(createCoreTeamUser(payload))
@@ -77,6 +104,14 @@ const Signup = () => {
         signupUser.fulfilled.match(resultAction) ||
         createCoreTeamUser.fulfilled.match(resultAction);
 
+=======
+      const resultAction = data.isCoreTeam
+        ? await dispatch(createCoreTeamUser(payload))
+        : await dispatch(signupUser(payload));
+      const success =
+        signupUser.fulfilled.match(resultAction) ||
+        createCoreTeamUser.fulfilled.match(resultAction);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       if (success) {
         toast.success("User created successfully");
         reset();
@@ -89,11 +124,15 @@ const Signup = () => {
       setCreatingUser(false);
     }
   };
+<<<<<<< HEAD
 
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   return (
     <>
       <Toaster />
       <AdminNavbar />
+<<<<<<< HEAD
 
       <div className="flex justify-center items-center h-screen bg-gray-100">
         <div className="bg-white p-8 rounded-2xl mt-10 shadow-md w-full max-w-md">
@@ -198,6 +237,178 @@ const Signup = () => {
               {creatingUser ? "Creating..." : "Create User"}
             </button>
           </form>
+=======
+      <div className="relative min-h-screen overflow-y-auto pt-16 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
+        <style>{`
+          @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=Playfair+Display:wght@600&display=swap');
+        `}</style>
+
+        <div className="absolute inset-0 bg-[radial-gradient(60%_60%_at_10%_20%,rgba(30,64,175,0.14),rgba(248,250,252,0))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_85%_15%,rgba(14,116,144,0.14),rgba(248,250,252,0))]" />
+        <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_70%_85%,rgba(15,23,42,0.08),rgba(248,250,252,0))]" />
+
+        <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] max-w-6xl items-start px-4 py-4 md:items-center">
+          <div className="w-full overflow-hidden rounded-3xl bg-white border border-slate-200 shadow-[0_30px_70px_-45px_rgba(15,23,42,0.35)]">
+            <div className="grid lg:grid-cols-[1.1fr_1.3fr]">
+              <div className="relative flex flex-col justify-between bg-gradient-to-br from-slate-100 via-blue-50 to-white p-10 text-slate-900 lg:p-12 border-r border-slate-200">
+                <div>
+                  <span className="inline-flex items-center rounded-full bg-blue-100 text-blue-700 border border-blue-200 px-3 py-1 text-xs uppercase tracking-[0.2em]">
+                    Admin Console
+                  </span>
+                  <h2
+                    className="mt-6 text-3xl font-semibold leading-tight"
+                    style={{ fontFamily: "'Playfair Display', serif" }}
+                  >
+                    Create new access
+                  </h2>
+                  <p className="mt-3 text-sm text-slate-600">
+                    Provision accounts with role-based permissions in minutes.
+                  </p>
+                </div>
+                <div className="mt-10 grid gap-4 text-sm sm:grid-cols-2">
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-2xl font-semibold text-slate-900">Secure</p>
+                    <p className="mt-1 text-slate-600">Role-based access</p>
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <p className="text-2xl font-semibold text-slate-900">Fast</p>
+                    <p className="mt-1 text-slate-600">One form setup</p>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                className="bg-white p-10 lg:p-12"
+                style={{ fontFamily: "'IBM Plex Sans', system-ui, sans-serif" }}
+              >
+                <h3 className="text-2xl font-semibold text-slate-900">
+                  Create User
+                </h3>
+                <p className="mt-2 text-sm text-slate-500">
+                  Fill out the details below to provision a new account.
+                </p>
+
+                <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5">
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Username
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. jdoe"
+                      {...register("username", { required: true })}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                      disabled={creatingUser}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-medium text-slate-700">
+                      Password
+                    </label>
+                    <div className="relative mt-2">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Set a temporary password"
+                        {...register("password", { required: true })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 pr-10 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                        disabled={creatingUser}
+                      />
+                      <span
+                        className="absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer text-slate-500"
+                        onClick={() => setShowPassword(!showPassword)}
+                      >
+                        {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div>
+                      <label className="text-sm font-medium text-slate-700">
+                        Account Type
+                      </label>
+                      <select
+                        {...register("accountType")}
+                        className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                        disabled={creatingUser}
+                      >
+                        <option value="employee">Employee</option>
+                        <option value="admin">Admin</option>
+                        <option value="Operations">Operations</option>
+                        <option value="AM">AM</option>
+                        <option value="HR">HR</option>
+                        <option value="superAdmin">Super Admin</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-slate-700">
+                        Department
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="e.g. Operations"
+                        {...register("department", { required: true })}
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                        disabled={creatingUser}
+                      />
+                    </div>
+                  </div>
+                  {accountType === "employee" && !isCoreTeam && (
+                    <div>
+                      <label className="text-sm font-medium text-slate-700">
+                        Shift
+                      </label>
+                      <select
+                        {...register("shiftLabel", { required: true })}
+                        className="mt-2 w-full cursor-pointer rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
+                        disabled={creatingUser}
+                      >
+                        {shiftOptions.map((option) => (
+                          <option key={option.shiftLabel} value={option.shiftLabel}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
+                  {accountType === "employee" && (
+                    <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                      <label className="text-sm text-slate-700 font-medium">
+                        Core Team Member
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setValue("isCoreTeam", !isCoreTeam)}
+                        className={`relative inline-flex cursor-pointer h-6 w-11 items-center rounded-full ${
+                          isCoreTeam ? "bg-blue-600" : "bg-slate-300"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition ${
+                            isCoreTeam ? "translate-x-6" : "translate-x-1"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+                  <button
+                    type="submit"
+                    disabled={creatingUser}
+                    className={`w-full rounded-xl px-4 py-3 cursor-pointer text-base font-semibold text-white transition ${
+                      creatingUser
+                        ? "cursor-not-allowed bg-blue-300"
+                        : "bg-blue-600 hover:bg-blue-700"
+                    }`}
+                  >
+                    {creatingUser ? "Creating..." : "Create User"}
+                  </button>
+                </form>
+              </div>
+            </div>
+          </div>
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         </div>
       </div>
     </>
@@ -205,4 +416,7 @@ const Signup = () => {
 };
 
 export default Signup;
+<<<<<<< HEAD
 
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)

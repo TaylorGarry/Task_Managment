@@ -2,9 +2,15 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
+<<<<<<< HEAD
 // const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
 const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+=======
+const API_URL = "http://localhost:4000/api/v1";
+// const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
+//const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));

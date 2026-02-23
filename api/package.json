@@ -26,6 +26,10 @@
     "node-cache": "^5.1.2",
     "node-cron": "^4.2.1",
     "socket.io": "^4.8.1",
+<<<<<<< HEAD
+=======
+    "web-push": "^3.6.7",
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     "xlsx": "^0.18.5",
     "xlsx-js-style": "^1.2.0"
   },

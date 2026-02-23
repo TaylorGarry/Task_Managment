@@ -22,7 +22,10 @@ const AdminDashboard = () => {
     deadline: "",
   });
 
+<<<<<<< HEAD
   const statuses = ["Pending", "Working", "Reviewing", "Done"];
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
   useEffect(() => {
     dispatch(fetchTasks());

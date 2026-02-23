@@ -10,12 +10,18 @@ export const uploadFile = createAsyncThunk(
       if (chatId) {
         formData.append("chatId", chatId);
       }
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       const res = await api.post("/api/messages/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
       return res.data.media;
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     } catch (err) {
       return rejectWithValue(err.response?.data || err.message);
     }
@@ -32,16 +38,25 @@ export const sendMessage = createAsyncThunk(
         media: media,
         repliedTo: repliedTo || null
       };
+<<<<<<< HEAD
       
       const res = await api.post("/api/messages/send", payload, {
         headers: { "Content-Type": "application/json" }
       });
       
+=======
+      const res = await api.post("/api/messages/send", payload, {
+        headers: { "Content-Type": "application/json" }
+      });
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       return { 
         chatId, 
         message: res.data.message 
       };
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     } catch (err) {
       return rejectWithValue(err.response?.data || err.message);
     }
@@ -55,7 +70,10 @@ export const sendMessageWithFiles = createAsyncThunk(
       const uploadPromises = files.map(file => 
         dispatch(uploadFile({ file, chatId })).unwrap()
       );
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       const uploadedMedia = await Promise.all(uploadPromises);
       const payload = { 
         chatId, 
@@ -63,7 +81,10 @@ export const sendMessageWithFiles = createAsyncThunk(
         media: uploadedMedia,
         repliedTo: repliedTo || null
       };
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       const res = await api.post("/api/messages/send", payload, {
         headers: { "Content-Type": "application/json" }
       });
@@ -71,7 +92,10 @@ export const sendMessageWithFiles = createAsyncThunk(
         chatId, 
         message: res.data.message 
       };
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     } catch (err) {
       return rejectWithValue(err.response?.data || err.message);
     }
@@ -86,7 +110,10 @@ export const editMessage = createAsyncThunk(
         text: text.trim() 
       });
       return res.data.message || res.data;
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     } catch (err) {
       return rejectWithValue(err.response?.data || err.message);
     }
@@ -99,7 +126,10 @@ export const deleteMessage = createAsyncThunk(
     try {
       const res = await api.delete(`/api/messages/${messageId}`);
       return { messageId, data: res.data };
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     } catch (err) {
       return rejectWithValue(err.response?.data || err.message);
     }
@@ -125,6 +155,7 @@ const messageSlice = createSlice({
       if (!chatId || !message) {
         return;
       }
+<<<<<<< HEAD
       
       if (!state.messagesByChat[chatId]) {
         state.messagesByChat[chatId] = [];
@@ -137,11 +168,22 @@ const messageSlice = createSlice({
       if (!messageExists) {
         state.messagesByChat[chatId].push(message);
         
+=======
+      if (!state.messagesByChat[chatId]) {
+        state.messagesByChat[chatId] = [];
+      }
+      const messageExists = state.messagesByChat[chatId].some(
+        m => m._id === message._id
+      );
+      if (!messageExists) {
+        state.messagesByChat[chatId].push(message);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         state.messagesByChat[chatId].sort((a, b) => 
           new Date(a.createdAt) - new Date(b.createdAt)
         );
       } 
     },
+<<<<<<< HEAD
     
     setMessagesForChat: (state, action) => {
       const { chatId, messages } = action.payload;
@@ -156,17 +198,32 @@ const messageSlice = createSlice({
       
       state.messagesByChat[chatId] = realMessages;
       
+=======
+    setMessagesForChat: (state, action) => {
+      const { chatId, messages } = action.payload;
+      if (!chatId) {
+        return;
+      }
+      const realMessages = messages.filter(
+        m => !m._id?.toString().startsWith('temp_')
+      );
+      state.messagesByChat[chatId] = realMessages;
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       state.messagesByChat[chatId].sort((a, b) => 
         new Date(a.createdAt) - new Date(b.createdAt)
       );
     },
+<<<<<<< HEAD
     
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     clearMessages: (state) => {
       state.messagesByChat = {};
     },
     
     replaceTempMessage: (state, action) => {
       const { chatId, tempId, realMessage } = action.payload;
+<<<<<<< HEAD
       
       if (!state.messagesByChat[chatId]) return;
       
@@ -174,14 +231,25 @@ const messageSlice = createSlice({
         m => m._id !== tempId
       );
       
+=======
+      if (!state.messagesByChat[chatId]) return;
+      state.messagesByChat[chatId] = state.messagesByChat[chatId].filter(
+        m => m._id !== tempId
+      );
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       if (realMessage) {
         const realMessageExists = state.messagesByChat[chatId].some(
           m => m._id === realMessage._id
         );
+<<<<<<< HEAD
         
         if (!realMessageExists) {
           state.messagesByChat[chatId].push(realMessage);
           
+=======
+        if (!realMessageExists) {
+          state.messagesByChat[chatId].push(realMessage);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
           state.messagesByChat[chatId].sort((a, b) => 
             new Date(a.createdAt) - new Date(b.createdAt)
           );
@@ -191,6 +259,7 @@ const messageSlice = createSlice({
     
     updateEditedMessage: (state, action) => {
       const { chatId, messageId, text, isEdited, editedAt, updatedAt } = action.payload;
+<<<<<<< HEAD
       
       if (!state.messagesByChat[chatId]) return;
       
@@ -198,6 +267,12 @@ const messageSlice = createSlice({
         m => m._id === messageId
       );
       
+=======
+      if (!state.messagesByChat[chatId]) return;
+      const messageIndex = state.messagesByChat[chatId].findIndex(
+        m => m._id === messageId
+      );
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       if (messageIndex !== -1) {
         state.messagesByChat[chatId][messageIndex].content.text = text;
         state.messagesByChat[chatId][messageIndex].isEdited = isEdited || true;
@@ -208,6 +283,7 @@ const messageSlice = createSlice({
     
     updateMessageLocally: (state, action) => {
       const { chatId, messageId, updates } = action.payload;
+<<<<<<< HEAD
       
       if (!state.messagesByChat[chatId]) return;
       
@@ -215,6 +291,12 @@ const messageSlice = createSlice({
         m => m._id === messageId
       );
       
+=======
+      if (!state.messagesByChat[chatId]) return;
+      const messageIndex = state.messagesByChat[chatId].findIndex(
+        m => m._id === messageId
+      );
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       if (messageIndex !== -1) {
         state.messagesByChat[chatId][messageIndex] = {
           ...state.messagesByChat[chatId][messageIndex],
@@ -242,11 +324,17 @@ const messageSlice = createSlice({
     clearUploadedFiles: (state) => {
       state.uploadedFiles = [];
     },
+<<<<<<< HEAD
     
     addUploadedFile: (state, action) => {
       state.uploadedFiles.push(action.payload);
     },
     
+=======
+    addUploadedFile: (state, action) => {
+      state.uploadedFiles.push(action.payload);
+    },
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     removeUploadedFile: (state, action) => {
       const { publicId } = action.payload;
       state.uploadedFiles = state.uploadedFiles.filter(
@@ -278,6 +366,7 @@ const messageSlice = createSlice({
         if (!state.messagesByChat[chatId]) {
           state.messagesByChat[chatId] = [];
         }
+<<<<<<< HEAD
         
         const messageExists = state.messagesByChat[chatId].some(
           m => m._id === message._id
@@ -286,6 +375,13 @@ const messageSlice = createSlice({
         if (!messageExists) {
           state.messagesByChat[chatId].push(message);
           
+=======
+        const messageExists = state.messagesByChat[chatId].some(
+          m => m._id === message._id
+        );
+        if (!messageExists) {
+          state.messagesByChat[chatId].push(message);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
           state.messagesByChat[chatId].sort((a, b) => 
             new Date(a.createdAt) - new Date(b.createdAt)
           );
@@ -305,6 +401,7 @@ const messageSlice = createSlice({
         state.loading = false;
         state.uploading = false;
         const { chatId, message } = action.payload;
+<<<<<<< HEAD
         
         if (!state.messagesByChat[chatId]) {
           state.messagesByChat[chatId] = [];
@@ -317,6 +414,16 @@ const messageSlice = createSlice({
         if (!messageExists) {
           state.messagesByChat[chatId].push(message);
           
+=======
+        if (!state.messagesByChat[chatId]) {
+          state.messagesByChat[chatId] = [];
+        }
+        const messageExists = state.messagesByChat[chatId].some(
+          m => m._id === message._id
+        );
+        if (!messageExists) {
+          state.messagesByChat[chatId].push(message);
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
           state.messagesByChat[chatId].sort((a, b) => 
             new Date(a.createdAt) - new Date(b.createdAt)
           );
@@ -345,7 +452,10 @@ const messageSlice = createSlice({
             break;
           }
         }
+<<<<<<< HEAD
         
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         state.editingMessageId = null;
       })
       .addCase(editMessage.rejected, (state, action) => {
@@ -353,7 +463,10 @@ const messageSlice = createSlice({
         state.error = action.payload;
         state.editingMessageId = null;
       })
+<<<<<<< HEAD
       
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       .addCase(deleteMessage.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -365,7 +478,10 @@ const messageSlice = createSlice({
         for (const [chatId, messages] of chatEntries) {
           state.messagesByChat[chatId] = messages.filter(m => m._id !== messageId);
         }
+<<<<<<< HEAD
         
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         state.deletingMessageId = null;
       })
       .addCase(deleteMessage.rejected, (state, action) => {

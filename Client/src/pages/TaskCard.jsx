@@ -1,5 +1,6 @@
 import React from "react";
 const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
+<<<<<<< HEAD
   const normalizeDate = (dateInput) => {
     if (!dateInput) return '';
     
@@ -77,6 +78,271 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
     return isSameDate;
   });
   
+=======
+  // const normalizeDate = (dateInput) => {
+  //   if (!dateInput) return '';
+    
+  //   try {
+  //     if (dateInput instanceof Date) {
+  //       return dateInput.toISOString().split('T')[0];
+  //     }
+      
+  //     if (typeof dateInput === 'string' && dateInput.includes('/')) {
+  //       const parts = dateInput.split('/');
+  //       if (parts.length === 3) {
+  //         const day = parts[0];
+  //         const month = parts[1];
+  //         const year = parts[2];
+  //         return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  //       }
+  //     }
+      
+  //     const d = new Date(dateInput);
+  //     if (!isNaN(d.getTime())) {
+  //       return d.toISOString().split('T')[0];
+  //     }
+      
+  //     return '';
+  //   } catch (error) {
+  //     return '';
+  //   }
+  // };
+
+  // const formatDisplayDate = (dateInput) => {
+  //   if (!dateInput) return "Today";
+    
+  //   try {
+  //     let d;
+      
+  //     if (dateInput instanceof Date) {
+  //       d = dateInput;
+  //     } else if (typeof dateInput === 'string') {
+  //       if (dateInput.includes('/')) {
+  //         const parts = dateInput.split('/');
+  //         if (parts.length === 3) {
+  //           d = new Date(parts[2], parts[1] - 1, parts[0]);
+  //         } else if (parts.length === 3 && parts[0].length === 4) {
+  //           d = new Date(dateInput);
+  //         }
+  //       } else if (dateInput.includes('-')) {
+  //         d = new Date(dateInput);
+  //       }
+  //     }
+      
+  //     if (!d || isNaN(d.getTime())) {
+  //       d = new Date(dateInput);
+  //     }
+
+  //        d = getISTDate(d);
+      
+  //     if (d && !isNaN(d.getTime())) {
+  //       const day = String(d.getDate()).padStart(2, '0');
+  //       const month = String(d.getMonth() + 1).padStart(2, '0');
+  //       const year = d.getFullYear();
+  //       return `${day}/${month}/${year}`;
+  //     }
+      
+  //     return "Today";
+  //   } catch (e) {
+  //     return "Today";
+  //   }
+  // };
+
+  // const taskNormalizedDate = normalizeDate(task.date);
+  // const taskDisplayDate = formatDisplayDate(task.date);
+  
+  // const relatedTasks = allTasks.filter(t => {
+  //   const tDate = normalizeDate(t.date);
+  //   const isSameDate = tDate === taskNormalizedDate && tDate !== '';
+    
+  //   return isSameDate;
+  // });
+  
+
+const getISTDate = (date) => {
+  if (!date || isNaN(new Date(date).getTime())) return null;
+  
+  const utcDate = new Date(date);
+  
+  const istOffset = 5.5 * 60 * 60 * 1000; 
+  const istDate = new Date(utcDate.getTime() + istOffset);
+  
+  return istDate;
+};
+
+const getIndianDateFromIST = (istDate) => {
+  if (!istDate) return null;
+  
+  const indianDate = new Date(Date.UTC(
+    istDate.getUTCFullYear(),
+    istDate.getUTCMonth(),
+    istDate.getUTCDate(),
+    0, 0, 0, 0
+  ));
+  
+  return indianDate;
+};
+
+const normalizeDate = (dateInput) => {
+  if (!dateInput) return '';
+  
+  try {
+    let d;
+    
+    if (dateInput instanceof Date) {
+      d = dateInput;
+    } else if (typeof dateInput === 'string') {
+      if (dateInput.includes('/')) {
+        const parts = dateInput.split('/');
+        if (parts.length === 3) {
+          d = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else {
+          d = new Date(dateInput);
+        }
+      } else if (dateInput.includes('-')) {
+        d = new Date(dateInput);
+      } else {
+        d = new Date(dateInput);
+      }
+    } else {
+      d = new Date(dateInput);
+    }
+    
+    if (!d || isNaN(d.getTime())) {
+      return '';
+    }
+    
+    const istDate = getISTDate(d);
+    if (!istDate) return '';
+    
+    const indianDate = getIndianDateFromIST(istDate);
+    if (!indianDate) return '';
+    
+    const day = String(indianDate.getUTCDate()).padStart(2, '0');
+    const month = String(indianDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = indianDate.getUTCFullYear();
+    
+    return `${year}-${month}-${day}`;
+  } catch (e) {
+    return '';
+  }
+};
+
+const formatDisplayDate = (dateInput) => {
+  if (!dateInput) return "Invalid Date";
+  
+  try {
+    let d;
+    
+    if (dateInput instanceof Date) {
+      d = dateInput;
+    } else if (typeof dateInput === 'string') {
+      if (dateInput.includes('/')) {
+        const parts = dateInput.split('/');
+        if (parts.length === 3) {
+          d = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else {
+          d = new Date(dateInput);
+        }
+      } else if (dateInput.includes('-')) {
+        d = new Date(dateInput);
+      } else {
+        d = new Date(dateInput);
+      }
+    } else {
+      d = new Date(dateInput);
+    }
+    
+    if (!d || isNaN(d.getTime())) {
+      return "Invalid Date";
+    }
+    
+    const istDate = getISTDate(d);
+    if (!istDate) return "Invalid Date";
+    
+    const indianDate = getIndianDateFromIST(istDate);
+    if (!indianDate) return "Invalid Date";
+    
+    const day = String(indianDate.getUTCDate()).padStart(2, '0');
+    const month = String(indianDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = indianDate.getUTCFullYear();
+    
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return "Invalid Date";
+  }
+};
+
+const formatDisplayDateWithToday = (dateInput, showToday = false) => {
+  if (!dateInput) return "Invalid Date";
+  
+  try {
+    let d;
+    
+    if (dateInput instanceof Date) {
+      d = dateInput;
+    } else if (typeof dateInput === 'string') {
+      if (dateInput.includes('/')) {
+        const parts = dateInput.split('/');
+        if (parts.length === 3) {
+          d = new Date(parts[2], parts[1] - 1, parts[0]);
+        } else {
+          d = new Date(dateInput);
+        }
+      } else if (dateInput.includes('-')) {
+        d = new Date(dateInput);
+      } else {
+        d = new Date(dateInput);
+      }
+    } else {
+      d = new Date(dateInput);
+    }
+    
+    if (!d || isNaN(d.getTime())) {
+      return "Invalid Date";
+    }
+    
+    const istDate = getISTDate(d);
+    if (!istDate) return "Invalid Date";
+    
+    const indianDate = getIndianDateFromIST(istDate);
+    if (!indianDate) return "Invalid Date";
+    
+    const day = String(indianDate.getUTCDate()).padStart(2, '0');
+    const month = String(indianDate.getUTCMonth() + 1).padStart(2, '0');
+    const year = indianDate.getUTCFullYear();
+    
+    if (showToday) {
+      const todayIST = getISTDate(new Date());
+      const todayIndianDate = getIndianDateFromIST(todayIST);
+      
+      if (todayIndianDate) {
+        const todayDay = String(todayIndianDate.getUTCDate()).padStart(2, '0');
+        const todayMonth = String(todayIndianDate.getUTCMonth() + 1).padStart(2, '0');
+        const todayYear = todayIndianDate.getUTCFullYear();
+        
+        if (day === todayDay && month === todayMonth && year === todayYear) {
+          return "Today";
+        }
+      }
+    }
+    
+    return `${day}/${month}/${year}`;
+  } catch (e) {
+    return "Invalid Date";
+  }
+};
+
+const taskNormalizedDate = normalizeDate(task.date);
+const taskDisplayDate = formatDisplayDate(task.date);
+
+const relatedTasks = allTasks.filter(t => {
+  const tDate = normalizeDate(t.date);
+  const isSameDate = tDate === taskNormalizedDate && tDate !== '';
+  
+  return isSameDate;
+});
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   const startTasks = relatedTasks.filter(t => t.shift === "Start");
   const midTasks = relatedTasks.filter(t => t.shift === "Mid");
   const endTasks = relatedTasks.filter(t => t.shift === "End");
@@ -365,4 +631,7 @@ const TaskCard = ({ task, onStatusChange, allTasks = [] }) => {
 };
 
 export default TaskCard;
+<<<<<<< HEAD
 
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)

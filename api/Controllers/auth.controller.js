@@ -73,34 +73,56 @@ export const signup = async (req, res) => {
       isCoreTeam,
     } = req.body;
 
+<<<<<<< HEAD
     // 🔐 Admin OR Super Admin can create users
     const isAdminOrSuperAdmin =
       req.user?.accountType === "admin" ||
       req.user?.accountType === "superAdmin";
+=======
+    const isAdminOrSuperAdmin =
+      req.user?.accountType === "admin" ||
+      req.user?.accountType === "superAdmin" || 
+      req.user?.accountType === "HR";
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
     if (!isAdminOrSuperAdmin) {
       return res
         .status(403)
+<<<<<<< HEAD
         .json({ message: "Only admin or super admin can create users" });
     }
 
     // 🔍 Check if a super admin already exists
+=======
+        .json({ message: "Only admin, super admin and HR can create users" });
+    }
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     const superAdminExists = await User.exists({
       accountType: "superAdmin",
     });
 
+<<<<<<< HEAD
     // 🔐 Super Admin creation rules
     if (accountType === "superAdmin") {
       // ❌ Block if super admin exists AND requester is not super admin
+=======
+    if (accountType === "superAdmin") {
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       if (superAdminExists && req.user.accountType !== "superAdmin") {
         return res.status(403).json({
           message: "Only super admin can create another super admin",
         });
       }
+<<<<<<< HEAD
       // ✅ Allow admin ONLY if no super admin exists
     }
 
     // Basic validation
+=======
+    }
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     if (!username || !password || !department || !accountType) {
       return res.status(400).json({
         message:
@@ -108,19 +130,28 @@ export const signup = async (req, res) => {
       });
     }
 
+<<<<<<< HEAD
     // Shift validation
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     if (accountType === "employee" && !isCoreTeam && !shiftLabel) {
       return res.status(400).json({
         message: "Shift label is required for non-core team employees",
       });
     }
 
+<<<<<<< HEAD
     // Prevent duplicate user
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     if (await User.exists({ username })) {
       return res.status(400).json({ message: "User already exists" });
     }
 
+<<<<<<< HEAD
     // Shift mapping
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     const shiftMapping = {
       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
@@ -171,8 +202,11 @@ export const signup = async (req, res) => {
   }
 };
 
+<<<<<<< HEAD
 
 
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 export const createCoreTeamUser = async (req, res) => {
   try {
     const { username, password, accountType, department } = req.body;
@@ -279,7 +313,11 @@ export const getAllEmployees = async (req, res) => {
     let query = {};
 
     if (requester.accountType === "superAdmin") {
+<<<<<<< HEAD
       query = { accountType: { $in: ["employee", "admin", "superAdmin"] } };
+=======
+      query = { accountType: { $in: ["employee", "admin", "superAdmin", "HR", "Operations"] } };
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     } else {
       query = { accountType: "employee" };
     }
@@ -336,8 +374,13 @@ export const updateProfile = async (req, res) => {
 
 export const updateUserByAdmin = async (req, res) => {
   try {
+<<<<<<< HEAD
     if (!req.user?.accountType || req.user.accountType !== "admin" && req.user.accountType !== "superAdmin" ) {
       return res.status(403).json({ message: "Only admin and superAdmin can update users" });
+=======
+    if (!req.user?.accountType || req.user.accountType !== "admin" && req.user.accountType !== "superAdmin" && req.user.accountType !== "HR") {
+      return res.status(403).json({ message: "Only admin, superAdmin and HR can update users" });
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     }
 
     const userId = req.params.id;
@@ -482,4 +525,8 @@ export const updateUserByAdmin = async (req, res) => {
 //     console.error("Update User Error:", error);
 //     res.status(500).json({ message: "Server error", error: error.message });
 //   }
+<<<<<<< HEAD
 // };
+=======
+// };
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)

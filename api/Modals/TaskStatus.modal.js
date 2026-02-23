@@ -26,6 +26,10 @@ const taskStatusSchema = new mongoose.Schema(
     employeeId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
     date: { type: Date, required: true },
     status: { type: String, enum: ["", "Not Done", "Done"], default: "" },
+<<<<<<< HEAD
+=======
+    notified80: { type: Boolean, default: false },
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   },
   { timestamps: true, collection: "taskstatuses" }  
 );

@@ -7,6 +7,10 @@ import Navbar from "./Navbar";
 import { Toaster, toast } from "react-hot-toast";
 import { MessageCircle } from "lucide-react";
 import { FiX, FiSend, FiEdit2, FiCheck, FiXCircle } from "react-icons/fi";
+<<<<<<< HEAD
+=======
+import { subscribeUserToPush } from "../utils/pushNotifications";
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
 const EmployeeDashboard = () => {
   const dispatch = useDispatch();
@@ -15,23 +19,58 @@ const EmployeeDashboard = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   const isCoreTeam = user?.isCoreTeam;
   const employeeDepartment = user?.department || "";
+<<<<<<< HEAD
   
+=======
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   const [filters, setFilters] = useState({
     date: new Date().toISOString().split("T")[0],
     shift: "",
     department: employeeDepartment,
   });
+<<<<<<< HEAD
   
+=======
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   const [selectedTask, setSelectedTask] = useState(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [editingRemarkId, setEditingRemarkId] = useState(null);
   const [editingMessage, setEditingMessage] = useState("");
+<<<<<<< HEAD
   
+=======
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   const shiftOptions = ["Start", "Mid", "End"];
   const departmentOptions = [employeeDepartment];
   const messagesEndRef = useRef(null);
 
+<<<<<<< HEAD
+=======
+useEffect(() => {
+  console.log("The subscribeUserToPush is now loading from EmployeeDashboard.jsx file ::::");
+  
+  let isSubscribed = false;
+  
+  const initPush = async () => {
+    if (isSubscribed) return;
+    isSubscribed = true;
+    
+    await subscribeUserToPush();
+  };
+  
+  initPush();
+  
+  return () => {
+    isSubscribed = true;
+  };
+}, []);
+
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
   useEffect(() => {
     if (isCoreTeam) {
       dispatch(fetchCoreTasks({ department: employeeDepartment }));
@@ -55,6 +94,7 @@ const EmployeeDashboard = () => {
   const handleFilterChange = (e) => {
     setFilters({ ...filters, [e.target.name]: e.target.value });
   };
+<<<<<<< HEAD
  
 const handleStatusChange = async (taskId, status) => {
   const task = tasks.find(t => t._id === taskId);
@@ -147,17 +187,151 @@ const handleStatusChange = async (taskId, status) => {
       if (!allStartHandled) {
         isBlocked = true;
         
+=======
+
+  const handleStatusChange = async (taskId, status) => {
+    const task = tasks.find(t => t._id === taskId);
+    if (!task) {
+      toast.error("Task not found");
+      return;
+    }
+
+    if (status === "") {
+      toast.error("Please select a valid status");
+      return;
+    }
+
+
+    const normalizeDate = (dateInput) => {
+      if (!dateInput) return '';
+
+      try {
+        if (dateInput instanceof Date) {
+          return dateInput.toISOString().split('T')[0];
+        }
+
+        if (typeof dateInput === 'string') {
+          const d = new Date(dateInput);
+          if (!isNaN(d.getTime())) {
+            return d.toISOString().split('T')[0];
+          }
+        }
+
+        return '';
+      } catch (error) {
+        return '';
+      }
+    };
+
+    const taskNormalizedDate = normalizeDate(task.date);
+
+    // Get all tasks for the same normalized date
+    const sameDayTasks = tasks.filter(t => {
+      const tDate = normalizeDate(t.date);
+      return tDate === taskNormalizedDate && tDate !== '';
+    });
+
+
+
+    // Group tasks by shift
+    const startTasks = sameDayTasks.filter(t => t.shift === "Start");
+    const midTasks = sameDayTasks.filter(t => t.shift === "Mid");
+
+
+    // Check if current task is missed
+    const isTaskMissed = (task.employeeStatus === "" || !task.employeeStatus) &&
+      task.canUpdate === false;
+
+    if (isTaskMissed) {
+      toast.error(`${task.shift} shift time window has passed. Can update tomorrow.`);
+      return;
+    }
+
+    const canTaskBeUpdated = task.canUpdate === true;
+
+    if (!canTaskBeUpdated) {
+      toast.error(`${task.shift} shift time window is not currently open.`);
+      return;
+    }
+
+
+    const areAllTasksInShiftHandled = (shiftTasks) => {
+      if (shiftTasks.length === 0) {
+        return true;
+      }
+
+      const unhandledTasks = shiftTasks.filter(t => {
+        const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+        const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
+        return !hasStatus && !isMissed;
+      });
+
+
+      return unhandledTasks.length === 0;
+    };
+
+    let isBlocked = false;
+    let blockReason = "";
+
+    if (task.shift === "Mid") {
+      if (startTasks.length > 0) {
+        const allStartHandled = areAllTasksInShiftHandled(startTasks);
+
+        if (!allStartHandled) {
+          isBlocked = true;
+
+          const pendingStart = startTasks.filter(t => {
+            const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+            const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
+            return !hasStatus && !isMissed;
+          });
+
+          const missedStart = startTasks.filter(t =>
+            (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
+          );
+
+          let reason = `Cannot update Mid shift. `;
+          if (pendingStart.length > 0) {
+            reason += `${pendingStart.length} Start shift task(s) pending completion. `;
+          }
+          if (missedStart.length > 0) {
+            reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
+          }
+          blockReason = reason.trim();
+        }
+      } else {
+      }
+    }
+
+    if (task.shift === "End") {
+      const allStartHandled = areAllTasksInShiftHandled(startTasks);
+      const allMidHandled = areAllTasksInShiftHandled(midTasks);
+
+
+      if (startTasks.length > 0 && !allStartHandled) {
+        isBlocked = true;
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         const pendingStart = startTasks.filter(t => {
           const hasStatus = t.employeeStatus && t.employeeStatus !== "";
           const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
           return !hasStatus && !isMissed;
         });
+<<<<<<< HEAD
         
         const missedStart = startTasks.filter(t => 
           (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
         );
         
         let reason = `Cannot update Mid shift. `;
+=======
+
+        const missedStart = startTasks.filter(t =>
+          (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
+        );
+
+        let reason = `Cannot update End shift. `;
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         if (pendingStart.length > 0) {
           reason += `${pendingStart.length} Start shift task(s) pending completion. `;
         }
@@ -165,6 +339,7 @@ const handleStatusChange = async (taskId, status) => {
           reason += `${missedStart.length} Start shift task(s) missed (time window passed).`;
         }
         blockReason = reason.trim();
+<<<<<<< HEAD
       }
     } else {
     }
@@ -254,6 +429,66 @@ const handleStatusChange = async (taskId, status) => {
     toast.error(errorMessage);
   }
 };
+=======
+
+      } else if (midTasks.length > 0 && !allMidHandled) {
+        isBlocked = true;
+
+        const pendingMid = midTasks.filter(t => {
+          const hasStatus = t.employeeStatus && t.employeeStatus !== "";
+          const isMissed = (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false;
+          return !hasStatus && !isMissed;
+        });
+
+        const missedMid = midTasks.filter(t =>
+          (!t.employeeStatus || t.employeeStatus === "") && t.canUpdate === false
+        );
+
+        let reason = `Cannot update End shift. `;
+        if (pendingMid.length > 0) {
+          reason += `${pendingMid.length} Mid shift task(s) pending completion. `;
+        }
+        if (missedMid.length > 0) {
+          reason += `${missedMid.length} Mid shift task(s) missed (time window passed).`;
+        }
+        blockReason = reason.trim();
+      }
+    }
+
+    if (isBlocked) {
+      toast.error(blockReason);
+      return;
+    }
+
+
+    try {
+      let updatedStatus;
+
+      if (isCoreTeam) {
+        updatedStatus = await dispatch(
+          updateTaskStatusCoreTeam({ id: taskId, status })
+        ).unwrap();
+        dispatch({
+          type: "tasks/updateTaskStatusCoreTeam/fulfilled",
+          payload: updatedStatus,
+        });
+      } else {
+        updatedStatus = await dispatch(
+          updateTaskStatus({ id: taskId, status })
+        ).unwrap();
+        dispatch({
+          type: "tasks/updateTaskStatus/fulfilled",
+          payload: updatedStatus,
+        });
+      }
+
+      toast.success("Task status updated successfully!");
+    } catch (err) {
+      const errorMessage = err?.message || err || "Failed to update status, please try again.";
+      toast.error(errorMessage);
+    }
+  };
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
   const openChat = (task) => {
     setSelectedTask(task);
@@ -343,7 +578,11 @@ const handleStatusChange = async (taskId, status) => {
             </div>
           </div>
         )}
+<<<<<<< HEAD
         
+=======
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
         {loading && (
           <div className="flex justify-center items-center py-8">
             <div className="flex space-x-2">
@@ -374,10 +613,17 @@ const handleStatusChange = async (taskId, status) => {
           ) : (
             tasks.map((task) => (
               <div key={task._id} className="relative">
+<<<<<<< HEAD
                 <TaskCard 
                   task={task} 
                   onStatusChange={handleStatusChange} 
                   allTasks={tasks} 
+=======
+                <TaskCard
+                  task={task}
+                  onStatusChange={handleStatusChange}
+                  allTasks={tasks}
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                 />
                 <button
                   onClick={() => openChat(task)}
@@ -398,8 +644,13 @@ const handleStatusChange = async (taskId, status) => {
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-800 text-lg truncate">{selectedTask?.title}</h3>
                   <p className="text-sm text-gray-500 mt-1">
+<<<<<<< HEAD
                     {Array.isArray(selectedTask?.assignedTo) 
                       ? `${selectedTask?.assignedTo.length} assignee(s)` 
+=======
+                    {Array.isArray(selectedTask?.assignedTo)
+                      ? `${selectedTask?.assignedTo.length} assignee(s)`
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                       : selectedTask?.assignedTo?.username || 'Unassigned'}
                   </p>
                 </div>
@@ -450,11 +701,18 @@ const handleStatusChange = async (taskId, status) => {
                           className={`relative max-w-[80%] ${isMine ? "ml-8" : "mr-8"}`}
                         >
                           <div
+<<<<<<< HEAD
                             className={`px-4 py-3 rounded-2xl break-words shadow-sm relative transition-all duration-200 hover:shadow-md ${
                               isMine
                                 ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-none"
                                 : "bg-white text-gray-800 border border-gray-100 rounded-bl-none"
                             }`}
+=======
+                            className={`px-4 py-3 rounded-2xl break-words shadow-sm relative transition-all duration-200 hover:shadow-md ${isMine
+                                ? "bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-br-none"
+                                : "bg-white text-gray-800 border border-gray-100 rounded-bl-none"
+                              }`}
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                           >
                             {isEditing ? (
                               <div className="space-y-3">
@@ -462,11 +720,18 @@ const handleStatusChange = async (taskId, status) => {
                                   type="text"
                                   value={editingMessage}
                                   onChange={(e) => setEditingMessage(e.target.value)}
+<<<<<<< HEAD
                                   className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 transition-all duration-200 ${
                                     isMine 
                                       ? "bg-blue-700/20 text-white placeholder-blue-300 border-blue-400/30 focus:ring-blue-300/30" 
                                       : "bg-white text-gray-800 border-gray-300 focus:ring-blue-100"
                                   }`}
+=======
+                                  className={`w-full px-4 py-2.5 rounded-xl text-sm border outline-none focus:ring-2 transition-all duration-200 ${isMine
+                                      ? "bg-blue-700/20 text-white placeholder-blue-300 border-blue-400/30 focus:ring-blue-300/30"
+                                      : "bg-white text-gray-800 border-gray-300 focus:ring-blue-100"
+                                    }`}
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                                   placeholder="Edit remark..."
                                   autoFocus
                                   onKeyPress={(e) => {
@@ -516,7 +781,11 @@ const handleStatusChange = async (taskId, status) => {
                               <>
                                 <div className="relative">
                                   <p className="text-sm pr-8">{msg.message}</p>
+<<<<<<< HEAD
                                   
+=======
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                                   {isMine && (
                                     <div className="absolute -top-2 -right-2">
                                       <button
@@ -538,7 +807,14 @@ const handleStatusChange = async (taskId, status) => {
                                     {msg.senderId?.username}
                                   </span>
                                   <span className={`text-xs ${isMine ? "text-white/80" : "text-gray-500"}`}>
+<<<<<<< HEAD
                                     {new Date(msg.createdAt).toLocaleTimeString([], {
+=======
+                                    {new Date(msg.createdAt).toLocaleDateString('en-US', {
+                                      month: 'short',
+                                      day: 'numeric'
+                                    })} • {new Date(msg.createdAt).toLocaleTimeString([], {
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                                       hour: "2-digit",
                                       minute: "2-digit",
                                     })}
@@ -590,11 +866,18 @@ const handleStatusChange = async (taskId, status) => {
                   <button
                     onClick={handleSendRemark}
                     disabled={!newMessage.trim()}
+<<<<<<< HEAD
                     className={`p-3 rounded-full shadow-md transition-all duration-200 transform hover:scale-105 cursor-pointer ${
                       newMessage.trim()
                         ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
                         : "bg-gray-100 text-gray-400 cursor-not-allowed"
                     }`}
+=======
+                    className={`p-3 rounded-full shadow-md transition-all duration-200 transform hover:scale-105 cursor-pointer ${newMessage.trim()
+                        ? "bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+                        : "bg-gray-100 text-gray-400 cursor-not-allowed"
+                      }`}
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
                   >
                     <FiSend size={18} />
                   </button>

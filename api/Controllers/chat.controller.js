@@ -13,21 +13,33 @@ cloudinary.config({
 
 export const getUserChats = async (req, res) => {
   try {
+<<<<<<< HEAD
     const currentUserId = req.user._id || req.user.id; // Handle both
+=======
+    const currentUserId = req.user._id || req.user.id;  
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
     console.log("🔍 Current user ID:", currentUserId);
 
     const chats = await Chat.find({ participants: currentUserId })
       .populate({
         path: "participants",
         select: "username name department",
+<<<<<<< HEAD
         match: { _id: { $ne: currentUserId } } // Only get other users
+=======
+        match: { _id: { $ne: currentUserId } }  
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       })
       .populate("lastMessage")
       .sort({ updatedAt: -1 });
 
+<<<<<<< HEAD
     // Map to include only the "other user" for frontend
     const mappedChats = chats.map(chat => {
       // Find the participant who is NOT the current user
+=======
+    const mappedChats = chats.map(chat => {
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
       const otherUser = chat.participants?.find(
         p => p && (p._id.toString() !== currentUserId.toString() && 
                    p.id?.toString() !== currentUserId.toString())
@@ -109,4 +121,8 @@ export const searchUsers = async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+<<<<<<< HEAD
 };
+=======
+};
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)

@@ -1,4 +1,8 @@
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 // import express from "express";
 
 // import cors from "cors";
@@ -11,7 +15,10 @@
 // // Import routes
 // import authRoutes from "./routes/auth.routes.js";
 // import taskRoutes from "./routes/task.routes.js";
+<<<<<<< HEAD
 // import reviewRoutes from "./routes/review.routes.js";
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 // import taskStatusRoutes from "./routes/taskStatus.routes.js";
 // import remarkRoutes from "./routes/remark.routes.js";
 // import rosterRoutes from "./routes/roster.routes.js";
@@ -241,7 +248,10 @@
 // // Use routes
 // app.use("/api/v1", authRoutes);
 // app.use("/api/v1/tasks", taskRoutes);
+<<<<<<< HEAD
 // app.use("/api/v1/review", reviewRoutes);
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 // app.use("/api/v1/task-status", taskStatusRoutes);
 // app.use("/api/remarks", remarkRoutes);
 // app.use("/api/v1/roster", rosterRoutes);
@@ -375,12 +385,19 @@ import path from "path";
 
 import authRoutes from "./routes/auth.routes.js";
 import taskRoutes from "./routes/task.routes.js";
+<<<<<<< HEAD
 import reviewRoutes from "./routes/review.routes.js";
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 import taskStatusRoutes from "./routes/taskStatus.routes.js";
 import remarkRoutes from "./routes/remark.routes.js";
 import rosterRoutes from "./routes/roster.routes.js";
 import chatRoutes from "./routes/chat.routes.js";
 import messageRoutes from "./routes/message.routes.js";
+<<<<<<< HEAD
+=======
+import pushRoutes from "./routes/push.routes.js";
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 
 dotenv.config();
@@ -441,7 +458,13 @@ const allowedIPs = [
   "14.97.83.226",
   "127.0.0.1",
   "103.21.187.189",
+<<<<<<< HEAD
   "::1",
+=======
+  "182.95.42.106",
+  "::1",
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 ];
 
 app.use(express.json());
@@ -459,6 +482,12 @@ const publicRoutes = [
   "/api/v1/signup",
   "/api/v1/logout"
 ];
+<<<<<<< HEAD
+=======
+const ipFreeRoutes = [
+  "/api/v1/push/subscribe"
+];
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
 app.use((req, res, next) => {
   if (publicRoutes.includes(req.path)) {
@@ -469,6 +498,10 @@ app.use((req, res, next) => {
 
 app.use((req, res, next) => {
   if (publicRoutes.includes(req.path)) return next(); 
+<<<<<<< HEAD
+=======
+  if (ipFreeRoutes.includes(req.path)) return next(); 
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
@@ -617,12 +650,20 @@ io.on("connection", (socket) => {
 
 app.use("/api/v1", authRoutes);
 app.use("/api/v1/tasks", taskRoutes);
+<<<<<<< HEAD
 app.use("/api/v1/review", reviewRoutes);
+=======
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 app.use("/api/v1/task-status", taskStatusRoutes);
 app.use("/api/remarks", remarkRoutes);
 app.use("/api/v1/roster", rosterRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
+<<<<<<< HEAD
+=======
+app.use("/api/v1/push", pushRoutes);
+
+>>>>>>> a4bba92 (Initial commit on Farhan_dev)
 
 app.get("/", (req, res) => {
   res.json({
