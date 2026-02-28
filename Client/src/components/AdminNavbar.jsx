@@ -185,7 +185,6 @@ const AdminNavbar = () => {
       ? parts[0][0].toUpperCase() + parts[1][0].toUpperCase()
       : name[0].toUpperCase();
   };
-
   const handleLogout = () => {
     dispatch(logoutUser());
     setShowDropdown(false);
@@ -202,7 +201,6 @@ const AdminNavbar = () => {
         { username, password },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-
       if (res.data.user) {
         const updatedUser = { ...user, ...res.data.user };
         localStorage.setItem("user", JSON.stringify(updatedUser));
@@ -215,7 +213,6 @@ const AdminNavbar = () => {
       setLoading(false);
     }
   };
-
   const handleExport = async () => {
     try {
       setExporting(true);
@@ -262,11 +259,10 @@ const AdminNavbar = () => {
             <h1
               className="text-base lg:text-lg font-semibold text-slate-900 cursor-pointer whitespace-nowrap"
               style={{ fontFamily: "'Playfair Display', serif" }}
-              onClick={() => navigate("/admin/adminDashboard")}
+              onClick={() => navigate("/admin/tasks")}
             >
               Task Management
             </h1>
-
             <div className="hidden md:flex items-center gap-2 lg:gap-3 min-w-0" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
               <Link 
                 to="/admin/roster" 
@@ -275,8 +271,6 @@ const AdminNavbar = () => {
                 <FiCalendar className="text-lg text-blue-600" />
                 Roster
               </Link>
-              
-              {/* Ops-Meta Roster Button - Only for Ops-Meta employees */}
               {isOpsMeta && (
                 <button
                   onClick={() => navigate("/ops-meta-roster")}
@@ -289,7 +283,6 @@ const AdminNavbar = () => {
                   Ops-Meta Roster
                 </button>
               )}
-              
               {canUploadExcel && (
                 <button
                   onClick={() => navigate("/upload-roster")}
@@ -317,7 +310,6 @@ const AdminNavbar = () => {
                   </span>
                 )}
               </Link>
-             
               {canManageAdmin && (
                 <>
                   <Link to="/admin/assign-task" className={navLinkClass("/admin/assign-task")}>
@@ -337,7 +329,6 @@ const AdminNavbar = () => {
                     <FiDownload />
                     {exporting ? "Exporting..." : "Export Excel"}
                   </button>
-
                   <button
                     onClick={() => navigate("/signup")}
                     className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer border ${
@@ -350,7 +341,6 @@ const AdminNavbar = () => {
                   </button>
                 </>
               )}
-
               <div className="relative ml-2 lg:ml-3 shrink-0" ref={dropdownRef}>
                 <button
                   className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-semibold text-slate-800 border border-slate-200 cursor-pointer"
@@ -367,7 +357,6 @@ const AdminNavbar = () => {
                     >
                       My Profile
                     </button>
-
                     <button
                       onClick={() => {
                         navigate("/admin/manage-employee");
@@ -377,7 +366,6 @@ const AdminNavbar = () => {
                     >
                       Team
                     </button>
-
                     <button
                       onClick={handleLogout}
                       className="w-full px-3 py-2 hover:bg-rose-50 text-left cursor-pointer text-rose-700"
@@ -388,7 +376,6 @@ const AdminNavbar = () => {
                 )}
               </div>
             </div>
-
             <div className="md:hidden">
               <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-slate-700">
                 <FiMenu />
@@ -419,7 +406,6 @@ const AdminNavbar = () => {
                 Roster
               </Link>
 
-              {/* Mobile Ops-Meta Roster Button */}
               {isOpsMeta && (
                 <button
                   onClick={() => {
@@ -436,7 +422,6 @@ const AdminNavbar = () => {
                 </button>
               )}
 
-              {/* Mobile Excel Upload Button */}
               {canUploadExcel && (
                 <button
                   onClick={() => {
@@ -453,13 +438,13 @@ const AdminNavbar = () => {
                 </button>
               )}
 
-              <Link
+              {/* <Link
                 to="/admin/adminDashboard"
                 className="text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
                 Admin Dashboard
-              </Link>
+              </Link> */}
               <Link to="/admin/admintask" className="text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors" onClick={() => setShowMobileMenu(false)}>
                 Your Task
               </Link>

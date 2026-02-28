@@ -633,8 +633,6 @@ export const updateRoster = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
-
-
 // export const updateRoster = async (req, res) => {
 //   try {
 //     const { month, year, weekNumber, employeeId, updates } = req.body;
@@ -2315,8 +2313,6 @@ export const bulkUpdateWeeks = async (req, res) => {
     });
   }
 };
-
-
 const calculateWeeksInRange = (startDate, endDate) => {
   const weeks = [];
   let currentStart = new Date(startDate);
@@ -2681,7 +2677,6 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
     });
   }
 };
-
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
@@ -3554,13 +3549,10 @@ export const exportRosterTemplate = async (req, res) => {
     ];
     
     worksheet['!cols'] = colWidths;
-
-    // Set row height for header
     worksheet['!rows'] = [
-      { hpt: 25 }  // Header row only
+      { hpt: 25 }   
     ];
 
-    // Append the roster sheet
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
 
     const fileName = `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1).toString().padStart(2,'0')}-${fromDate.getDate().toString().padStart(2,'0')}_to_${toDate.getFullYear()}-${(toDate.getMonth()+1).toString().padStart(2,'0')}-${toDate.getDate().toString().padStart(2,'0')}.xlsx`;

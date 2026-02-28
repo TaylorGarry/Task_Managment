@@ -701,14 +701,13 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-// const API_URL = "http://localhost:4000/api/v1/tasks";
-const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
+const API_URL = "http://localhost:4000/api/v1/tasks";
+// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks";
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token || null;
 };
-
 const getUser = () => {
   try {
     
@@ -742,8 +741,6 @@ const getUser = () => {
     return null;
   }
 };
-
-
 const getTodayDateString = () => {
   const today = new Date();
   const year = today.getFullYear();
@@ -751,12 +748,10 @@ const getTodayDateString = () => {
   const day = String(today.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
 };
-
 const isToday = (dateString) => {
   if (!dateString) return false;
   return dateString === getTodayDateString();
 };
-
 let cache = {
   tasks: {
     data: null,
@@ -795,8 +790,6 @@ let cache = {
     CACHE_DURATION: 5 * 60 * 1000,
   }
 };
-
-// Enhanced cache validation that forces fresh data for today
 const isCacheValid = (cacheKey, filters) => {
   const cacheItem = cache[cacheKey];
   
@@ -842,8 +835,6 @@ const isCacheValid = (cacheKey, filters) => {
   const HISTORICAL_CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   return cacheAge < HISTORICAL_CACHE_DURATION;
 };
-
-// Helper to invalidate all task-related caches
 const invalidateAllTaskCaches = () => {
   console.log("Invalidating all task caches...");
   cache.tasks.data = null;
@@ -862,8 +853,6 @@ const invalidateAllTaskCaches = () => {
   cache.adminTasks.timestamp = null;
   cache.adminTasks.filters = null;
 };
-
-// Invalidate cache specifically for today's data
 const invalidateTodayCache = () => {
   const todayString = getTodayDateString();
   console.log("Invalidating cache for today:", todayString);
@@ -886,7 +875,6 @@ const invalidateTodayCache = () => {
     cache.tasks.filters = null;
   }
 };
-
 export const createTask = createAsyncThunk(
   "tasks/createTask",
   async ({ data }, thunkAPI) => {
@@ -911,7 +899,6 @@ export const createTask = createAsyncThunk(
     }
   }
 );
-
 export const createCoreTask = createAsyncThunk(
   "tasks/coretask",
   async ({ data }, thunkAPI) => {
@@ -938,7 +925,6 @@ export const createCoreTask = createAsyncThunk(
     }
   }
 );
-
 export const fetchTasks = createAsyncThunk(
   "tasks/fetchTasks",
   async (filters = {}, thunkAPI) => {
@@ -981,7 +967,6 @@ export const fetchTasks = createAsyncThunk(
     }
   }
 );
-
 export const fetchCoreTasks = createAsyncThunk(
   "tasks/fetchCoreTasks",
   async (filters = {}, thunkAPI) => {
@@ -1013,7 +998,6 @@ export const fetchCoreTasks = createAsyncThunk(
     }
   }
 );
-
 export const fetchDefaulters = createAsyncThunk(
   "tasks/fetchDefaulters",
   async (filters = {}, thunkAPI) => {
@@ -1054,7 +1038,6 @@ export const fetchDefaulters = createAsyncThunk(
     }
   }
 );
-
 export const fetchDefaultList = createAsyncThunk(
   "tasks/fetchDefaultList",
   async (filters = {}, thunkAPI) => {
@@ -1095,7 +1078,6 @@ export const fetchDefaultList = createAsyncThunk(
     }
   }
 );
-
 export const updateTaskStatus = createAsyncThunk(
   "tasks/updateTaskStatus",
   async ({ id, status }, thunkAPI) => {
@@ -1122,7 +1104,6 @@ export const updateTaskStatus = createAsyncThunk(
     }
   }
 );
-
 export const updateTaskStatusCoreTeam = createAsyncThunk(
   "tasks/updateTaskStatusCoreTeam",
   async ({ id, status }, thunkAPI) => {
@@ -1149,7 +1130,6 @@ export const updateTaskStatusCoreTeam = createAsyncThunk(
     }
   }
 );
-
 export const deleteTask = createAsyncThunk(
   "tasks/deleteTask",
   async (id, thunkAPI) => {
@@ -1175,7 +1155,6 @@ export const deleteTask = createAsyncThunk(
     }
   }
 );
-
 export const fetchAllTasks = createAsyncThunk(
   "allTasks/fetchAllTasks",
   async (filters = {}, thunkAPI) => {
@@ -1193,7 +1172,6 @@ export const fetchAllTasks = createAsyncThunk(
     }
   }
 );
-
 export const updateTask = createAsyncThunk(
   "tasks/updateTask",
   async ({ id, updates }, thunkAPI) => {
@@ -1218,7 +1196,6 @@ export const updateTask = createAsyncThunk(
     }
   }
 );
-
 export const exportTaskStatusExcel = createAsyncThunk(
   "tasks/exportTaskStatusExcel",
   async (_, thunkAPI) => {
@@ -1260,7 +1237,6 @@ export const exportTaskStatusExcel = createAsyncThunk(
     }
   }
 );
-
 export const exportEmployeeDefaulterExcel = createAsyncThunk(
   "tasks/exportEmployeeDefaulterExcel",
   async ({ employeeId, startDate, endDate }, thunkAPI) => {
@@ -1309,8 +1285,6 @@ export const exportEmployeeDefaulterExcel = createAsyncThunk(
     }
   }
 );
-
-
 export const fetchAdminTasks = createAsyncThunk(
   "tasks/fetchAdminTasks",
   async (filters = {}, thunkAPI) => {
@@ -1344,7 +1318,6 @@ export const fetchAdminTasks = createAsyncThunk(
     }
   }
 );
-
 export const updateAdminTaskStatus = createAsyncThunk(
   "tasks/updateAdminTaskStatus",
   async ({ id, status }, thunkAPI) => {
@@ -1369,7 +1342,6 @@ export const updateAdminTaskStatus = createAsyncThunk(
     }
   }
 );
-
 export const fetchAdminAssignedTasks = createAsyncThunk(
   "tasks/fetchAdminAssignedTasks",
   async (filters = {}, thunkAPI) => {
@@ -1391,7 +1363,6 @@ export const fetchAdminAssignedTasks = createAsyncThunk(
     }
   }
 );
-
 export const fetchEmployeeDefaulters = createAsyncThunk(
   "tasks/fetchEmployeeDefaulters",
   async ({ employeeId, page = 1, limit = 30, startDate, endDate }, thunkAPI) => {
@@ -1418,8 +1389,6 @@ export const fetchEmployeeDefaulters = createAsyncThunk(
     }
   }
 );
-
-// Get employee's own default tasks
 export const fetchEmployeeMyDefaults = createAsyncThunk(
   "tasks/fetchEmployeeMyDefaults",
   async (filters = {}, thunkAPI) => {
@@ -1467,7 +1436,6 @@ export const fetchEmployeeMyDefaults = createAsyncThunk(
     }
   }
 );
-
 const taskSlice = createSlice({
   name: "tasks",
   initialState: {
@@ -1957,6 +1925,5 @@ employeeCurrentPage: 1,
 });
   },
 });
-
 export const { invalidateCache, resetTasks, forceRefreshToday, ensureTodayData,clearEmployeeMyDefaults } = taskSlice.actions;
 export default taskSlice.reducer;
