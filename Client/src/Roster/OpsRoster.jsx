@@ -745,7 +745,6 @@ const OpsRoster = () => {
         className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-2xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full"
         style={{ zIndex: 9999, position: 'relative' }}
       >
-        {/* Modal Header */}
         <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg leading-6 font-medium text-gray-900">

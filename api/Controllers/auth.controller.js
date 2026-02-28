@@ -62,6 +62,14 @@ const JWT_SECRET = process.env.JWT_SECRET;
 //   }
 // };
 
+const shiftMapping = {
+  "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+  "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+  "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+  "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+  "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+  "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+};
 export const signup = async (req, res) => {
   try {
     const {
@@ -73,27 +81,25 @@ export const signup = async (req, res) => {
       isCoreTeam,
     } = req.body;
 
-    const isAdminOrSuperAdmin =
-      req.user?.accountType === "admin" ||
-      req.user?.accountType === "superAdmin" || 
-      req.user?.accountType === "HR";
-
-    if (!isAdminOrSuperAdmin) {
-      return res
-        .status(403)
-        .json({ message: "Only admin, super admin and HR can create users" });
-    }
-
+    // ⭐ NEW: check if any superAdmin exists
     const superAdminExists = await User.exists({
       accountType: "superAdmin",
     });
 
-    if (accountType === "superAdmin") {
-      if (superAdminExists && req.user.accountType !== "superAdmin") {
-        return res.status(403).json({
-          message: "Only super admin can create another super admin",
-        });
-      }
+    // ⭐ NEW: allow first superAdmin creation without token
+    const isFirstSuperAdmin =
+      !superAdminExists && accountType === "superAdmin";
+
+    const isAdminOrSuperAdmin =
+      req.user?.accountType === "admin" ||
+      req.user?.accountType === "superAdmin" ||
+      req.user?.accountType === "HR";
+
+    // ⭐ MODIFIED: block only if NOT first superAdmin
+    if (!isAdminOrSuperAdmin && !isFirstSuperAdmin) {
+      return res.status(403).json({
+        message: "Only admin, super admin and HR can create users",
+      });
     }
 
     if (!username || !password || !department || !accountType) {
@@ -109,18 +115,25 @@ export const signup = async (req, res) => {
       });
     }
 
-    if (await User.exists({ username })) {
-      return res.status(400).json({ message: "User already exists" });
+    // 🔥 Parallel DB checks (kept your optimization)
+    const [userExists] = await Promise.all([
+      User.exists({ username }),
+    ]);
+
+    // 🔥 Only superAdmin can create another superAdmin (after first)
+    if (
+      accountType === "superAdmin" &&
+      superAdminExists &&
+      req.user?.accountType !== "superAdmin"
+    ) {
+      return res.status(403).json({
+        message: "Only super admin can create another super admin",
+      });
     }
 
-    const shiftMapping = {
-      "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
-      "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
-      "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
-      "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
-      "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
-      "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
-    };
+    if (userExists) {
+      return res.status(400).json({ message: "User already exists" });
+    }
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
 
@@ -141,7 +154,7 @@ export const signup = async (req, res) => {
       shiftEndHour: selectedShift?.shiftEndHour || null,
     });
 
-    res.status(201).json({
+    return res.status(201).json({
       message: "User created successfully",
       user: {
         id: newUser._id,
@@ -156,12 +169,113 @@ export const signup = async (req, res) => {
     });
   } catch (error) {
     console.error("Signup error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Server error",
       error: error.message,
     });
   }
 };
+
+// export const signup = async (req, res) => {
+//   try {
+//     const {
+//       username,
+//       password,
+//       accountType,
+//       department,
+//       shiftLabel,
+//       isCoreTeam,
+//     } = req.body;
+
+//     const isAdminOrSuperAdmin =
+//       req.user?.accountType === "admin" ||
+//       req.user?.accountType === "superAdmin" || 
+//       req.user?.accountType === "HR";
+
+//     if (!isAdminOrSuperAdmin) {
+//       return res
+//         .status(403)
+//         .json({ message: "Only admin, super admin and HR can create users" });
+//     }
+
+//     const superAdminExists = await User.exists({
+//       accountType: "superAdmin",
+//     });
+
+//     if (accountType === "superAdmin") {
+//       if (superAdminExists && req.user.accountType !== "superAdmin") {
+//         return res.status(403).json({
+//           message: "Only super admin can create another super admin",
+//         });
+//       }
+//     }
+
+//     if (!username || !password || !department || !accountType) {
+//       return res.status(400).json({
+//         message:
+//           "Username, password, department, and account type are required",
+//       });
+//     }
+
+//     if (accountType === "employee" && !isCoreTeam && !shiftLabel) {
+//       return res.status(400).json({
+//         message: "Shift label is required for non-core team employees",
+//       });
+//     }
+
+//     if (await User.exists({ username })) {
+//       return res.status(400).json({ message: "User already exists" });
+//     }
+
+//     const shiftMapping = {
+//       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+//       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+//       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+//       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+//       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+//       "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+//     };
+
+//     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
+
+//     if (accountType === "employee" && !isCoreTeam && !selectedShift) {
+//       return res.status(400).json({ message: "Invalid shift label" });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const newUser = await User.create({
+//       username,
+//       password: hashedPassword,
+//       accountType,
+//       department,
+//       isCoreTeam: accountType === "employee" && !!isCoreTeam,
+//       shift: selectedShift?.shift || null,
+//       shiftStartHour: selectedShift?.shiftStartHour || null,
+//       shiftEndHour: selectedShift?.shiftEndHour || null,
+//     });
+
+//     res.status(201).json({
+//       message: "User created successfully",
+//       user: {
+//         id: newUser._id,
+//         username,
+//         accountType,
+//         department,
+//         isCoreTeam: newUser.isCoreTeam,
+//         shift: newUser.shift,
+//         shiftStartHour: newUser.shiftStartHour,
+//         shiftEndHour: newUser.shiftEndHour,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Signup error:", error);
+//     res.status(500).json({
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 export const createCoreTeamUser = async (req, res) => {
   try {
@@ -262,29 +376,39 @@ export const logout = async (req, res) => {
 //   }
 // };
 
+const SUPER_ADMIN_VISIBLE_ROLES = [
+  "employee",
+  "admin",
+  "superAdmin",
+  "HR",
+  "Operations",
+];
 
 export const getAllEmployees = async (req, res) => {
   try {
-    const requester = req.user;  
-    let query = {};
+    const requester = req.user;
 
-    if (requester.accountType === "superAdmin") {
-      query = { accountType: { $in: ["employee", "admin", "superAdmin", "HR", "Operations"] } };
-    } else {
-      query = { accountType: "employee" };
-    }
+    const isSuperAdmin = requester.accountType === "superAdmin";
 
-    const employees = await User.find(
-      query,
-      "_id username department accountType isCoreTeam shiftStartHour shiftEndHour"
-    ).lean();
+    const query = isSuperAdmin
+      ? { accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } }
+      : { accountType: "employee" };
 
-    res.status(200).json(employees);
+    const employees = await User.find(query)
+      .select("_id username department accountType isCoreTeam shiftStartHour shiftEndHour")
+      .lean();
+
+    return res.status(200).json(employees);
+
   } catch (error) {
     console.error("Get Employees Error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    return res.status(500).json({
+      message: "Server error",
+      error: error.message,
+    });
   }
 };
+
 
 export const updateProfile = async (req, res) => {
   try {

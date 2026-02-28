@@ -6,6 +6,32 @@ import { getRosterForBulkEdit, bulkUpdateRosterWeeks, clearBulkEditState, clearB
 const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const dispatch = useDispatch();
     const { bulkEditRoster, bulkEditLoading, bulkEditError, bulkSaveLoading, bulkSaveSuccess, bulkSaveError } = useSelector((state) => state.roster);
+    const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}/;
+    const pad2 = (value) => String(value).padStart(2, '0');
+    const getLocalDateKey = (date = new Date()) =>
+        `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+    const getDateKey = (value) => {
+        if (!value) return '';
+        if (typeof value === 'string' && DATE_ONLY_REGEX.test(value)) return value.slice(0, 10);
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return '';
+        return date.toISOString().slice(0, 10);
+    };
+    const dateFromKeyUTC = (dateKey) => {
+        const [year, month, day] = dateKey.split('-').map(Number);
+        return new Date(Date.UTC(year, month - 1, day));
+    };
+    const addDaysToDateKeyUTC = (dateKey, days) => {
+        const date = dateFromKeyUTC(dateKey);
+        date.setUTCDate(date.getUTCDate() + days);
+        return date.toISOString().slice(0, 10);
+    };
+    const getUTCISOStringFromDateKey = (dateKey) => `${dateKey}T00:00:00.000Z`;
+    const getDateRangeDurationDaysUTC = (startDateKey, endDateKey) =>
+        Math.ceil((dateFromKeyUTC(endDateKey) - dateFromKeyUTC(startDateKey)) / (1000 * 60 * 60 * 24)) + 1;
+    const formatDateFromKeyUTC = (dateKey, options = {}) =>
+        dateFromKeyUTC(dateKey).toLocaleDateString('en-US', { timeZone: 'UTC', ...options });
+
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
 
@@ -109,34 +135,33 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         }
 
         const updatedWeeks = [...editedWeeks];
-        const currentDate = new Date();
+        const todayKey = getLocalDateKey();
 
         updatedWeeks.forEach((week, weekIndex) => {
-            const weekStartDate = new Date(week.startDate);
+            const weekStartDateKey = getDateKey(week.startDate);
+            const weekEndDateKey = getDateKey(week.endDate);
 
             const isSuperAdmin = bulkEditRoster?.data?.userPermissions?.accountType === 'superAdmin';
-            const isCurrentOrFuture = weekStartDate >= currentDate ||
-                (weekStartDate <= currentDate && new Date(week.endDate) >= currentDate);
+            const isCurrentOrFuture = weekStartDateKey >= todayKey ||
+                (weekStartDateKey <= todayKey && weekEndDateKey >= todayKey);
 
             if (isSuperAdmin || isCurrentOrFuture) {
                 const employeeExists = week.employees.some(emp => emp.name === newEmployee.name);
 
                 if (!employeeExists) {
                     const dailyStatus = [];
-                    const startDate = new Date(week.startDate);
-                    const endDate = new Date(week.endDate);
-                    const currentDate = new Date(startDate);
+                    const startDateKey = getDateKey(week.startDate);
+                    const endDateKey = getDateKey(week.endDate);
+                    const daysInWeek = getDateRangeDurationDaysUTC(startDateKey, endDateKey);
 
-                    while (currentDate <= endDate) {
-                        const dayIndex = Math.floor((currentDate - startDate) / (1000 * 60 * 60 * 24));
+                    for (let dayIndex = 0; dayIndex < daysInWeek; dayIndex += 1) {
                         const status = newEmployee.dailyStatus[dayIndex % 7] || 'P';
+                        const dayDateKey = addDaysToDateKeyUTC(startDateKey, dayIndex);
 
                         dailyStatus.push({
-                            date: new Date(currentDate),
+                            date: getUTCISOStringFromDateKey(dayDateKey),
                             status: status
                         });
-
-                        currentDate.setDate(currentDate.getDate() + 1);
                     }
 
                     updatedWeeks[weekIndex].employees.push({
@@ -429,7 +454,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     }
 
     const { weeks, userPermissions } = bulkEditRoster.data;
-    const currentDate = new Date();
+    const todayKey = getLocalDateKey();
 
     return (
         <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
@@ -452,10 +477,10 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                 <div className="border-t border-slate-200 bg-slate-50/80">
                     <div className="flex overflow-x-auto px-3 py-3 gap-2">
                         {editedWeeks.map((week, index) => {
-                            const weekEndDate = new Date(week.endDate);
-                            const weekStartDate = new Date(week.startDate);
-                            const hasWeekEnded = weekEndDate < currentDate;
-                            const isCurrentWeek = weekStartDate <= currentDate && weekEndDate >= currentDate;
+                            const weekStartDateKey = getDateKey(week.startDate);
+                            const weekEndDateKey = getDateKey(week.endDate);
+                            const hasWeekEnded = weekEndDateKey < todayKey;
+                            const isCurrentWeek = weekStartDateKey <= todayKey && weekEndDateKey >= todayKey;
 
                             let timelineStatus = 'upcoming';
                             if (hasWeekEnded) timelineStatus = 'past';
@@ -484,7 +509,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     <div className="flex flex-col items-start">
                                         <span>Week {week.weekNumber}</span>
                                         <span className="text-[11px] text-slate-500">
-                                            {new Date(week.startDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short' })} - {new Date(week.endDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short' })}
+                                            {formatDateFromKeyUTC(weekStartDateKey, { day: '2-digit', month: 'short' })} - {formatDateFromKeyUTC(weekEndDateKey, { day: '2-digit', month: 'short' })}
                                         </span>
                                     </div>
                                     <span className="ml-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">{week.employees.length} emp</span>
@@ -514,8 +539,8 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         Week {editedWeeks[activeTab].weekNumber}
                                     </h3>
                                     <p className="text-slate-600 text-sm">
-                                        {new Date(editedWeeks[activeTab].startDate).toLocaleDateString()} -
-                                        {new Date(editedWeeks[activeTab].endDate).toLocaleDateString()}
+                                        {formatDateFromKeyUTC(getDateKey(editedWeeks[activeTab].startDate))} -
+                                        {formatDateFromKeyUTC(getDateKey(editedWeeks[activeTab].endDate))}
                                     </p>
                                 </div>
                                 <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
@@ -691,9 +716,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     </thead>
                                     <tbody>
                                         {editedWeeks[activeTab].employees.map((employee, empIndex) => {
-                                            const weekStartDate = new Date(editedWeeks[activeTab].startDate);
-                                            const weekEndDate = new Date(editedWeeks[activeTab].endDate);
-                                            const daysInWeek = Math.ceil((weekEndDate - weekStartDate) / (1000 * 60 * 60 * 24)) + 1;
+                                            const weekStartDateKey = getDateKey(editedWeeks[activeTab].startDate);
+                                            const weekEndDateKey = getDateKey(editedWeeks[activeTab].endDate);
+                                            const daysInWeek = getDateRangeDurationDaysUTC(weekStartDateKey, weekEndDateKey);
 
                                             return (
                                                 <tr key={employee._id} className="border-b border-slate-100 hover:bg-slate-50/80">
@@ -757,14 +782,13 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                     <td className="p-2">
                                                         <div className="flex gap-1 justify-center min-w-max">
                                     {employee.dailyStatus.slice(0, daysInWeek).map((status, dayIndex) => {
-                                        const dayDate = new Date(weekStartDate);
-                                        dayDate.setDate(dayDate.getDate() + dayIndex);
-                                        const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
-                                        const dayDateLabel = dayDate.toLocaleDateString('en-US', {
+                                        const dayDateKey = addDaysToDateKeyUTC(weekStartDateKey, dayIndex);
+                                        const dayName = formatDateFromKeyUTC(dayDateKey, { weekday: 'short' });
+                                        const dayDateLabel = formatDateFromKeyUTC(dayDateKey, {
                                             day: '2-digit',
                                             month: 'short'
                                         });
-                                        const fullDateLabel = dayDate.toLocaleDateString('en-US', {
+                                        const fullDateLabel = formatDateFromKeyUTC(dayDateKey, {
                                             weekday: 'long',
                                             day: 'numeric',
                                             month: 'long',

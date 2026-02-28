@@ -8,24 +8,14 @@ const Defaulter = () => {
   const dispatch = useDispatch();
   const { defaulters, loading } = useSelector((state) => state.tasks);
   const { employees } = useSelector((state) => state.auth);
-  
-  // ===========================================
-  // OVERNIGHT SHIFT DATE HANDLING
-  // ===========================================
-  
-  // Get IST time and apply overnight shift logic (before 10 AM = previous day)
   const getISTBusinessDate = () => {
     const now = new Date();
-    // Convert to IST
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
     const ist = new Date(utc + 5.5 * 60 * 60000);
     
-    // Before 10 AM IST, it's still the previous business day
     if (ist.getHours() < 10) {
       ist.setDate(ist.getDate() - 1);
     }
-    
-    // Format to YYYY-MM-DD
     const year = ist.getFullYear();
     const month = String(ist.getMonth() + 1).padStart(2, '0');
     const day = String(ist.getDate()).padStart(2, '0');
@@ -34,15 +24,11 @@ const Defaulter = () => {
   };
 
   const today = getISTBusinessDate();
-
-  // Format date for display (backend already handles overnight logic)
   const formatDisplayDate = (dateString) => {
     if (!dateString) return "—";
     const date = new Date(dateString);
     return date.toLocaleDateString("en-GB");
   };
-
-  // Check if current time is in overnight period
   const isOvernightPeriod = () => {
     const now = new Date();
     const utc = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -67,12 +53,8 @@ const Defaulter = () => {
   const [modalTotalPages, setModalTotalPages] = useState(0);
   const [modalTotalDefaults, setModalTotalDefaults] = useState(0);
   const modalItemsPerPage = 30;
-  
-  // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  
-  // Chart data state
   const [chartType, setChartType] = useState('pie');
 
   useEffect(() => {
@@ -86,8 +68,6 @@ const Defaulter = () => {
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
-    
-    // Use overnight-aware today date for validation
     if ((name === "startDate" || name === "endDate") && value > today) {
       alert(`Cannot select future date. Current business date is ${today}`);
       return;
@@ -141,14 +121,14 @@ const Defaulter = () => {
         endDate: filters.endDate
       }).toString();
 
-      // const res = await fetch(
-      //   `http://localhost:4000/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
-      //   { headers: { Authorization: `Bearer ${token}` } }
-      // );
       const res = await fetch(
-        `https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
+        `http://localhost:4000/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
+      // const res = await fetch(
+      //   `https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
+      //   { headers: { Authorization: `Bearer ${token}` } }
+      // );
       const data = await res.json();
       if (data.success) {
         setSelectedEmployee(data.employeeName || employeeName);
@@ -191,22 +171,14 @@ const Defaulter = () => {
   const filteredEmployees = filters.department
     ? employees.filter((e) => e.department === filters.department)
     : employees;
-
-  // Calculate totals correctly
   const calculateTotals = () => {
     if (!defaulters || defaulters.length === 0) {
       return { totalDefaultDay: 0, totalCumulative: 0 };
     }
-
-    // Sum of Default Day column
     const totalDefaultDay = defaulters.reduce((sum, d) => sum + (d.notDoneTasksToday || 0), 0);
-
-    // For Total Defaults Till Today, each record has the cumulative total for that employee
-    // Get unique employees and their cumulative totals
     const employeeTotals = new Map();
     defaulters.forEach(d => {
       if (d.employeeId && d.totalDefaultsTillDate !== undefined) {
-        // All records for the same employee have the same totalDefaultsTillDate
         employeeTotals.set(d.employeeId, d.totalDefaultsTillDate);
       }
     });
@@ -217,8 +189,6 @@ const Defaulter = () => {
   };
 
   const { totalDefaultDay, totalCumulative } = calculateTotals();
-
-  // Prepare data for charts
   const prepareChartData = () => {
     if (!defaulters || defaulters.length === 0) {
       return {

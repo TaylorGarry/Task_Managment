@@ -18,6 +18,31 @@ import RosterBulkEditForm from "../Roster/RosterBulkEditForm.jsx"
 
 
 const RosterForm = () => {
+  const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}/;
+  const pad2 = (value) => String(value).padStart(2, "0");
+  const getLocalDateKey = (date = new Date()) =>
+    `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const getDateKey = (value) => {
+    if (!value) return "";
+    if (typeof value === "string" && DATE_ONLY_REGEX.test(value)) return value.slice(0, 10);
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toISOString().slice(0, 10);
+  };
+  const dateFromKeyUTC = (dateKey) => {
+    const [year, month, day] = dateKey.split("-").map(Number);
+    return new Date(Date.UTC(year, month - 1, day));
+  };
+  const addDaysToDateKeyUTC = (dateKey, days) => {
+    const date = dateFromKeyUTC(dateKey);
+    date.setUTCDate(date.getUTCDate() + days);
+    return date.toISOString().slice(0, 10);
+  };
+  const getUTCISOStringFromDateKey = (dateKey) => `${dateKey}T00:00:00.000Z`;
+  const getMonthFromDateKeyUTC = (dateKey) => dateFromKeyUTC(dateKey).getUTCMonth() + 1;
+  const getYearFromDateKeyUTC = (dateKey) => dateFromKeyUTC(dateKey).getUTCFullYear();
+  const getDateRangeDurationDaysUTC = (startDateKey, endDateKey) =>
+    Math.ceil((dateFromKeyUTC(endDateKey) - dateFromKeyUTC(startDateKey)) / (1000 * 60 * 60 * 24)) + 1;
   const dispatch = useDispatch();
   const {
     roster,
@@ -66,8 +91,8 @@ const RosterForm = () => {
 
   // ADDED: State for roster dates
   const [rosterDates, setRosterDates] = useState({
-    startDate: new Date().toISOString().slice(0, 10),
-    endDate: new Date(new Date().setDate(new Date().getDate() + 6)).toISOString().slice(0, 10),
+    startDate: getLocalDateKey(),
+    endDate: addDaysToDateKeyUTC(getLocalDateKey(), 6),
   });
 
   // Add this with your other state declarations:
@@ -303,8 +328,8 @@ const proceedWithBulkEditAfterFetch = () => {
       return;
     }
 
-    const startDate = new Date(rosterDates.startDate);
-    const endDate = new Date(rosterDates.endDate);
+    const startDate = dateFromKeyUTC(rosterDates.startDate);
+    const endDate = dateFromKeyUTC(rosterDates.endDate);
     
     if (startDate > endDate) {
       toast.error("Start date cannot be after end date");
@@ -312,13 +337,13 @@ const proceedWithBulkEditAfterFetch = () => {
     }
 
     // Calculate week number based on roster dates
-    const rosterMonth = startDate.getMonth() + 1;
-    const rosterYear = startDate.getFullYear();
+    const rosterMonth = startDate.getUTCMonth() + 1;
+    const rosterYear = startDate.getUTCFullYear();
     
     // Calculate week number from start date
-    const firstDayOfMonth = new Date(rosterYear, rosterMonth - 1, 1);
+    const firstDayOfMonth = new Date(Date.UTC(rosterYear, rosterMonth - 1, 1));
     const pastDaysOfYear = Math.floor((startDate - firstDayOfMonth) / (24 * 60 * 60 * 1000));
-    const weekNumber = Math.max(1, Math.ceil((firstDayOfMonth.getDay() + pastDaysOfYear + 1) / 7));
+    const weekNumber = Math.max(1, Math.ceil((firstDayOfMonth.getUTCDay() + pastDaysOfYear + 1) / 7));
 
     // Prepare the data object correctly
     const rosterData = {
@@ -337,10 +362,9 @@ const proceedWithBulkEditAfterFetch = () => {
           teamLeader: emp.teamLeader || "",
           isCoreTeam: emp.isCoreTeam || false,
           dailyStatus: emp.dailyStatus.map((status, index) => {
-            const date = new Date(startDate);
-            date.setDate(date.getDate() + index);
+            const dateKey = addDaysToDateKeyUTC(rosterDates.startDate, index);
             return {
-              date: date.toISOString(),
+              date: getUTCISOStringFromDateKey(dateKey),
               status: status || "P",
             };
           }),
@@ -524,16 +548,35 @@ const proceedWithBulkEditAfterFetch = () => {
 
   const formatDate = (dateString) => {
     try {
-      const date = new Date(dateString);
+      const dateKey = getDateKey(dateString);
+      if (!dateKey) return dateString;
+      const date = dateFromKeyUTC(dateKey);
       return date.toLocaleDateString("en-GB", {
         day: "2-digit",
         month: "short",
         year: "numeric",
+        timeZone: "UTC",
       });
     } catch (error) {
       return dateString;
     }
   };
+  const formatDateShort = (dateString) => {
+    try {
+      const dateKey = getDateKey(dateString);
+      if (!dateKey) return dateString;
+      const date = dateFromKeyUTC(dateKey);
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        timeZone: "UTC",
+      });
+    } catch (error) {
+      return dateString;
+    }
+  };
+  const getWeekDayDateLabel = (startDate, dayIndex) =>
+    formatDateShort(addDaysToDateKeyUTC(getDateKey(startDate), dayIndex));
 
   const getLatestRosterWeek = () => {
     if (!allRosters || allRosters.length === 0) return null;
@@ -543,7 +586,7 @@ const proceedWithBulkEditAfterFetch = () => {
   };
 
   const handleEditSaved = (emp, rosterWeek) => {
-    const startDate = rosterWeek?.startDate ? new Date(rosterWeek.startDate) : new Date();
+    const startDateKey = rosterWeek?.startDate ? getDateKey(rosterWeek.startDate) : getLocalDateKey();
     const ds = (emp.dailyStatus || []).slice(0, 7).map((d, i) => {
       if (typeof d === "object") return d.status || "P";
       return d || "P";
@@ -557,7 +600,7 @@ const proceedWithBulkEditAfterFetch = () => {
       shiftStartHour: emp.shiftStartHour ?? "",
       shiftEndHour: emp.shiftEndHour ?? "",
       dailyStatus: ds,
-      startDate: startDate.toISOString().slice(0, 10),
+      startDate: startDateKey,
       weekNumber: rosterWeek.weekNumber,
     });
     setShowEditModal(true);
@@ -580,11 +623,9 @@ const proceedWithBulkEditAfterFetch = () => {
       const rosterObj = selectedWeek ? { month: allRosters[0].month, year: allRosters[0].year } : allRosters && allRosters[0] ? { month: allRosters[0].month, year: allRosters[0].year } : null;
       if (!rosterObj) return toast.error("Roster context missing");
       const { month, year } = rosterObj;
-      const startDate = new Date(editSavedEmployee.startDate);
       const dailyStatusObjects = editSavedEmployee.dailyStatus.map((status, idx) => {
-        const date = new Date(startDate);
-        date.setDate(date.getDate() + idx);
-        return { date: date.toISOString(), status: status || "P" };
+        const dateKey = addDaysToDateKeyUTC(editSavedEmployee.startDate, idx);
+        return { date: getUTCISOStringFromDateKey(dateKey), status: status || "P" };
       });
 
       const updates = {
@@ -917,19 +958,21 @@ const proceedWithBulkEditAfterFetch = () => {
                           <div className="flex space-x-1">
                             {emp.dailyStatus && emp.dailyStatus.map((ds, dayIndex) => {
                               const status = typeof ds === "object" ? ds.status : ds;
+                              const dayDate = getWeekDayDateLabel(rosterWeek.startDate, dayIndex);
                               return (
                                 <div
                                   key={dayIndex}
-                                  className={`w-8 h-8 flex items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" :
+                                  className={`w-12 h-12 flex flex-col items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" :
                                     status === "WO" ? "bg-blue-100 border-blue-300" :
                                       status === "L" ? "bg-red-100 border-red-300" :
                                         status === "HD" ? "bg-amber-100 border-amber-300" :
                                         status === "H" ? "bg-purple-100 border-purple-300" :
                                           "bg-gray-100 border-gray-300"
                                     }`}
-                                  title={`${daysOfWeek[dayIndex % 7]}: ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : status === "HD" ? "Half Day" : status === "H" ? "Holiday" : status}`}
+                                  title={`${daysOfWeek[dayIndex % 7]} (${dayDate}): ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : status === "HD" ? "Half Day" : status === "H" ? "Holiday" : status}`}
                                 >
-                                  <span className="text-base">{getStatusIcon(status)}</span>
+                                  <span className="text-sm leading-none">{getStatusIcon(status)}</span>
+                                  <span className="text-[10px] leading-none text-gray-700 mt-0.5">{dayDate}</span>
                                 </div>
                               );
                             })}
@@ -1308,8 +1351,9 @@ const proceedWithBulkEditAfterFetch = () => {
                                 </div>
                                 <div className="flex space-x-1">
                                   {emp.dailyStatus.map((status, dayIndex) => (
-                                    <div key={dayIndex} className={`w-8 h-8 flex items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" : status === "WO" ? "bg-blue-100 border-blue-300" : status === "L" ? "bg-red-100 border-red-300" : status === "HD" ? "bg-amber-100 border-amber-300" : "bg-gray-100 border-gray-300"}`} title={`${daysOfWeek[dayIndex]}: ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : status === "HD" ? "Half Day" : status}`}>
-                                      <span className="text-base">{getStatusIcon(status)}</span>
+                                    <div key={dayIndex} className={`w-12 h-12 flex flex-col items-center justify-center rounded border cursor-pointer ${status === "P" ? "bg-green-100 border-green-300" : status === "WO" ? "bg-blue-100 border-blue-300" : status === "L" ? "bg-red-100 border-red-300" : status === "HD" ? "bg-amber-100 border-amber-300" : "bg-gray-100 border-gray-300"}`} title={`${daysOfWeek[dayIndex]} (${getWeekDayDateLabel(rosterDates.startDate, dayIndex)}): ${status === "P" ? "Present" : status === "WO" ? "Week Off" : status === "L" ? "Leave" : status === "HD" ? "Half Day" : status}`}>
+                                      <span className="text-sm leading-none">{getStatusIcon(status)}</span>
+                                      <span className="text-[10px] leading-none text-gray-700 mt-0.5">{getWeekDayDateLabel(rosterDates.startDate, dayIndex)}</span>
                                     </div>
                                   ))}
                                 </div>
@@ -1437,8 +1481,8 @@ const proceedWithBulkEditAfterFetch = () => {
             <ul className="text-sm text-gray-600 mt-1 space-y-1">
               <li>• Employees to save: {employees.length}</li>
               <li>• Roster Period: {formatDate(rosterDates.startDate)} to {formatDate(rosterDates.endDate)}</li>
-              <li>• Month/Year: {new Date(rosterDates.startDate).getMonth() + 1}/{new Date(rosterDates.startDate).getFullYear()}</li>
-              <li>• Duration: {Math.ceil((new Date(rosterDates.endDate) - new Date(rosterDates.startDate)) / (1000 * 60 * 60 * 24)) + 1} days</li>
+              <li>• Month/Year: {getMonthFromDateKeyUTC(rosterDates.startDate)}/{getYearFromDateKeyUTC(rosterDates.startDate)}</li>
+              <li>• Duration: {getDateRangeDurationDaysUTC(rosterDates.startDate, rosterDates.endDate)} days</li>
             </ul>
           </div>
         </div>
@@ -1694,10 +1738,14 @@ const proceedWithBulkEditAfterFetch = () => {
 
         <div className="mt-6">
           <h3 className="font-semibold mb-3 text-gray-800">Daily Status</h3>
+          <p className="text-sm text-gray-600 mb-3">
+            Roster Period: {formatDate(editSavedEmployee.startDate)} to {formatDate(addDaysToDateKeyUTC(editSavedEmployee.startDate, 6))}
+          </p>
           <div className="grid grid-cols-7 gap-2">
             {daysOfWeek.map((day, i) => (
               <div key={i} className="flex flex-col items-center">
                 <span className="text-sm mb-1 font-medium text-gray-700">{day}</span>
+                <span className="text-xs mb-2 text-gray-500">{formatDateShort(addDaysToDateKeyUTC(editSavedEmployee.startDate, i))}</span>
                 <select name={`day${i}`} value={editSavedEmployee.dailyStatus[i]} onChange={(e) => handleEditSavedChange(e, i)} className="border p-2 rounded w-full text-center text-gray-800">
                   <option value="P">Present (P)</option>
                   <option value="WO">Week Off (WO)</option>
