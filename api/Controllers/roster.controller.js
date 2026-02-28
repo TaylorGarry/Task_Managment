@@ -3389,7 +3389,8 @@ export const getRosterForBulkEdit = async (req, res) => {
 
 
 
-//by farhan
+
+
 export const bulkUpdateRosterWeeks = async (req, res) => {
   try {
     const { rosterId } = req.params;
@@ -3415,7 +3416,8 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
 
         const changes = [];
 
-        ["name", "department", "transport", "cabRoute", "teamLeader", "shiftStartHour", "shiftEndHour"].forEach(field => {
+        // Compare normal fields
+        ["name","transport","cabRoute","teamLeader","shiftStartHour","shiftEndHour"].forEach(field => {
           if (empUpdate[field] !== undefined && employee[field] !== empUpdate[field]) {
             changes.push({
               field,
@@ -3477,95 +3479,6 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
     });
   }
 };
-
-// export const bulkUpdateRosterWeeks = async (req, res) => {
-//   try {
-//     const { rosterId } = req.params;
-//     const { weeks } = req.body;
-//     const user = req.user;
-
-//     if (!rosterId) {
-//       return res.status(400).json({ success: false, message: "rosterId required" });
-//     }
-
-//     const roster = await Roster.findById(rosterId);
-//     if (!roster) {
-//       return res.status(404).json({ success: false, message: "Roster not found" });
-//     }
-
-//     for (const updatedWeek of weeks) {
-//       const week = roster.weeks.find(w => w.weekNumber === updatedWeek.weekNumber);
-//       if (!week) continue;
-
-//       for (const empUpdate of updatedWeek.employees) {
-//         const employee = week.employees.id(empUpdate._id);
-//         if (!employee) continue;
-
-//         const changes = [];
-
-//         // Compare normal fields
-//         ["name","transport","cabRoute","teamLeader","shiftStartHour","shiftEndHour"].forEach(field => {
-//           if (empUpdate[field] !== undefined && employee[field] !== empUpdate[field]) {
-//             changes.push({
-//               field,
-//               oldValue: employee[field],
-//               newValue: empUpdate[field]
-//             });
-//             employee[field] = empUpdate[field];
-//           }
-//         });
-
-//         // Compare dailyStatus
-//         if (empUpdate.dailyStatus) {
-//           empUpdate.dailyStatus.forEach((newDay, index) => {
-//             const oldDay = employee.dailyStatus[index];
-//             if (oldDay && oldDay.status !== newDay.status) {
-//               changes.push({
-//                 field: `dailyStatus (${newDay.date})`,
-//                 oldValue: oldDay.status,
-//                 newValue: newDay.status
-//               });
-//               employee.dailyStatus[index].status = newDay.status;
-//             }
-//           });
-//         }
-
-//         // Push history if changes exist
-//         if (changes.length > 0) {
-//           roster.editHistory.push({
-//             editedBy: user._id,
-//             editedByName: user.username,
-//             accountType: user.accountType,
-//             actionType: "bulk-update",
-//             weekNumber: week.weekNumber,
-//             employeeId: employee._id,
-//             employeeName: employee.name,
-//             changes
-//           });
-//         }
-//       }
-//     }
-
-//     roster.updatedBy = user._id;
-//     roster.markModified("weeks");
-//     roster.markModified("editHistory");
-
-//     await roster.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Bulk update successful",
-//       roster
-//     });
-
-//   } catch (error) {
-//     console.error(error);
-//     return res.status(500).json({
-//       success: false,
-//       message: error.message
-//     });
-//   }
-// };
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
