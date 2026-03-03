@@ -1,10 +1,9 @@
-
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { toast } from "react-toastify";
 
- const API_URL = "http://localhost:4000/api/v1/roster";
-//const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
+//  const API_URL = "http://localhost:4000/api/v1/roster";
+const API_URL = `${import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app"}/api/v1/roster`;
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -69,21 +68,6 @@ const clearAllRosterCaches = () => {
   
   console.log("All roster caches cleared");
 };
-
-const clearRosterCache = () => {
-  cache.roster.data = null;
-  cache.roster.timestamp = null;
-  cache.roster.filters = null;
-  console.log("Roster cache cleared");
-};
-
-const clearAllRostersCache = () => {
-  cache.allRosters.data = null;
-  cache.allRosters.timestamp = null;
-  cache.allRosters.filters = null;
-  console.log("All rosters cache cleared");
-};
-
 const clearBulkEditCache = (rosterId = null) => {
   if (rosterId && cache.bulkEditRoster.rosterId === rosterId) {
     cache.bulkEditRoster.data = null;
@@ -224,7 +208,6 @@ export const getRosterForBulkEdit = createAsyncThunk(
     return res.data;
   }
 );
-
 export const bulkUpdateRosterWeeks = createAsyncThunk(
   "roster/bulkUpdateRosterWeeks",
   async ({ rosterId, data }, thunkAPI) => {
@@ -246,7 +229,6 @@ export const bulkUpdateRosterWeeks = createAsyncThunk(
     }
   }
 );
-
 export const addRosterWeek = createAsyncThunk(
   "roster/addRosterWeek",
   async ({ data }, thunkAPI) => {
@@ -266,7 +248,6 @@ export const addRosterWeek = createAsyncThunk(
     }
   }
 );
-
 export const fetchRoster = createAsyncThunk(
   "roster/fetchRoster",
   async (filters = {}, thunkAPI) => {
@@ -289,7 +270,6 @@ export const fetchRoster = createAsyncThunk(
     }
   }
 );
-
 export const fetchAllRosters = createAsyncThunk(
   "roster/fetchAllRosters",
   async (filters = {}, thunkAPI) => {
@@ -325,7 +305,6 @@ export const fetchAllRosters = createAsyncThunk(
     }
   }
 );
-
 export const updateRosterWeek = createAsyncThunk(
   "roster/updateRosterWeek",
   async ({ weekId, data }, thunkAPI) => {
@@ -349,7 +328,6 @@ export const updateRosterWeek = createAsyncThunk(
     }
   }
 );
-
 // export const updateRosterEmployee = createAsyncThunk(
 //   "roster/updateRosterEmployee",
 //   async ({ month, year, weekNumber, employeeId, updates }, thunkAPI) => {
@@ -477,7 +455,6 @@ export const deleteEmployeeFromRoster = createAsyncThunk(
     }
   }
 );
-
 export const deleteEmployeeByUserId = createAsyncThunk(
   "roster/deleteEmployeeByUserId",
   async ({ rosterId, weekNumber, userId }, thunkAPI) => {
@@ -504,7 +481,6 @@ export const deleteEmployeeByUserId = createAsyncThunk(
     }
   }
 );
-
 export const deleteEmployeeByName = createAsyncThunk(
   "roster/deleteEmployeeByName",
   async ({ rosterId, weekNumber, employeeName }, thunkAPI) => {
@@ -531,8 +507,6 @@ export const deleteEmployeeByName = createAsyncThunk(
     }
   }
 );
-
-// OTHER OPERATIONS
 export const createRosterForDateRange = createAsyncThunk(
   "roster/createRosterForDateRange",
   async ({ data }, thunkAPI) => {
@@ -556,7 +530,6 @@ export const createRosterForDateRange = createAsyncThunk(
     }
   }
 );
-
 export const copyEmployeesToWeek = createAsyncThunk(
   "roster/copyEmployeesToWeek",
   async ({ data }, thunkAPI) => {
@@ -580,7 +553,6 @@ export const copyEmployeesToWeek = createAsyncThunk(
     }
   }
 );
-
 export const exportSavedRoster = createAsyncThunk(
   "roster/exportSavedRoster",
   async ({ month, year }, thunkAPI) => {
@@ -631,7 +603,6 @@ export const exportSavedRoster = createAsyncThunk(
     }
   }
 );
-
 export const bulkUpdateWeeks = createAsyncThunk(
   "roster/bulkUpdateWeeks",
   async ({ data }, thunkAPI) => {
@@ -666,8 +637,6 @@ return thunkAPI.rejectWithValue(
     }
   }
 );
-
-// ========== EXCEL TEMPLATE EXPORT THUNK (ONLY HEADERS) ==========
 export const exportRosterTemplate = createAsyncThunk(
   'roster/exportTemplate',
   async ({ startDate, endDate }, { rejectWithValue }) => {
@@ -737,8 +706,6 @@ export const exportRosterTemplate = createAsyncThunk(
     }
   }
 );
-
-//  New: Department filter rosters 
 export const fetchRostersByDepartment = createAsyncThunk(
   'roster/fetchByDepartment',
   async ({ department, month, year, page = 1, limit = 10 }, { rejectWithValue, getState }) => {
@@ -780,7 +747,154 @@ export const fetchRostersByDepartment = createAsyncThunk(
     }
   }
 );
-// Helper function
+
+// ===== ARRIVAL TIME & ATTENDANCE THUNKS =====
+
+export const updateArrivalTime = createAsyncThunk(
+  "roster/updateArrivalTime",
+  async ({ rosterId, weekNumber, employeeId, date, arrivalTime }, thunkAPI) => {
+    try {
+      const token = getToken();
+      const res = await axios.put(
+        `${API_URL}/update-arrival`,
+        { rosterId, weekNumber, employeeId, date, arrivalTime },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Clear relevant caches
+      clearOpsMetaRosterCache();
+      clearBulkEditCache(rosterId);
+      
+      // Also clear department cache if needed
+      cache.departmentRosters.data = null;
+      cache.departmentRosters.timestamp = null;
+
+      toast.success(res.data.message || 'Arrival time updated successfully');
+
+      return {
+        ...res.data,
+        rosterId,
+        weekNumber,
+        employeeId,
+        date,
+        data: res.data.data // The updated daily object
+      };
+    } catch (err) {
+      const message = err.response?.data?.message || err.message;
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
+    }
+  }
+);
+
+export const updateAttendance = createAsyncThunk(
+  "roster/updateAttendance",
+  async ({ rosterId, weekNumber, employeeId, date, transportStatus, departmentStatus, arrivalTime }, thunkAPI) => {
+    try {
+      const token = getToken();
+      
+      // Build payload with only the fields that are provided
+      const payload = {
+        rosterId,
+        weekNumber,
+        employeeId,
+        date,
+      };
+      
+      // Only add fields that are defined and not empty
+      if (transportStatus !== undefined && transportStatus !== '') {
+        payload.transportStatus = transportStatus;
+      }
+      
+      if (departmentStatus !== undefined && departmentStatus !== '') {
+        payload.departmentStatus = departmentStatus;
+      }
+      
+      if (arrivalTime !== undefined && arrivalTime !== '') {
+        payload.arrivalTime = arrivalTime;
+      }
+      
+      console.log("📦 Sending attendance update payload:", payload);
+      
+      const res = await axios.put(
+        `${API_URL}/update-attendance`,
+        payload,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      // Clear relevant caches
+      clearOpsMetaRosterCache();
+      clearBulkEditCache(rosterId);
+      
+      // Also clear department cache if needed
+      cache.departmentRosters.data = null;
+      cache.departmentRosters.timestamp = null;
+
+      toast.success(res.data.message || 'Attendance updated successfully');
+
+      return {
+        ...res.data,
+        rosterId,
+        weekNumber,
+        employeeId,
+        date,
+        data: res.data.data
+      };
+    } catch (err) {
+      const message = err.response?.data?.message || err.message;
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
+    }
+  }
+);
+
+// Optional: Thunk to get filtered employees for updates
+export const getEmployeesForUpdates = createAsyncThunk(
+  "roster/getEmployeesForUpdates",
+  async ({ rosterId, weekNumber, date }, thunkAPI) => {
+    try {
+      const token = getToken();
+      console.log("🔍 Fetching employees for updates:", { rosterId, weekNumber, date });
+      
+      const res = await axios.get(
+        `${API_URL}/updates/${rosterId}/${weekNumber}/${date}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log("✅ Received response:", res.data);
+      return res.data;
+    } catch (err) {
+      console.error("❌ Error fetching employees:", err.response?.data || err.message);
+      const message = err.response?.data?.message || err.message;
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
+    }
+  }
+);
+
+export const getTransportDetailForSuperAdmin = createAsyncThunk(
+  "roster/getTransportDetailForSuperAdmin",
+  async ({ rosterId, weekNumber, date }, thunkAPI) => {
+    try {
+      const token = getToken();
+      console.log("👑 SuperAdmin fetching transport details:", { rosterId, weekNumber, date });
+      
+      const res = await axios.get(
+        `${API_URL}/superadmin/transport-details/${rosterId}/${weekNumber}/${date}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      console.log("✅ SuperAdmin received response:", res.data);
+      return res.data;
+    } catch (err) {
+      console.error("❌ Error fetching superadmin details:", err.response?.data || err.message);
+      const message = err.response?.data?.message || err.message;
+      toast.error(message);
+      return thunkAPI.rejectWithValue(message);
+    }
+  }
+);
+//===== ATTENDANCE THUNK======
 const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   if (!roster?.weeks) return -1;
   const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
@@ -790,8 +904,6 @@ const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   );
   return { weekIndex, employeeIndex };
 };
-
-// UPDATED SLICE WITH OPS-META STATES AND EXCEL UPLOAD
 const rosterSlice = createSlice({
   name: "roster",
   initialState: {
@@ -804,7 +916,7 @@ const rosterSlice = createSlice({
     opsMetaError: null,
     opsMetaCanEdit: false,
     opsMetaEditMessage: "",
-    
+     superAdminTransportData: null, 
     // ADDED: Excel upload states
     excelUploadLoading: false,
     excelUploadSuccess: false,
@@ -1145,6 +1257,296 @@ canEdit: true,
           state.roster = action.payload.roster;
         }
       })
+// ===== ARRIVAL TIME & ATTENDANCE CASES =====
+
+// Update Arrival Time Cases
+.addCase(updateArrivalTime.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+.addCase(updateArrivalTime.fulfilled, (state, action) => {
+  state.loading = false;
+  
+  const { weekNumber, employeeId, date, data } = action.payload;
+
+  // Update in main roster
+  if (state.roster?.weeks) {
+    state.roster.weeks.forEach((week) => {
+      if (week.weekNumber === weekNumber) {
+        const emp = week.employees.find(e => e._id === employeeId);
+        if (emp) {
+          const dayIndex = emp.dailyStatus.findIndex(d => 
+            new Date(d.date).toDateString() === new Date(date).toDateString()
+          );
+
+          if (dayIndex !== -1) {
+            // Update existing day
+            emp.dailyStatus[dayIndex] = {
+              ...emp.dailyStatus[dayIndex],
+              ...data
+            };
+          } else {
+            // Add new day
+            emp.dailyStatus.push(data);
+          }
+        }
+      }
+    });
+  }
+
+  // Update in allRosters
+  if (state.allRosters?.data) {
+    state.allRosters.data.forEach(roster => {
+      roster.weeks?.forEach(week => {
+        if (week.weekNumber === weekNumber) {
+          const emp = week.employees?.find(e => e._id === employeeId);
+          if (emp) {
+            const dayIndex = emp.dailyStatus?.findIndex(d => 
+              new Date(d.date).toDateString() === new Date(date).toDateString()
+            );
+
+            if (dayIndex !== -1 && dayIndex !== undefined) {
+              emp.dailyStatus[dayIndex] = {
+                ...emp.dailyStatus[dayIndex],
+                ...data
+              };
+            } else if (emp.dailyStatus) {
+              emp.dailyStatus.push(data);
+            }
+          }
+        }
+      });
+    });
+  }
+
+  // Update in bulkEditRoster
+  if (state.bulkEditRoster?.data?.weeks) {
+    const week = state.bulkEditRoster.data.weeks.find(w => w.weekNumber === weekNumber);
+    if (week?.employees) {
+      const emp = week.employees.find(e => e._id === employeeId);
+      if (emp) {
+        const dayIndex = emp.dailyStatus?.findIndex(d => 
+          new Date(d.date).toDateString() === new Date(date).toDateString()
+        );
+
+        if (dayIndex !== -1 && dayIndex !== undefined) {
+          emp.dailyStatus[dayIndex] = {
+            ...emp.dailyStatus[dayIndex],
+            ...data
+          };
+        } else if (emp.dailyStatus) {
+          emp.dailyStatus.push(data);
+        }
+      }
+    }
+  }
+
+  // Update in opsMetaRoster
+  if (state.opsMetaRoster?.data?.rosterEntries) {
+    const emp = state.opsMetaRoster.data.rosterEntries.find(e => e._id === employeeId);
+    if (emp) {
+      const dayIndex = emp.dailyStatus?.findIndex(d => 
+        new Date(d.date).toDateString() === new Date(date).toDateString()
+      );
+
+      if (dayIndex !== -1 && dayIndex !== undefined) {
+        emp.dailyStatus[dayIndex] = {
+          ...emp.dailyStatus[dayIndex],
+          ...data
+        };
+      } else if (emp.dailyStatus) {
+        emp.dailyStatus.push(data);
+      }
+    }
+  }
+
+  // Update in departmentRosters
+  if (state.departmentRosters?.data) {
+    state.departmentRosters.data.forEach(roster => {
+      roster.weeks?.forEach(week => {
+        if (week.weekNumber === weekNumber) {
+          const emp = week.employees?.find(e => e._id === employeeId);
+          if (emp) {
+            const dayIndex = emp.dailyStatus?.findIndex(d => 
+              new Date(d.date).toDateString() === new Date(date).toDateString()
+            );
+
+            if (dayIndex !== -1 && dayIndex !== undefined) {
+              emp.dailyStatus[dayIndex] = {
+                ...emp.dailyStatus[dayIndex],
+                ...data
+              };
+            } else if (emp.dailyStatus) {
+              emp.dailyStatus.push(data);
+            }
+          }
+        }
+      });
+    });
+  }
+})
+.addCase(updateArrivalTime.rejected, (state, action) => {
+  state.loading = false;
+  state.error = action.payload;
+})
+
+// Update Attendance Cases
+.addCase(updateAttendance.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+.addCase(updateAttendance.fulfilled, (state, action) => {
+  state.loading = false;
+  
+  const { weekNumber, employeeId, date, data } = action.payload;
+
+  // Update in main roster
+  if (state.roster?.weeks) {
+    state.roster.weeks.forEach((week) => {
+      if (week.weekNumber === weekNumber) {
+        const emp = week.employees.find(e => e._id === employeeId);
+        if (emp) {
+          const dayIndex = emp.dailyStatus.findIndex(d => 
+            new Date(d.date).toDateString() === new Date(date).toDateString()
+          );
+
+          if (dayIndex !== -1) {
+            emp.dailyStatus[dayIndex] = {
+              ...emp.dailyStatus[dayIndex],
+              ...data
+            };
+          } else {
+            emp.dailyStatus.push(data);
+          }
+        }
+      }
+    });
+  }
+
+  // Update in allRosters
+  if (state.allRosters?.data) {
+    state.allRosters.data.forEach(roster => {
+      roster.weeks?.forEach(week => {
+        if (week.weekNumber === weekNumber) {
+          const emp = week.employees?.find(e => e._id === employeeId);
+          if (emp) {
+            const dayIndex = emp.dailyStatus?.findIndex(d => 
+              new Date(d.date).toDateString() === new Date(date).toDateString()
+            );
+
+            if (dayIndex !== -1 && dayIndex !== undefined) {
+              emp.dailyStatus[dayIndex] = {
+                ...emp.dailyStatus[dayIndex],
+                ...data
+              };
+            } else if (emp.dailyStatus) {
+              emp.dailyStatus.push(data);
+            }
+          }
+        }
+      });
+    });
+  }
+
+  // Update in bulkEditRoster
+  if (state.bulkEditRoster?.data?.weeks) {
+    const week = state.bulkEditRoster.data.weeks.find(w => w.weekNumber === weekNumber);
+    if (week?.employees) {
+      const emp = week.employees.find(e => e._id === employeeId);
+      if (emp) {
+        const dayIndex = emp.dailyStatus?.findIndex(d => 
+          new Date(d.date).toDateString() === new Date(date).toDateString()
+        );
+
+        if (dayIndex !== -1 && dayIndex !== undefined) {
+          emp.dailyStatus[dayIndex] = {
+            ...emp.dailyStatus[dayIndex],
+            ...data
+          };
+        } else if (emp.dailyStatus) {
+          emp.dailyStatus.push(data);
+        }
+      }
+    }
+  }
+
+  // Update in opsMetaRoster
+  if (state.opsMetaRoster?.data?.rosterEntries) {
+    const emp = state.opsMetaRoster.data.rosterEntries.find(e => e._id === employeeId);
+    if (emp) {
+      const dayIndex = emp.dailyStatus?.findIndex(d => 
+        new Date(d.date).toDateString() === new Date(date).toDateString()
+      );
+
+      if (dayIndex !== -1 && dayIndex !== undefined) {
+        emp.dailyStatus[dayIndex] = {
+          ...emp.dailyStatus[dayIndex],
+          ...data
+        };
+      } else if (emp.dailyStatus) {
+        emp.dailyStatus.push(data);
+      }
+    }
+  }
+
+  // Update in departmentRosters
+  if (state.departmentRosters?.data) {
+    state.departmentRosters.data.forEach(roster => {
+      roster.weeks?.forEach(week => {
+        if (week.weekNumber === weekNumber) {
+          const emp = week.employees?.find(e => e._id === employeeId);
+          if (emp) {
+            const dayIndex = emp.dailyStatus?.findIndex(d => 
+              new Date(d.date).toDateString() === new Date(date).toDateString()
+            );
+
+            if (dayIndex !== -1 && dayIndex !== undefined) {
+              emp.dailyStatus[dayIndex] = {
+                ...emp.dailyStatus[dayIndex],
+                ...data
+              };
+            } else if (emp.dailyStatus) {
+              emp.dailyStatus.push(data);
+            }
+          }
+        }
+      });
+    });
+  }
+})
+.addCase(updateAttendance.rejected, (state, action) => {
+  state.loading = false;
+  state.error = action.payload;
+})
+
+// Get Employees for Updates Cases
+.addCase(getEmployeesForUpdates.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+.addCase(getEmployeesForUpdates.fulfilled, (state, action) => {
+  state.loading = false;
+  // Store the entire response
+  state.updateEmployeesData = action.payload;
+  console.log("✅ updateEmployeesData stored:", action.payload);
+})
+.addCase(getEmployeesForUpdates.rejected, (state, action) => {
+  state.loading = false;
+  state.error = action.payload;
+})
+.addCase(getTransportDetailForSuperAdmin.pending, (state) => {
+  state.loading = true;
+  state.error = null;
+})
+.addCase(getTransportDetailForSuperAdmin.fulfilled, (state, action) => {
+  state.loading = false;
+  state.superAdminTransportData = action.payload;
+  console.log("📦 SuperAdmin data stored in state");
+})
+.addCase(getTransportDetailForSuperAdmin.rejected, (state, action) => {
+  state.loading = false;
+  state.error = action.payload;
+})
       .addCase(addRosterWeek.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
@@ -1193,25 +1595,42 @@ canEdit: true,
         state.rosterDetailLoading = true;
         state.rosterDetailError = null;
       })
+      // .addCase(fetchAllRosters.fulfilled, (state, action) => {
+      //   state.rosterDetailLoading = false;
+      //   if (action.payload.success) {
+      //     state.allRosters = action.payload.data || [];
+      //     if (action.payload.pagination) {
+      //       state.pagination = {
+      //         currentPage: action.payload.pagination.currentPage || 1,
+      //         totalPages: action.payload.pagination.totalPages || 1,
+      //         totalItems: action.payload.pagination.totalItems || 0,
+      //         itemsPerPage: action.payload.pagination.itemsPerPage || 10,
+      //       };
+      //     }
+      //   } else {
+      //     state.allRosters = Array.isArray(action.payload) ? action.payload : [];
+      //   }
+      //   if (!state.allRosters) {
+      //     state.allRosters = [];
+      //   }
+      // })
       .addCase(fetchAllRosters.fulfilled, (state, action) => {
-        state.rosterDetailLoading = false;
-        if (action.payload.success) {
-          state.allRosters = action.payload.data || [];
-          if (action.payload.pagination) {
-            state.pagination = {
-              currentPage: action.payload.pagination.currentPage || 1,
-              totalPages: action.payload.pagination.totalPages || 1,
-              totalItems: action.payload.pagination.totalItems || 0,
-              itemsPerPage: action.payload.pagination.itemsPerPage || 10,
-            };
-          }
-        } else {
-          state.allRosters = Array.isArray(action.payload) ? action.payload : [];
-        }
-        if (!state.allRosters) {
-          state.allRosters = [];
-        }
-      })
+  state.rosterDetailLoading = false;
+  
+  // Store the ENTIRE response object, not just the data array
+  state.allRosters = action.payload;
+  
+  if (action.payload?.success && action.payload?.pagination) {
+    state.pagination = {
+      currentPage: action.payload.pagination.currentPage || 1,
+      totalPages: action.payload.pagination.totalPages || 1,
+      totalItems: action.payload.pagination.totalItems || 0,
+      itemsPerPage: action.payload.pagination.itemsPerPage || 10,
+    };
+  }
+  
+  console.log("✅ allRosters stored in state:", state.allRosters);
+})
       .addCase(fetchAllRosters.rejected, (state, action) => {
         state.rosterDetailLoading = false;
         state.rosterDetailError = action.payload;
@@ -1378,7 +1797,6 @@ canEdit: true,
       });
   },
 });
-
 export const { 
   clearExportState, 
   clearRosterDetailState, 
@@ -1396,7 +1814,8 @@ export const {
   clearOpsMetaState,
   updateOpsMetaRosterLocally,
   clearExcelUploadState,
-    clearDepartmentRostersState,//ADD
+    clearDepartmentRostersState, 
+     clearUpdateEmployeesData,
 } = rosterSlice.actions;
 
 export default rosterSlice.reducer; 

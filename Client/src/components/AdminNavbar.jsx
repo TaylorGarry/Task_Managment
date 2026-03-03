@@ -5,6 +5,7 @@ import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar } from "react-icons/fi";
+import { Clock } from "lucide-react"; // Add this import
 import toast from "react-hot-toast";
 import { socket } from "../socket.js";
 
@@ -32,6 +33,14 @@ const AdminNavbar = () => {
   const titleResetTimerRef = useRef(null);
   const defaultTitleRef = useRef(document.title);
   const processedMessageIdsRef = useRef(new Set());
+
+  // 🔥 NEW: Attendance Update Permission
+  const allowedAttendanceDepartments = ["Ops - Meta", "Transport"];
+  
+  const canAccessAttendanceUpdate =
+    (user?.accountType === "employee" &&
+      allowedAttendanceDepartments.includes(user?.department)) ||
+    ["admin", "superAdmin", "HR"].includes(user?.accountType);
 
   // Check if user is Ops-Meta employee
   const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
@@ -271,6 +280,18 @@ const AdminNavbar = () => {
                 <FiCalendar className="text-lg text-blue-600" />
                 Roster
               </Link>
+              
+              {/* 🔥 NEW: Attendance Update Button */}
+              {canAccessAttendanceUpdate && (
+                <button
+                  onClick={() => navigate("/attendance-update")}
+                  className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-2.5 lg:px-3 py-1.5 rounded-full text-indigo-700 font-medium text-sm whitespace-nowrap hover:bg-indigo-100 transition-all cursor-pointer"
+                >
+                  <Clock className="w-4 h-4" />
+                  Attendance Update
+                </button>
+              )}
+
               {isOpsMeta && (
                 <button
                   onClick={() => navigate("/ops-meta-roster")}
@@ -405,6 +426,20 @@ const AdminNavbar = () => {
                 <FiCalendar className="text-lg text-blue-600" />
                 Roster
               </Link>
+
+              {/* 🔥 NEW: Attendance Update Button in Mobile Menu */}
+              {canAccessAttendanceUpdate && (
+                <button
+                  onClick={() => {
+                    navigate("/attendance-update");
+                    setShowMobileMenu(false);
+                  }}
+                  className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-2 rounded-xl text-indigo-700 font-medium hover:bg-indigo-100 transition-all w-full text-left"
+                >
+                  <Clock className="w-4 h-4" />
+                  Attendance Update
+                </button>
+              )}
 
               {isOpsMeta && (
                 <button

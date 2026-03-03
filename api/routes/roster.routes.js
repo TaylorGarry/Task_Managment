@@ -119,6 +119,10 @@ import {
   rosterUploadFromExcel,
   exportRosterTemplate,
   getRostersByDepartment,
+    updateArrivalTime,
+  updateAttendance,
+  getFilteredRosterForUpdates,
+  getTransportDetailForSuperAdmin,
 } from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
@@ -161,18 +165,14 @@ router.put("/bulk-save/:rosterId", authMiddleware, bulkUpdateRosterWeeks);
 // This roster is for Ops-Meta to display only current week roster
 router.get('/current-week', authMiddleware, getOpsMetaCurrentWeekRoster);
 
-//This is for update the roster of curent week only by OPS-Meta
 router.put('/update',authMiddleware, updateOpsMetaRoster);
 
-//This is for upload roster via excel file 
 router.post("/upload-excel", 
   authMiddleware, 
   (req, res, next) => {
-    // Custom middleware to handle file upload
     const upload = multer({
       storage: multer.memoryStorage(),
       fileFilter: (req, file, cb) => {
-        // Only allow Excel files
         const allowedMimeTypes = [
           'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           'application/vnd.ms-excel'
@@ -186,9 +186,9 @@ router.post("/upload-excel",
         }
       },
       limits: {
-        fileSize: 10 * 1024 * 1024, // 10MB limit for Excel files
+        fileSize: 10 * 1024 * 1024,  
       }
-    }).single('excelFile'); // Field name should be 'excelFile'
+    }).single('excelFile');  
     
     upload(req, res, (err) => {
       if (err) {
@@ -206,4 +206,28 @@ router.post("/upload-excel",
 router.get('/export-template',authMiddleware, exportRosterTemplate);
 //new 
 router.get('/by-department', authMiddleware, getRostersByDepartment);
+
+// Routes
+router.put(
+  "/update-arrival",
+  authMiddleware,
+  updateArrivalTime
+);
+
+router.put(
+  "/update-attendance",
+  authMiddleware,
+  updateAttendance
+);
+
+router.get(
+  "/updates/:rosterId/:weekNumber/:date",
+  authMiddleware,
+  getFilteredRosterForUpdates
+);
+router.get(
+  "/superadmin/transport-details/:rosterId/:weekNumber/:date",
+  authMiddleware,
+  getTransportDetailForSuperAdmin
+);
 export default router;
