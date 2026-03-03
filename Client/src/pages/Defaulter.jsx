@@ -121,14 +121,14 @@ const Defaulter = () => {
         endDate: filters.endDate
       }).toString();
 
-      const res = await fetch(
-        `http://localhost:4000/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
       // const res = await fetch(
-      //   `https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
+      //   `http://localhost:4000/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
       //   { headers: { Authorization: `Bearer ${token}` } }
       // );
+      const res = await fetch(
+        `https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/tasks/employee-defaulter/${employeeId}?${query}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       const data = await res.json();
       if (data.success) {
         setSelectedEmployee(data.employeeName || employeeName);

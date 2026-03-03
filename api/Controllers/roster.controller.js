@@ -1814,6 +1814,8 @@ export const getAllRosters = async (req, res) => {
   try {
     const { month, year, page = 1, limit = 10 } = req.query;
     
+    console.log("📡 getAllRosters called with:", { month, year, page, limit });
+    
     const filter = {};
     if (month) filter.month = parseInt(month);
     if (year) filter.year = parseInt(year);
@@ -1822,49 +1824,126 @@ export const getAllRosters = async (req, res) => {
     
     const total = await Roster.countDocuments(filter);
     
+    // 🔥 FIX: Add population to get user details
     const rosters = await Roster.find(filter)
       .sort({ year: -1, month: -1, 'weeks.weekNumber': 1 })
       .skip(skip)
       .limit(parseInt(limit))
       .populate('createdBy', 'username email')
       .populate('updatedBy', 'username email')
+      .populate('weeks.employees.userId', 'username email department') // Add this line!
       .lean();
     
+    console.log("📦 Raw rosters count:", rosters.length);
+    
+    // Format rosters similar to getRosterForBulkEdit but for viewing
     const formattedRosters = rosters.map(roster => {
-      const processedWeeks = roster.weeks.map(week => {
-        const processedEmployees = week.employees.map(employee => {
-          const { userId, ...employeeWithoutUserId } = employee;
-          return employeeWithoutUserId;
+      // Group weeks by weekNumber and merge employees
+      const weeksMap = new Map();
+      
+      (roster.weeks || []).forEach(week => {
+        if (!week) return;
+        
+        const weekKey = week.weekNumber.toString();
+        
+        if (!weeksMap.has(weekKey)) {
+          weeksMap.set(weekKey, {
+            weekNumber: week.weekNumber,
+            startDate: week.startDate,
+            endDate: week.endDate,
+            _id: week._id,
+            employees: []
+          });
+        }
+        
+        const existingWeek = weeksMap.get(weekKey);
+        
+        // Filter out null employees
+        const validEmployees = (week.employees || []).filter(emp => emp !== null);
+        
+        validEmployees.forEach(emp => {
+          // Check for duplicates
+          const employeeExists = existingWeek.employees.some(
+            e => e?.name === emp?.name || 
+            (e?.userId && emp?.userId && e.userId.toString() === emp.userId.toString())
+          );
+          
+          if (!employeeExists) {
+            existingWeek.employees.push(emp);
+          }
+        });
+      });
+      
+      const groupedWeeks = Array.from(weeksMap.values()).sort((a, b) => a.weekNumber - b.weekNumber);
+      
+      // Process weeks with employee data
+      const processedWeeks = groupedWeeks.map(week => {
+        const processedEmployees = (week.employees || []).map(emp => {
+          // Get department from userId if available
+          let department = emp?.department;
+          if (!department && emp?.userId && emp.userId?.department) {
+            department = emp.userId.department;
+          }
+          
+          return {
+            _id: emp._id,
+            userId: emp.userId?._id || emp.userId,
+            name: emp.name || 'Unknown',
+            department: department || 'General',
+            transport: emp.transport || '',
+            cabRoute: emp.cabRoute || '',
+            teamLeader: emp.teamLeader || '',
+            shiftStartHour: emp.shiftStartHour || 0,
+            shiftEndHour: emp.shiftEndHour || 0,
+            dailyStatus: (emp.dailyStatus || []).map(ds => ({
+              date: ds.date,
+              status: ds.status,
+              transportArrivalTime: ds.transportArrivalTime,
+              transportUpdatedBy: ds.transportUpdatedBy,
+              transportUpdatedAt: ds.transportUpdatedAt,
+              departmentArrivalTime: ds.departmentArrivalTime,
+              departmentUpdatedBy: ds.departmentUpdatedBy,
+              departmentUpdatedAt: ds.departmentUpdatedAt
+            }))
+          };
+        });
+        
+        // Calculate totals
+        const totals = {
+          totalWO: 0,
+          totalL: 0,
+          totalP: 0,
+          totalH: 0
+        };
+        
+        processedEmployees.forEach(emp => {
+          (emp.dailyStatus || []).forEach(ds => {
+            if (ds.status === 'WO') totals.totalWO++;
+            else if (ds.status === 'L') totals.totalL++;
+            else if (ds.status === 'P') totals.totalP++;
+            else if (ds.status === 'H') totals.totalH++;
+          });
         });
         
         return {
-          ...week,
+          weekNumber: week.weekNumber,
+          startDate: week.startDate,
+          endDate: week.endDate,
+          _id: week._id,
           employees: processedEmployees,
           employeeCount: processedEmployees.length,
-          totals: {
-            totalWO: processedEmployees.reduce((sum, emp) => {
-              return sum + (emp.dailyStatus?.filter(ds => ds?.status === 'WO').length || 0);
-            }, 0),
-            totalL: processedEmployees.reduce((sum, emp) => {
-              return sum + (emp.dailyStatus?.filter(ds => ds?.status === 'L').length || 0);
-            }, 0),
-            totalP: processedEmployees.reduce((sum, emp) => {
-              return sum + (emp.dailyStatus?.filter(ds => ds?.status === 'P').length || 0);
-            }, 0),
-            totalH: processedEmployees.reduce((sum, emp) => {
-              return sum + (emp.dailyStatus?.filter(ds => ds?.status === 'H').length || 0);
-            }, 0),
-          }
+          totals
         };
       });
       
+      // Calculate total employees and unique employees
       let totalEmployees = 0;
       const uniqueEmployees = new Set();
       
       processedWeeks.forEach(week => {
         totalEmployees += week.employees.length;
         week.employees.forEach(emp => {
-          if (emp.name) uniqueEmployees.add(emp.name);
+          if (emp?.name) uniqueEmployees.add(emp.name);
         });
       });
       
@@ -1872,6 +1951,8 @@ export const getAllRosters = async (req, res) => {
         _id: roster._id,
         month: roster.month,
         year: roster.year,
+        rosterStartDate: roster.rosterStartDate,
+        rosterEndDate: roster.rosterEndDate,
         weeks: processedWeeks,
         totalWeeks: processedWeeks.length,
         totalEmployees,
@@ -1883,6 +1964,8 @@ export const getAllRosters = async (req, res) => {
         __v: roster.__v
       };
     });
+    
+    console.log("✅ Sending response with", formattedRosters.length, "formatted rosters");
     
     return res.status(200).json({
       success: true,
@@ -1897,7 +1980,7 @@ export const getAllRosters = async (req, res) => {
     });
     
   } catch (error) {
-    console.error("Error fetching rosters:", error);
+    console.error("❌ Error fetching rosters:", error);
     return res.status(500).json({ 
       success: false,
       message: "Server error", 
@@ -3107,8 +3190,6 @@ export const getRosterForBulkEdit = async (req, res) => {
       });
     }
     
-    
-    
     // Group weeks by weekNumber and merge employees
     const weeksMap = new Map();
     
@@ -3126,10 +3207,13 @@ export const getRosterForBulkEdit = async (req, res) => {
       
       const existingWeek = weeksMap.get(weekKey);
       
-      week.employees.forEach(emp => {
+      // FIX 1: Filter out null employees before processing
+      const validEmployees = week.employees.filter(emp => emp !== null);
+      
+      validEmployees.forEach(emp => {
         const employeeExists = existingWeek.employees.some(
-          e => e.name === emp.name || 
-          (e.userId && emp.userId && e.userId.toString() === emp.userId.toString())
+          e => e?.name === emp?.name || 
+          (e?.userId && emp?.userId && e.userId.toString() === emp.userId.toString())
         );
         
         if (!employeeExists) {
@@ -3170,10 +3254,14 @@ export const getRosterForBulkEdit = async (req, res) => {
         }
       }
       
-      const processedEmployees = week.employees.map(emp => {
-        let department = emp.department;
+      // FIX 2: Filter out null employees again and safely process
+      const validWeekEmployees = (week.employees || []).filter(emp => emp !== null);
+      
+      const processedEmployees = validWeekEmployees.map(emp => {
+        // FIX 3: Safe navigation with optional chaining
+        let department = emp?.department;
         
-        if (!department && emp.userId && emp.userId.department) {
+        if (!department && emp?.userId && emp.userId?.department) {
           department = emp.userId.department;
         }
         
@@ -3184,18 +3272,19 @@ export const getRosterForBulkEdit = async (req, res) => {
         departmentsSet.add(department);
         
         return {
-          _id: emp._id,
-          userId: emp.userId?._id || emp.userId,
-          name: emp.name,
+          _id: emp?._id,
+          userId: emp?.userId?._id || emp?.userId,
+          name: emp?.name || 'Unknown',
           department: department,
-          transport: emp.transport,
-          cabRoute: emp.cabRoute,
-          teamLeader: emp.teamLeader || "",
-          shiftStartHour: emp.shiftStartHour,
-          shiftEndHour: emp.shiftEndHour,
-          dailyStatus: emp.dailyStatus.map(status => ({
-            date: status.date,
-            status: status.status
+          transport: emp?.transport || '',
+          cabRoute: emp?.cabRoute || '',
+          teamLeader: emp?.teamLeader || "",
+          shiftStartHour: emp?.shiftStartHour || 0,
+          shiftEndHour: emp?.shiftEndHour || 0,
+          // FIX 4: Safely map dailyStatus
+          dailyStatus: (emp?.dailyStatus || []).map(status => ({
+            date: status?.date,
+            status: status?.status
           }))
         };
       });
@@ -3388,9 +3477,6 @@ export const getRosterForBulkEdit = async (req, res) => {
 // };
 
 
-
-
-
 export const bulkUpdateRosterWeeks = async (req, res) => {
   try {
     const { rosterId } = req.params;
@@ -3483,6 +3569,7 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
     const allowedTeamLeaderDepartments = ["Ops - Meta", "Marketing", "CS"];
+    
     if (!allowedTeamLeaderDepartments.includes(user.department)) {
       return res.status(403).json({
         success: false,
@@ -3494,6 +3581,7 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
     currentDate.setHours(0, 0, 0, 0);
     const currentYear = currentDate.getFullYear();
     const currentMonth = currentDate.getMonth() + 1;
+    
     const roster = await Roster.findOne({ 
       month: currentMonth, 
       year: currentYear 
@@ -3508,6 +3596,8 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
 
     // Find current week
     const currentWeek = roster.weeks.find(week => {
+      if (!week) return false;
+      
       const weekStart = new Date(week.startDate);
       const weekEnd = new Date(week.endDate);
       
@@ -3545,19 +3635,25 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
       editMessage = "Can edit roster for your team during current week";
     }
 
-    // ========== FILTER: Only show employees where user.username === teamLeader ==========
-    // Since teamLeader is stored as String, match it with user's username
-    const currentUserUsername = user.username;
+    // ========== FIXED: Filter employees with proper null checks ==========
+    const currentUserUsername = user.username; // e.g., "Sam"
     
     // Filter employees where teamLeader matches current user's username
-    const teamEmployees = currentWeek.employees.filter(emp => {
-      // Check if teamLeader matches current user's username
-      // Trim and compare case-insensitively to handle variations
-      if (emp.teamLeader && typeof emp.teamLeader === 'string') {
-        return emp.teamLeader.trim().toLowerCase() === currentUserUsername.toLowerCase();
-      }
-      return false;
-    });
+    // AND employee is not null
+    const teamEmployees = (currentWeek.employees || [])
+      .filter(emp => {
+        // FIX 1: Check if employee exists
+        if (!emp) return false;
+        
+        // FIX 2: Check if teamLeader exists and is a string
+        if (!emp.teamLeader || typeof emp.teamLeader !== 'string') return false;
+        
+        // FIX 3: Compare exactly (case-sensitive as per your data)
+        // Your data shows "Sam" not "sam"
+        return emp.teamLeader === currentUserUsername;
+      });
+
+    console.log(`Team Leader ${currentUserUsername}: Found ${teamEmployees.length} employees`);
 
     // If no employees found for this team leader
     if (teamEmployees.length === 0) {
@@ -3586,7 +3682,7 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
 
     // Get user details for filtered employees only
     const teamUserIds = teamEmployees
-      .filter(emp => emp.userId)
+      .filter(emp => emp.userId) // Filter out null userIds
       .map(emp => emp.userId);
     
     const teamUsers = teamUserIds.length > 0 
@@ -3594,25 +3690,25 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
           .select('_id username name department accountType')
       : [];
 
-    // Format roster entries with user details
+    // Format roster entries with user details (with null checks)
     const formattedRoster = teamEmployees.map(emp => {
       const userDetails = teamUsers.find(u => 
-        u._id.toString() === emp.userId?.toString()
+        u && u._id && emp.userId && u._id.toString() === emp.userId.toString()
       );
       
       return {
         _id: emp._id,
         userId: emp.userId,
-        name: emp.name,
+        name: emp.name || 'Unknown',
         username: userDetails?.username || '',
-        department: userDetails?.department || 'Unknown',
+        department: userDetails?.department || emp.department || 'Unknown',
         accountType: userDetails?.accountType || 'employee',
         transport: emp.transport || "",
         cabRoute: emp.cabRoute || "",
         teamLeader: emp.teamLeader || "",
-        shiftStartHour: emp.shiftStartHour,
-        shiftEndHour: emp.shiftEndHour,
-        dailyStatus: emp.dailyStatus.map(status => ({
+        shiftStartHour: emp.shiftStartHour || 0,
+        shiftEndHour: emp.shiftEndHour || 0,
+        dailyStatus: (emp.dailyStatus || []).map(status => ({
           date: status.date,
           status: status.status || "P"
         }))
@@ -3620,7 +3716,7 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
     });
 
     // Get unique departments in the team
-    const teamDepartments = [...new Set(formattedRoster.map(e => e.department))];
+    const teamDepartments = [...new Set(formattedRoster.map(e => e.department).filter(Boolean))];
 
     return res.status(200).json({
       success: true,
@@ -3649,7 +3745,8 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
     console.error("Error fetching roster:", error);
     return res.status(500).json({
       success: false,
-      message: error.message || "Server error"
+      message: error.message || "Server error",
+      error: error.stack
     });
   }
 }; 
@@ -5245,6 +5342,795 @@ export const getRostersByDepartment = async (req, res) => {
       success: false,
       message: "Server error while fetching rosters", 
       error: error.message 
+    });
+  }
+};
+
+export const updateArrivalTime = async (req, res) => {
+  try {
+    const { rosterId, weekNumber, employeeId, date, arrivalTime } = req.body;
+    const user = req.user; // logged in user from auth middleware
+
+    // Validation
+    if (!rosterId || !weekNumber || !employeeId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, employeeId, date are required"
+      });
+    }
+
+    // 🔥 FIX: Validate arrivalTime
+    if (!arrivalTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Arrival time is required"
+      });
+    }
+
+    // Find roster
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    // Find week
+    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    // Find employee
+    const employee = week.employees.id(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    // 🔐 TEAM LEADER VALIDATION
+    if (user.accountType !== "superAdmin" && user.department !== "Transport") {
+      if (employee.teamLeader !== user.username) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update your own team members"
+        });
+      }
+    }
+
+    // Process date
+    const selectedDate = new Date(date);
+    if (isNaN(selectedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    selectedDate.setHours(0, 0, 0, 0);
+
+    // 🔥 FIX: Validate arrivalTime is a valid time string
+    // Expected format: "HH:MM" like "09:30" or "14:45"
+    const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+    if (!timeRegex.test(arrivalTime)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+      });
+    }
+
+    // Create a proper date object by combining the selected date with the arrival time
+    const [hours, minutes] = arrivalTime.split(':').map(Number);
+    const newArrival = new Date(selectedDate);
+    newArrival.setHours(hours, minutes, 0, 0);
+
+    // Verify it's a valid date
+    if (isNaN(newArrival.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid arrival time"
+      });
+    }
+
+    // Find or create daily status for this date
+    let daily = employee.dailyStatus.find(d => {
+      const dDate = new Date(d.date);
+      dDate.setHours(0, 0, 0, 0);
+      return dDate.getTime() === selectedDate.getTime();
+    });
+
+    const isNewDay = !daily;
+    const oldValues = {};
+
+    if (isNewDay) {
+      daily = {
+        date: selectedDate,
+        status: "P" // Default status
+      };
+      employee.dailyStatus.push(daily);
+      daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+    } else {
+      // Store old values for edit history
+      if (user.department === "Transport") {
+        oldValues.transportArrivalTime = daily.transportArrivalTime;
+      } else if (user.department === employee.department || user.accountType === "superAdmin") {
+        oldValues.departmentArrivalTime = daily.departmentArrivalTime;
+      }
+    }
+
+    const changes = [];
+
+    // 🚌 TRANSPORT UPDATE
+    if (user.department === "Transport") {
+      daily.transportArrivalTime = newArrival;
+      daily.transportUpdatedBy = user._id;
+      daily.transportUpdatedAt = new Date();
+      
+      changes.push({
+        field: `transportArrivalTime (${date})`,
+        oldValue: oldValues.transportArrivalTime || null,
+        newValue: newArrival
+      });
+    }
+    
+    // 👑 SUPERADMIN UPDATE - can update both
+    else if (user.accountType === "superAdmin") {
+      // Update both transport and department fields
+      daily.transportArrivalTime = newArrival;
+      daily.transportUpdatedBy = user._id;
+      daily.transportUpdatedAt = new Date();
+      
+      daily.departmentArrivalTime = newArrival;
+      daily.departmentUpdatedBy = user._id;
+      daily.departmentUpdatedAt = new Date();
+      
+      changes.push({
+        field: `arrivalTime (${date})`,
+        oldValue: oldValues.departmentArrivalTime || null,
+        newValue: newArrival
+      });
+    }
+    
+    // 👥 DEPARTMENT UPDATE (Team Leader)
+    else if (user.department === employee.department) {
+      daily.departmentArrivalTime = newArrival;
+      daily.departmentUpdatedBy = user._id;
+      daily.departmentUpdatedAt = new Date();
+      
+      changes.push({
+        field: `departmentArrivalTime (${date})`,
+        oldValue: oldValues.departmentArrivalTime || null,
+        newValue: newArrival
+      });
+    }
+    
+    // ❌ UNAUTHORIZED
+    else {
+      return res.status(403).json({
+        success: false,
+        message: "You are not allowed to update this employee's arrival time"
+      });
+    }
+
+    // 📝 Add edit history
+    roster.editHistory.push({
+      editedBy: user._id,
+      editedByName: user.username,
+      accountType: user.accountType,
+      actionType: "update",
+      weekNumber,
+      employeeId: employee._id,
+      employeeName: employee.name,
+      changes
+    });
+
+    // Save roster
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Arrival time updated successfully",
+      data: daily
+    });
+
+  } catch (error) {
+    console.error("Arrival Update Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+
+
+export const updateAttendance = async (req, res) => {
+  try {
+    const { 
+      rosterId, 
+      weekNumber, 
+      employeeId, 
+      date, 
+      transportStatus, 
+      departmentStatus, 
+      arrivalTime 
+    } = req.body;
+    
+    const user = req.user;
+
+    // Validation
+    if (!rosterId || !weekNumber || !employeeId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, employeeId, date"
+      });
+    }
+
+    // At least one of transportStatus or departmentStatus should be provided
+    if (!transportStatus && !departmentStatus && !arrivalTime) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one field (transportStatus, departmentStatus, or arrivalTime) is required"
+      });
+    }
+
+    // Validate status against enum if provided
+    const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD"];
+    
+    if (transportStatus && !validStatuses.includes(transportStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid transport status. Must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+    
+    if (departmentStatus && !validStatuses.includes(departmentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid department status. Must be one of: ${validStatuses.join(', ')}`
+      });
+    }
+
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    const employee = week.employees.id(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    // 🔐 TEAM LEADER VALIDATION - Only for department employees
+    if (user.accountType !== "superAdmin" && user.department !== "Transport") {
+      if (employee.teamLeader !== user.username) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update your own team members"
+        });
+      }
+    }
+
+    const selectedDate = new Date(date);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    let daily = employee.dailyStatus.find(d => {
+      const dDate = new Date(d.date);
+      dDate.setHours(0, 0, 0, 0);
+      return dDate.getTime() === selectedDate.getTime();
+    });
+
+    const isNewDay = !daily;
+    const changes = [];
+
+    if (isNewDay) {
+      daily = { 
+        date: selectedDate,
+        transportStatus: "",
+        departmentStatus: ""
+      };
+      employee.dailyStatus.push(daily);
+      daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+    }
+
+    // 🔥 UPDATE TRANSPORT STATUS
+    if (transportStatus && (user.department === "Transport" || user.accountType === "superAdmin")) {
+      if (daily.transportStatus !== transportStatus) {
+        changes.push({
+          field: `transportStatus (${date})`,
+          oldValue: daily.transportStatus || null,
+          newValue: transportStatus
+        });
+        
+        daily.transportStatus = transportStatus;
+        daily.transportStatusUpdatedBy = user._id;
+        daily.transportStatusUpdatedAt = new Date();
+      }
+    }
+    
+    // 🔥 UPDATE DEPARTMENT STATUS
+    if (departmentStatus && (user.department === employee.department || user.accountType === "superAdmin")) {
+      if (daily.departmentStatus !== departmentStatus) {
+        changes.push({
+          field: `departmentStatus (${date})`,
+          oldValue: daily.departmentStatus || null,
+          newValue: departmentStatus
+        });
+        
+        daily.departmentStatus = departmentStatus;
+        daily.departmentStatusUpdatedBy = user._id;
+        daily.departmentStatusUpdatedAt = new Date();
+      }
+    }
+
+    // Handle arrival time
+    if (arrivalTime) {
+      // Validate time format (HH:MM)
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(arrivalTime)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+        });
+      }
+
+      const [hours, minutes] = arrivalTime.split(':').map(Number);
+      const newArrival = new Date(selectedDate);
+      newArrival.setHours(hours, minutes, 0, 0);
+
+      if (isNaN(newArrival.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid arrival time"
+        });
+      }
+
+      // Transport updates transportArrivalTime
+      if (user.department === "Transport" || user.accountType === "superAdmin") {
+        if (daily.transportArrivalTime?.getTime() !== newArrival.getTime()) {
+          changes.push({
+            field: `transportArrivalTime (${date})`,
+            oldValue: daily.transportArrivalTime || null,
+            newValue: newArrival
+          });
+          
+          daily.transportArrivalTime = newArrival;
+          daily.transportUpdatedBy = user._id;
+          daily.transportUpdatedAt = new Date();
+        }
+      }
+      
+      // Department updates departmentArrivalTime
+      if (user.department === employee.department || user.accountType === "superAdmin") {
+        if (daily.departmentArrivalTime?.getTime() !== newArrival.getTime()) {
+          changes.push({
+            field: `departmentArrivalTime (${date})`,
+            oldValue: daily.departmentArrivalTime || null,
+            newValue: newArrival
+          });
+          
+          daily.departmentArrivalTime = newArrival;
+          daily.departmentUpdatedBy = user._id;
+          daily.departmentUpdatedAt = new Date();
+        }
+      }
+    }
+
+    // Add edit history if there are changes
+    if (changes.length > 0) {
+      roster.editHistory.push({
+        editedBy: user._id,
+        editedByName: user.username,
+        accountType: user.accountType,
+        actionType: "update",
+        weekNumber,
+        employeeId: employee._id,
+        employeeName: employee.name,
+        changes
+      });
+    }
+
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Attendance updated successfully",
+      data: daily
+    });
+
+  } catch (error) {
+    console.error("Attendance Update Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+export const getFilteredRosterForUpdates = async (req, res) => {
+  try {
+    const { rosterId, weekNumber, date } = req.params;
+    const user = req.user;
+
+    console.log("📡 Fetching updates for:", { 
+      rosterId, 
+      weekNumber: parseInt(weekNumber), 
+      date,
+      user: user.username,
+      userDepartment: user.department,
+      accountType: user.accountType
+    });
+
+    if (!rosterId || !weekNumber || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, date"
+      });
+    }
+
+    const roster = await Roster.findById(rosterId);
+
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    // Find the specific week
+    const week = roster.weeks.find(w => w && w.weekNumber === parseInt(weekNumber));
+    
+    if (!week) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `Week ${weekNumber} not found in roster. Available weeks: ${roster.weeks.filter(w => w).map(w => w.weekNumber).join(', ')}`
+      });
+    }
+
+    console.log(`📅 Found week ${weekNumber} with ${week.employees?.filter(e => e).length || 0} employees`);
+
+    let filteredEmployees = [];
+
+    // 👑 SUPERADMIN - sees all employees (filter out nulls)
+    if (user.accountType === "superAdmin") {
+      filteredEmployees = (week.employees || []).filter(emp => emp !== null);
+      console.log(`👑 SuperAdmin: Found ${filteredEmployees.length} employees`);
+    }
+    
+    // 🚌 TRANSPORT - sees all employees (filter out nulls)
+    else if (user.department === "Transport") {
+      filteredEmployees = (week.employees || []).filter(emp => emp !== null);
+      console.log(`🚌 Transport: Found ${filteredEmployees.length} employees`);
+    }
+    
+    // 👥 TEAM LEADERS - see only their team
+    else if (user.accountType === "employee") {
+      console.log(`👥 Team Leader check: ${user.username}`);
+      
+      filteredEmployees = (week.employees || []).filter(emp => {
+        if (!emp) return false;
+        return emp.teamLeader === user.username;
+      });
+      
+      console.log(`👥 Team Leader ${user.username}: Found ${filteredEmployees.length} employees`);
+    }
+    
+    // ❌ UNAUTHORIZED
+    else {
+      return res.status(403).json({
+        success: false,
+        message: "Not authorized to view this roster"
+      });
+    }
+
+    // 🔥 FIXED: Format employees with ALL status and arrival time data
+    const formattedRosterEntries = filteredEmployees.map(emp => ({
+      _id: emp._id,
+      userId: emp.userId,
+      name: emp.name || 'Unknown',
+      username: "", 
+      department: emp.department || 'N/A',
+      accountType: "employee",
+      transport: emp.transport || 'No',
+      cabRoute: emp.cabRoute || '',
+      teamLeader: emp.teamLeader || '',
+      shiftStartHour: emp.shiftStartHour || 0,
+      shiftEndHour: emp.shiftEndHour || 0,
+      dailyStatus: (emp.dailyStatus || []).map(ds => ({
+        date: ds.date,
+        // 🔥 STATUS FIELDS - NEW
+        transportStatus: ds.transportStatus || '',
+        departmentStatus: ds.departmentStatus || '',
+        // 🔥 STATUS UPDATE TRACKING - NEW
+        transportStatusUpdatedBy: ds.transportStatusUpdatedBy || null,
+        transportStatusUpdatedAt: ds.transportStatusUpdatedAt || null,
+        departmentStatusUpdatedBy: ds.departmentStatusUpdatedBy || null,
+        departmentStatusUpdatedAt: ds.departmentStatusUpdatedAt || null,
+        // 🔥 ARRIVAL FIELDS - EXISTING
+        transportArrivalTime: ds.transportArrivalTime || null,
+        departmentArrivalTime: ds.departmentArrivalTime || null,
+        // 🔥 ARRIVAL UPDATE TRACKING - EXISTING
+        transportUpdatedBy: ds.transportUpdatedBy || null,
+        transportUpdatedAt: ds.transportUpdatedAt || null,
+        departmentUpdatedBy: ds.departmentUpdatedBy || null,
+        departmentUpdatedAt: ds.departmentUpdatedAt || null
+      }))
+    }));
+
+    // Also return all weeks for the dropdown
+    const weeksForDropdown = roster.weeks
+      .filter(w => w !== null)
+      .map(w => ({
+        weekNumber: w.weekNumber,
+        startDate: w.startDate,
+        endDate: w.endDate,
+        employeeCount: w.employees?.filter(e => e !== null).length || 0
+      }));
+
+    // Calculate today's date for comparison
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    const weekStartDate = new Date(week.startDate);
+    const weekEndDate = new Date(week.endDate);
+    
+    weekStartDate.setHours(0, 0, 0, 0);
+    weekEndDate.setHours(23, 59, 59, 999);
+    
+    let canEdit = false;
+    let editMessage = "";
+    
+    if (currentDate < weekStartDate) {
+      canEdit = false;
+      editMessage = "Cannot edit before the week starts";
+    } else if (currentDate > weekEndDate) {
+      canEdit = false;
+      editMessage = "Cannot edit after the week has ended";
+    } else {
+      canEdit = true;
+      editMessage = "Can edit during current week";
+    }
+
+    // Get unique departments
+    const departments = [...new Set(formattedRosterEntries.map(e => e.department).filter(Boolean))];
+
+    const response = {
+      success: true,
+      message: `Employees for updates (Team Leader: ${user.username})`,
+      data: {
+        weekNumber: week.weekNumber,
+        startDate: week.startDate,
+        endDate: week.endDate,
+        currentDate: currentDate,
+        canEdit: canEdit,
+        editMessage: editMessage,
+        rosterEntries: formattedRosterEntries,
+        weeks: weeksForDropdown,
+        summary: {
+          totalEmployees: formattedRosterEntries.length,
+          teamLeader: user.username,
+          departments: departments,
+          currentUser: user.username,
+          userDepartment: user.department,
+          teamSize: formattedRosterEntries.length,
+          hasTeam: formattedRosterEntries.length > 0
+        }
+      }
+    };
+
+    console.log("📤 Sending response with", formattedRosterEntries.length, "employees");
+    if (formattedRosterEntries.length > 0) {
+      console.log("📤 Sample employee dailyStatus:", formattedRosterEntries[0].dailyStatus[0]);
+    }
+
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error("❌ Get Filtered Roster Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+      error: error.stack
+    });
+  }
+};
+
+export const getTransportDetailForSuperAdmin = async (req, res) => {
+  try {
+    const { rosterId, weekNumber, date } = req.params;
+    const user = req.user;
+
+    // Verify superAdmin access
+    if (user.accountType !== "superAdmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Super Admin only."
+      });
+    }
+
+    console.log("👑 SuperAdmin fetching transport details:", { 
+      rosterId, 
+      weekNumber: parseInt(weekNumber), 
+      date,
+      user: user.username 
+    });
+
+    if (!rosterId || !weekNumber || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, date"
+      });
+    }
+
+    const roster = await Roster.findById(rosterId)
+      .populate('createdBy', 'username email')
+      .populate('updatedBy', 'username email')
+      .populate('weeks.employees.userId', 'username email department')
+      .populate('weeks.employees.transportUpdatedBy', 'username department')
+      .populate('weeks.employees.departmentUpdatedBy', 'username department')
+      .populate('weeks.employees.transportStatusUpdatedBy', 'username department')
+      .populate('weeks.employees.departmentStatusUpdatedBy', 'username department');
+
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    // Find the specific week
+    const week = roster.weeks.find(w => w && w.weekNumber === parseInt(weekNumber));
+    
+    if (!week) {
+      return res.status(404).json({ 
+        success: false, 
+        message: `Week ${weekNumber} not found in roster.`
+      });
+    }
+
+    // Get all non-null employees
+    const allEmployees = (week.employees || []).filter(emp => emp !== null);
+
+    // Format employees with all update details for SuperAdmin view (WITHOUT _id fields)
+    const formattedEmployees = allEmployees.map(emp => {
+      // Find the daily status for the selected date
+      const dailyStatus = (emp.dailyStatus || []).find(
+        d => new Date(d.date).toDateString() === new Date(date).toDateString()
+      );
+
+      return {
+        // Employee basic info (NO _id)
+        name: emp.name || 'Unknown',
+        department: emp.department || 'N/A',
+        transport: emp.transport || 'No',
+        cabRoute: emp.cabRoute || '',
+        teamLeader: emp.teamLeader || '',
+        shiftStartHour: emp.shiftStartHour || 0,
+        shiftEndHour: emp.shiftEndHour || 0,
+        
+        // Transport Status Details (NO _id)
+        transportStatus: dailyStatus?.transportStatus || null,
+        transportStatusUpdatedBy: dailyStatus?.transportStatusUpdatedBy ? {
+          username: dailyStatus.transportStatusUpdatedBy.username,
+          department: dailyStatus.transportStatusUpdatedBy.department
+        } : null,
+        transportStatusUpdatedAt: dailyStatus?.transportStatusUpdatedAt || null,
+
+        // Department Status Details (NO _id)
+        departmentStatus: dailyStatus?.departmentStatus || null,
+        departmentStatusUpdatedBy: dailyStatus?.departmentStatusUpdatedBy ? {
+          username: dailyStatus.departmentStatusUpdatedBy.username,
+          department: dailyStatus.departmentStatusUpdatedBy.department
+        } : null,
+        departmentStatusUpdatedAt: dailyStatus?.departmentStatusUpdatedAt || null,
+
+        // Transport Arrival Details (NO _id)
+        transportArrivalTime: dailyStatus?.transportArrivalTime || null,
+        transportUpdatedBy: dailyStatus?.transportUpdatedBy ? {
+          username: dailyStatus.transportUpdatedBy.username,
+          department: dailyStatus.transportUpdatedBy.department
+        } : null,
+        transportUpdatedAt: dailyStatus?.transportUpdatedAt || null,
+
+        // Department Arrival Details (NO _id)
+        departmentArrivalTime: dailyStatus?.departmentArrivalTime || null,
+        departmentUpdatedBy: dailyStatus?.departmentUpdatedBy ? {
+          username: dailyStatus.departmentUpdatedBy.username,
+          department: dailyStatus.departmentUpdatedBy.department
+        } : null,
+        departmentUpdatedAt: dailyStatus?.departmentUpdatedAt || null
+      };
+    });
+
+    // Calculate summary statistics
+    const summary = {
+      totalEmployees: allEmployees.length,
+      employeesWithTransportStatus: formattedEmployees.filter(e => e.transportStatus).length,
+      employeesWithDepartmentStatus: formattedEmployees.filter(e => e.departmentStatus).length,
+      employeesWithTransportArrival: formattedEmployees.filter(e => e.transportArrivalTime).length,
+      employeesWithDepartmentArrival: formattedEmployees.filter(e => e.departmentArrivalTime).length,
+      
+      // Status breakdown
+      transportStatusBreakdown: {},
+      departmentStatusBreakdown: {}
+    };
+
+    // Calculate status breakdowns
+    formattedEmployees.forEach(emp => {
+      if (emp.transportStatus) {
+        summary.transportStatusBreakdown[emp.transportStatus] = 
+          (summary.transportStatusBreakdown[emp.transportStatus] || 0) + 1;
+      }
+      if (emp.departmentStatus) {
+        summary.departmentStatusBreakdown[emp.departmentStatus] = 
+          (summary.departmentStatusBreakdown[emp.departmentStatus] || 0) + 1;
+      }
+    });
+
+    // Get all weeks for dropdown (NO _id)
+    const weeksForDropdown = roster.weeks
+      .filter(w => w !== null)
+      .map(w => ({
+        weekNumber: w.weekNumber,
+        startDate: w.startDate,
+        endDate: w.endDate,
+        employeeCount: w.employees?.filter(e => e !== null).length || 0
+      }));
+
+    // Calculate edit permissions based on current date
+    const currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    const weekStartDate = new Date(week.startDate);
+    const weekEndDate = new Date(week.endDate);
+    
+    weekStartDate.setHours(0, 0, 0, 0);
+    weekEndDate.setHours(23, 59, 59, 999);
+    
+    let canEdit = false;
+    let editMessage = "";
+    
+    if (currentDate < weekStartDate) {
+      canEdit = false;
+      editMessage = "Week hasn't started yet";
+    } else if (currentDate > weekEndDate) {
+      canEdit = false;
+      editMessage = "Week has ended";
+    } else {
+      canEdit = true;
+      editMessage = "Current week - edits allowed";
+    }
+
+    const response = {
+      success: true,
+      message: "Transport details fetched successfully for Super Admin",
+      data: {
+        rosterId: roster._id, // Keep rosterId for reference
+        month: roster.month,
+        year: roster.year,
+        rosterStartDate: roster.rosterStartDate,
+        rosterEndDate: roster.rosterEndDate,
+        weekNumber: parseInt(weekNumber),
+        weekStartDate: week.startDate,
+        weekEndDate: week.endDate,
+        selectedDate: date,
+        canEdit,
+        editMessage,
+        employees: formattedEmployees,
+        weeks: weeksForDropdown,
+        summary,
+        userInfo: {
+          accountType: user.accountType,
+          username: user.username,
+          department: user.department
+        }
+      }
+    };
+
+    console.log(`👑 SuperAdmin: Returning ${formattedEmployees.length} employees with full details`);
+    return res.status(200).json(response);
+
+  } catch (error) {
+    console.error("❌ SuperAdmin Transport Details Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Server error",
+      error: error.stack
     });
   }
 };

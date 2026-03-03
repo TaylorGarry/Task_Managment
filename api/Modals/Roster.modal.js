@@ -94,14 +94,83 @@
 
 import mongoose from "mongoose";
 
+// const dailyStatusSchema = new mongoose.Schema({
+//   date: { type: Date, required: true },
+//   status: { 
+//     type: String, 
+//     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H","LWD","HD", "", null], 
+//     default: "P" 
+//   }
+// });
+
 const dailyStatusSchema = new mongoose.Schema({
   date: { type: Date, required: true },
-  status: { 
+
+  // ===== STATUS TRACKING =====
+  // Transport side status
+  transportStatus: { 
     type: String, 
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H","LWD","HD", "", null], 
-    default: "P" 
+    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""],
+    default: ""
+  },
+  transportStatusUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null
+  },
+  transportStatusUpdatedAt: {
+    type: Date,
+    default: null
+  },
+
+  // Department side status
+  departmentStatus: { 
+    type: String, 
+    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""],
+    default: ""
+  },
+  departmentStatusUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null
+  },
+  departmentStatusUpdatedAt: {
+    type: Date,
+    default: null
+  },
+
+  // ===== ARRIVAL TIME TRACKING =====
+  // Transport side arrival update
+  transportArrivalTime: {
+    type: Date,
+    default: null
+  },
+  transportUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null
+  },
+  transportUpdatedAt: {
+    type: Date,
+    default: null
+  },
+
+  // Department side arrival update
+  departmentArrivalTime: {
+    type: Date,
+    default: null
+  },
+  departmentUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null
+  },
+  departmentUpdatedAt: {
+    type: Date,
+    default: null
   }
-});
+
+}, { _id: false });
 
 const rosterEmployeeSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },

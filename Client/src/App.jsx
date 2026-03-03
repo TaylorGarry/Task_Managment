@@ -168,8 +168,12 @@ import { ToastContainer } from "react-toastify";
 import OpsRoster from "./Roster/OpsRoster.jsx";
 import ExcelRosterUpload from "./Roster/ExcelRosterUpload.jsx";  
 import MyDefaults from "./pages/MyDefaults.jsx";
+import ArrivalAttendanceUpdate from "./Roster/ArrivalAttendanceUpdate.jsx";
+import AttendanceUpdateWrapper from "./Roster/AttendanceUpdateWrapper.jsx";
+import SuperAdminTransportView from "./Roster/SuperAdminTransportView.jsx";
 
 const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS"];
+
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
@@ -247,6 +251,27 @@ const OpsMetaUploadRoute = ({ children }) => {
   return children;
 };
 
+const AttendanceUpdateRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+
+  if (!user) return <Navigate to="/login" replace />;
+
+  const allowedDepartments = ["Ops - Meta", "Transport"];
+
+  const isAllowedEmployee =
+    user.accountType === "employee" &&
+    allowedDepartments.includes(user.department);
+
+  const isAdmin =
+    ["admin", "superAdmin", "HR"].includes(user.accountType);
+
+  if (!isAllowedEmployee && !isAdmin) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+};
+
 function App() {
   const { user } = useSelector((state) => state.auth);
 
@@ -263,6 +288,30 @@ function App() {
             </ProtectedRoute>
           }
         />
+       <Route
+  path="/attendance-update"
+  element={
+    <AttendanceUpdateRoute>
+      <AttendanceUpdateWrapper />
+    </AttendanceUpdateRoute>
+  }
+/>
+<Route
+  path="/attendance-update/:rosterId"
+  element={
+    <AttendanceUpdateRoute>
+      <AttendanceUpdateWrapper />  {/* Use wrapper for both */}
+    </AttendanceUpdateRoute>
+  }
+/>
+<Route
+  path="/superadmin/transport"
+  element={
+    <ProtectedRoute adminOnly={true}>
+      <SuperAdminTransportView />
+    </ProtectedRoute>
+  }
+/>
 
         <Route path="/login" element={<Login />} />
 
