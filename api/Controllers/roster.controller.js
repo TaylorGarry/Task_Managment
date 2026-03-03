@@ -5595,14 +5595,30 @@ export const updateAttendance = async (req, res) => {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
-    // 🔐 TEAM LEADER VALIDATION - Only for department employees
-    if (user.accountType !== "superAdmin" && user.department !== "Transport") {
-      if (employee.teamLeader !== user.username) {
+    // 🔐 IMPROVED VALIDATION LOGIC
+    // SuperAdmin can update anyone
+    if (user.accountType === "superAdmin") {
+      console.log("SuperAdmin access granted");
+    } 
+    // Transport can update anyone (they manage all arrival times and transport status)
+    else if (user.department === "Transport") {
+      console.log("Transport department access granted");
+    }
+    // Department users (including team leaders)
+    else {
+      // Check if this user is allowed to update this employee
+      const isTeamLeader = employee.teamLeader === user.username;
+      const isSameDepartment = employee.department === user.department;
+      
+      // Allow if they are the team leader OR in the same department
+      if (!isTeamLeader && !isSameDepartment) {
         return res.status(403).json({
           success: false,
-          message: "You can only update your own team members"
+          message: "You can only update employees in your department or your own team members"
         });
       }
+      
+      console.log(`Department user access granted. Team Leader: ${isTeamLeader}, Same Dept: ${isSameDepartment}`);
     }
 
     const selectedDate = new Date(date);
@@ -5618,7 +5634,7 @@ export const updateAttendance = async (req, res) => {
     const changes = [];
 
     if (isNewDay) {
-      // 🔥 FIX: Create new daily entry with ALL fields from schema
+      // Create new daily entry with ALL fields from schema
       daily = { 
         date: selectedDate,
         // Status fields
@@ -5641,7 +5657,7 @@ export const updateAttendance = async (req, res) => {
       employee.dailyStatus.push(daily);
       daily = employee.dailyStatus[employee.dailyStatus.length - 1];
     } else {
-      // 🔥 FIX: Ensure existing entries have all fields (for legacy data)
+      // Ensure existing entries have all fields (for legacy data)
       let needsMarkModified = false;
       
       if (daily.transportStatus === undefined) {
@@ -5699,6 +5715,7 @@ export const updateAttendance = async (req, res) => {
     }
 
     // 🔥 UPDATE TRANSPORT STATUS
+    // Transport can update transportStatus, SuperAdmin can update both
     if (transportStatus && (user.department === "Transport" || user.accountType === "superAdmin")) {
       if (daily.transportStatus !== transportStatus) {
         changes.push({
@@ -5714,17 +5731,31 @@ export const updateAttendance = async (req, res) => {
     }
     
     // 🔥 UPDATE DEPARTMENT STATUS
-    if (departmentStatus && (user.department === employee.department || user.accountType === "superAdmin")) {
-      if (daily.departmentStatus !== departmentStatus) {
-        changes.push({
-          field: `departmentStatus (${date})`,
-          oldValue: daily.departmentStatus || null,
-          newValue: departmentStatus
+    // Department users can update departmentStatus, SuperAdmin can update both
+    if (departmentStatus) {
+      // Allow if: user is in same department OR is team leader OR is superAdmin
+      const canUpdateDepartment = 
+        user.accountType === "superAdmin" || 
+        user.department === employee.department ||
+        employee.teamLeader === user.username;
+      
+      if (canUpdateDepartment) {
+        if (daily.departmentStatus !== departmentStatus) {
+          changes.push({
+            field: `departmentStatus (${date})`,
+            oldValue: daily.departmentStatus || null,
+            newValue: departmentStatus
+          });
+          
+          daily.departmentStatus = departmentStatus;
+          daily.departmentStatusUpdatedBy = user._id;
+          daily.departmentStatusUpdatedAt = new Date();
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: "You don't have permission to update department status for this employee"
         });
-        
-        daily.departmentStatus = departmentStatus;
-        daily.departmentStatusUpdatedBy = user._id;
-        daily.departmentStatusUpdatedAt = new Date();
       }
     }
 
@@ -5752,7 +5783,6 @@ export const updateAttendance = async (req, res) => {
 
       // Transport updates transportArrivalTime
       if (user.department === "Transport" || user.accountType === "superAdmin") {
-        // 🔥 FIX: Handle case where transportArrivalTime might be null
         if (!daily.transportArrivalTime || daily.transportArrivalTime.getTime() !== newArrival.getTime()) {
           changes.push({
             field: `transportArrivalTime (${date})`,
@@ -5767,8 +5797,12 @@ export const updateAttendance = async (req, res) => {
       }
       
       // Department updates departmentArrivalTime
-      if (user.department === employee.department || user.accountType === "superAdmin") {
-        // 🔥 FIX: Handle case where departmentArrivalTime might be null
+      const canUpdateDepartmentArrival = 
+        user.accountType === "superAdmin" || 
+        user.department === employee.department ||
+        employee.teamLeader === user.username;
+      
+      if (canUpdateDepartmentArrival) {
         if (!daily.departmentArrivalTime || daily.departmentArrivalTime.getTime() !== newArrival.getTime()) {
           changes.push({
             field: `departmentArrivalTime (${date})`,
@@ -5797,7 +5831,7 @@ export const updateAttendance = async (req, res) => {
       });
     }
 
-    // 🔥 IMPORTANT: Mark the employee as modified to ensure changes are saved
+    // Mark the employee as modified to ensure changes are saved
     employee.markModified('dailyStatus');
     await roster.save();
 
