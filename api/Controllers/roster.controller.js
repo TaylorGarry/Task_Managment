@@ -5219,8 +5219,6 @@ export const addRosterWeek = async (req, res) => {
   }
 };
 
-// New controller: Department filter
-
 export const getRostersByDepartment = async (req, res) => {
   try {
     const { department, month, year, page = 1, limit = 10 } = req.query;
@@ -5538,7 +5536,7 @@ export const updateArrivalTime = async (req, res) => {
     });
   }
 };
-
+//This is updated by keshav
 export const updateAttendance = async (req, res) => {
   try {
     const { 
@@ -5594,13 +5592,9 @@ export const updateAttendance = async (req, res) => {
     if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
-
-    // 🔐 IMPROVED VALIDATION LOGIC
-    // SuperAdmin can update anyone
     if (user.accountType === "superAdmin") {
       console.log("SuperAdmin access granted");
     } 
-    // Transport can update anyone (they manage all arrival times and transport status)
     else if (user.department === "Transport") {
       console.log("Transport department access granted");
     }
