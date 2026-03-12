@@ -300,7 +300,7 @@ function App() {
   path="/attendance-update/:rosterId"
   element={
     <AttendanceUpdateRoute>
-      <AttendanceUpdateWrapper />  {/* Use wrapper for both */}
+      <AttendanceUpdateWrapper />  
     </AttendanceUpdateRoute>
   }
 />
