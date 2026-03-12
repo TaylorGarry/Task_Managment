@@ -6,10 +6,9 @@ import {
   getEmployeesForUpdates,
 } from "../features/slices/rosterSlice.js";
 import Navbar from "../pages/Navbar.jsx";
+import AdminNavbar from "../components/AdminNavbar.jsx"; 
 import { Clock, CheckCircle, AlertCircle, Truck, Users } from "lucide-react";
 import { toast } from "react-toastify";
-
-// 🔹 Get current user safely
 const getCurrentUser = () => {
   try {
     return JSON.parse(localStorage.getItem("user"));
@@ -17,8 +16,6 @@ const getCurrentUser = () => {
     return null;
   }
 };
-
-// Status options matching your schema
 const STATUS_OPTIONS = [
   { value: "P", label: "Present (P)", color: "bg-green-100 text-green-800" },
   { value: "WO", label: "Weekly Off (WO)", color: "bg-blue-100 text-blue-800" },
@@ -36,11 +33,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const dispatch = useDispatch();
   const currentUser = getCurrentUser();
   const { updateEmployeesData, loading } = useSelector((state) => state.roster);
-  
-  // Use ref to track if initial fetch has been done
   const initialFetchDone = useRef(false);
-  
-  // State
   const [selectedDate, setSelectedDate] = useState(
     new Date().toISOString().split('T')[0]
   );
@@ -50,12 +43,10 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const [viewType, setViewType] = useState({});
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [weekInfo, setWeekInfo] = useState(null);
-
-  // If no rosterId is provided, show message
   if (!rosterId) {
     return (
       <div className="min-h-screen bg-gray-100">
-        <Navbar />
+        {viewType.isSuperAdmin ? <AdminNavbar /> : <Navbar />}
         <div className="container mx-auto px-4 py-8">
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
@@ -75,21 +66,19 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     );
   }
 
-  // Determine view type based on user
   useEffect(() => {
     if (currentUser) {
       setViewType({
         isSuperAdmin: currentUser.accountType === "superAdmin",
         isTransport: currentUser.department === "Transport",
-        isTeamLeader: currentUser.accountType === "employee" && 
-                      ["Ops - Meta", "Marketing", "CS"].includes(currentUser.department),
+        isTeamLeader: currentUser.accountType === "employee" &&
+          ["Ops - Meta", "Marketing", "CS", "Ticketing", "HR"].includes(currentUser.department),
         username: currentUser.username,
         department: currentUser.department
       });
     }
   }, [currentUser]);
 
-  // Initial fetch when component mounts
   useEffect(() => {
     if (rosterId && !initialFetchDone.current) {
       setSelectedWeek("1");
@@ -97,7 +86,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }
   }, [rosterId]);
 
-  // Fetch employees when rosterId, week, or date changes
   useEffect(() => {
     if (rosterId && selectedWeek && selectedDate) {
       dispatch(getEmployeesForUpdates({
@@ -108,11 +96,10 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }
   }, [dispatch, rosterId, selectedWeek, selectedDate]);
 
-  // Process the response data
   useEffect(() => {
     if (updateEmployeesData?.data) {
       const responseData = updateEmployeesData.data;
-      
+
       if (responseData.weekNumber) {
         setWeekInfo({
           weekNumber: responseData.weekNumber,
@@ -122,12 +109,12 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
           editMessage: responseData.editMessage
         });
       }
-      
+
       const weeks = responseData.weeks || [];
       if (JSON.stringify(weeks) !== JSON.stringify(availableWeeks)) {
         setAvailableWeeks(weeks);
       }
-      
+
       if (!selectedWeek && weeks.length > 0) {
         setSelectedWeek(weeks[0].weekNumber.toString());
       }
@@ -136,7 +123,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 
   const rosterEntries = updateEmployeesData?.data?.rosterEntries || [];
 
-  // Handle transport arrival update
   const handleTransportArrivalChange = (employeeId, value) => {
     setUpdates(prev => ({
       ...prev,
@@ -147,7 +133,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }));
   };
 
-  // Handle department arrival update
   const handleDepartmentArrivalChange = (employeeId, value) => {
     setUpdates(prev => ({
       ...prev,
@@ -158,7 +143,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }));
   };
 
-  // Handle transport status change
   const handleTransportStatusChange = (employeeId, value) => {
     setUpdates(prev => ({
       ...prev,
@@ -169,7 +153,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }));
   };
 
-  // Handle department status change
   const handleDepartmentStatusChange = (employeeId, value) => {
     setUpdates(prev => ({
       ...prev,
@@ -207,7 +190,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
           transportArrivalTime: ""
         }
       }));
-      
+
       toast.success(`Transport arrival updated for ${employee.name}`);
     } catch (error) {
       console.error("Failed to update transport arrival:", error);
@@ -245,7 +228,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
           departmentArrivalTime: ""
         }
       }));
-      
+
       toast.success(`Department arrival updated for ${employee.name}`);
     } catch (error) {
       console.error("Failed to update department arrival:", error);
@@ -254,7 +237,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }
   };
 
-  // Handle transport status update - only send transportStatus
   const handleTransportStatusUpdate = async (employee) => {
     const employeeUpdate = updates[employee._id];
     if (!employeeUpdate?.transportStatus) {
@@ -282,7 +264,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
           transportStatus: ""
         }
       }));
-      
+
       toast.success(`Transport status updated for ${employee.name}`);
     } catch (error) {
       console.error("Failed to update transport status:", error);
@@ -291,7 +273,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }
   };
 
-  // Handle department status update - only send departmentStatus
   const handleDepartmentStatusUpdate = async (employee) => {
     const employeeUpdate = updates[employee._id];
     if (!employeeUpdate?.departmentStatus) {
@@ -319,7 +300,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
           departmentStatus: ""
         }
       }));
-      
+
       toast.success(`Department status updated for ${employee.name}`);
     } catch (error) {
       console.error("Failed to update department status:", error);
@@ -328,37 +309,44 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }
   };
 
-  // Get today's status for an employee with all fields
   const getTodayStatus = (employee) => {
     if (!employee?.dailyStatus) return null;
-    
+
     return employee.dailyStatus.find(
       d => new Date(d.date).toDateString() === new Date(selectedDate).toDateString()
     );
   };
 
-  // Format time for input field (HH:MM)
-  const formatTimeForInput = (dateString) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-    } catch (e) {
-      return '';
-    }
-  };
+ const formatTimeForInput = (dateString) => {
+  if (!dateString) return '';
+  try {
+    const date = new Date(dateString);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  } catch (e) {
+    return '';
+  }
+};
 
-  // Format time for display (HH:MM:SS AM/PM)
-  const formatTimeForDisplay = (dateString) => {
-    if (!dateString) return '--:-- --';
-    try {
-      return new Date(dateString).toLocaleTimeString();
-    } catch (e) {
-      return '--:-- --';
-    }
-  };
+const formatTimeForDisplay = (dateString) => {
+  if (!dateString) return '--:--';
+  try {
+    const date = new Date(dateString);
+    // Use UTC methods to prevent timezone conversion
+    let hours = date.getUTCHours();
+    const minutes = date.getUTCMinutes().toString().padStart(2, '0');
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    
+    // Convert to 12-hour format
+    hours = hours % 12;
+    hours = hours ? hours : 12; // 0 should be 12
+    
+    return `${hours}:${minutes} ${ampm}`;
+  } catch (e) {
+    return '--:--';
+  }
+};
 
   const getStatusColor = (status) => {
     const option = STATUS_OPTIONS.find(opt => opt.value === status);
@@ -381,7 +369,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Navbar />
+      {/* ✅ Conditional navbar based on user type */}
+      {viewType.isSuperAdmin ? <AdminNavbar /> : <Navbar />}
 
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -395,13 +384,12 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                 Update employee attendance and arrival times
               </p>
             </div>
-            
+
             {/* User Role Badge */}
-            <div className={`px-4 py-2 rounded-lg ${
-              viewType.isSuperAdmin ? "bg-purple-100 text-purple-800" :
-              viewType.isTransport ? "bg-blue-100 text-blue-800" :
-              "bg-green-100 text-green-800"
-            }`}>
+            <div className={`px-4 py-2 rounded-lg ${viewType.isSuperAdmin ? "bg-purple-100 text-purple-800" :
+                viewType.isTransport ? "bg-blue-100 text-blue-800" :
+                  "bg-green-100 text-green-800"
+              }`}>
               <span className="font-semibold flex items-center gap-2">
                 <Clock className="w-4 h-4" />
                 {viewType.isSuperAdmin && "👑 Super Admin"}
@@ -413,9 +401,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 
           {/* Week Info Banner */}
           {weekInfo && (
-            <div className={`mt-4 p-3 rounded-lg ${
-              weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
-            }`}>
+            <div className={`mt-4 p-3 rounded-lg ${weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
+              }`}>
               <p className="text-sm font-medium">
                 Week {weekInfo.weekNumber}: {new Date(weekInfo.startDate).toLocaleDateString()} - {new Date(weekInfo.endDate).toLocaleDateString()}
               </p>
@@ -507,11 +494,10 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-500">{employee.department}</td>
                       <td className="px-4 py-3">
-                        <span className={`px-2 py-1 text-xs rounded-full ${
-                          employee.transport === "Yes" 
-                            ? "bg-green-100 text-green-800" 
+                        <span className={`px-2 py-1 text-xs rounded-full ${employee.transport === "Yes"
+                            ? "bg-green-100 text-green-800"
                             : "bg-gray-100 text-gray-800"
-                        }`}>
+                          }`}>
                           {employee.transport || "No"}
                         </span>
                       </td>
@@ -520,7 +506,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                       <td className="px-4 py-3 text-sm text-gray-500">
                         {employee.shiftStartHour}:00 - {employee.shiftEndHour}:00
                       </td>
-                      
+
                       {/* Transport Status Display */}
                       <td className="px-4 py-3">
                         {todayStatus?.transportStatus ? (
@@ -542,72 +528,69 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                           <span className="text-gray-400 text-xs">Not set</span>
                         )}
                       </td>
+                      <td className="px-4 py-3">
+                        <div className="text-xs space-y-1">
+                          {(() => {
+                            const updates = [];
 
-                      {/* Last Updates */}
-                      {/* Last Updates - Show ONLY the most recent update */}
-<td className="px-4 py-3">
-  <div className="text-xs space-y-1">
-    {(() => {
-      // Collect all updates with their timestamps
-      const updates = [];
-      
-      if (todayStatus?.transportStatus && todayStatus.transportStatusUpdatedAt) {
-        updates.push({
-          type: 'Transport Status',
-          value: todayStatus.transportStatus,
-          time: new Date(todayStatus.transportStatusUpdatedAt).getTime(),
-          icon: '🚌',
-          color: 'text-blue-600'
-        });
-      }
-      
-      if (todayStatus?.departmentStatus && todayStatus.departmentStatusUpdatedAt) {
-        updates.push({
-          type: 'Dept Status',
-          value: todayStatus.departmentStatus,
-          time: new Date(todayStatus.departmentStatusUpdatedAt).getTime(),
-          icon: '👥',
-          color: 'text-green-600'
-        });
-      }
-      
-      if (todayStatus?.transportArrivalTime && todayStatus.transportUpdatedAt) {
-        updates.push({
-          type: 'Transport Arrival',
-          value: new Date(todayStatus.transportArrivalTime).toLocaleTimeString(),
-          time: new Date(todayStatus.transportUpdatedAt).getTime(),
-          icon: '🚌',
-          color: 'text-blue-600'
-        });
-      }
-      
-      if (todayStatus?.departmentArrivalTime && todayStatus.departmentUpdatedAt) {
-        updates.push({
-          type: 'Dept Arrival',
-          value: new Date(todayStatus.departmentArrivalTime).toLocaleTimeString(),
-          time: new Date(todayStatus.departmentUpdatedAt).getTime(),
-          icon: '👥',
-          color: 'text-green-600'
-        });
-      }
-      
-      // Sort by time (most recent first) and take the first one
-      const mostRecent = updates.sort((a, b) => b.time - a.time)[0];
-      
-      if (mostRecent) {
-        return (
-          <div className={`${mostRecent.color} flex items-center gap-1`} 
-               title={`${mostRecent.type} - ${new Date(mostRecent.time).toLocaleString()}`}>
-            <span>{mostRecent.icon}</span>
-            <span>{mostRecent.type}: {mostRecent.value}</span>
-          </div>
-        );
-      }
-      
-      return <span className="text-gray-400">No updates</span>;
-    })()}
-  </div>
-</td>
+                            if (todayStatus?.transportStatus && todayStatus.transportStatusUpdatedAt) {
+                              updates.push({
+                                type: 'Transport Status',
+                                value: todayStatus.transportStatus,
+                                time: new Date(todayStatus.transportStatusUpdatedAt).getTime(),
+                                icon: '🚌',
+                                color: 'text-blue-600'
+                              });
+                            }
+
+                            if (todayStatus?.departmentStatus && todayStatus.departmentStatusUpdatedAt) {
+                              updates.push({
+                                type: 'Dept Status',
+                                value: todayStatus.departmentStatus,
+                                time: new Date(todayStatus.departmentStatusUpdatedAt).getTime(),
+                                icon: '👥',
+                                color: 'text-green-600'
+                              });
+                            }
+
+                            if (todayStatus?.transportArrivalTime && todayStatus.transportUpdatedAt) {
+                              updates.push({
+                                type: 'Transport Arrival',
+                                value: formatTimeForDisplay(todayStatus.transportArrivalTime), // ✅ Use your function
+                                time: new Date(todayStatus.transportUpdatedAt).getTime(),
+                                icon: '🚌',
+                                color: 'text-blue-600'
+                              });
+                            }
+
+                            if (todayStatus?.departmentArrivalTime && todayStatus.departmentUpdatedAt) {
+                              updates.push({
+                                type: 'Dept Arrival',
+                                value: formatTimeForDisplay(todayStatus.departmentArrivalTime), // ✅ Use your function
+                                time: new Date(todayStatus.departmentUpdatedAt).getTime(),
+                                icon: '👥',
+                                color: 'text-green-600'
+                              });
+                            }
+
+                            // Sort by time (most recent first) and take the first one
+                            const mostRecent = updates.sort((a, b) => b.time - a.time)[0];
+
+                            if (mostRecent) {
+                              return (
+                                <div className={`${mostRecent.color} flex items-center gap-1`}
+                                  title={`${mostRecent.type} - ${new Date(mostRecent.time).toLocaleString()}`}>
+                                  <span>{mostRecent.icon}</span>
+                                  <span>{mostRecent.type}: {mostRecent.value}</span>
+                                </div>
+                              );
+                            }
+
+                            return <span className="text-gray-400">No updates</span>;
+                          })()}
+                        </div>
+                      </td>
+
                       {/* Transport Arrival - Input OR Display Value */}
                       <td className="px-4 py-3">
                         {canUpdateTransport ? (
@@ -615,11 +598,11 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                             <input
                               type="time"
                               value={
-                                employeeUpdate.transportArrivalTime !== undefined 
-                                  ? employeeUpdate.transportArrivalTime 
-                                  : (todayStatus?.transportArrivalTime 
-                                      ? formatTimeForInput(todayStatus.transportArrivalTime)
-                                      : '')
+                                employeeUpdate.transportArrivalTime !== undefined
+                                  ? employeeUpdate.transportArrivalTime
+                                  : (todayStatus?.transportArrivalTime
+                                    ? formatTimeForInput(todayStatus.transportArrivalTime)
+                                    : '')
                               }
                               onChange={(e) => handleTransportArrivalChange(employee._id, e.target.value)}
                               disabled={isUpdating}
@@ -652,11 +635,11 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                             <input
                               type="time"
                               value={
-                                employeeUpdate.departmentArrivalTime !== undefined 
-                                  ? employeeUpdate.departmentArrivalTime 
-                                  : (todayStatus?.departmentArrivalTime 
-                                      ? formatTimeForInput(todayStatus.departmentArrivalTime)
-                                      : '')
+                                employeeUpdate.departmentArrivalTime !== undefined
+                                  ? employeeUpdate.departmentArrivalTime
+                                  : (todayStatus?.departmentArrivalTime
+                                    ? formatTimeForInput(todayStatus.departmentArrivalTime)
+                                    : '')
                               }
                               onChange={(e) => handleDepartmentArrivalChange(employee._id, e.target.value)}
                               disabled={isUpdating}
@@ -690,8 +673,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                             <div className="flex flex-col gap-1 mb-2">
                               <select
                                 value={
-                                  employeeUpdate.transportStatus !== undefined 
-                                    ? employeeUpdate.transportStatus 
+                                  employeeUpdate.transportStatus !== undefined
+                                    ? employeeUpdate.transportStatus
                                     : (todayStatus?.transportStatus || '')
                                 }
                                 onChange={(e) => handleTransportStatusChange(employee._id, e.target.value)}
@@ -722,14 +705,14 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                               )}
                             </div>
                           )}
-                          
+
                           {/* Department Status Update - WITH EXISTING VALUE */}
                           {canUpdateDepartment && (
                             <div className="flex flex-col gap-1 mb-2">
                               <select
                                 value={
-                                  employeeUpdate.departmentStatus !== undefined 
-                                    ? employeeUpdate.departmentStatus 
+                                  employeeUpdate.departmentStatus !== undefined
+                                    ? employeeUpdate.departmentStatus
                                     : (todayStatus?.departmentStatus || '')
                                 }
                                 onChange={(e) => handleDepartmentStatusChange(employee._id, e.target.value)}
@@ -760,7 +743,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                               )}
                             </div>
                           )}
-                          
+
                           {/* Transport Arrival Update */}
                           {canUpdateTransport && employeeUpdate.transportArrivalTime && employeeUpdate.transportArrivalTime !== formatTimeForInput(todayStatus?.transportArrivalTime) && (
                             <button
@@ -772,7 +755,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                               Update Transport Arrival
                             </button>
                           )}
-                          
+
                           {/* Department Arrival Update */}
                           {canUpdateDepartment && employeeUpdate.departmentArrivalTime && employeeUpdate.departmentArrivalTime !== formatTimeForInput(todayStatus?.departmentArrivalTime) && (
                             <button

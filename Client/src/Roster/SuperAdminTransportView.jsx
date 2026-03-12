@@ -4,7 +4,7 @@ import {
   getTransportDetailForSuperAdmin,
   fetchAllRosters,
 } from "../features/slices/rosterSlice.js";
-import Navbar from "../pages/Navbar.jsx";
+import AdminNavbar from "../components/AdminNavbar.jsx"
 import { 
   Clock, 
   AlertCircle, 
@@ -78,8 +78,6 @@ const SuperAdminTransportView = () => {
       }
     }
   };
-
-  // Update available weeks when roster changes
   useEffect(() => {
     if (selectedRosterId) {
       const selectedRoster = rosters.find(r => r._id === selectedRosterId);
@@ -95,8 +93,6 @@ const SuperAdminTransportView = () => {
   const data = superAdminTransportData?.data;
   const employees = data?.employees || [];
   const summary = data?.summary || {};
-
-  // Filter employees
   const filteredEmployees = employees.filter(emp => {
     if (departmentFilter && emp.department !== departmentFilter) return false;
     if (attendanceFilter === "transport" && !emp.transportStatus) return false;
@@ -104,8 +100,6 @@ const SuperAdminTransportView = () => {
     if (attendanceFilter === "both" && (!emp.transportStatus || !emp.departmentStatus)) return false;
     return true;
   });
-
-  // Format date for display
   const formatDateTime = (dateString) => {
     if (!dateString) return '—';
     return new Date(dateString).toLocaleString();
@@ -115,8 +109,6 @@ const SuperAdminTransportView = () => {
     if (!dateString) return '—';
     return new Date(dateString).toLocaleTimeString();
   };
-
-  // Export to CSV
   const exportToCSV = () => {
     const headers = [
       'Employee', 'Department', 'Transport', 'Team Leader', 'Shift',
@@ -155,16 +147,13 @@ const SuperAdminTransportView = () => {
     a.click();
     window.URL.revokeObjectURL(url);
   };
-
-  // Get unique departments for filter
   const departments = [...new Set(employees.map(e => e.department).filter(Boolean))];
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Navbar />
+      <AdminNavbar />
 
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
         <div className="mb-6 bg-white rounded-lg shadow p-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
@@ -186,9 +175,7 @@ const SuperAdminTransportView = () => {
             </div>
           </div>
 
-          {/* Filters Row */}
           <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Roster Select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Select Roster
@@ -206,8 +193,6 @@ const SuperAdminTransportView = () => {
                 ))}
               </select>
             </div>
-
-            {/* Week Select */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Select Week
@@ -226,8 +211,6 @@ const SuperAdminTransportView = () => {
                 ))}
               </select>
             </div>
-
-            {/* Date Picker */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Select Date
@@ -238,9 +221,7 @@ const SuperAdminTransportView = () => {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
               />
-            </div>
-
-            {/* Actions */}
+            </div> 
             <div className="flex items-end gap-2">
               <button
                 onClick={() => fetchSuperAdminData()}
@@ -262,9 +243,7 @@ const SuperAdminTransportView = () => {
                 <Clock className="w-4 h-4" />
               </button>
             </div>
-          </div>
-
-          {/* Filter Toggle */}
+          </div> 
           <div className="mt-4 flex justify-between items-center">
             <button
               onClick={() => setShowFilters(!showFilters)}
@@ -283,9 +262,7 @@ const SuperAdminTransportView = () => {
                 Export CSV
               </button>
             )}
-          </div>
-
-          {/* Advanced Filters */}
+          </div> 
           {showFilters && (
             <div className="mt-4 p-4 bg-gray-50 rounded-lg grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -332,9 +309,7 @@ const SuperAdminTransportView = () => {
                 )}
               </div>
             </div>
-          )}
-
-          {/* Summary Cards */}
+          )} 
           {data && (
             <div className="mt-6 grid grid-cols-2 md:grid-cols-5 gap-4">
               <div className="bg-blue-50 p-3 rounded-lg">
@@ -359,9 +334,7 @@ const SuperAdminTransportView = () => {
               </div>
             </div>
           )}
-        </div>
-
-        {/* Main Table */}
+        </div> 
         {loading ? (
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-600 mx-auto"></div>
@@ -381,23 +354,15 @@ const SuperAdminTransportView = () => {
                 <tr className="bg-gray-100">
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Name</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Dept</th>
-                  
-                  {/* Transport ATTENDANCE */}
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Attendance</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated By</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated At</th>
-                  
-                  {/* Department ATTENDANCE */}
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Attendance</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated By</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated At</th>
-                  
-                  {/* Transport Arrival */}
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Time</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated By</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated At</th>
-                  
-                  {/* Department Arrival */}
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Time</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated By</th>
                   <th className="px-3 py-2 text-left text-xs font-medium text-gray-600">Updated At</th>
@@ -406,11 +371,8 @@ const SuperAdminTransportView = () => {
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredEmployees.map((emp, idx) => (
                   <tr key={idx} className="hover:bg-gray-50">
-                    {/* Employee Info */}
                     <td className="px-3 py-3 text-sm font-medium text-gray-900">{emp.name}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.department}</td>
-                    
-                    {/* Transport ATTENDANCE */}
                     <td className="px-3 py-3">
                       {emp.transportStatus ? (
                         <span className={`px-2 py-1 text-xs rounded-full ${
@@ -432,8 +394,6 @@ const SuperAdminTransportView = () => {
                     </td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.transportStatusUpdatedBy?.username || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.transportStatusUpdatedAt ? formatDateTime(emp.transportStatusUpdatedAt) : '—'}</td>
-                    
-                    {/* Department ATTENDANCE */}
                     <td className="px-3 py-3">
                       {emp.departmentStatus ? (
                         <span className={`px-2 py-1 text-xs rounded-full ${
@@ -455,13 +415,9 @@ const SuperAdminTransportView = () => {
                     </td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.departmentStatusUpdatedBy?.username || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.departmentStatusUpdatedAt ? formatDateTime(emp.departmentStatusUpdatedAt) : '—'}</td>
-                    
-                    {/* Transport Arrival */}
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.transportArrivalTime ? formatTime(emp.transportArrivalTime) : '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.transportUpdatedBy?.username || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.transportUpdatedAt ? formatDateTime(emp.transportUpdatedAt) : '—'}</td>
-                    
-                    {/* Department Arrival */}
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.departmentArrivalTime ? formatTime(emp.departmentArrivalTime) : '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.departmentUpdatedBy?.username || '—'}</td>
                     <td className="px-3 py-3 text-sm text-gray-600">{emp.departmentUpdatedAt ? formatDateTime(emp.departmentUpdatedAt) : '—'}</td>
@@ -486,9 +442,7 @@ const SuperAdminTransportView = () => {
               Please select a roster, week, and date to view transport details.
             </p>
           </div>
-        )}
-
-        {/* Attendance Breakdown */}
+        )} 
         {data && Object.keys(summary.transportStatusBreakdown || {}).length > 0 && (
           <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="bg-white rounded-lg shadow p-4">

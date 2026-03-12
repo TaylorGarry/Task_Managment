@@ -4,6 +4,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { fetchAllRosters } from "../features/slices/rosterSlice.js";
 import ArrivalAttendanceUpdate from "./ArrivalAttendanceUpdate.jsx";
 import Navbar from "../pages/Navbar.jsx";
+import AdminNavbar from "../components/AdminNavbar.jsx";
 import { Calendar, AlertCircle, Clock } from "lucide-react";
 
 const AttendanceUpdateWrapper = () => {
@@ -22,6 +23,13 @@ const AttendanceUpdateWrapper = () => {
     }
   };
   const currentUser = getCurrentUser();
+  
+  // ✅ Determine user type for navbar rendering
+  const isSuperAdmin = currentUser?.accountType === "superAdmin";
+  const isEmployee = currentUser?.accountType === "employee";
+  
+  // For Transport and Team Leaders, they should see regular Navbar
+  // Only superAdmin sees AdminNavbar
 
   useEffect(() => {
     console.log("📡 Fetching rosters for:", { month: selectedMonth, year: selectedYear });
@@ -41,14 +49,26 @@ const AttendanceUpdateWrapper = () => {
   
   console.log("📋 Processed rosters:", rosters);
 
+  // Function to render the appropriate navbar
+  const renderNavbar = () => {
+    if (isSuperAdmin) {
+      return <AdminNavbar />;
+    } else {
+      // For employees (including Transport, Team Leaders, etc.)
+      return <Navbar />;
+    }
+  };
+
   if (rosterId) {
     return (
       <div className="min-h-screen bg-gray-100">
-        <Navbar />
+        {/* ✅ Render navbar based on user type */}
+        {renderNavbar()}
+        
         <div className="container mx-auto px-4 py-8">
           <button
             onClick={() => navigate("/attendance-update")}
-            className="mb-0 text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            className="mb-4 text-blue-600 hover:text-blue-800 flex items-center gap-1"
           >
             ← Back to roster selection
           </button>
@@ -60,7 +80,8 @@ const AttendanceUpdateWrapper = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      <Navbar />
+      {/* ✅ Render navbar based on user type */}
+      {renderNavbar()}
       
       <div className="container mx-auto px-2 py-2">
         <div className="bg-white rounded-lg shadow p-6 mb-6">
@@ -75,12 +96,14 @@ const AttendanceUpdateWrapper = () => {
               </p>
             </div>
             
-            <div className="bg-indigo-50 px-4 py-2 rounded-lg">
-              <p className="text-sm text-indigo-800">
-                <span className="font-semibold">{currentUser?.username}</span> 
+            <div className={`px-4 py-2 rounded-lg ${
+              isSuperAdmin ? "bg-purple-100 text-purple-800" : "bg-green-100 text-green-800"
+            }`}>
+              <p className="text-sm font-semibold">
+                {currentUser?.username}
                 <span className="mx-2">•</span>
                 {currentUser?.department}
-                {currentUser?.accountType === "superAdmin" && " (Admin)"}
+                {isSuperAdmin && " 👑 Super Admin"}
               </p>
             </div>
           </div>

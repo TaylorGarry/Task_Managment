@@ -1,9 +1,11 @@
 import React from "react";
 import { useSelector } from "react-redux";
+import { useParams } from "react-router-dom"; // Add this import
 import ArrivalAttendanceUpdate from "../components/ArrivalAttendanceUpdate";
 
 const ArrivalAttendancePage = () => {
   const { user } = useSelector((state) => state.auth);
+  const { rosterId } = useParams(); // Get rosterId from URL params
 
   const allowedDepartments = ["Ops - Meta", "Transport"];
 
@@ -19,18 +21,22 @@ const ArrivalAttendancePage = () => {
     );
   }
 
+  // If no rosterId is provided, show a message
+  if (!rosterId) {
+    return (
+      <div className="p-6">
+        <h2 className="text-xl font-bold mb-4">Arrival & Attendance Update</h2>
+        <p className="text-gray-600">Please select a roster from the list.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4">
         Arrival & Attendance Update
       </h2>
-
-      <ArrivalAttendanceUpdate
-        rosterId="YOUR_ROSTER_ID"
-        weekNumber={1}
-        employee={{ _id: "EMPLOYEE_ID", username: "Employee Name" }}
-        date={new Date().toISOString()}
-      />
+      <ArrivalAttendanceUpdate rosterId={rosterId} />
     </div>
   );
 };
