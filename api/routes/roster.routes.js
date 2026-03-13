@@ -122,9 +122,10 @@ import {
     updateArrivalTime,
   updateAttendance,
   getFilteredRosterForUpdates,
-  getTransportDetailForSuperAdmin,
-  getDepartmentWiseAttendance,
-} from "../Controllers/roster.controller.js";
+	  getTransportDetailForSuperAdmin,
+	  getDepartmentWiseAttendance,
+	  exportAttendanceSnapshotToExcel,
+	} from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
 import multer from "multer"; 
@@ -139,8 +140,11 @@ router.get("/getroster", authMiddleware, getRosterForCRMUsers);
 // Edit roster week details
 router.put("/update-employee", authMiddleware, updateRoster);
 
-// Export roster to Excel
-router.get("/exportroster", authMiddleware, exportRosterToExcel);
+	// Export roster to Excel
+	router.get("/exportroster", authMiddleware, exportRosterToExcel);
+
+	// Export attendance snapshot (date range + optional department)
+	router.get("/export-attendance-snapshot", authMiddleware, exportAttendanceSnapshotToExcel);
 
 router.get("/rosterdetail", authMiddleware, getAllRosters);
 
