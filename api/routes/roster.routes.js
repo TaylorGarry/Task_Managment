@@ -123,6 +123,7 @@ import {
   updateAttendance,
   getFilteredRosterForUpdates,
   getTransportDetailForSuperAdmin,
+  getDepartmentWiseAttendance,
 } from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
@@ -229,5 +230,11 @@ router.get(
   "/superadmin/transport-details/:rosterId/:weekNumber/:date",
   authMiddleware,
   getTransportDetailForSuperAdmin
+);
+
+router.get(
+  '/attendance/department-wise/:rosterId/:weekNumber/:date',
+  authMiddleware,
+  getDepartmentWiseAttendance
 );
 export default router;
