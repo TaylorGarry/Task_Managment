@@ -1790,22 +1790,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         </span>
                                     </div>
 
-                                    {/* Department-wise employee count badges */}
-                                    <div className="ml-3 flex flex-col gap-1">
-                                        {week.employeesByDepartment && Object.entries(week.employeesByDepartment).map(([dept, emps]) => (
-                                            <span 
-                                                key={dept} 
-                                                className="text-[10px] px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap"
-                                                title={`${dept}: ${emps.length} employees`}
-                                            >
-                                                {dept}: {emps.length}
-                                            </span>
-                                        ))}
-                                    </div>
-
-                                    <span className="ml-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-                                        {week.employeeCount} total
-                                    </span>
+	                                    <span className="ml-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+	                                        {week.employeeCount} total
+	                                    </span>
                                     
                                     {hasWeekEnded && (
                                         <span className="ml-2 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
@@ -1840,25 +1827,11 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     </p>
                                 </div>
                                 
-                                {/* Department summary badges */}
-                                <div className="flex flex-wrap gap-2">
-                                    {editedWeeks[activeTab].employeesByDepartment && 
-                                        Object.entries(editedWeeks[activeTab].employeesByDepartment).map(([dept, emps]) => (
-                                            <div key={dept} className="px-3 py-1.5 bg-purple-50 rounded-lg border border-purple-200">
-                                                <span className="text-xs font-medium text-purple-700">{dept}</span>
-                                                <span className="ml-2 text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">
-                                                    {emps.length}
-                                                </span>
-                                            </div>
-                                        ))
-                                    }
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
-                                    <div className="text-sm text-slate-600 font-medium">
-                                        {getFilteredEmployees(editedWeeks[activeTab].employees).length} employees
-                                        {departmentFilter && ` (filtered from ${editedWeeks[activeTab].employees.length})`}
-                                    </div>
+	                                <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
+	                                    <div className="text-sm text-slate-600 font-medium">
+	                                        {getFilteredEmployees(editedWeeks[activeTab].employees).length} employees
+	                                        {departmentFilter && ` (filtered from ${editedWeeks[activeTab].employees.length})`}
+	                                    </div>
                                     <button
                                         onClick={() => setShowAddEmployeeForm(true)}
                                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shadow-sm"

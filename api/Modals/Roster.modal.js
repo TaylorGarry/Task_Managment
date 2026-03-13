@@ -104,12 +104,14 @@ import mongoose from "mongoose";
 // });
 
 const dailyStatusSchema = new mongoose.Schema({
-  date: { type: Date, required: true },
-
-  // ===== STATUS TRACKING =====
-  // Transport side status
-  transportStatus: { 
-    type: String, 
+	  date: { type: Date, required: true },
+	  status: {
+	    type: String,
+	    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""],
+	    default: "P"
+	  },
+	  transportStatus: { 
+	    type: String, 
     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""],
     default: ""
   },
@@ -122,8 +124,6 @@ const dailyStatusSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-
-  // Department side status
   departmentStatus: { 
     type: String, 
     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""],
@@ -138,9 +138,6 @@ const dailyStatusSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-
-  // ===== ARRIVAL TIME TRACKING =====
-  // Transport side arrival update
   transportArrivalTime: {
     type: Date,
     default: null
@@ -154,8 +151,6 @@ const dailyStatusSchema = new mongoose.Schema({
     type: Date,
     default: null
   },
-
-  // Department side arrival update
   departmentArrivalTime: {
     type: Date,
     default: null
@@ -175,9 +170,6 @@ const dailyStatusSchema = new mongoose.Schema({
 const rosterEmployeeSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
   name: { type: String, required: true },
-
-  
-//  DEPARTMENT FIELD 
   department: {
     type: String,
     required: true,
@@ -218,7 +210,7 @@ const rosterEditHistorySchema = new mongoose.Schema({
     type: String,
   },
   actionType: {
-    type: String, // update / bulk-update / delete / add
+    type: String,  
   },
   weekNumber: Number,
   employeeId: {

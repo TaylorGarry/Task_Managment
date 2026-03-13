@@ -2792,24 +2792,25 @@ const RosterForm = () => {
   // UPDATED: Handle delete button click with proper validation and debugging
   
   
-  const handleSaveEditedSaved = async () => {
-  try {
-    if (!editSavedEmployee) return;
-    
-    
-    // Find the correct month, year, and roster containing this employee
-    let month = null;
-    let year = null;
-    let foundRoster = null;
-    let foundWeek = null;
-    let rosterId = null;
-    
-    // Search through all rosters to find the one containing this employee
-    if (allRosters && allRosters.length > 0) {
-      for (const roster of allRosters) {
-        if (roster.weeks && Array.isArray(roster.weeks)) {
-          for (const week of roster.weeks) {
-            if (week.weekNumber === editSavedEmployee.weekNumber) {
+	  const handleSaveEditedSaved = async () => {
+	  try {
+	    if (!editSavedEmployee) return;
+	    
+	    
+	    // Find the correct month, year, and roster containing this employee
+	    let month = null;
+	    let year = null;
+	    let foundRoster = null;
+	    let foundWeek = null;
+	    let rosterId = null;
+	    
+	    // Search through all rosters to find the one containing this employee
+	    const rosters = Array.isArray(allRosters) ? allRosters : (allRosters?.data || []);
+	    if (rosters && rosters.length > 0) {
+	      for (const roster of rosters) {
+	        if (roster.weeks && Array.isArray(roster.weeks)) {
+	          for (const week of roster.weeks) {
+	            if (week.weekNumber === editSavedEmployee.weekNumber) {
               // Check if this week contains the employee
               const employeeExists = week.employees.some(emp => {
                 // Compare as strings to ensure proper matching
@@ -2835,12 +2836,12 @@ const RosterForm = () => {
         }
         if (foundRoster) break;
       }
-    }
-    
-    if (!month || !year) {
-      console.error("Could not determine month/year from allRosters:", allRosters);
-      return toast.error("Could not determine roster month/year");
-    }
+	    }
+	    
+	    if (!month || !year) {
+	      console.error("Could not determine month/year from allRosters:", { allRosters, rosters });
+	      return toast.error("Could not determine roster month/year");
+	    }
     
     const employeeId = editSavedEmployee._id;
     if (!employeeId) {
@@ -2867,35 +2868,32 @@ const RosterForm = () => {
       dailyStatus: dailyStatusObjects,
     };
 
-    // Add skipHistory flag to prevent logging in bulk edit history
-    const skipHistory = true;
+	    // Log edit history so updates appear in Employee Audit Trail
 
-    // Try with rosterId first (more specific)
-    let result;
-    if (rosterId) {
-      result = await dispatch(
-        updateRosterEmployee({
-          month,
-          year,
-          weekNumber: editSavedEmployee.weekNumber,
-          employeeId: employeeId,
-          rosterId: rosterId,
-          updates,
-          skipHistory: skipHistory // Pass the flag
-        })
-      ).unwrap();
-    } else {
-      result = await dispatch(
-        updateRosterEmployee({
-          month,
-          year,
-          weekNumber: editSavedEmployee.weekNumber,
-          employeeId: employeeId,
-          updates,
-          skipHistory: skipHistory // Pass the flag
-        })
-      ).unwrap();
-    }
+	    // Try with rosterId first (more specific)
+	    let result;
+	    if (rosterId) {
+	      result = await dispatch(
+	        updateRosterEmployee({
+	          month,
+	          year,
+	          weekNumber: editSavedEmployee.weekNumber,
+	          employeeId: employeeId,
+	          rosterId: rosterId,
+	          updates
+	        })
+	      ).unwrap();
+	    } else {
+	      result = await dispatch(
+	        updateRosterEmployee({
+	          month,
+	          year,
+	          weekNumber: editSavedEmployee.weekNumber,
+	          employeeId: employeeId,
+	          updates
+	        })
+	      ).unwrap();
+	    }
 
     
     await dispatch(fetchAllRosters({})).unwrap();
@@ -3047,26 +3045,28 @@ const RosterForm = () => {
   };
 
   // ========== FIXED renderSavedRosterTable - NO useEffect inside ==========
-  const renderSavedRosterTable = () => {
-    if (rosterDetailLoading) {
-      return (
-        <div className="flex justify-center items-center py-10 bg-white rounded-2xl border border-slate-200 shadow-sm">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          <span className="ml-3 text-slate-600 font-medium">Loading saved roster...</span>
-        </div>
-      );
-    }
+	  const renderSavedRosterTable = () => {
+	    if (rosterDetailLoading) {
+	      return (
+	        <div className="flex justify-center items-center py-10 bg-white rounded-2xl border border-slate-200 shadow-sm">
+	          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+	          <span className="ml-3 text-slate-600 font-medium">Loading saved roster...</span>
+	        </div>
+	      );
+	    }
 
-    if (!allRosters || !Array.isArray(allRosters) || allRosters.length === 0) {
-      return (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
-          <p className="text-amber-800 font-medium">No saved roster data found.</p>
-        </div>
-      );
-    }
+	    const rosters = Array.isArray(allRosters) ? allRosters : (allRosters?.data || []);
 
-    const currentRoster = allRosters[0];
-    const weeks = currentRoster?.weeks || [];
+	    if (!rosters || !Array.isArray(rosters) || rosters.length === 0) {
+	      return (
+	        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center">
+	          <p className="text-amber-800 font-medium">No saved roster data found.</p>
+	        </div>
+	      );
+	    }
+
+	    const currentRoster = rosters[0];
+	    const weeks = currentRoster?.weeks || [];
     
     // ========== FIX: Group weeks by weekNumber and merge employees ==========
     const weeksMap = new Map();
