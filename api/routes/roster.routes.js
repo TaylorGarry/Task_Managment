@@ -117,15 +117,16 @@ import {
   getOpsMetaCurrentWeekRoster,
   updateOpsMetaRoster,
   rosterUploadFromExcel,
-  exportRosterTemplate,
-  getRostersByDepartment,
-    updateArrivalTime,
-  updateAttendance,
-  getFilteredRosterForUpdates,
-	  getTransportDetailForSuperAdmin,
-	  getDepartmentWiseAttendance,
-	  exportAttendanceSnapshotToExcel,
-	} from "../Controllers/roster.controller.js";
+	  exportRosterTemplate,
+	  getRostersByDepartment,
+	    updateArrivalTime,
+	  updateAttendance,
+	  updateAttendanceBulk,
+	  getFilteredRosterForUpdates,
+		  getTransportDetailForSuperAdmin,
+		  getDepartmentWiseAttendance,
+		  exportAttendanceSnapshotToExcel,
+		} from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
 import multer from "multer"; 
@@ -219,11 +220,17 @@ router.put(
   updateArrivalTime
 );
 
-router.put(
-  "/update-attendance",
-  authMiddleware,
-  updateAttendance
-);
+	router.put(
+	  "/update-attendance",
+	  authMiddleware,
+	  updateAttendance
+	);
+
+	router.put(
+	  "/update-attendance/bulk",
+	  authMiddleware,
+	  updateAttendanceBulk
+	);
 
 router.get(
   "/updates/:rosterId/:weekNumber/:date",
