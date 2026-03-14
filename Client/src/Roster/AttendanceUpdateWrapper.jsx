@@ -284,24 +284,14 @@ const AttendanceUpdateWrapper = () => {
     console.log("📦 allRosters from Redux:", allRosters);
   }, [allRosters]);
 
-  const rosters = allRosters?.data || [];
-  
-
-  if (rosterId) {
-    return (
-      <div className="min-h-screen bg-gray-100">
-        {currentUser?.accountType === "superAdmin" ? <AdminNavbar /> : <Navbar />}
-        <div className="container mx-auto px-1 ">
-          <button
-            onClick={() => navigate("/attendance-update")}
-            className=" text-blue-600 hover:text-blue-800 flex items-center"
-          >
-          </button>
-          <ArrivalAttendanceUpdate rosterId={rosterId} />
-        </div>
-      </div>
-    );
-  }
+	  const rosters = allRosters?.data || [];
+	  
+	
+	  if (rosterId) {
+	    // ArrivalAttendanceUpdate already renders the correct navbar + full-page layout.
+	    // Rendering another Navbar/AdminNavbar here caused duplicate fixed headers and broke SPA navigation.
+	    return <ArrivalAttendanceUpdate rosterId={rosterId} />;
+	  }
 
   return (
     <div className="min-h-screen bg-gray-100">

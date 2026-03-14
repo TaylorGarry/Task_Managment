@@ -846,6 +846,13 @@ const STATUS_OPTIONS = [
   { value: "HD", label: "Half Day (HD)", color: "bg-cyan-100 text-cyan-800" }
 ];
 
+const getLocalDateKey = (d = new Date()) => {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return new Date().toISOString().split("T")[0];
+  const tzOffsetMs = date.getTimezoneOffset() * 60000;
+  return new Date(date.getTime() - tzOffsetMs).toISOString().split("T")[0];
+};
+
 const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const dispatch = useDispatch();
   const currentUser = getCurrentUser();
@@ -855,9 +862,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const initialFetchDone = useRef(false);
   
   // State
-  const [selectedDate, setSelectedDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [selectedDate, setSelectedDate] = useState(() => getLocalDateKey());
 		  const [selectedWeek, setSelectedWeek] = useState("");
 		  const [currentPage, setCurrentPage] = useState(1);
 		  const [pageSize, setPageSize] = useState(25);
@@ -1027,6 +1032,36 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }));
   };
 
+  const clearEmployeeUpdateField = (employeeId, field) => {
+    setUpdates((prev) => {
+      const existing = prev?.[employeeId];
+      if (!existing) return prev;
+      const nextEmployee = { ...existing };
+      delete nextEmployee[field];
+      const hasAny = Object.values(nextEmployee).some((v) => v !== undefined && v !== "");
+      const next = { ...prev };
+      if (!hasAny) {
+        delete next[employeeId];
+      } else {
+        next[employeeId] = nextEmployee;
+      }
+      return next;
+    });
+  };
+
+  const refetchEmployees = () => {
+    if (!rosterId || !selectedWeek || !selectedDate) return;
+    dispatch(
+      getEmployeesForUpdates({
+        rosterId,
+        weekNumber: parseInt(selectedWeek),
+        date: selectedDate,
+        page: currentPage,
+        limit: pageSize,
+      })
+    );
+  };
+
   const handleTransportArrivalUpdate = async (employee) => {
     const employeeUpdate = updates[employee._id];
     if (!employeeUpdate?.transportArrivalTime) {
@@ -1047,13 +1082,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         })
       ).unwrap();
 
-      setUpdates(prev => ({
-        ...prev,
-        [employee._id]: {
-          ...prev[employee._id],
-          transportArrivalTime: ""
-        }
-      }));
+      clearEmployeeUpdateField(employee._id, "transportArrivalTime");
+      refetchEmployees();
       
       toast.success(`Transport arrival updated for ${employee.name}`);
     } catch (error) {
@@ -1085,13 +1115,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         })
       ).unwrap();
 
-      setUpdates(prev => ({
-        ...prev,
-        [employee._id]: {
-          ...prev[employee._id],
-          departmentArrivalTime: ""
-        }
-      }));
+      clearEmployeeUpdateField(employee._id, "departmentArrivalTime");
+      refetchEmployees();
       
       toast.success(`Department arrival updated for ${employee.name}`);
     } catch (error) {
@@ -1122,13 +1147,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         })
       ).unwrap();
 
-      setUpdates(prev => ({
-        ...prev,
-        [employee._id]: {
-          ...prev[employee._id],
-          transportStatus: ""
-        }
-      }));
+      clearEmployeeUpdateField(employee._id, "transportStatus");
+      refetchEmployees();
       
       toast.success(`Transport status updated for ${employee.name}`);
     } catch (error) {
@@ -1159,13 +1179,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         })
       ).unwrap();
 
-      setUpdates(prev => ({
-        ...prev,
-        [employee._id]: {
-          ...prev[employee._id],
-          departmentStatus: ""
-        }
-      }));
+      clearEmployeeUpdateField(employee._id, "departmentStatus");
+      refetchEmployees();
       
       toast.success(`Department status updated for ${employee.name}`);
     } catch (error) {
