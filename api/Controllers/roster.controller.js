@@ -7185,17 +7185,19 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     // Get unique departments
 	    const departments = [...new Set(filteredEmployees.map(e => e?.department).filter(Boolean))];
 
-    const response = {
-      success: true,
-      message: resolvedByDate
-        ? `Employees for updates (resolved week by date: ${date})`
-        : `Employees for updates (Team Leader: ${user.username})`,
-      data: {
-        weekNumber: week.weekNumber,
-        startDate: week.startDate,
-        endDate: week.endDate,
-        currentDate: currentDate,
-	        canEdit: canEdit,
+	    const response = {
+	      success: true,
+	      message: resolvedByDate
+	        ? `Employees for updates (resolved week by date: ${date})`
+	        : `Employees for updates (Team Leader: ${user.username})`,
+	      data: {
+	        rosterId: roster._id,
+	        requestedDate: date,
+	        weekNumber: week.weekNumber,
+	        startDate: week.startDate,
+	        endDate: week.endDate,
+	        currentDate: currentDate,
+		        canEdit: canEdit,
 	        editMessage: editMessage,
 	        rosterEntries: formattedRosterEntries,
 	        pagination: {

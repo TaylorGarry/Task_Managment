@@ -3862,8 +3862,6 @@ export const fetchRostersByDepartment = createAsyncThunk(
   }
 );
 
-// ===== ARRIVAL TIME & ATTENDANCE THUNKS =====
-
 export const updateArrivalTime = createAsyncThunk(
   "roster/updateArrivalTime",
   async ({ rosterId, weekNumber, employeeId, date, arrivalTime }, thunkAPI) => {
@@ -4037,7 +4035,6 @@ export const updateAttendanceBulk = createAsyncThunk(
   }
 );
 
-// Optional: Thunk to get filtered employees for updates
 export const getEmployeesForUpdates = createAsyncThunk(
   "roster/getEmployeesForUpdates",
 	  async ({ rosterId, weekNumber, date, page, limit }, thunkAPI) => {
@@ -4065,7 +4062,6 @@ export const getEmployeesForUpdates = createAsyncThunk(
   }
 );
 
-// ✅ NEW: Thunk for department-wise attendance (matching your backend route)
 export const getDepartmentWiseAttendance = createAsyncThunk(
   "roster/getDepartmentWiseAttendance",
   async ({ rosterId, weekNumber, date }, thunkAPI) => {
@@ -4125,7 +4121,6 @@ export const getTransportDetailForSuperAdmin = createAsyncThunk(
     }
   }
 );
-//===== ATTENDANCE THUNK======
 const findEmployeeIndex = (roster, weekNumber, employeeId) => {
   if (!roster?.weeks) return -1;
   const weekIndex = roster.weeks.findIndex(w => w.weekNumber === weekNumber);
@@ -4134,6 +4129,34 @@ const findEmployeeIndex = (roster, weekNumber, employeeId) => {
     e._id === employeeId || (e.userId && e.userId._id === employeeId)
   );
   return { weekIndex, employeeIndex };
+};
+
+const patchUpdateEmployeesDailyStatus = (updateEmployeesData, { employeeId, date, data }) => {
+  const rosterEntries = updateEmployeesData?.data?.rosterEntries;
+  if (!Array.isArray(rosterEntries)) return;
+
+  const employee = rosterEntries.find((e) => String(e?._id) === String(employeeId));
+  if (!employee) return;
+
+  if (!Array.isArray(employee.dailyStatus)) employee.dailyStatus = [];
+
+  const targetDate = new Date(date);
+  const targetKey = Number.isNaN(targetDate.getTime()) ? null : targetDate.toDateString();
+  const dayIndex = employee.dailyStatus.findIndex((d) => {
+    const dDate = new Date(d?.date);
+    if (Number.isNaN(dDate.getTime())) return false;
+    if (targetKey) return dDate.toDateString() === targetKey;
+    return String(d?.date) === String(date);
+  });
+
+  if (dayIndex !== -1 && dayIndex !== undefined) {
+    employee.dailyStatus[dayIndex] = {
+      ...employee.dailyStatus[dayIndex],
+      ...data,
+    };
+  } else {
+    employee.dailyStatus.push(data);
+  }
 };
 const rosterSlice = createSlice({
   name: "roster",
@@ -4555,7 +4578,7 @@ canEdit: true,
 .addCase(updateArrivalTime.fulfilled, (state, action) => {
   state.loading = false;
   
-  const { weekNumber, employeeId, date, data } = action.payload;
+  const { rosterId, weekNumber, employeeId, date, data } = action.payload;
 
   // Update in main roster
   if (state.roster?.weeks) {
@@ -4648,9 +4671,9 @@ canEdit: true,
     }
   }
 
-  // Update in departmentRosters
-  if (state.departmentRosters?.data) {
-    state.departmentRosters.data.forEach(roster => {
+	  // Update in departmentRosters
+	  if (state.departmentRosters?.data) {
+	    state.departmentRosters.data.forEach(roster => {
       roster.weeks?.forEach(week => {
         if (week.weekNumber === weekNumber) {
           const emp = week.employees?.find(e => e._id === employeeId);
@@ -4671,6 +4694,15 @@ canEdit: true,
         }
       });
     });
+	  }
+
+  // Update in updateEmployeesData (attendance update UI)
+  if (
+    state.updateEmployeesData?.data?.rosterId &&
+    String(state.updateEmployeesData.data.rosterId) === String(rosterId) &&
+    String(state.updateEmployeesData.data.weekNumber) === String(weekNumber)
+  ) {
+    patchUpdateEmployeesDailyStatus(state.updateEmployeesData, { employeeId, date, data });
   }
 })
 .addCase(updateArrivalTime.rejected, (state, action) => {
@@ -4686,7 +4718,7 @@ canEdit: true,
 .addCase(updateAttendance.fulfilled, (state, action) => {
   state.loading = false;
   
-  const { weekNumber, employeeId, date, data } = action.payload;
+  const { rosterId, weekNumber, employeeId, date, data } = action.payload;
 
   // Update in main roster
   if (state.roster?.weeks) {
@@ -4777,9 +4809,9 @@ canEdit: true,
     }
   }
 
-  // Update in departmentRosters
-  if (state.departmentRosters?.data) {
-    state.departmentRosters.data.forEach(roster => {
+	  // Update in departmentRosters
+	  if (state.departmentRosters?.data) {
+	    state.departmentRosters.data.forEach(roster => {
       roster.weeks?.forEach(week => {
         if (week.weekNumber === weekNumber) {
           const emp = week.employees?.find(e => e._id === employeeId);
@@ -4800,12 +4832,21 @@ canEdit: true,
         }
       });
     });
+	  }
+
+  // Update in updateEmployeesData (attendance update UI)
+  if (
+    state.updateEmployeesData?.data?.rosterId &&
+    String(state.updateEmployeesData.data.rosterId) === String(rosterId) &&
+    String(state.updateEmployeesData.data.weekNumber) === String(weekNumber)
+  ) {
+    patchUpdateEmployeesDailyStatus(state.updateEmployeesData, { employeeId, date, data });
   }
 })
-	.addCase(updateAttendance.rejected, (state, action) => {
-	  state.loading = false;
-	  state.error = action.payload;
-	})
+		.addCase(updateAttendance.rejected, (state, action) => {
+		  state.loading = false;
+		  state.error = action.payload;
+		})
 
 	// Bulk Update Attendance Cases
 	.addCase(updateAttendanceBulk.pending, (state) => {
