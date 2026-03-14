@@ -6465,6 +6465,333 @@ export const updateAttendance = async (req, res) => {
   }
 };
 
+export const updateAttendanceBulk = async (req, res) => {
+  try {
+    const {
+      rosterId,
+      weekNumber,
+      employeeIds,
+      date,
+      transportStatus,
+      departmentStatus,
+      arrivalTime
+    } = req.body;
+
+    const user = req.user;
+
+    if (!rosterId || !weekNumber || !Array.isArray(employeeIds) || employeeIds.length === 0 || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, employeeIds, date"
+      });
+    }
+
+    if (!transportStatus && !departmentStatus && !arrivalTime) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one field (transportStatus, departmentStatus, or arrivalTime) is required"
+      });
+    }
+
+    const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD"];
+
+    if (transportStatus && !validStatuses.includes(transportStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid transport status. Must be one of: ${validStatuses.join(", ")}`
+      });
+    }
+
+    if (departmentStatus && !validStatuses.includes(departmentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid department status. Must be one of: ${validStatuses.join(", ")}`
+      });
+    }
+
+    // Validate time format (HH:MM) if provided
+    let newArrival = null;
+    if (arrivalTime) {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(arrivalTime)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+        });
+      }
+    }
+
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    const parsedWeekNumber = parseInt(weekNumber);
+    const week = roster.weeks.find((w) => w.weekNumber === parsedWeekNumber);
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    // Week edit rules (same as single update):
+    // - HR/superAdmin: can update past/future/current
+    // - Transport/Department: current week only
+    const now = new Date();
+    const weekStartDate = new Date(week.startDate);
+    const weekEndDate = new Date(week.endDate);
+    weekStartDate.setHours(0, 0, 0, 0);
+    weekEndDate.setHours(23, 59, 59, 999);
+    const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+    const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+
+    if (!isCurrentWeek && !canEditAnyWeek) {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+      });
+    }
+
+    const selectedDate = new Date(date);
+    if (Number.isNaN(selectedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
+    selectedDate.setHours(0, 0, 0, 0);
+    const selectedDayEnd = new Date(selectedDate);
+    selectedDayEnd.setHours(23, 59, 59, 999);
+
+    if (selectedDayEnd < weekStartDate || selectedDate > weekEndDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Selected date does not fall within the requested week"
+      });
+    }
+
+    if (arrivalTime) {
+      const [hours, minutes] = arrivalTime.split(":").map(Number);
+      newArrival = new Date(selectedDate);
+      newArrival.setHours(hours, minutes, 0, 0);
+      if (Number.isNaN(newArrival.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid arrival time"
+        });
+      }
+    }
+
+    const results = [];
+    const failed = [];
+
+    for (const employeeId of employeeIds) {
+      try {
+        const employee = week.employees.id(employeeId);
+        if (!employee) {
+          failed.push({ employeeId, message: "Employee not found" });
+          continue;
+        }
+
+        // Base access check (same as single update)
+        if (user.accountType === "superAdmin" || user.accountType === "HR") {
+          // ok
+        } else if (user.department === "Transport") {
+          // ok (transport updates only; field-specific permission checks below)
+        } else {
+          const isTeamLeader = employee.teamLeader === user.username;
+          const isSameDepartment = employee.department === user.department;
+          if (!isTeamLeader && !isSameDepartment) {
+            failed.push({
+              employeeId,
+              message: "You can only update employees in your department or your own team members"
+            });
+            continue;
+          }
+        }
+
+        let daily = employee.dailyStatus.find((d) => {
+          const dDate = new Date(d.date);
+          dDate.setHours(0, 0, 0, 0);
+          return dDate.getTime() === selectedDate.getTime();
+        });
+
+        if (!daily) {
+          daily = {
+            date: selectedDate,
+            transportStatus: "",
+            departmentStatus: "",
+            transportStatusUpdatedBy: null,
+            transportStatusUpdatedAt: null,
+            departmentStatusUpdatedBy: null,
+            departmentStatusUpdatedAt: null,
+            transportArrivalTime: null,
+            departmentArrivalTime: null,
+            transportUpdatedBy: null,
+            transportUpdatedAt: null,
+            departmentUpdatedBy: null,
+            departmentUpdatedAt: null
+          };
+          employee.dailyStatus.push(daily);
+          daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+        } else {
+          // Backfill legacy fields if needed
+          let needsMarkModified = false;
+          const ensure = (key, fallback) => {
+            if (daily[key] === undefined) {
+              daily[key] = fallback;
+              needsMarkModified = true;
+            }
+          };
+
+          ensure("transportStatus", "");
+          ensure("departmentStatus", "");
+          ensure("transportStatusUpdatedBy", null);
+          ensure("transportStatusUpdatedAt", null);
+          ensure("departmentStatusUpdatedBy", null);
+          ensure("departmentStatusUpdatedAt", null);
+          ensure("transportArrivalTime", null);
+          ensure("departmentArrivalTime", null);
+          ensure("transportUpdatedBy", null);
+          ensure("transportUpdatedAt", null);
+          ensure("departmentUpdatedBy", null);
+          ensure("departmentUpdatedAt", null);
+
+          if (needsMarkModified) {
+            employee.markModified("dailyStatus");
+          }
+        }
+
+        const changes = [];
+
+        if (transportStatus) {
+          const canUpdateTransportStatus =
+            user.department === "Transport" || user.accountType === "superAdmin" || user.accountType === "HR";
+
+          if (!canUpdateTransportStatus) {
+            failed.push({ employeeId, message: "You don't have permission to update transport status for this employee" });
+            continue;
+          }
+
+          if (daily.transportStatus !== transportStatus) {
+            changes.push({
+              field: `transportStatus (${date})`,
+              oldValue: daily.transportStatus || null,
+              newValue: transportStatus
+            });
+            daily.transportStatus = transportStatus;
+            daily.transportStatusUpdatedBy = user._id;
+            daily.transportStatusUpdatedAt = new Date();
+          }
+        }
+
+        if (departmentStatus) {
+          const canUpdateDepartmentStatus =
+            user.accountType === "superAdmin" ||
+            user.accountType === "HR" ||
+            user.department === employee.department ||
+            employee.teamLeader === user.username;
+
+          if (!canUpdateDepartmentStatus) {
+            failed.push({ employeeId, message: "You don't have permission to update department status for this employee" });
+            continue;
+          }
+
+          if (daily.departmentStatus !== departmentStatus) {
+            changes.push({
+              field: `departmentStatus (${date})`,
+              oldValue: daily.departmentStatus || null,
+              newValue: departmentStatus
+            });
+            daily.departmentStatus = departmentStatus;
+            daily.departmentStatusUpdatedBy = user._id;
+            daily.departmentStatusUpdatedAt = new Date();
+          }
+        }
+
+        if (newArrival) {
+          const canUpdateTransportArrival =
+            user.department === "Transport" || user.accountType === "superAdmin" || user.accountType === "HR";
+
+          const canUpdateDepartmentArrival =
+            user.accountType === "superAdmin" ||
+            user.accountType === "HR" ||
+            user.department === employee.department ||
+            employee.teamLeader === user.username;
+
+          if (!canUpdateTransportArrival && !canUpdateDepartmentArrival) {
+            failed.push({ employeeId, message: "You don't have permission to update arrival time for this employee" });
+            continue;
+          }
+
+          if (canUpdateTransportArrival) {
+            const old = daily.transportArrivalTime || null;
+            if (!daily.transportArrivalTime || daily.transportArrivalTime.getTime() !== newArrival.getTime()) {
+              changes.push({
+                field: `transportArrivalTime (${date})`,
+                oldValue: old,
+                newValue: newArrival
+              });
+              daily.transportArrivalTime = newArrival;
+              daily.transportUpdatedBy = user._id;
+              daily.transportUpdatedAt = new Date();
+            }
+          }
+
+          if (canUpdateDepartmentArrival) {
+            const old = daily.departmentArrivalTime || null;
+            if (!daily.departmentArrivalTime || daily.departmentArrivalTime.getTime() !== newArrival.getTime()) {
+              changes.push({
+                field: `departmentArrivalTime (${date})`,
+                oldValue: old,
+                newValue: newArrival
+              });
+              daily.departmentArrivalTime = newArrival;
+              daily.departmentUpdatedBy = user._id;
+              daily.departmentUpdatedAt = new Date();
+            }
+          }
+        }
+
+        if (changes.length > 0) {
+          roster.editHistory.push({
+            editedBy: user._id,
+            editedByName: user.username,
+            accountType: user.accountType,
+            actionType: "bulk-update",
+            weekNumber: parsedWeekNumber,
+            employeeId: employee._id,
+            employeeName: employee.name,
+            changes
+          });
+        }
+
+        employee.markModified("dailyStatus");
+        results.push({ employeeId: employee._id, data: daily });
+      } catch (err) {
+        failed.push({ employeeId, message: err.message || "Failed to update employee" });
+      }
+    }
+
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Bulk attendance updated successfully",
+      updatedCount: results.length,
+      failedCount: failed.length,
+      results,
+      failed
+    });
+  } catch (error) {
+    console.error("Bulk Attendance Update Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+
 // export const updateAttendance = async (req, res) => {
 //   try {
 //     const { 
@@ -6671,6 +6998,8 @@ export const getFilteredRosterForUpdates = async (req, res) => {
   try {
     const { rosterId, weekNumber, date } = req.params;
     const user = req.user;
+    const rawPage = req.query?.page;
+    const rawLimit = req.query?.limit;
 
     console.log("📡 Fetching updates for:", { 
       rosterId, 
@@ -6763,7 +7092,26 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     }
 
     // 🔥 FIXED: Format employees with ALL status and arrival time data
-    const formattedRosterEntries = filteredEmployees.map(emp => ({
+    const totalEmployees = filteredEmployees.length;
+
+    // Pagination (optional; backward compatible when not provided)
+    let page = Number.parseInt(rawPage, 10);
+    let limit = Number.parseInt(rawLimit, 10);
+
+    if (Number.isNaN(page) || page < 1) page = 1;
+    if (Number.isNaN(limit) || limit < 0) limit = 0;
+
+    const MAX_LIMIT = 200;
+    if (limit > MAX_LIMIT) limit = MAX_LIMIT;
+
+    const totalPages = limit > 0 ? Math.max(1, Math.ceil(totalEmployees / limit)) : 1;
+    if (page > totalPages) page = totalPages;
+
+    const startIndex = limit > 0 ? (page - 1) * limit : 0;
+    const endIndexExclusive = limit > 0 ? startIndex + limit : totalEmployees;
+    const pagedEmployees = limit > 0 ? filteredEmployees.slice(startIndex, endIndexExclusive) : filteredEmployees;
+
+    const formattedRosterEntries = pagedEmployees.map(emp => ({
       _id: emp._id,
       userId: emp.userId,
       name: emp.name || 'Unknown',
@@ -6835,7 +7183,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     }
 
     // Get unique departments
-    const departments = [...new Set(formattedRosterEntries.map(e => e.department).filter(Boolean))];
+	    const departments = [...new Set(filteredEmployees.map(e => e?.department).filter(Boolean))];
 
     const response = {
       success: true,
@@ -6847,19 +7195,28 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         startDate: week.startDate,
         endDate: week.endDate,
         currentDate: currentDate,
-        canEdit: canEdit,
-        editMessage: editMessage,
-        rosterEntries: formattedRosterEntries,
-        weeks: weeksForDropdown,
-        summary: {
-          totalEmployees: formattedRosterEntries.length,
-          teamLeader: user.username,
-          departments: departments,
-          currentUser: user.username,
-          userDepartment: user.department,
-          teamSize: formattedRosterEntries.length,
-          hasTeam: formattedRosterEntries.length > 0
-        }
+	        canEdit: canEdit,
+	        editMessage: editMessage,
+	        rosterEntries: formattedRosterEntries,
+	        pagination: {
+	          page,
+	          limit: limit > 0 ? limit : totalEmployees,
+	          totalEmployees,
+	          totalPages,
+	          hasPrevPage: page > 1,
+	          hasNextPage: page < totalPages,
+	          returnedEmployees: formattedRosterEntries.length
+	        },
+	        weeks: weeksForDropdown,
+	        summary: {
+	          totalEmployees: totalEmployees,
+	          teamLeader: user.username,
+	          departments: departments,
+	          currentUser: user.username,
+	          userDepartment: user.department,
+	          teamSize: totalEmployees,
+	          hasTeam: totalEmployees > 0
+	        }
       }
     };
     console.log("📤 Sending response with", formattedRosterEntries.length, "employees");

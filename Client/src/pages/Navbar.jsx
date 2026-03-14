@@ -423,12 +423,11 @@
 
 
 
-
 import React, { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { useNavigate } from "react-router-dom";
-import { Menu, X, AlertCircle, Clock } from "lucide-react";
+import { Menu, X, AlertCircle, Clock, Camera } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 
 const Navbar = () => {
@@ -445,6 +444,9 @@ const Navbar = () => {
     navigate("/login");
   };
 
+  // ✅ Check if user is from Transport department
+  const isTransportDepartment = user?.department === "Transport";
+
   // ✅ Attendance Update Permission
   const allowedAttendanceDepartments = ["Ops - Meta", "Transport"];
 
@@ -452,6 +454,9 @@ const Navbar = () => {
     (user?.accountType === "employee" &&
       allowedAttendanceDepartments.includes(user?.department)) ||
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
+
+  // ✅ Attendance Snapshot Permission - 
+  const canAccessAttendanceSnapshot = true; 
 
   // ✅ Roster Permission
   const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
@@ -484,14 +489,18 @@ const Navbar = () => {
 
             {/* ================= DESKTOP MENU ================= */}
             <div className="hidden md:flex items-center gap-6">
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full hover:bg-sky-50"
-              >
-                Today
-              </button>
+              {/* Today Button -  */}
+              {!isTransportDepartment && (
+                <button
+                  onClick={() => navigate("/dashboard")}
+                  className="bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full hover:bg-sky-50"
+                >
+                  Today
+                </button>
+              )}
 
-              {isEmployee && (
+              {/* My Defaulters Button - */}
+              {isEmployee && !isTransportDepartment && (
                 <button
                   onClick={() => navigate("/my-defaults")}
                   className="flex items-center gap-2 bg-red-50 border border-red-200 px-4 py-2 rounded-lg text-red-700 hover:bg-red-100"
@@ -519,7 +528,7 @@ const Navbar = () => {
                 </button>
               )}
 
-              {/* ✅ NEW: Attendance Update Button */}
+              {/* ✅ Attendance Update Button */}
               {canAccessAttendanceUpdate && (
                 <button
                   onClick={() => navigate("/attendance-update")}
@@ -527,6 +536,17 @@ const Navbar = () => {
                 >
                   <Clock className="w-4 h-4" />
                   Attendance Update
+                </button>
+              )}
+
+              {/* ✅ NEW: Attendance Snapshot Button - */}
+              {canAccessAttendanceSnapshot && (
+                <button
+                  onClick={() => navigate("/attendance-snapshot")}
+                  className="flex items-center gap-2 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-full text-purple-700 hover:bg-purple-100"
+                >
+                  <Camera className="w-4 h-4" />
+                  Attendance Snapshot
                 </button>
               )}
 
@@ -567,16 +587,33 @@ const Navbar = () => {
           {/* ================= MOBILE MENU ================= */}
           {isMenuOpen && (
             <div className="md:hidden flex flex-col mt-3 space-y-2 border-t pt-3">
-              <button
-                onClick={() => {
-                  navigate("/dashboard");
-                  setIsMenuOpen(false);
-                }}
-                className="mx-3 px-3 py-2 bg-gray-50 rounded-full"
-              >
-                Today
-              </button>
+              {/* Today Button -  */}
+              {!isTransportDepartment && (
+                <button
+                  onClick={() => {
+                    navigate("/dashboard");
+                    setIsMenuOpen(false);
+                  }}
+                  className="mx-3 px-3 py-2 bg-gray-50 rounded-full"
+                >
+                  Today
+                </button>
+              )}
 
+              {/* My Defaulters Button - */}
+              {isEmployee && !isTransportDepartment && (
+                <button
+                  onClick={() => {
+                    navigate("/my-defaults");
+                    setIsMenuOpen(false);
+                  }}
+                  className="mx-3 px-3 py-2 bg-red-50 text-red-700 rounded-full"
+                >
+                  My Defaulters
+                </button>
+              )}
+
+              {/* Attendance Update Button - Mobile */}
               {canAccessAttendanceUpdate && (
                 <button
                   onClick={() => {
@@ -586,6 +623,19 @@ const Navbar = () => {
                   className="mx-3 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-full"
                 >
                   Attendance Update
+                </button>
+              )}
+
+              {/* Attendance Snapshot Button - */}
+              {canAccessAttendanceSnapshot && (
+                <button
+                  onClick={() => {
+                    navigate("/attendance-snapshot");
+                    setIsMenuOpen(false);
+                  }}
+                  className="mx-3 px-3 py-2 bg-purple-50 text-purple-700 rounded-full"
+                >
+                  Attendance Snapshot
                 </button>
               )}
 
@@ -609,3 +659,199 @@ const Navbar = () => {
 };
 
 export default Navbar;
+
+// upper is by farhan from 2nd start of code 
+
+
+
+
+
+
+
+
+
+// import React, { useState } from "react";
+// import { useDispatch, useSelector } from "react-redux";
+// import { logoutUser } from "../features/slices/authSlice.js";
+// import { useNavigate } from "react-router-dom";
+// import { Menu, X, AlertCircle, Clock } from "lucide-react";
+// import toast, { Toaster } from "react-hot-toast";
+
+// const Navbar = () => {
+//   const { user } = useSelector((state) => state.auth);
+//   const dispatch = useDispatch();
+//   const navigate = useNavigate();
+
+//   const [isMenuOpen, setIsMenuOpen] = useState(false);
+//   const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+//   const handleLogout = async () => {
+//     await dispatch(logoutUser());
+//     toast.success("Logged out successfully!");
+//     navigate("/login");
+//   };
+
+//   // ✅ Attendance Update Permission
+//   const allowedAttendanceDepartments = ["Ops - Meta", "Transport"];
+
+//   const canAccessAttendanceUpdate =
+//     (user?.accountType === "employee" &&
+//       allowedAttendanceDepartments.includes(user?.department)) ||
+//     ["admin", "superAdmin", "HR"].includes(user?.accountType);
+
+//   // ✅ Roster Permission
+//   const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
+
+//   const isAllowedRosterDepartmentEmployee =
+//     user?.accountType === "employee" &&
+//     allowedRosterDepartments.includes(user?.department);
+
+//   const canUploadExcel =
+//     (user?.accountType === "employee" &&
+//       allowedRosterDepartments.includes(user?.department)) ||
+//     ["admin", "superAdmin", "HR"].includes(user?.accountType);
+
+//   const isEmployee = user?.accountType === "employee";
+
+//   return (
+//     <>
+//       <Toaster position="top-right" />
+//       <div className="fixed top-0 left-0 right-0 z-50">
+//         <div className="h-1 bg-gradient-to-r from-sky-400 via-sky-500 to-sky-600" />
+
+//         <nav className="bg-white border-b border-[#EAEAEA] px-4 sm:px-6 py-3 shadow-sm">
+//           <div className="max-w-7xl mx-auto flex items-center justify-between">
+//             <h1
+//               className="text-xl font-bold text-sky-600 cursor-pointer"
+//               onClick={() => navigate("/dashboard")}
+//             >
+//               Work Queue
+//             </h1>
+
+//             {/* ================= DESKTOP MENU ================= */}
+//             <div className="hidden md:flex items-center gap-6">
+//               <button
+//                 onClick={() => navigate("/dashboard")}
+//                 className="bg-gray-50 border border-[#EAEAEA] px-3 py-1.5 rounded-full hover:bg-sky-50"
+//               >
+//                 Today
+//               </button>
+
+//               {isEmployee && (
+//                 <button
+//                   onClick={() => navigate("/my-defaults")}
+//                   className="flex items-center gap-2 bg-red-50 border border-red-200 px-4 py-2 rounded-lg text-red-700 hover:bg-red-100"
+//                 >
+//                   <AlertCircle className="w-4 h-4" />
+//                   My Defaulters
+//                 </button>
+//               )}
+
+//               {canUploadExcel && (
+//                 <button
+//                   onClick={() => navigate("/upload-roster")}
+//                   className="bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-full text-emerald-700 hover:bg-emerald-100"
+//                 >
+//                   Upload Roster
+//                 </button>
+//               )}
+
+//               {isAllowedRosterDepartmentEmployee && (
+//                 <button
+//                   onClick={() => navigate("/ops-meta-roster")}
+//                   className="bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-full text-amber-700 hover:bg-amber-100"
+//                 >
+//                   Ops-Meta Roster
+//                 </button>
+//               )}
+
+//               {/* ✅ NEW: Attendance Update Button */}
+//               {canAccessAttendanceUpdate && (
+//                 <button
+//                   onClick={() => navigate("/attendance-update")}
+//                   className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-3 py-1.5 rounded-full text-indigo-700 hover:bg-indigo-100"
+//                 >
+//                   <Clock className="w-4 h-4" />
+//                   Attendance Update
+//                 </button>
+//               )}
+
+//               {/* Profile */}
+//               <div className="relative">
+//                 <button
+//                   onClick={() => setShowProfileMenu((prev) => !prev)}
+//                   className="flex items-center gap-2 bg-gray-50 border px-3 py-1.5 rounded-full"
+//                 >
+//                   <div className="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 font-semibold text-sm">
+//                     {user?.username?.charAt(0)?.toUpperCase() || "U"}
+//                   </div>
+//                   {user?.username}
+//                 </button>
+
+//                 {showProfileMenu && (
+//                   <div className="absolute right-0 mt-2 w-48 bg-white border rounded-lg shadow-md py-2">
+//                     <button
+//                       onClick={handleLogout}
+//                       className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50"
+//                     >
+//                       Logout
+//                     </button>
+//                   </div>
+//                 )}
+//               </div>
+//             </div>
+
+//             {/* Mobile Toggle */}
+//             <button
+//               className="md:hidden"
+//               onClick={() => setIsMenuOpen(!isMenuOpen)}
+//             >
+//               {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+//             </button>
+//           </div>
+
+//           {/* ================= MOBILE MENU ================= */}
+//           {isMenuOpen && (
+//             <div className="md:hidden flex flex-col mt-3 space-y-2 border-t pt-3">
+//               <button
+//                 onClick={() => {
+//                   navigate("/dashboard");
+//                   setIsMenuOpen(false);
+//                 }}
+//                 className="mx-3 px-3 py-2 bg-gray-50 rounded-full"
+//               >
+//                 Today
+//               </button>
+
+//               {canAccessAttendanceUpdate && (
+//                 <button
+//                   onClick={() => {
+//                     navigate("/attendance-update");
+//                     setIsMenuOpen(false);
+//                   }}
+//                   className="mx-3 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-full"
+//                 >
+//                   Attendance Update
+//                 </button>
+//               )}
+
+//               <button
+//                 onClick={() => {
+//                   handleLogout();
+//                   setIsMenuOpen(false);
+//                 }}
+//                 className="mx-3 px-3 py-2 text-red-600"
+//               >
+//                 Logout ({user?.username})
+//               </button>
+//             </div>
+//           )}
+//         </nav>
+//       </div>
+
+//       <div className="pt-[88px]" />
+//     </>
+//   );
+// };
+
+// export default Navbar;
