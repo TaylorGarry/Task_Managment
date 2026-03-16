@@ -134,36 +134,31 @@ const MyDefaults = () => {
   ];
 
   // ✅ FIXED: Extract tasks from the correct path in the response
-  const tasks = useMemo(() => {
-    if (!employeeMyDefaults) return [];
-    
-    // Check if data exists and is an array (this is your actual response structure)
-    if (employeeMyDefaults.data && Array.isArray(employeeMyDefaults.data)) {
-      console.log("✅ Using employeeMyDefaults.data array:", employeeMyDefaults.data.length);
-      return employeeMyDefaults.data;
-    }
+	  const tasks = useMemo(() => {
+	    if (!employeeMyDefaults) return [];
+	    
+	    // Check if data exists and is an array (this is your actual response structure)
+	    if (employeeMyDefaults.data && Array.isArray(employeeMyDefaults.data)) {
+	      return employeeMyDefaults.data;
+	    }
     
     // Check if tasks array exists
-    if (employeeMyDefaults.tasks && Array.isArray(employeeMyDefaults.tasks)) {
-      console.log("✅ Using employeeMyDefaults.tasks array:", employeeMyDefaults.tasks.length);
-      return employeeMyDefaults.tasks;
-    }
+	    if (employeeMyDefaults.tasks && Array.isArray(employeeMyDefaults.tasks)) {
+	      return employeeMyDefaults.tasks;
+	    }
     
     // Check nested data structure
-    if (employeeMyDefaults.data?.tasks && Array.isArray(employeeMyDefaults.data.tasks)) {
-      console.log("✅ Using employeeMyDefaults.data.tasks array:", employeeMyDefaults.data.tasks.length);
-      return employeeMyDefaults.data.tasks;
-    }
+	    if (employeeMyDefaults.data?.tasks && Array.isArray(employeeMyDefaults.data.tasks)) {
+	      return employeeMyDefaults.data.tasks;
+	    }
     
     // Check if the response itself is an array
-    if (Array.isArray(employeeMyDefaults)) {
-      console.log("✅ employeeMyDefaults is array:", employeeMyDefaults.length);
-      return employeeMyDefaults;
-    }
-    
-    console.log("❌ No tasks array found in:", employeeMyDefaults);
-    return [];
-  }, [employeeMyDefaults]);
+	    if (Array.isArray(employeeMyDefaults)) {
+	      return employeeMyDefaults;
+	    }
+	    
+	    return [];
+	  }, [employeeMyDefaults]);
 
   // Extract pagination from the response
   const pagination = useMemo(() => {
@@ -236,23 +231,8 @@ const MyDefaults = () => {
     };
   }, [tasks, employeeMyDefaults]);
 
-  // DEBUG: Log raw API response
-  useEffect(() => {
-    if (employeeMyDefaults) {
-      console.log("🔍 RAW API RESPONSE:", employeeMyDefaults);
-      console.log("📋 TASKS COUNT:", tasks.length);
-      console.log("📋 FIRST TASK:", tasks[0]);
-      
-      // Log date format for first task
-      if (tasks[0]?.date) {
-        console.log("📅 FIRST TASK DATE RAW:", tasks[0].date);
-        console.log("📅 FIRST TASK DATE FORMATTED:", formatDate(tasks[0].date));
-      }
-    }
-  }, [employeeMyDefaults, tasks]);
-
-  // Chart data processing
-  const chartData = useMemo(() => {
+	  // Chart data processing
+	  const chartData = useMemo(() => {
     // Group tasks by date
     const tasksByDate = {};
     tasks.forEach(task => {

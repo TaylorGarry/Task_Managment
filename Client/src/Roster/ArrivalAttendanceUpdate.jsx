@@ -853,6 +853,20 @@ const getLocalDateKey = (d = new Date()) => {
   return new Date(date.getTime() - tzOffsetMs).toISOString().split("T")[0];
 };
 
+const toLocalDateKey = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  return getLocalDateKey(new Date(value));
+};
+
+const toUtcDateKey = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+};
+
 const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const dispatch = useDispatch();
   const currentUser = getCurrentUser();
@@ -865,13 +879,16 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateKey());
 		  const [selectedWeek, setSelectedWeek] = useState("");
 		  const [currentPage, setCurrentPage] = useState(1);
-		  const [pageSize, setPageSize] = useState(25);
-		  const [tableTheme, setTableTheme] = useState("dark"); // "dark" | "light"
-		  const [updates, setUpdates] = useState({});
-  const [updatingId, setUpdatingId] = useState(null);
-	  const [viewType, setViewType] = useState({});
-	  const [availableWeeks, setAvailableWeeks] = useState([]);
-	  const [weekInfo, setWeekInfo] = useState(null);
+			  const [pageSize, setPageSize] = useState(25);
+			  const [tableTheme, setTableTheme] = useState("dark"); // "dark" | "light"
+			  const [updates, setUpdates] = useState({});
+	  const [searchBy, setSearchBy] = useState("all"); // all | name | department | teamLeader
+	  const [searchInput, setSearchInput] = useState("");
+	  const [appliedSearch, setAppliedSearch] = useState("");
+	  const [updatingId, setUpdatingId] = useState(null);
+		  const [viewType, setViewType] = useState({});
+		  const [availableWeeks, setAvailableWeeks] = useState([]);
+		  const [weekInfo, setWeekInfo] = useState(null);
 	  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
 	  const [bulkUpdate, setBulkUpdate] = useState({
 	    transportStatus: "",
@@ -927,18 +944,41 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     }
   }, [rosterId]);
 
-  // Fetch employees when rosterId, week, or date changes
-	  useEffect(() => {
-	    if (rosterId && selectedWeek && selectedDate) {
-	      dispatch(getEmployeesForUpdates({
-	        rosterId,
-	        weekNumber: parseInt(selectedWeek),
-	        date: selectedDate,
-	        page: currentPage,
-	        limit: pageSize
-	      }));
-	    }
-	  }, [dispatch, rosterId, selectedWeek, selectedDate, currentPage, pageSize]);
+	  // Fetch employees when rosterId, week, or date changes
+		  useEffect(() => {
+		    if (rosterId && selectedWeek && selectedDate) {
+		      const weekNumber = parseInt(selectedWeek);
+			      const currentData = updateEmployeesData?.data;
+			      const currentPagination = currentData?.pagination;
+			      const currentLimit =
+			        currentPagination?.limit ?? currentPagination?.pageSize ?? currentPagination?.perPage;
+			      const currentDateKeyRaw = currentData?.requestedDate ?? currentData?.date ?? null;
+			      const currentDateKey = currentDateKeyRaw ? toLocalDateKey(currentDateKeyRaw) : null;
+			      const requestedDateKey = toLocalDateKey(selectedDate);
+
+			      const isSameRequest =
+			        currentData &&
+			        String(currentData.rosterId) === String(rosterId) &&
+			        String(currentData.weekNumber) === String(weekNumber) &&
+			        (!currentDateKey || currentDateKey === requestedDateKey) &&
+			        String(currentData.q || "") === String(appliedSearch || "") &&
+			        String(currentData.searchBy || "all") === String(searchBy || "all") &&
+			        (currentPagination?.page == null || Number(currentPagination.page) === Number(currentPage)) &&
+			        (currentLimit == null || Number(currentLimit) === Number(pageSize));
+
+		      if (isSameRequest) return;
+
+			      dispatch(getEmployeesForUpdates({
+			        rosterId,
+			        weekNumber,
+			        date: selectedDate,
+			        page: currentPage,
+			        limit: pageSize,
+			        q: appliedSearch,
+			        searchBy
+			      }));
+			    }
+			  }, [dispatch, rosterId, selectedWeek, selectedDate, currentPage, pageSize, appliedSearch, searchBy]);
 
   // Process the response data
   useEffect(() => {
@@ -973,15 +1013,27 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 		  const rangeStart = totalEmployees === 0 ? 0 : (currentPage - 1) * pageSize + 1;
 		  const rangeEnd = Math.min(currentPage * pageSize, totalEmployees);
 
-		  useEffect(() => {
-		    if (pagination?.page && pagination.page !== currentPage) {
-		      setCurrentPage(pagination.page);
-		    }
-		  }, [pagination?.page, currentPage]);
+			  useEffect(() => {
+			    if (pagination?.page != null) {
+			      const nextPage = Number(pagination.page);
+			      setCurrentPage((prev) => (Number(prev) === nextPage ? prev : nextPage));
+			    }
+			  }, [pagination?.page]);
 
-	  useEffect(() => {
-	    setSelectedEmployeeIds([]);
-	  }, [rosterId, selectedWeek, selectedDate]);
+		  useEffect(() => {
+		    setSelectedEmployeeIds([]);
+		  }, [rosterId, selectedWeek, selectedDate]);
+
+		  useEffect(() => {
+		    const t = setTimeout(() => {
+		      setAppliedSearch(String(searchInput || "").trim());
+		    }, 350);
+		    return () => clearTimeout(t);
+		  }, [searchInput]);
+
+		  useEffect(() => {
+		    setCurrentPage(1);
+		  }, [appliedSearch, searchBy]);
 
 	  useEffect(() => {
 	    const currentIds = new Set(rosterEntries.map((e) => String(e._id)));
@@ -1052,15 +1104,17 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const refetchEmployees = () => {
     if (!rosterId || !selectedWeek || !selectedDate) return;
     dispatch(
-      getEmployeesForUpdates({
-        rosterId,
-        weekNumber: parseInt(selectedWeek),
-        date: selectedDate,
-        page: currentPage,
-        limit: pageSize,
-      })
-    );
-  };
+	      getEmployeesForUpdates({
+	        rosterId,
+	        weekNumber: parseInt(selectedWeek),
+	        date: selectedDate,
+	        page: currentPage,
+	        limit: pageSize,
+	        q: appliedSearch,
+	        searchBy,
+	      })
+	    );
+	  };
 
   const handleTransportArrivalUpdate = async (employee) => {
     const employeeUpdate = updates[employee._id];
@@ -1193,42 +1247,172 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   // Get today's status for an employee with all fields
   const getTodayStatus = (employee) => {
     if (!employee?.dailyStatus) return null;
-    
-    return employee.dailyStatus.find(
-      d => new Date(d.date).toDateString() === new Date(selectedDate).toDateString()
-    );
+
+    const selectedKey = toLocalDateKey(selectedDate);
+    if (!selectedKey) return null;
+
+    return employee.dailyStatus.find((d) => {
+      const localKey = toLocalDateKey(d?.date);
+      const utcKey = toUtcDateKey(d?.date);
+      return localKey === selectedKey || utcKey === selectedKey;
+    });
   };
 
-  // Format time for input field (HH:MM)
-  const formatTimeForInput = (dateString) => {
-    if (!dateString) return '';
-    try {
-      const date = new Date(dateString);
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-    } catch (e) {
-      return '';
-    }
-  };
+	  // Format time for input field (HH:MM)
+			  const formatTimeForInput = (dateString) => {
+			    if (!dateString) return '';
+			    const IST_TIME_ZONE = "Asia/Kolkata";
 
-  // Format time for display (HH:MM:SS AM/PM)
-	  const formatTimeForDisplay = (dateString) => {
-	    if (!dateString) return '--:-- --';
-	    try {
-	      return new Date(dateString).toLocaleTimeString();
+			    const pad2 = (n) => String(n).padStart(2, "0");
+
+			    const formatTimeOnlyToHM = (hours, minutes) => `${pad2(hours)}:${pad2(minutes)}`;
+
+			    const getISTTimeParts = (dt) => {
+			      const parts = new Intl.DateTimeFormat("en-GB", {
+			        timeZone: IST_TIME_ZONE,
+			        hour: "2-digit",
+			        minute: "2-digit",
+			        hour12: false,
+			      }).formatToParts(dt);
+			      const hour = parts.find((p) => p.type === "hour")?.value;
+			      const minute = parts.find((p) => p.type === "minute")?.value;
+			      if (!hour || !minute) return null;
+			      return { hour, minute };
+			    };
+
+			    const getISTDateKeyFromDate = (dt) => {
+			      const parts = new Intl.DateTimeFormat("en-GB", {
+			        timeZone: IST_TIME_ZONE,
+			        year: "numeric",
+			        month: "2-digit",
+			        day: "2-digit",
+			      }).formatToParts(dt);
+			      const year = parts.find((p) => p.type === "year")?.value;
+			      const month = parts.find((p) => p.type === "month")?.value;
+			      const day = parts.find((p) => p.type === "day")?.value;
+			      if (!year || !month || !day) return null;
+			      return `${year}-${month}-${day}`;
+			    };
+
+			    if (typeof dateString === "string") {
+			      const timeOnly = dateString.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+			      if (timeOnly) {
+			        return formatTimeOnlyToHM(Number(timeOnly[1]), Number(timeOnly[2]));
+			      }
+			      if (dateString.includes("T")) {
+			        const hasTz = /[zZ]$/.test(dateString) || /[+-]\d{2}:\d{2}$/.test(dateString);
+			        if (hasTz) {
+			          const dt = new Date(dateString);
+			          if (!Number.isNaN(dt.getTime())) {
+			            const expectedKey = selectedDate; // roster day key (treat as IST day)
+			            const actualKey = getISTDateKeyFromDate(dt);
+			            if (expectedKey && actualKey && expectedKey !== actualKey) {
+			              const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+			              if (isoTime) return `${isoTime[1]}:${isoTime[2]}`;
+			            }
+			            const istParts = getISTTimeParts(dt);
+			            if (istParts) return `${istParts.hour}:${istParts.minute}`;
+			          }
+			        }
+
+			        const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+			        if (isoTime) return `${isoTime[1]}:${isoTime[2]}`;
+			      }
+			    }
+			    try {
+			      const date = new Date(dateString);
+			      if (Number.isNaN(date.getTime())) return "";
+			      const istParts = getISTTimeParts(date);
+			      if (istParts) return `${istParts.hour}:${istParts.minute}`;
+			      return "";
 	    } catch (e) {
-	      return '--:-- --';
+	      return '';
 	    }
 	  };
 
-	  const formatShift = (startHour, endHour) => {
-	    const start = Number.parseInt(startHour, 10);
-	    const end = Number.parseInt(endHour, 10);
-	    if (Number.isNaN(start) || Number.isNaN(end)) return "-";
-	    if (start === 0 && end === 0) return "-";
-	    return `${start}:00 - ${end}:00`;
-	  };
+		  // Format time for display (HH:MM:SS AM/PM)
+				  const formatTimeForDisplay = (dateString) => {
+				    if (!dateString) return '--:-- --';
+				    const IST_TIME_ZONE = "Asia/Kolkata";
+
+				    const pad2 = (n) => String(n).padStart(2, "0");
+				    const formatTimeOnlyTo12h = (hours, minutes) => {
+				      const h = Number(hours);
+				      const m = Number(minutes);
+				      if (Number.isNaN(h) || Number.isNaN(m)) return "--:-- --";
+				      const suffix = h >= 12 ? "PM" : "AM";
+				      const hour12 = h % 12 === 0 ? 12 : h % 12;
+				      return `${pad2(hour12)}:${pad2(m)} ${suffix}`;
+				    };
+
+				    const getISTDateKeyFromDate = (dt) => {
+				      const parts = new Intl.DateTimeFormat("en-GB", {
+				        timeZone: IST_TIME_ZONE,
+				        year: "numeric",
+				        month: "2-digit",
+				        day: "2-digit",
+				      }).formatToParts(dt);
+				      const year = parts.find((p) => p.type === "year")?.value;
+				      const month = parts.find((p) => p.type === "month")?.value;
+				      const day = parts.find((p) => p.type === "day")?.value;
+				      if (!year || !month || !day) return null;
+				      return `${year}-${month}-${day}`;
+				    };
+
+				    if (typeof dateString === "string") {
+				      const timeOnly = dateString.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+				      if (timeOnly) {
+				        return formatTimeOnlyTo12h(timeOnly[1], timeOnly[2]);
+				      }
+				      if (dateString.includes("T")) {
+				        const hasTz = /[zZ]$/.test(dateString) || /[+-]\d{2}:\d{2}$/.test(dateString);
+				        if (hasTz) {
+				          const dt = new Date(dateString);
+				          if (!Number.isNaN(dt.getTime())) {
+			            const expectedKey = selectedDate; // roster day key (treat as IST day)
+			            const actualKey = getISTDateKeyFromDate(dt);
+				            if (expectedKey && actualKey && expectedKey !== actualKey) {
+				              const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+				              if (isoTime) {
+				                return formatTimeOnlyTo12h(isoTime[1], isoTime[2]);
+				              }
+				            }
+				            return dt.toLocaleTimeString([], { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+				          }
+				        }
+
+				        const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+				        if (isoTime) {
+				          return formatTimeOnlyTo12h(isoTime[1], isoTime[2]);
+				        }
+				      }
+				    }
+				    try {
+				      const dt = new Date(dateString);
+				      if (Number.isNaN(dt.getTime())) return "--:-- --";
+				      return dt.toLocaleTimeString([], { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+				    } catch (e) {
+				      return '--:-- --';
+				    }
+				  };
+
+		  const formatShift = (startHour, endHour) => {
+		    const isEmpty = (v) => v === null || v === undefined || v === "";
+		    const toHour = (v) => {
+		      if (isEmpty(v)) return null;
+		      const n = Number.parseInt(String(v), 10);
+		      if (!Number.isFinite(n)) return null;
+		      return n;
+		    };
+
+		    const start = toHour(startHour);
+		    const end = toHour(endHour);
+		    if (start === null && end === null) return "-";
+
+		    const startLabel = start === null ? "??" : start;
+		    const endLabel = end === null ? "??" : end;
+		    return `${startLabel}:00 - ${endLabel}:00`;
+		  };
 
 	  const getStatusColor = (status) => {
 	    const option = STATUS_OPTIONS.find(opt => opt.value === status);
@@ -1292,13 +1476,15 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 	    setBulkUpdating(true);
 	    try {
 		      await dispatch(updateAttendanceBulk(payload)).unwrap();
-		      dispatch(getEmployeesForUpdates({
-		        rosterId,
-		        weekNumber: parseInt(selectedWeek),
-		        date: selectedDate,
-		        page: currentPage,
-		        limit: pageSize
-		      }));
+			      dispatch(getEmployeesForUpdates({
+			        rosterId,
+			        weekNumber: parseInt(selectedWeek),
+			        date: selectedDate,
+			        page: currentPage,
+			        limit: pageSize,
+			        q: appliedSearch,
+			        searchBy
+			      }));
 	      setSelectedEmployeeIds([]);
 	    } catch {
 	      // thunk toasts on failure
@@ -1354,23 +1540,23 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
           </div>
 
           {/* Week Info Banner */}
-          {weekInfo && (
-            <div className={`mt-4 p-3 rounded-lg ${
-              weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
-            }`}>
-              <p className="text-sm font-medium">
-                Week {weekInfo.weekNumber}: {new Date(weekInfo.startDate).toLocaleDateString()} - {new Date(weekInfo.endDate).toLocaleDateString()}
-              </p>
-              <p className="text-xs mt-1">{weekInfo.editMessage}</p>
-            </div>
-          )}
+	          {weekInfo && (
+	            <div className={`mt-4 p-3 rounded-lg ${
+	              weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
+	            }`}>
+	              <p className="text-sm font-medium">
+	                Week {weekInfo.weekNumber}: {new Date(weekInfo.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(weekInfo.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+	              </p>
+	              <p className="text-xs mt-1">{weekInfo.editMessage}</p>
+	            </div>
+	          )}
 
-          {/* Filters */}
-          <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Week
-              </label>
+	          {/* Filters */}
+	          <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
+	            <div>
+	              <label className="block text-sm font-medium text-gray-700 mb-1">
+	                Select Week
+	              </label>
 	              <select
 	                value={selectedWeek}
 	                onChange={(e) => {
@@ -1380,18 +1566,18 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 	                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
 	              >
                 <option value="">Choose a week</option>
-                {availableWeeks.map((week) => (
-                  <option key={week.weekNumber} value={week.weekNumber}>
-                    Week {week.weekNumber} ({new Date(week.startDate).toLocaleDateString()} - {new Date(week.endDate).toLocaleDateString()}) - {week.employeeCount || 0} employees
-                  </option>
-                ))}
+	                {availableWeeks.map((week) => (
+	                  <option key={week.weekNumber} value={week.weekNumber}>
+	                    Week {week.weekNumber} ({new Date(week.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(week.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}) - {week.employeeCount || 0} employees
+	                  </option>
+	                ))}
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Select Date
-              </label>
+	            <div>
+	              <label className="block text-sm font-medium text-gray-700 mb-1">
+	                Select Date
+	              </label>
 	              <input
 	                type="date"
 	                value={selectedDate}
@@ -1399,17 +1585,58 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 	                  setSelectedDate(e.target.value);
 	                  setCurrentPage(1);
 	                }}
-	                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
-	              />
-            </div>
+		                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+		              />
+	            </div>
 
-            <div className="bg-gray-50 rounded-lg p-3">
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold">Employees:</span> {rosterEntries.length}
-              </p>
-              <p className="text-sm text-gray-600 mt-1">
-                <span className="font-semibold">Department:</span> {currentUser.department}
-              </p>
+	            <div>
+	              <label className="block text-sm font-medium text-gray-700 mb-1">
+	                Search
+	              </label>
+	              <div className="flex gap-2">
+	                <select
+	                  value={searchBy}
+	                  onChange={(e) => setSearchBy(e.target.value)}
+	                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+	                  title="Search by"
+	                >
+	                  <option value="all">All</option>
+	                  <option value="name">Name</option>
+	                  <option value="department">Department</option>
+	                  <option value="teamLeader">Team Leader</option>
+	                </select>
+	                <div className="flex-1 relative">
+	                  <input
+	                    value={searchInput}
+	                    onChange={(e) => setSearchInput(e.target.value)}
+	                    placeholder="Type to search…"
+	                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+	                  />
+	                  {searchInput ? (
+	                    <button
+	                      type="button"
+	                      onClick={() => setSearchInput("")}
+	                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-800"
+	                    >
+	                      Clear
+	                    </button>
+	                  ) : null}
+	                </div>
+	              </div>
+	            </div>
+
+	            <div className="bg-gray-50 rounded-lg p-3">
+	              <p className="text-sm text-gray-600">
+	                <span className="font-semibold">Employees:</span> {totalEmployees}
+	              </p>
+	              {appliedSearch ? (
+	                <p className="text-xs text-gray-500 mt-1">
+	                  Showing results for: <span className="font-medium">{appliedSearch}</span>
+	                </p>
+	              ) : null}
+	              <p className="text-sm text-gray-600 mt-1">
+	                <span className="font-semibold">Department:</span> {currentUser.department}
+	              </p>
               <p className="text-sm text-gray-600 mt-1">
                 <span className="font-semibold">Team Leader:</span> {currentUser.username}
               </p>
@@ -1418,15 +1645,18 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         </div>
 
         {/* Employees Table */}
-        {loading ? (
-          <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading employees...</p>
-          </div>
-	        ) : rosterEntries.length > 0 ? (
-	          <div className="space-y-4">
-	            {/* Bulk Update */}
-	            <div className="bg-white rounded-lg shadow p-4">
+	        {loading && rosterEntries.length === 0 ? (
+	          <div className="bg-white rounded-lg shadow p-8 text-center">
+	            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+	            <p className="mt-4 text-gray-600">Loading employees...</p>
+	          </div>
+		        ) : rosterEntries.length > 0 ? (
+		          <div className="space-y-4">
+		            {loading && (
+		              <div className="text-xs text-gray-500 px-1">Loading…</div>
+		            )}
+		            {/* Bulk Update */}
+		            <div className="bg-white rounded-lg shadow p-4">
 	              <div className="flex flex-wrap items-end gap-4">
 	                <div className="text-sm text-gray-700">
 	                  <span className="font-semibold">Selected:</span> {selectedEmployeeIds.length}
@@ -1645,7 +1875,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                             if (todayStatus?.transportArrivalTime && todayStatus.transportUpdatedAt) {
                               updates.push({
                                 type: 'Transport Arrival',
-                                value: new Date(todayStatus.transportArrivalTime).toLocaleTimeString(),
+	                                value: formatTimeForDisplay(todayStatus.transportArrivalTime),
                                 time: new Date(todayStatus.transportUpdatedAt).getTime(),
                                 icon: '🚌',
                                 color: 'text-blue-600'
@@ -1655,7 +1885,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                             if (todayStatus?.departmentArrivalTime && todayStatus.departmentUpdatedAt) {
                               updates.push({
                                 type: 'Dept Arrival',
-                                value: new Date(todayStatus.departmentArrivalTime).toLocaleTimeString(),
+	                                value: formatTimeForDisplay(todayStatus.departmentArrivalTime),
                                 time: new Date(todayStatus.departmentUpdatedAt).getTime(),
                                 icon: '👥',
                                 color: 'text-green-600'
@@ -1759,20 +1989,20 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                           {/* Transport Status Update - WITH EXISTING VALUE */}
                           {canUpdateTransport && (
                             <div className="flex flex-col gap-1 mb-2">
-                              <select
-                                value={
-                                  employeeUpdate.transportStatus !== undefined 
-                                    ? employeeUpdate.transportStatus 
-                                    : (todayStatus?.transportStatus || '')
-                                }
-                                onChange={(e) => handleTransportStatusChange(employee._id, e.target.value)}
-                                disabled={isUpdating}
-                                className="w-32 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
-                              >
-                                <option value="">Transport Attendance</option>
-                                {STATUS_OPTIONS.map(option => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
+	                              <select
+	                                value={
+	                                  employeeUpdate.transportStatus !== undefined 
+	                                    ? employeeUpdate.transportStatus 
+	                                    : (todayStatus?.transportStatus || '')
+	                                }
+	                                onChange={(e) => handleTransportStatusChange(employee._id, e.target.value)}
+	                                disabled={isUpdating}
+	                                className={isDarkTable ? "w-32 bg-neutral-950 text-neutral-200 border border-neutral-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" : "w-32 bg-white text-gray-900 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"}
+	                              >
+	                                <option value="">Transport Attendance</option>
+	                                {STATUS_OPTIONS.map(option => (
+	                                  <option key={option.value} value={option.value}>
+	                                    {option.label}
                                   </option>
                                 ))}
                               </select>
@@ -1797,20 +2027,20 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                           {/* Department Status Update - WITH EXISTING VALUE */}
                           {canUpdateDepartment && (
                             <div className="flex flex-col gap-1 mb-2">
-                              <select
-                                value={
-                                  employeeUpdate.departmentStatus !== undefined 
-                                    ? employeeUpdate.departmentStatus 
-                                    : (todayStatus?.departmentStatus || '')
-                                }
-                                onChange={(e) => handleDepartmentStatusChange(employee._id, e.target.value)}
-                                disabled={isUpdating}
-                                className="w-32 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"
-                              >
-                                <option value="">Dept ATTENDANCE</option>
-                                {STATUS_OPTIONS.map(option => (
-                                  <option key={option.value} value={option.value}>
-                                    {option.label}
+	                              <select
+	                                value={
+	                                  employeeUpdate.departmentStatus !== undefined 
+	                                    ? employeeUpdate.departmentStatus 
+	                                    : (todayStatus?.departmentStatus || '')
+	                                }
+	                                onChange={(e) => handleDepartmentStatusChange(employee._id, e.target.value)}
+	                                disabled={isUpdating}
+	                                className={isDarkTable ? "w-32 bg-neutral-950 text-neutral-200 border border-neutral-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500" : "w-32 bg-white text-gray-900 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"}
+	                              >
+	                                <option value="">Dept ATTENDANCE</option>
+	                                {STATUS_OPTIONS.map(option => (
+	                                  <option key={option.value} value={option.value}>
+	                                    {option.label}
                                   </option>
                                 ))}
                               </select>

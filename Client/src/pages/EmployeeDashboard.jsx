@@ -34,8 +34,6 @@ const EmployeeDashboard = () => {
   const messagesEndRef = useRef(null);
 
 useEffect(() => {
-  console.log("The subscribeUserToPush is now loading from EmployeeDashboard.jsx file ::::");
-  
   let isSubscribed = false;
   
   const initPush = async () => {

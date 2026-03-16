@@ -8,41 +8,55 @@ import AdminNavbar from "../components/AdminNavbar.jsx";
 const toDateKeyLocal = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return '';
-  const pad2 = (num) => String(num).padStart(2, '0');
-  return `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  if (!year || !month || !day) return "";
+  return `${year}-${month}-${day}`;
 };
 
 const AttendanceSnapshot = () => {
 	  const dispatch = useDispatch();
 	  const { user } = useSelector((state) => state.auth);
-	  const { 
-	    updateEmployeesData,
-    allRosters,
-    loading 
-  } = useSelector((state) => state.roster);
+		  const { 
+		    updateEmployeesData,
+	    allRosters,
+	    loading,
+	    rosterDetailLoading,
+	    rosterDetailError,
+	    error,
+	  } = useSelector((state) => state.roster);
 
-	  const [selectedDate, setSelectedDate] = useState(() => toDateKeyLocal(new Date()));
-	  
-	  const [selectedDepartment, setSelectedDepartment] = useState('all');
-	  const [allEmployees, setAllEmployees] = useState([]);
-	  const [availableWeeks, setAvailableWeeks] = useState([]);
-	  const [selectedRoster, setSelectedRoster] = useState(null);
-	  const [selectedWeek, setSelectedWeek] = useState(null);
-	  const [loadingState, setLoadingState] = useState('loading');
+		  const [selectedDate, setSelectedDate] = useState(() => toDateKeyLocal(new Date()));
+		  
+		  const [selectedDepartment, setSelectedDepartment] = useState('all');
+		  const [selectedTeamLeader, setSelectedTeamLeader] = useState('all');
+		  const [allEmployees, setAllEmployees] = useState([]);
+		  const [availableWeeks, setAvailableWeeks] = useState([]);
+		  const [selectedRoster, setSelectedRoster] = useState(null);
+		  const [selectedWeek, setSelectedWeek] = useState(null);
+		  const [loadingState, setLoadingState] = useState('idle');
 	  const [showMonthDropdown, setShowMonthDropdown] = useState(false);
 		  const [summary, setSummary] = useState(null);
 		  const [rostersByMonth, setRostersByMonth] = useState({});
 		  const dateInputRef = useRef(null);
-		  const [showColumnMenu, setShowColumnMenu] = useState(false);
-		  const [columnVisibility, setColumnVisibility] = useState({
-		    employee: true,
-		    department: true,
-		    shift: true,
-		    transportStatus: true,
-		    departmentStatus: true,
-		    transportArrival: true,
-		    departmentArrival: true,
-		  });
+			  const [showColumnMenu, setShowColumnMenu] = useState(false);
+			  const [columnVisibility, setColumnVisibility] = useState({
+			    employee: true,
+			    teamLeader: true,
+			    department: true,
+			    shift: true,
+			    transportStatus: true,
+			    departmentStatus: true,
+			    transportArrival: true,
+			    departmentArrival: true,
+			  });
 		  const [currentPage, setCurrentPage] = useState(1);
 		  const [pageSize, setPageSize] = useState(25);
 		  const [tableTheme, setTableTheme] = useState("dark"); // "dark" | "light"
@@ -74,11 +88,29 @@ const AttendanceSnapshot = () => {
   // Years for dropdown
   const years = [2025, 2026, 2027];
 
+  const pickWeekNumberForDate = (roster, dateKey) => {
+    const weeks = roster?.weeks || [];
+    if (!Array.isArray(weeks) || weeks.length === 0) return null;
+
+    const targetKey = typeof dateKey === 'string' ? dateKey : toDateKeyLocal(dateKey);
+    if (targetKey) {
+      const matching = weeks.find((w) => {
+        const startKey = toDateKeyLocal(w?.startDate);
+        const endKey = toDateKeyLocal(w?.endDate);
+        if (!startKey || !endKey) return false;
+        return targetKey >= startKey && targetKey <= endKey;
+      });
+      if (matching?.weekNumber != null) return Number(matching.weekNumber);
+    }
+
+    const sorted = [...weeks].sort((a, b) => Number(a?.weekNumber ?? 0) - Number(b?.weekNumber ?? 0));
+    return sorted[0]?.weekNumber != null ? Number(sorted[0].weekNumber) : null;
+  };
+
   // ✅ Fetch all rosters on component mount and when month/year changes
   useEffect(() => {
     if (user) {
-      console.log(`📡 Fetching all rosters for ${selectedMonth}/${selectedYear}`);
-      dispatch(fetchAllRosters({ 
+	      dispatch(fetchAllRosters({ 
         month: selectedMonth, 
         year: selectedYear,
         page: 1,
@@ -87,11 +119,22 @@ const AttendanceSnapshot = () => {
     }
   }, [dispatch, user, selectedMonth, selectedYear]);
 
+  useEffect(() => {
+    if (rosterDetailError) {
+      setLoadingState('error');
+    }
+  }, [rosterDetailError]);
+
+  useEffect(() => {
+    if (error && loadingState === 'loading') {
+      setLoadingState('error');
+    }
+  }, [error, loadingState]);
+
   // ✅ Process allRosters data to find available rosters
   useEffect(() => {
     if (allRosters?.success && allRosters?.data) {
-      console.log("📋 All rosters received:", allRosters.data);
-      
+	      
       // Create a map of rosters by month/year
       const rosterMap = {};
       
@@ -107,36 +150,36 @@ const AttendanceSnapshot = () => {
       const currentRoster = rosterMap[currentKey];
       
       if (currentRoster) {
-        console.log(`✅ Found roster for ${selectedMonth}/${selectedYear}:`, currentRoster);
-        setSelectedRoster(currentRoster._id);
+	        setSelectedRoster(currentRoster._id);
         
-        // Find week 2 specifically (from your data)
-        const week2 = currentRoster.weeks?.find(w => w.weekNumber === 2);
-        if (week2) {
-          setSelectedWeek(2);
-          
-          // Set available weeks
-          if (currentRoster.weeks && currentRoster.weeks.length > 0) {
-            const weeks = currentRoster.weeks.map(w => ({
-              weekNumber: w.weekNumber,
-              startDate: w.startDate,
-              endDate: w.endDate,
-              employeeCount: w.employees?.length || 0
-            }));
-            setAvailableWeeks(weeks);
-          }
-          
-          // Fetch employees data
-          setLoadingState('loading');
-          dispatch(getEmployeesForUpdates({
-            rosterId: currentRoster._id,
-            weekNumber: 2, // Week 2
-            date: selectedDate
-          }));
-        }
+	        const weeks = currentRoster.weeks || [];
+	        if (Array.isArray(weeks) && weeks.length > 0) {
+	          setAvailableWeeks(weeks.map(w => ({
+	            weekNumber: w.weekNumber,
+	            startDate: w.startDate,
+	            endDate: w.endDate,
+	            employeeCount: w.employees?.length || 0
+	          })));
+	        } else {
+	          setAvailableWeeks([]);
+	        }
+
+	        const weekNumber = pickWeekNumberForDate(currentRoster, selectedDate);
+	        if (weekNumber != null) {
+	          setSelectedWeek(weekNumber);
+	          setLoadingState('loading');
+	          dispatch(getEmployeesForUpdates({
+	            rosterId: currentRoster._id,
+	            weekNumber,
+	            date: selectedDate
+	          }));
+	        } else {
+	          setAllEmployees([]);
+	          setSelectedWeek(null);
+	          setLoadingState('success');
+	        }
       } else {
-        console.log(`❌ No roster found for ${selectedMonth}/${selectedYear}`);
-        setAllEmployees([]);
+	        setAllEmployees([]);
         setSelectedRoster(null);
         setSelectedWeek(null);
         setAvailableWeeks([]);
@@ -148,22 +191,19 @@ const AttendanceSnapshot = () => {
   // ✅ Process the dynamic data from API
   useEffect(() => {
     if (updateEmployeesData?.data) {
-      console.log("📦 Dynamic data received from API:", updateEmployeesData);
-      
+	      
       const responseData = updateEmployeesData.data;
       
       // Set employees from rosterEntries
       if (responseData.rosterEntries && responseData.rosterEntries.length > 0) {
-        console.log(`✅ Found ${responseData.rosterEntries.length} employees`);
-        setAllEmployees(responseData.rosterEntries);
+	        setAllEmployees(responseData.rosterEntries);
       } else {
         setAllEmployees([]);
       }
       
       // Set available weeks for dropdown
       if (responseData.weeks && responseData.weeks.length > 0) {
-        console.log("📅 Available weeks:", responseData.weeks);
-        setAvailableWeeks(responseData.weeks);
+	        setAvailableWeeks(responseData.weeks);
       }
       
       // Set summary data
@@ -206,22 +246,87 @@ const AttendanceSnapshot = () => {
 	    });
 	  };
 
-	  const formatTimeForDisplay = (dateString) => {
-	    if (!dateString) return "--:-- --";
-	    try {
-	      return new Date(dateString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-	    } catch {
-	      return "--:-- --";
-	    }
-	  };
+			  const formatTimeForDisplay = (dateString) => {
+			    if (!dateString) return "--:-- --";
+			    try {
+			      const IST_TIME_ZONE = "Asia/Kolkata";
+			      const pad2 = (n) => String(n).padStart(2, "0");
+			      const formatTimeOnlyTo12h = (hours, minutes) => {
+			        const h = Number(hours);
+			        const m = Number(minutes);
+			        if (Number.isNaN(h) || Number.isNaN(m)) return "--:-- --";
+			        const suffix = h >= 12 ? "PM" : "AM";
+			        const hour12 = h % 12 === 0 ? 12 : h % 12;
+			        return `${pad2(hour12)}:${pad2(m)} ${suffix}`;
+			      };
 
-	  const formatShift = (startHour, endHour) => {
-	    const start = Number.parseInt(startHour, 10);
-	    const end = Number.parseInt(endHour, 10);
-	    if (Number.isNaN(start) || Number.isNaN(end)) return "-";
-	    if (start === 0 && end === 0) return "-";
-	    return `${start}:00 - ${end}:00`;
-	  };
+			      const getISTDateKeyFromDate = (dt) => {
+			        const parts = new Intl.DateTimeFormat("en-GB", {
+			          timeZone: IST_TIME_ZONE,
+			          year: "numeric",
+			          month: "2-digit",
+			          day: "2-digit",
+			        }).formatToParts(dt);
+			        const year = parts.find((p) => p.type === "year")?.value;
+			        const month = parts.find((p) => p.type === "month")?.value;
+			        const day = parts.find((p) => p.type === "day")?.value;
+			        if (!year || !month || !day) return null;
+			        return `${year}-${month}-${day}`;
+			      };
+
+			      if (typeof dateString === "string") {
+			        const timeOnly = dateString.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+			        if (timeOnly) {
+			          return formatTimeOnlyTo12h(timeOnly[1], timeOnly[2]);
+			        }
+			        if (dateString.includes("T")) {
+			          const hasTz = /[zZ]$/.test(dateString) || /[+-]\d{2}:\d{2}$/.test(dateString);
+			          if (hasTz) {
+			            const dt = new Date(dateString);
+			            if (!Number.isNaN(dt.getTime())) {
+			              const expectedKey = selectedDate; // roster day key (treat as IST day)
+			              const actualKey = getISTDateKeyFromDate(dt);
+			              if (expectedKey && actualKey && expectedKey !== actualKey) {
+			                const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+			                if (isoTime) {
+			                  return formatTimeOnlyTo12h(isoTime[1], isoTime[2]);
+			                }
+			              }
+			              return dt.toLocaleTimeString([], { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+			            }
+			          }
+
+			          const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+			          if (isoTime) {
+			            return formatTimeOnlyTo12h(isoTime[1], isoTime[2]);
+			          }
+			        }
+			      }
+			      const dt = new Date(dateString);
+			      if (Number.isNaN(dt.getTime())) return "--:-- --";
+			      return dt.toLocaleTimeString([], { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+			    } catch {
+			      return "--:-- --";
+			    }
+			  };
+
+		  const formatShift = (startHour, endHour) => {
+		    const isEmpty = (v) => v === null || v === undefined || v === "";
+		    const toHour = (v) => {
+		      if (isEmpty(v)) return null;
+		      const n = Number.parseInt(String(v), 10);
+		      if (!Number.isFinite(n)) return null;
+		      return n;
+		    };
+
+		    const start = toHour(startHour);
+		    const end = toHour(endHour);
+		    if (start === null && end === null) return "-";
+
+		    const startLabel = start === null ? "??" : start;
+		    const endLabel = end === null ? "??" : end;
+		    return `${startLabel}:00 - ${endLabel}:00`;
+		  };
 
   // Handle month change
   const handleMonthChange = (month) => {
@@ -233,34 +338,36 @@ const AttendanceSnapshot = () => {
     const key = `${month}-${selectedYear}`;
     const roster = rostersByMonth[key];
     
-    if (roster) {
-      setSelectedRoster(roster._id);
-      
-      // Find week 2
-      const week2 = roster.weeks?.find(w => w.weekNumber === 2);
-      if (week2) {
-        setSelectedWeek(2);
-        
-        // Set weeks
-        if (roster.weeks) {
-          setAvailableWeeks(roster.weeks.map(w => ({
-            weekNumber: w.weekNumber,
-            startDate: w.startDate,
-            endDate: w.endDate,
-            employeeCount: w.employees?.length || 0
-          })));
-        }
-        
-        // Fetch data
-        dispatch(getEmployeesForUpdates({
-          rosterId: roster._id,
-          weekNumber: 2,
-          date: selectedDate
-        }));
-      }
-    } else {
-      setAllEmployees([]);
-      setSelectedRoster(null);
+	    if (roster) {
+	      setSelectedRoster(roster._id);
+
+	      if (roster.weeks) {
+	        setAvailableWeeks(roster.weeks.map(w => ({
+	          weekNumber: w.weekNumber,
+	          startDate: w.startDate,
+	          endDate: w.endDate,
+	          employeeCount: w.employees?.length || 0
+	        })));
+	      } else {
+	        setAvailableWeeks([]);
+	      }
+
+	      const weekNumber = pickWeekNumberForDate(roster, selectedDate);
+	      if (weekNumber != null) {
+	        setSelectedWeek(weekNumber);
+	        dispatch(getEmployeesForUpdates({
+	          rosterId: roster._id,
+	          weekNumber,
+	          date: selectedDate
+	        }));
+	      } else {
+	        setAllEmployees([]);
+	        setSelectedWeek(null);
+	        setLoadingState('success');
+	      }
+	    } else {
+	      setAllEmployees([]);
+	      setSelectedRoster(null);
       setSelectedWeek(null);
       setAvailableWeeks([]);
       setLoadingState('success');
@@ -288,19 +395,27 @@ const AttendanceSnapshot = () => {
   };
 
 	  // Handle date change
-		  const handleDateChange = (newDate) => {
-		    setSelectedDate(newDate);
-		    setCurrentPage(1);
-		    
-		    if (selectedRoster && selectedWeek) {
-	      setLoadingState('loading');
-	      dispatch(getEmployeesForUpdates({
-        rosterId: selectedRoster,
-        weekNumber: selectedWeek,
-        date: newDate
-      }));
-    }
-  };
+			  const handleDateChange = (newDate) => {
+			    setSelectedDate(newDate);
+			    setCurrentPage(1);
+
+			    const currentKey = `${selectedMonth}-${selectedYear}`;
+			    const roster = rostersByMonth[currentKey];
+			    const maybeWeek = pickWeekNumberForDate(roster, newDate);
+			    const nextWeek = maybeWeek ?? selectedWeek;
+			    if (maybeWeek != null && maybeWeek !== selectedWeek) {
+			      setSelectedWeek(maybeWeek);
+			    }
+
+			    if (selectedRoster && nextWeek) {
+		      setLoadingState('loading');
+		      dispatch(getEmployeesForUpdates({
+	        rosterId: selectedRoster,
+	        weekNumber: nextWeek,
+	        date: newDate
+	      }));
+	    }
+	  };
 
   // Handle refresh
 	  const handleRefresh = () => {
@@ -362,11 +477,28 @@ const AttendanceSnapshot = () => {
 	    )
 	  ).sort((a, b) => String(a).localeCompare(String(b)));
 
-		  const handleExportSnapshot = async () => {
-		    try {
-	      const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
-	      if (!week?.startDate || !week?.endDate) {
-	        return;
+	  const TEAM_LEADER_NONE = "__none__";
+	  const normalizeTeamLeader = (value) => String(value || "").trim();
+	  const availableTeamLeaders = Array.from(
+	    new Set(
+	      (allEmployees || [])
+	        .map((emp) => normalizeTeamLeader(emp?.teamLeader))
+	        .filter(Boolean)
+	    )
+	  ).sort((a, b) => String(a).localeCompare(String(b)));
+
+	  useEffect(() => {
+	    if (selectedTeamLeader === "all" || selectedTeamLeader === TEAM_LEADER_NONE) return;
+	    if (!availableTeamLeaders.includes(selectedTeamLeader)) {
+	      setSelectedTeamLeader("all");
+	    }
+	  }, [TEAM_LEADER_NONE, availableTeamLeaders, selectedTeamLeader]);
+
+			  const handleExportSnapshot = async () => {
+			    try {
+		      const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
+		      if (!week?.startDate || !week?.endDate) {
+		        return;
 	      }
 
 	      const startDateKey = toDateKeyLocal(week.startDate);
@@ -381,11 +513,21 @@ const AttendanceSnapshot = () => {
 	      // exportAttendanceSnapshot already toasts on success; keep errors silent here
 	      console.error('Export snapshot failed:', err);
 	    }
-		  };
+			  };
 
-		  const filteredEmployees = (allEmployees || []).filter(
-		    (emp) => selectedDepartment === "all" || emp.department === selectedDepartment
-		  );
+			  const filteredEmployees = (allEmployees || []).filter((emp) => {
+			    const matchesDepartment =
+			      selectedDepartment === "all" || emp.department === selectedDepartment;
+
+			    const normalizedLeader = normalizeTeamLeader(emp?.teamLeader);
+			    const matchesTeamLeader =
+			      selectedTeamLeader === "all" ||
+			      (selectedTeamLeader === TEAM_LEADER_NONE
+			        ? !normalizedLeader
+			        : normalizedLeader === selectedTeamLeader);
+
+			    return matchesDepartment && matchesTeamLeader;
+			  });
 
 		  const totalEmployees = filteredEmployees.length;
 		  const totalPages = Math.max(1, Math.ceil(totalEmployees / pageSize));
@@ -397,24 +539,43 @@ const AttendanceSnapshot = () => {
 		  const rangeEnd = Math.min(startIndex + pagedEmployees.length, totalEmployees);
 		  const isDarkTable = tableTheme === "dark";
 
-  // Loading state
-	  if (loadingState === 'loading' || loading) {
-	    return (
-	      <div className="min-h-screen bg-gray-50 p-6">
-	        <div className="max-w-7xl mx-auto">
-	          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
-	            <div className="flex flex-col items-center justify-center">
-	              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mb-4"></div>
-	              <p className="text-gray-600">Loading attendance data...</p>
-	            </div>
-	          </div>
-	        </div>
-	      </div>
-	    );
-	  }
+	  // Loading state
+		  if (rosterDetailLoading || loadingState === 'loading' || (loading && (allEmployees?.length ?? 0) === 0)) {
+		    return (
+		      <div className="min-h-screen bg-gray-50 p-6">
+		        <div className="max-w-7xl mx-auto">
+		          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+		            <div className="flex flex-col items-center justify-center">
+		              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-600 mb-4"></div>
+		              <p className="text-gray-600">Loading attendance data...</p>
+		              {rosterDetailError && (
+		                <p className="text-sm text-red-600 mt-3">{String(rosterDetailError)}</p>
+		              )}
+		              {!rosterDetailError && loadingState === 'error' && error && (
+		                <p className="text-sm text-red-600 mt-3">{String(error)}</p>
+		              )}
+		            </div>
+		          </div>
+		        </div>
+		      </div>
+		    );
+		  }
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-6">
+		  if (loadingState === 'error') {
+		    return (
+		      <div className="min-h-screen bg-gray-50 p-6">
+		        <div className="max-w-7xl mx-auto">
+		          <div className="bg-white rounded-lg shadow-sm p-12 text-center">
+		            <p className="text-red-600 font-semibold">Failed to load attendance data.</p>
+		            <p className="text-sm text-gray-600 mt-2">{String(rosterDetailError || error || '')}</p>
+		          </div>
+		        </div>
+		      </div>
+		    );
+		  }
+
+	  return (
+	    <div className="min-h-screen bg-gray-50 p-6">
       <AdminNavbar/>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -532,31 +693,55 @@ const AttendanceSnapshot = () => {
 		              />
 		            </div>
 
-	            {/* Department Filter */}
-		            <div className="flex items-center gap-2">
-		              <Users size={18} className="text-gray-500" />
-		              <select
-		                value={selectedDepartment}
+		            {/* Department Filter */}
+			            <div className="flex items-center gap-2">
+			              <Users size={18} className="text-gray-500" />
+			              <select
+			                value={selectedDepartment}
 		                onChange={(e) => {
 		                  setSelectedDepartment(e.target.value);
 		                  setCurrentPage(1);
 		                }}
-		                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-		              >
-	                <option value="all">All</option>
-	                {availableDepartments.map((dept) => (
-	                  <option key={dept} value={dept}>
-	                    {dept}
-	                  </option>
-	                ))}
-	              </select>
-	            </div>
+			                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+			              >
+		                <option value="all">All</option>
+		                {availableDepartments.map((dept) => (
+		                  <option key={dept} value={dept}>
+		                    {dept}
+		                  </option>
+		                ))}
+		              </select>
+		            </div>
 
-	            {/* Employee Count */}
-	            <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
-	              <Users size={16} />
-              <span>{allEmployees.length} employees</span>
-            </div>
+		            {/* Team Leader Filter */}
+			            <div className="flex items-center gap-2">
+			              <Users size={18} className="text-gray-500" />
+			              <select
+			                value={selectedTeamLeader}
+			                onChange={(e) => {
+			                  setSelectedTeamLeader(e.target.value);
+			                  setCurrentPage(1);
+			                }}
+			                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+			              >
+			                <option value="all">All Team Leaders</option>
+			                <option value={TEAM_LEADER_NONE}>Not assigned</option>
+			                {availableTeamLeaders.map((tl) => (
+			                  <option key={tl} value={tl}>
+			                    {tl}
+			                  </option>
+			                ))}
+			              </select>
+			            </div>
+
+		            {/* Employee Count */}
+		            <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
+		              <Users size={16} />
+	              <span>
+	                {filteredEmployees.length}
+	                {filteredEmployees.length !== allEmployees.length ? ` / ${allEmployees.length}` : ""} employees
+	              </span>
+	            </div>
 
 	            {/* Refresh Button */}
 	            <button
@@ -638,13 +823,14 @@ const AttendanceSnapshot = () => {
 
 		                {showColumnMenu && (
 		                  <div className={isDarkTable ? "absolute right-0 mt-2 w-60 rounded-lg border border-neutral-800 bg-neutral-950 shadow-lg p-2 z-20" : "absolute right-0 mt-2 w-60 rounded-lg border border-gray-200 bg-white shadow-lg p-2 z-20"}>
-	                    {[
-	                      { key: "employee", label: "Employee" },
-	                      { key: "department", label: "Department" },
-	                      { key: "shift", label: "Shift" },
-	                      { key: "transportStatus", label: "Transport Status" },
-	                      { key: "departmentStatus", label: "Dept Status" },
-	                      { key: "transportArrival", label: "Transport Arrival" },
+		                    {[
+		                      { key: "employee", label: "Employee" },
+		                      { key: "teamLeader", label: "Team Leader" },
+		                      { key: "department", label: "Department" },
+		                      { key: "shift", label: "Shift" },
+		                      { key: "transportStatus", label: "Transport Status" },
+		                      { key: "departmentStatus", label: "Dept Status" },
+		                      { key: "transportArrival", label: "Transport Arrival" },
 	                      { key: "departmentArrival", label: "Dept Arrival" },
 	                    ].map((col) => (
 	                      <label
@@ -673,6 +859,9 @@ const AttendanceSnapshot = () => {
 	                  <tr>
 	                    {columnVisibility.employee && (
 	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Employee</th>
+	                    )}
+	                    {columnVisibility.teamLeader && (
+	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Team Leader</th>
 	                    )}
 	                    {columnVisibility.department && (
 	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Department</th>
@@ -706,6 +895,12 @@ const AttendanceSnapshot = () => {
 	                              <p className={isDarkTable ? "font-medium text-neutral-100" : "font-medium text-gray-900"}>{emp.name || "Unknown"}</p>
 	                              <p className={isDarkTable ? "text-xs text-neutral-400" : "text-xs text-gray-500"}>{emp.username || "-"}</p>
 	                              </div>
+	                            </td>
+	                          )}
+
+	                          {columnVisibility.teamLeader && (
+	                            <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-300" : "px-6 py-4 text-sm text-gray-600"}>
+	                              {emp.teamLeader || "-"}
 	                            </td>
 	                          )}
 

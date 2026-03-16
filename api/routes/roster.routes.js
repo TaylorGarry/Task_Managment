@@ -126,7 +126,8 @@ import {
 		  getTransportDetailForSuperAdmin,
 		  getDepartmentWiseAttendance,
 		  exportAttendanceSnapshotToExcel,
-		} from "../Controllers/roster.controller.js";
+		  searchBulkEditEmployees,
+			} from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
 import multer from "multer"; 
@@ -163,10 +164,11 @@ router.post("/copy-employees", authMiddleware, copyEmployeesToWeek);
 // 3. Bulk update multiple weeks at once
 router.post("/bulk-update", authMiddleware, bulkUpdateWeeks);
 
-router.get("/bulk-edit/:rosterId", authMiddleware, getRosterForBulkEdit);
+	router.get("/bulk-edit/:rosterId", authMiddleware, getRosterForBulkEdit);
+	router.get("/bulk-edit/:rosterId/search", authMiddleware, searchBulkEditEmployees);
 
-// 2. Save all changes across multiple weeks at once
-router.put("/bulk-save/:rosterId", authMiddleware, bulkUpdateRosterWeeks);
+	// 2. Save all changes across multiple weeks at once
+	router.put("/bulk-save/:rosterId", authMiddleware, bulkUpdateRosterWeeks);
 
 // This roster is for Ops-Meta to display only current week roster
 router.get('/current-week', authMiddleware, getOpsMetaCurrentWeekRoster);

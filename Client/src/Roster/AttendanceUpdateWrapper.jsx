@@ -270,19 +270,14 @@ const AttendanceUpdateWrapper = () => {
   };
   const currentUser = getCurrentUser();
 
-  useEffect(() => {
-    console.log("📡 Fetching rosters for:", { month: selectedMonth, year: selectedYear });
-    dispatch(fetchAllRosters({
-      month: selectedMonth,
-      year: selectedYear,
+	  useEffect(() => {
+	    dispatch(fetchAllRosters({
+	      month: selectedMonth,
+	      year: selectedYear,
       page: 1,
       limit: 50
     }));
   }, [dispatch, selectedMonth, selectedYear]);
-
-  useEffect(() => {
-    console.log("📦 allRosters from Redux:", allRosters);
-  }, [allRosters]);
 
 	  const rosters = allRosters?.data || [];
 	  
@@ -356,12 +351,11 @@ const AttendanceUpdateWrapper = () => {
 
           {/* Refresh Button */}
           <div className="mb-4 flex justify-end">
-            <button
-              onClick={() => {
-                console.log("🔄 Manually refreshing rosters...");
-                dispatch(fetchAllRosters({
-                  month: selectedMonth,
-                  year: selectedYear,
+	            <button
+	              onClick={() => {
+	                dispatch(fetchAllRosters({
+	                  month: selectedMonth,
+	                  year: selectedYear,
                   page: 1,
                   limit: 50
                 }));
@@ -402,9 +396,9 @@ const AttendanceUpdateWrapper = () => {
                             Week {firstWeekNumber}
                           </span>
                         </div>
-                        <h3 className="font-semibold text-gray-800">
-                          {new Date(roster.rosterStartDate).toLocaleDateString()} - {new Date(roster.rosterEndDate).toLocaleDateString()}
-                        </h3>
+	                        <h3 className="font-semibold text-gray-800">
+	                          {new Date(roster.rosterStartDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(roster.rosterEndDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+	                        </h3>
                         <p className="text-sm text-gray-500 mt-1">
                           {new Date(2000, roster.month-1, 1).toLocaleString('default', { month: 'long' })} {roster.year}
                         </p>

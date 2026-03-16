@@ -21,7 +21,6 @@ const SuperAdminTransportView = () => {
   const dispatch = useDispatch();
   const { superAdminTransportData, loading, allRosters } = useSelector((state) => state.roster);
   
-  // State
   const [selectedRosterId, setSelectedRosterId] = useState("");
   const [selectedWeek, setSelectedWeek] = useState("");
   const [selectedDate, setSelectedDate] = useState(
@@ -33,22 +32,18 @@ const SuperAdminTransportView = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(false);
 
-  // Fetch rosters on mount
   useEffect(() => {
     dispatch(fetchAllRosters({ page: 1, limit: 50 }));
   }, [dispatch]);
 
-  // Process rosters for dropdown
   const rosters = allRosters?.data || [];
 
-  // Fetch data when roster, week, or date changes
   useEffect(() => {
     if (selectedRosterId && selectedWeek && selectedDate) {
       fetchSuperAdminData();
     }
   }, [selectedRosterId, selectedWeek, selectedDate]);
 
-  // Auto-refresh every 30 seconds if enabled
   useEffect(() => {
     let interval;
     if (autoRefresh && selectedRosterId && selectedWeek && selectedDate) {
@@ -186,11 +181,11 @@ const SuperAdminTransportView = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400"
               >
                 <option value="">Choose a roster</option>
-                {rosters.map((roster) => (
-                  <option key={roster._id} value={roster._id}>
-                    {new Date(roster.rosterStartDate).toLocaleDateString()} - {new Date(roster.rosterEndDate).toLocaleDateString()} ({roster.month}/{roster.year})
-                  </option>
-                ))}
+	                {rosters.map((roster) => (
+	                  <option key={roster._id} value={roster._id}>
+	                    {new Date(roster.rosterStartDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(roster.rosterEndDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} ({roster.month}/{roster.year})
+	                  </option>
+	                ))}
               </select>
             </div>
             <div>
@@ -204,11 +199,11 @@ const SuperAdminTransportView = () => {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-purple-400 disabled:bg-gray-100"
               >
                 <option value="">Choose a week</option>
-                {availableWeeks.map((week) => (
-                  <option key={week.weekNumber} value={week.weekNumber}>
-                    Week {week.weekNumber} ({new Date(week.startDate).toLocaleDateString()} - {new Date(week.endDate).toLocaleDateString()})
-                  </option>
-                ))}
+	                {availableWeeks.map((week) => (
+	                  <option key={week.weekNumber} value={week.weekNumber}>
+	                    Week {week.weekNumber} ({new Date(week.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(week.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })})
+	                  </option>
+	                ))}
               </select>
             </div>
             <div>

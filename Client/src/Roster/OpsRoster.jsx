@@ -171,10 +171,23 @@ const OpsRoster = () => {
     });
   }, []);
 
-  const formatShiftHours = useCallback((startHour, endHour) => {
-    if (!startHour && !endHour) return 'Not Set';
-    return `${startHour || '??'}:00 - ${endHour || '??'}:00`;
-  }, []);
+	  const formatShiftHours = useCallback((startHour, endHour) => {
+	    const isEmpty = (v) => v === null || v === undefined || v === "";
+	    const toHour = (v) => {
+	      if (isEmpty(v)) return null;
+	      const n = Number(v);
+	      if (!Number.isFinite(n)) return null;
+	      return n;
+	    };
+
+	    const start = toHour(startHour);
+	    const end = toHour(endHour);
+	    if (start === null && end === null) return "Not Set";
+
+	    const startLabel = start === null ? "??" : start;
+	    const endLabel = end === null ? "??" : end;
+	    return `${startLabel}:00 - ${endLabel}:00`;
+	  }, []);
   const filteredEntries = useMemo(() => {
     if (!opsMetaRoster?.data?.rosterEntries) return [];
     
@@ -312,13 +325,13 @@ const OpsRoster = () => {
                 </svg>
               </div>
               <div>
-                <h1 className="text-xl font-bold text-gray-900">Current Week Roster - Week {weekNumber}</h1>
-                <p className="text-sm text-gray-600">
-                  {new Date(startDate).toLocaleDateString()} - {new Date(endDate).toLocaleDateString()}
-                </p>
-                <p className="text-xs text-gray-500">
-                  Current Date: {new Date(currentDate).toLocaleDateString()}
-                </p>
+	                <h1 className="text-xl font-bold text-gray-900">Current Week Roster - Week {weekNumber}</h1>
+	                <p className="text-sm text-gray-600">
+	                  {new Date(startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+	                </p>
+	                <p className="text-xs text-gray-500">
+	                  Current Date: {new Date(currentDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+	                </p>
               </div>
             </div>
             

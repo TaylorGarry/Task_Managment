@@ -1973,29 +1973,32 @@ const RosterForm = () => {
   const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
   // Helper function to get date for a specific day
-  const getDateForDay = (startDate, dayIndex) => {
-    try {
-      const date = new Date(startDate);
-      date.setDate(date.getDate() + dayIndex);
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short"
-      });
-    } catch (error) {
-      return "";
-    }
-  };
+	  const getDateForDay = (startDate, dayIndex) => {
+	    try {
+	      const base = new Date(startDate);
+	      if (Number.isNaN(base.getTime())) return "";
+	      const utcDate = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + dayIndex));
+	      return utcDate.toLocaleDateString("en-GB", {
+	        timeZone: "Asia/Kolkata",
+	        day: "2-digit",
+	        month: "short",
+	      });
+	    } catch (error) {
+	      return "";
+	    }
+	  };
 
   // Format date for display
-  const formatDateDisplay = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric"
-      });
-    } catch (error) {
+	  const formatDateDisplay = (dateString) => {
+	    try {
+	      const date = new Date(dateString);
+	      return date.toLocaleDateString("en-GB", {
+	        timeZone: "Asia/Kolkata",
+	        day: "2-digit",
+	        month: "short",
+	        year: "numeric"
+	      });
+	    } catch (error) {
       return dateString;
     }
   };
@@ -2327,17 +2330,18 @@ const RosterForm = () => {
     });
   };
 
-  const handleAddEmployee = () => {
-    if (!employeeInput.name) return toast.success("Enter employee name");
+	  const handleAddEmployee = () => {
+	    if (!employeeInput.name) return toast.success("Enter employee name");
 
-    if (!employeeInput.isCoreTeam) {
-      if (!employeeInput.shiftStartHour) return toast.info("Enter shift start hour");
-      if (!employeeInput.shiftEndHour) return toast.info("Enter shift end hour");
+	    if (!employeeInput.isCoreTeam) {
+	      const isEmpty = (v) => v === null || v === undefined || v === "";
+	      if (isEmpty(employeeInput.shiftStartHour)) return toast.info("Enter shift start hour");
+	      if (isEmpty(employeeInput.shiftEndHour)) return toast.info("Enter shift end hour");
 
-      const startHour = parseInt(employeeInput.shiftStartHour);
-      const endHour = parseInt(employeeInput.shiftEndHour);
+	      const startHour = parseInt(employeeInput.shiftStartHour);
+	      const endHour = parseInt(employeeInput.shiftEndHour);
 
-      if (isNaN(startHour) || isNaN(endHour)) {
+	      if (isNaN(startHour) || isNaN(endHour)) {
         return toast.info("Shift hours must be numbers");
       }
     }
@@ -2600,18 +2604,19 @@ const RosterForm = () => {
     return `${startHour}:00 - ${endHour}:00`;
   };
 
-  const formatDate = (dateString) => {
-    try {
-      const date = new Date(dateString);
-      return date.toLocaleDateString("en-GB", {
-        day: "2-digit",
-        month: "short",
-        year: "numeric",
-      });
-    } catch (error) {
-      return dateString;
-    }
-  };
+	  const formatDate = (dateString) => {
+	    try {
+	      const date = new Date(dateString);
+	      return date.toLocaleDateString("en-GB", {
+	        timeZone: "Asia/Kolkata",
+	        day: "2-digit",
+	        month: "short",
+	        year: "numeric",
+	      });
+	    } catch (error) {
+	      return dateString;
+	    }
+	  };
 
   const getLatestRosterWeek = () => {
     if (!allRosters || allRosters.length === 0) return null;
@@ -3384,12 +3389,14 @@ const RosterForm = () => {
                             {emp.dailyStatus && emp.dailyStatus.map((ds, dayIndex) => {
                               const status = typeof ds === "object" ? ds.status : ds;
                               // Get the date for this day - FIXED: Use rosterWeek.startDate instead of rosterDates.startDate
-                              let dateStr = "";
-                              if (rosterWeek?.startDate) {
-                                const statusDate = new Date(rosterWeek.startDate);
-                                statusDate.setDate(statusDate.getDate() + dayIndex);
-                                dateStr = statusDate.toLocaleDateString("en-GB", { day: "2-digit", month: "short" });
-                              }
+	                              let dateStr = "";
+	                              if (rosterWeek?.startDate) {
+	                                const base = new Date(rosterWeek.startDate);
+	                                if (!Number.isNaN(base.getTime())) {
+	                                  const utcDate = new Date(Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate() + dayIndex));
+	                                  dateStr = utcDate.toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
+	                                }
+	                              }
                               
                               return (
                                 <div
