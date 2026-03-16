@@ -108,6 +108,4 @@ const server = http.createServer((req, res) => {
 const port = process.env.PORT || 3000;
 
 server.listen(port, () => {
-  console.log(`Test server running on port ${port}`);
-  console.log('If you see this, Node.js is working on Plesk with IISNode');
 });

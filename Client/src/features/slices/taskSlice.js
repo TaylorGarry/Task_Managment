@@ -717,18 +717,12 @@ const getUser = () => {
       try {
         const user = JSON.parse(userStr);
         if (user && (user.id || user._id)) {
-          const normalizedUser = { ...user };
-          if (user.id && !user._id) {
-            normalizedUser._id = user.id;
-          }
-          console.log("✅ User found in localStorage 'user':", { 
-            _id: normalizedUser._id, 
-            id: normalizedUser.id,
-            username: normalizedUser.username,
-            accountType: normalizedUser.accountType 
-          });
-          return normalizedUser;
-        }
+	          const normalizedUser = { ...user };
+	          if (user.id && !user._id) {
+	            normalizedUser._id = user.id;
+	          }
+	          return normalizedUser;
+	        }
       } catch (e) {
         console.error("❌ Error parsing localStorage 'user':", e);
       }
@@ -810,18 +804,16 @@ const isCacheValid = (cacheKey, filters) => {
       (cacheItem.filters.date === todayString || 
        (!cacheItem.filters.date && !cacheItem.filters.startDate && !cacheItem.filters.endDate));
     
-    if (!isCacheFromToday) {
-      console.log(`Cache for ${cacheKey} is not from today, invalidating`);
-      return false;
-    }
+	    if (!isCacheFromToday) {
+	      return false;
+	    }
     
     // For today's data, use very short cache (30 seconds)
-    const cacheAge = Date.now() - cacheItem.timestamp;
-    const TODAY_CACHE_DURATION = 30 * 1000; // 30 seconds
-    if (cacheAge > TODAY_CACHE_DURATION) {
-      console.log(`Cache for today's ${cacheKey} is stale (${cacheAge}ms old)`);
-      return false;
-    }
+	    const cacheAge = Date.now() - cacheItem.timestamp;
+	    const TODAY_CACHE_DURATION = 30 * 1000; // 30 seconds
+	    if (cacheAge > TODAY_CACHE_DURATION) {
+	      return false;
+	    }
   }
   
   // For non-today data, check filter equality
@@ -836,10 +828,9 @@ const isCacheValid = (cacheKey, filters) => {
   return cacheAge < HISTORICAL_CACHE_DURATION;
 };
 const invalidateAllTaskCaches = () => {
-  console.log("Invalidating all task caches...");
-  cache.tasks.data = null;
-  cache.tasks.timestamp = null;
-  cache.tasks.filters = null;
+	  cache.tasks.data = null;
+	  cache.tasks.timestamp = null;
+	  cache.tasks.filters = null;
   
   cache.coreTasks.data = null;
   cache.coreTasks.timestamp = null;
@@ -854,10 +845,9 @@ const invalidateAllTaskCaches = () => {
   cache.adminTasks.filters = null;
 };
 const invalidateTodayCache = () => {
-  const todayString = getTodayDateString();
-  console.log("Invalidating cache for today:", todayString);
-  
-  // Invalidate allTasks cache if it's for today
+	  const todayString = getTodayDateString();
+	  
+	  // Invalidate allTasks cache if it's for today
   if (cache.allTasks.filters && 
       (cache.allTasks.filters.date === todayString || 
        (!cache.allTasks.filters.date && !cache.allTasks.filters.startDate && !cache.allTasks.filters.endDate))) {
@@ -937,17 +927,15 @@ export const fetchTasks = createAsyncThunk(
         ...filters,
         startDate: filters.startDate || todayString,
         endDate: filters.endDate || todayString,
-      };
+	      };
 
-      if (isCacheValid('tasks', effectiveFilters)) {
-        console.log("Using cached tasks data for", effectiveFilters.startDate);
-        return cache.tasks.data;
-      }
-      
-      console.log("Fetching fresh tasks data for", effectiveFilters.startDate);
-      const query = new URLSearchParams({
-        startDate: effectiveFilters.startDate,
-        endDate: effectiveFilters.endDate,
+	      if (isCacheValid('tasks', effectiveFilters)) {
+	        return cache.tasks.data;
+	      }
+	      
+	      const query = new URLSearchParams({
+	        startDate: effectiveFilters.startDate,
+	        endDate: effectiveFilters.endDate,
         shift: effectiveFilters.shift || "",
         department: effectiveFilters.department || "",
         employeeId: effectiveFilters.employee || "",
@@ -1459,11 +1447,10 @@ employeeTotalPages: 0,
 employeeCurrentPage: 1,
 
   },
-  reducers: {
-    invalidateCache: (state) => {
-      console.log("Manually invalidating all caches...");
-      invalidateAllTaskCaches();
-    },
+	  reducers: {
+	    invalidateCache: (state) => {
+	      invalidateAllTaskCaches();
+	    },
     resetTasks: (state) => {
       state.tasks = [];
       state.adminTasks = [];
@@ -1483,21 +1470,19 @@ employeeCurrentPage: 1,
       state.error = null;
     },
     // New action to force refresh today's data
-    forceRefreshToday: (state) => {
-      console.log("Force refreshing today's data...");
-      invalidateTodayCache();
-      state.allTasks = [];
-      state.lastFetchDate = null;
-    },
+	    forceRefreshToday: (state) => {
+	      invalidateTodayCache();
+	      state.allTasks = [];
+	      state.lastFetchDate = null;
+	    },
     // Check and refresh if data is not from today
-    ensureTodayData: (state) => {
-      const todayString = getTodayDateString();
-      if (state.lastFetchDate !== todayString) {
-        console.log("Data is not from today, refreshing...");
-        state.allTasks = [];
-        invalidateTodayCache();
-      }
-    }
+	    ensureTodayData: (state) => {
+	      const todayString = getTodayDateString();
+	      if (state.lastFetchDate !== todayString) {
+	        state.allTasks = [];
+	        invalidateTodayCache();
+	      }
+	    }
   },
   extraReducers: (builder) => {
     builder
@@ -1846,18 +1831,12 @@ employeeCurrentPage: 1,
         state.loading = true;
         state.error = null;
       })
-      .addCase(fetchAllTasks.fulfilled, (state, action) => {
-        state.loading = false;
-        state.allTasks = action.payload;
-        state.lastFetchDate = getTodayDateString(); // Track when we fetched
-        console.log("All tasks updated in state for date:", state.lastFetchDate, "Count:", action.payload?.length, "tasks");
-        
-        // Log dates for debugging
-        if (action.payload && action.payload.length > 0) {
-          const uniqueDates = [...new Set(action.payload.map(task => task.date))];
-          console.log("Unique dates in fetched tasks:", uniqueDates);
-        }
-      })
+	      .addCase(fetchAllTasks.fulfilled, (state, action) => {
+	        state.loading = false;
+	        state.allTasks = action.payload;
+	        state.lastFetchDate = getTodayDateString(); // Track when we fetched
+	        
+	      })
       .addCase(fetchAllTasks.rejected, (state, action) => {
         state.loading = false;
         state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";

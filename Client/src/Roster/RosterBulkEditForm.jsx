@@ -1021,18 +1021,31 @@
 import React, { useState, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { FiEye, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
-import { getRosterForBulkEdit, bulkUpdateRosterWeeks, clearBulkEditState, clearBulkSaveState } from '../features/slices/rosterSlice.js';
+import {
+    getRosterForBulkEdit,
+    bulkUpdateRosterWeeks,
+    clearBulkEditState,
+    clearBulkSaveState,
+    searchBulkEditEmployees
+} from '../features/slices/rosterSlice.js';
 
 const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const dispatch = useDispatch();
-    const { bulkEditRoster, bulkEditLoading, bulkEditError, bulkSaveLoading, bulkSaveSuccess, bulkSaveError } = useSelector((state) => state.roster);
+    const {
+        bulkEditRoster,
+        bulkEditLoading,
+        bulkEditError,
+        bulkSaveLoading,
+        bulkSaveSuccess,
+        bulkSaveError,
+        bulkEditSearch,
+        bulkEditSearchLoading,
+        bulkEditSearchError
+    } = useSelector((state) => state.roster);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [currentRosterWeek, setCurrentRosterWeek] = useState(null);
 
-    // Department Filter State
-    const [departmentFilter, setDepartmentFilter] = useState('');
-    const [showDepartmentFilter, setShowDepartmentFilter] = useState(false);
     const [availableDepartments, setAvailableDepartments] = useState([]);
 
     // Pagination State
@@ -1042,6 +1055,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const [activeTab, setActiveTab] = useState(0);
     const [editedWeeks, setEditedWeeks] = useState([]);
     const [showAddEmployeeForm, setShowAddEmployeeForm] = useState(false);
+    const [searchBy, setSearchBy] = useState('all'); // all | name | department | teamLeader
+    const [searchInput, setSearchInput] = useState('');
+    const [appliedSearch, setAppliedSearch] = useState('');
     const [newEmployee, setNewEmployee] = useState({
         name: '',
         department: '',
@@ -1065,19 +1081,17 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     }, [rosterId, dispatch]);
 
     useEffect(() => {
-        console.log("BULK EDIT ROSTER DATA:", bulkEditRoster);
-        
         if (bulkEditRoster?.data?.weeks) {
             // Deep clone the weeks data
             const weeksCopy = JSON.parse(JSON.stringify(bulkEditRoster.data.weeks));
-            
+
             // Ensure department field exists and add employeesByDepartment if not present
             weeksCopy.forEach(week => {
                 week.employees = week.employees.map(emp => ({
                     ...emp,
                     department: emp.department || 'General'
                 }));
-                
+
                 // Create employeesByDepartment if not present from backend
                 if (!week.employeesByDepartment) {
                     week.employeesByDepartment = week.employees.reduce((acc, emp) => {
@@ -1088,9 +1102,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     }, {});
                 }
             });
-            
+
             setEditedWeeks(weeksCopy);
-            
+
             // Set current roster week for date reference
             if (weeksCopy.length > 0) {
                 setCurrentRosterWeek(weeksCopy[0]);
@@ -1109,39 +1123,92 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         }
     }, [bulkEditRoster]);
 
-    // Handle Department Filter
-    const handleDepartmentFilter = (e) => {
-        setDepartmentFilter(e.target.value);
+    useEffect(() => {
+        const t = setTimeout(() => {
+            setAppliedSearch(String(searchInput || '').trim());
+        }, 350);
+        return () => clearTimeout(t);
+    }, [searchInput]);
+
+    useEffect(() => {
         setCurrentPage(1);
+    }, [activeTab, appliedSearch, searchBy]);
+
+    useEffect(() => {
+        if (!rosterId) return;
+        const q = String(appliedSearch || '').trim();
+        if (!q) return;
+
+        const currentData = bulkEditSearch?.data;
+        const isSameRequest =
+            currentData &&
+            String(currentData.rosterId) === String(rosterId) &&
+            String(currentData.q || '') === String(q) &&
+            String(currentData.searchBy || 'all') === String(searchBy || 'all');
+
+        if (isSameRequest) return;
+
+        dispatch(searchBulkEditEmployees({ rosterId, q, searchBy }));
+    }, [dispatch, rosterId, appliedSearch, searchBy, bulkEditSearch]);
+
+    const localEmployeeMatches = (employee, queryLower, by) => {
+        const name = String(employee?.name || '').toLowerCase();
+        const department = String(employee?.department || '').toLowerCase();
+        const teamLeader = String(employee?.teamLeader || '').toLowerCase();
+        const mode = String(by || 'all').toLowerCase();
+
+        if (!queryLower) return true;
+        if (mode === 'name') return name.includes(queryLower);
+        if (mode === 'department') return department.includes(queryLower);
+        if (mode === 'teamleader') return teamLeader.includes(queryLower);
+        return name.includes(queryLower) || department.includes(queryLower) || teamLeader.includes(queryLower);
     };
 
-    // Clear Department Filter
-    const clearDepartmentFilter = () => {
-        setDepartmentFilter('');
-        setCurrentPage(1);
-    };
+    const getFilteredEmployees = (weekNumber, employees) => {
+        const q = String(appliedSearch || '').trim();
+        if (!q) return employees;
 
-    // Apply Department Filter to Employees
-    const getFilteredEmployees = (employees) => {
-        if (!departmentFilter) return employees;
-        return employees.filter(emp =>
-            emp.department && emp.department.toLowerCase() === departmentFilter.toLowerCase()
-        );
+        const queryLower = q.toLowerCase();
+        const currentData = bulkEditSearch?.data;
+        const isSearchResultCurrent =
+            currentData &&
+            String(currentData.rosterId) === String(rosterId) &&
+            String(currentData.q || '') === String(q) &&
+            String(currentData.searchBy || 'all') === String(searchBy || 'all');
+
+        const matchedIdsRaw = isSearchResultCurrent
+            ? currentData?.matchingEmployeeIdsByWeek?.[String(weekNumber)]
+            : null;
+        const matchedIds = Array.isArray(matchedIdsRaw) ? new Set(matchedIdsRaw.map(String)) : null;
+
+        return (employees || []).filter((emp) => {
+            const id = emp?._id != null ? String(emp._id) : '';
+            const isNew = id.startsWith('new-');
+
+            if (isNew) return localEmployeeMatches(emp, queryLower, searchBy);
+            if (matchedIds) return matchedIds.has(id);
+
+            // No server results yet for this search: keep list stable until response arrives.
+            return true;
+        });
     };
 
     // Get Current Page Employees with Pagination
-    const getCurrentPageEmployees = (employees) => {
-        const filtered = getFilteredEmployees(employees);
+    const getCurrentPageEmployees = (weekNumber, employees) => {
+        const filtered = getFilteredEmployees(weekNumber, employees);
         const indexOfLastItem = currentPage * itemsPerPage;
         const indexOfFirstItem = indexOfLastItem - itemsPerPage;
         return filtered.slice(indexOfFirstItem, indexOfLastItem);
     };
 
-    // Calculate Total Pages
-    const getTotalPages = (employees) => {
-        const filtered = getFilteredEmployees(employees);
-        return Math.ceil(filtered.length / itemsPerPage);
-    };
+    useEffect(() => {
+        const week = editedWeeks?.[activeTab];
+        const weekNumber = week?.weekNumber;
+        const employees = week?.employees || [];
+        const filteredCount = getFilteredEmployees(weekNumber, employees).length;
+        const totalPages = Math.max(1, Math.ceil(filteredCount / itemsPerPage));
+        setCurrentPage((prev) => (prev > totalPages ? totalPages : prev));
+    }, [editedWeeks, activeTab, appliedSearch, searchBy, bulkEditSearch, itemsPerPage]);
 
     const handleEmployeeFieldChange = (weekIndex, employeeIndex, field, value) => {
         const updatedWeeks = [...editedWeeks];
@@ -1205,19 +1272,20 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
     const handleAddNewEmployee = () => {
         const validationErrors = {};
+        const isEmpty = (v) => v === null || v === undefined || v === '';
         if (!newEmployee.name.trim()) {
             validationErrors.name = 'Name is required';
         }
         if (!newEmployee.department) {
             validationErrors.department = 'Department is required';
         }
-        if (!newEmployee.shiftStartHour || !newEmployee.shiftEndHour) {
+        if (isEmpty(newEmployee.shiftStartHour) || isEmpty(newEmployee.shiftEndHour)) {
             validationErrors.shiftHours = 'Shift hours are required';
         }
-        if (parseInt(newEmployee.shiftStartHour) < 0 || parseInt(newEmployee.shiftStartHour) > 23) {
+        if (!isEmpty(newEmployee.shiftStartHour) && (parseInt(newEmployee.shiftStartHour, 10) < 0 || parseInt(newEmployee.shiftStartHour, 10) > 23)) {
             validationErrors.shiftStartHour = 'Start hour must be between 0-23';
         }
-        if (parseInt(newEmployee.shiftEndHour) < 0 || parseInt(newEmployee.shiftEndHour) > 23) {
+        if (!isEmpty(newEmployee.shiftEndHour) && (parseInt(newEmployee.shiftEndHour, 10) < 0 || parseInt(newEmployee.shiftEndHour, 10) > 23)) {
             validationErrors.shiftEndHour = 'End hour must be between 0-23';
         }
 
@@ -1397,7 +1465,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     day: 'numeric'
                 });
             }
-            
+
             // Fallback to the original date if no roster week
             const date = new Date(dateString);
             return date.toLocaleDateString('en-US', {
@@ -1413,10 +1481,10 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     // FIXED: Format history value with proper date connection to roster
     const formatHistoryValue = (value, weekStartDate) => {
         if (value === null || value === undefined || value === '') return '-';
-        
+
         // Handle date objects and date strings
         if (value instanceof Date) return formatSimpleDate(value);
-        
+
         // Handle array of daily status objects - use roster dates for display
         if (Array.isArray(value) && value.length > 0 && value[0]?.date && value[0]?.status) {
             return value.map((item, index) => {
@@ -1426,7 +1494,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     // Create date by adding days to start date
                     const displayDate = new Date(startDate);
                     displayDate.setDate(startDate.getDate() + index);
-                    
+
                     const formattedDate = displayDate.toLocaleDateString('en-US', {
                         year: 'numeric',
                         month: 'short',
@@ -1434,7 +1502,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     });
                     return `${formattedDate}: ${item.status}`;
                 }
-                
+
                 // Fallback to original date
                 const date = new Date(item.date);
                 const formattedDate = date.toLocaleDateString('en-US', {
@@ -1445,13 +1513,13 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                 return `${formattedDate}: ${item.status}`;
             }).join(', ');
         }
-        
+
         // Handle single date string
         if (typeof value === 'string' && isLikelyDateString(value)) {
             const formattedDate = formatSimpleDate(value);
             if (formattedDate) return formattedDate;
         }
-        
+
         if (typeof value === 'boolean') return value ? 'Yes' : 'No';
         if (typeof value === 'object') {
             // Check if it's a daily status object
@@ -1462,7 +1530,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     // The field name will indicate which day it is
                     return `${value.status}`;
                 }
-                
+
                 const date = new Date(value.date);
                 const formattedDate = date.toLocaleDateString('en-US', {
                     year: 'numeric',
@@ -1501,7 +1569,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
             if (changes.before.dailyStatus && changes.after.dailyStatus) {
                 const beforeStatuses = changes.before.dailyStatus;
                 const afterStatuses = changes.after.dailyStatus;
-                
+
                 // Compare each day's status
                 beforeStatuses.forEach((beforeItem, index) => {
                     const afterItem = afterStatuses[index];
@@ -1513,7 +1581,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         );
                     }
                 });
-                
+
                 // Handle other fields
                 Object.keys(changes.after).forEach(key => {
                     if (key !== 'dailyStatus' && changes.before[key] !== changes.after[key]) {
@@ -1679,8 +1747,15 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         return null;
     }
 
-    const { weeks, userPermissions } = bulkEditRoster.data;
+    const { userPermissions } = bulkEditRoster.data;
     const currentDate = new Date();
+    const activeWeek = editedWeeks?.[activeTab];
+    const activeWeekNumber = activeWeek?.weekNumber;
+    const activeEmployees = activeWeek?.employees || [];
+    const activeFilteredEmployees = activeWeekNumber != null
+        ? getFilteredEmployees(activeWeekNumber, activeEmployees)
+        : activeEmployees;
+    const activeTotalPages = Math.max(1, Math.ceil(activeFilteredEmployees.length / itemsPerPage));
 
     return (
         <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
@@ -1699,55 +1774,54 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         </div>
                     </div>
 
-                    {/* Department Filter Button */}
-                    <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setShowDepartmentFilter(!showDepartmentFilter)}
-                            className="mt-5 px-1 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-sm shadow-sm flex items-center gap-2"
-                        >
-                            <span>🔍</span>
-                            {showDepartmentFilter ? 'Hide Filter' : 'Filter by Department'}
-                        </button>
-                    </div>
-                </div>
-
-                {/* Department Filter Dropdown */}
-                {showDepartmentFilter && (
-                    <div className="px-4 md:px-6 pb-4">
-                        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm">
-                            <div className="flex flex-col md:flex-row gap-4 items-start md:items-center">
-                                <div className="flex-1 w-full">
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Select Department
-                                    </label>
-                                    <select
-                                        value={departmentFilter}
-                                        onChange={handleDepartmentFilter}
-                                        className="w-full border border-gray-300 p-2 rounded-lg text-sm"
-                                    >
-                                        <option value="">All Departments</option>
-                                        {availableDepartments.map((dept, index) => (
-                                            <option key={index} value={dept}>{dept}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                {departmentFilter && (
+                    <div className="w-full lg:w-[460px]">
+                        <div className="flex gap-2 mt-8">
+                            <select
+                                value={searchBy}
+                                onChange={(e) => setSearchBy(e.target.value)}
+                                className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                title="Search by"
+                            >
+                                <option value="all">All</option>
+                                <option value="name">Name</option>
+                                <option value="department">Department</option>
+                                <option value="teamLeader">Team Leader</option>
+                            </select>
+                            <div className="flex-1 relative">
+                                <input
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    placeholder="Type to search..."
+                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                />
+                                {searchInput ? (
                                     <button
-                                        onClick={clearDepartmentFilter}
-                                        className="mt-4 md:mt-7 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm"
+                                        type="button"
+                                        onClick={() => setSearchInput('')}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-800"
                                     >
-                                        Clear Filter
+                                        Clear
                                     </button>
-                                )}
+                                ) : null}
                             </div>
-                            {departmentFilter && (
-                                <div className="mt-2 text-sm text-purple-600">
-                                    Showing employees from: <span className="font-semibold">{departmentFilter}</span>
-                                </div>
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                            {bulkEditSearchLoading ? (
+                                <span className="text-slate-500">Searching...</span>
+                            ) : null}
+                            {appliedSearch ? (
+                                <span className="text-slate-600">
+                                    Showing results for: <span className="font-medium">{appliedSearch}</span>
+                                </span>
+                            ) : (
+                                <span className="text-slate-500">Search is optional.</span>
                             )}
+                            {bulkEditSearchError ? (
+                                <span className="text-rose-600">{bulkEditSearchError}</span>
+                            ) : null}
                         </div>
                     </div>
-                )}
+                </div>
 
                 <div className="border-t border-slate-200 bg-slate-50/80">
                     <div className="flex overflow-x-auto px-3 py-3 gap-2">
@@ -1768,13 +1842,12 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 <button
                                     key={week.weekNumber}
                                     onClick={() => setActiveTab(index)}
-                                    className={`px-4 py-2.5 rounded-xl border font-medium whitespace-nowrap flex items-center transition-colors ${
-                                        activeTab === index
-                                            ? 'border-blue-300 text-blue-800 bg-blue-100 shadow-sm'
-                                            : hasWeekEnded
-                                                ? 'border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100'
-                                                : 'border-slate-200 text-slate-600 bg-white hover:text-slate-800 hover:bg-slate-50'
-                                    } ${!isEditable ? 'cursor-not-allowed opacity-60' : ''}`}
+                                    className={`px-4 py-2.5 rounded-xl border font-medium whitespace-nowrap flex items-center transition-colors ${activeTab === index
+                                        ? 'border-blue-300 text-blue-800 bg-blue-100 shadow-sm'
+                                        : hasWeekEnded
+                                            ? 'border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100'
+                                            : 'border-slate-200 text-slate-600 bg-white hover:text-slate-800 hover:bg-slate-50'
+                                        } ${!isEditable ? 'cursor-not-allowed opacity-60' : ''}`}
                                     title={!isEditable ? 'Week has ended. Only Super Admin can edit past weeks.' : ''}
                                 >
                                     <span className="mr-2 text-sm">
@@ -1782,18 +1855,18 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         {timelineStatus === 'current' && '📌'}
                                         {timelineStatus === 'upcoming' && '📋'}
                                     </span>
-                                    
+
                                     <div className="flex flex-col items-start">
                                         <span>Week {week.weekNumber}</span>
                                         <span className="text-[11px] text-slate-500">
-                                            {new Date(week.startDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short' })} - {new Date(week.endDate).toLocaleDateString('en-US', { day: '2-digit', month: 'short' })}
+                                            {new Date(week.startDate).toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' })} - {new Date(week.endDate).toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' })}
                                         </span>
                                     </div>
 
-	                                    <span className="ml-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
-	                                        {week.employeeCount} total
-	                                    </span>
-                                    
+                                    <span className="ml-2 text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-600">
+                                        {week.employeeCount} total
+                                    </span>
+
                                     {hasWeekEnded && (
                                         <span className="ml-2 text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                                             Past Week
@@ -1814,7 +1887,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
             <div className="flex-1 overflow-y-auto p-4 md:p-6">
                 {editedWeeks.length > 0 && (
                     <>
-                        {/* Week Header with Department Summary */}
                         <div className="mb-6 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
                             <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
                                 <div>
@@ -1822,16 +1894,16 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         Week {editedWeeks[activeTab].weekNumber}
                                     </h3>
                                     <p className="text-slate-600 text-sm">
-                                        {new Date(editedWeeks[activeTab].startDate).toLocaleDateString()} -
-                                        {new Date(editedWeeks[activeTab].endDate).toLocaleDateString()}
+                                        {new Date(editedWeeks[activeTab].startDate).toLocaleDateString(undefined, { timeZone: 'Asia/Kolkata' })} -
+                                        {new Date(editedWeeks[activeTab].endDate).toLocaleDateString(undefined, { timeZone: 'Asia/Kolkata' })}
                                     </p>
                                 </div>
-                                
-	                                <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
-	                                    <div className="text-sm text-slate-600 font-medium">
-	                                        {getFilteredEmployees(editedWeeks[activeTab].employees).length} employees
-	                                        {departmentFilter && ` (filtered from ${editedWeeks[activeTab].employees.length})`}
-	                                    </div>
+
+                                <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
+                                    <div className="text-sm text-slate-600 font-medium">
+                                        {activeFilteredEmployees.length} employees
+                                        {appliedSearch ? ` (filtered from ${activeEmployees.length})` : ''}
+                                    </div>
                                     <button
                                         onClick={() => setShowAddEmployeeForm(true)}
                                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shadow-sm"
@@ -1885,8 +1957,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         />
                                         {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
                                     </div>
-
-                                    {/* Department Dropdown for New Employee */}
                                     <div>
                                         <select
                                             value={newEmployee.department}
@@ -2020,7 +2090,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {getCurrentPageEmployees(editedWeeks[activeTab].employees).map((employee, empIndex) => {
+                                        {getCurrentPageEmployees(activeWeekNumber, activeEmployees).map((employee, empIndex) => {
                                             const weekStartDate = new Date(editedWeeks[activeTab].startDate);
                                             const weekEndDate = new Date(editedWeeks[activeTab].endDate);
                                             const daysInWeek = Math.ceil((weekEndDate - weekStartDate) / (1000 * 60 * 60 * 24)) + 1;
@@ -2128,14 +2198,13 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                             value={status.status}
                                                                             onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, `dailyStatus[${dayIndex}]`, e.target.value)}
                                                                             title={`${fullDateLabel} - ${status.status}`}
-                                                                            className={`w-8 h-8 border rounded text-center text-xs ${
-                                                                                status.status === 'P' ? 'border-green-300 bg-green-50' :
+                                                                            className={`w-8 h-8 border rounded text-center text-xs ${status.status === 'P' ? 'border-green-300 bg-green-50' :
                                                                                 status.status === 'WO' ? 'border-blue-300 bg-blue-50' :
-                                                                                status.status === 'L' ? 'border-red-300 bg-red-50' :
-                                                                                status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
-                                                                                status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
-                                                                                'border-gray-300 bg-gray-50'
-                                                                            }`}
+                                                                                    status.status === 'L' ? 'border-red-300 bg-red-50' :
+                                                                                        status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
+                                                                                            status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
+                                                                                                'border-gray-300 bg-gray-50'
+                                                                                }`}
                                                                         >
                                                                             <option value="P">P</option>
                                                                             <option value="WO">WO</option>
@@ -2180,12 +2249,10 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     </tbody>
                                 </table>
                             </div>
-
-                            {/* Pagination Controls */}
-                            {getFilteredEmployees(editedWeeks[activeTab].employees).length > itemsPerPage && (
+                            {activeFilteredEmployees.length > itemsPerPage && (
                                 <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                                     <div className="text-sm text-slate-600">
-                                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, getFilteredEmployees(editedWeeks[activeTab].employees).length)} of {getFilteredEmployees(editedWeeks[activeTab].employees).length} employees
+                                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, activeFilteredEmployees.length)} of {activeFilteredEmployees.length} employees
                                     </div>
                                     <div className="flex gap-2">
                                         <button
@@ -2196,11 +2263,11 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                             <FiChevronLeft />
                                         </button>
                                         <span className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
-                                            Page {currentPage} of {getTotalPages(editedWeeks[activeTab].employees)}
+                                            Page {currentPage} of {activeTotalPages}
                                         </span>
                                         <button
-                                            onClick={() => setCurrentPage(prev => Math.min(getTotalPages(editedWeeks[activeTab].employees), prev + 1))}
-                                            disabled={currentPage === getTotalPages(editedWeeks[activeTab].employees)}
+                                            onClick={() => setCurrentPage(prev => Math.min(activeTotalPages, prev + 1))}
+                                            disabled={currentPage === activeTotalPages}
                                             className="p-2 border border-slate-300 rounded-lg bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             <FiChevronRight />
@@ -2209,10 +2276,10 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 </div>
                             )}
 
-                            {getFilteredEmployees(editedWeeks[activeTab].employees).length === 0 && (
+                            {activeFilteredEmployees.length === 0 && (
                                 <div className="p-8 text-center text-gray-500">
-                                    {departmentFilter ? (
-                                        <>No employees found in <span className="font-semibold">{departmentFilter}</span> department.</>
+                                    {appliedSearch ? (
+                                        <>No employees match <span className="font-semibold">{appliedSearch}</span>.</>
                                     ) : (
                                         'No employees in this week. Click "Add Employee" to add employees.'
                                     )}

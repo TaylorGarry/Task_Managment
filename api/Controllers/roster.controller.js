@@ -1506,8 +1506,31 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       });
     }
 
-    const start = new Date(startDate);
-    const end = new Date(endDate);
+    const IST_TIME_ZONE = "Asia/Kolkata";
+
+    const parseYmd = (value) => {
+      const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return null;
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+      return { year, month, day };
+    };
+
+    // Treat incoming YYYY-MM-DD as an IST calendar date, regardless of server timezone.
+    // Build UTC Date boundaries that represent IST day start/end.
+    const startYmd = parseYmd(startDate);
+    const endYmd = parseYmd(endDate);
+    if (!startYmd || !endYmd) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid startDate or endDate (expected YYYY-MM-DD)"
+      });
+    }
+
+    const start = new Date(`${startDate}T00:00:00.000+05:30`);
+    const end = new Date(`${endDate}T23:59:59.999+05:30`);
 
     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
       return res.status(400).json({
@@ -1515,9 +1538,6 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
         message: "Invalid startDate or endDate"
       });
     }
-
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
 
     if (start > end) {
       return res.status(400).json({
@@ -1556,29 +1576,64 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	    const normalizeDepartment = (value) => String(value || "").trim().toLowerCase();
 	    const deptFilter = department ? normalizeDepartment(department) : null;
 
-	    const toDateKey = (value) => {
+	    const toIstDateKey = (value) => {
+	      if (!value) return "";
+	      if (typeof value === "string") {
+	        const trimmed = value.trim();
+	        if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+	      }
 	      const d = value instanceof Date ? value : new Date(value);
 	      if (Number.isNaN(d.getTime())) return "";
-	      return d.toISOString().slice(0, 10);
+	      const parts = new Intl.DateTimeFormat("en-GB", {
+	        timeZone: IST_TIME_ZONE,
+	        year: "numeric",
+	        month: "2-digit",
+	        day: "2-digit",
+	      }).formatToParts(d);
+	      const year = parts.find((p) => p.type === "year")?.value;
+	      const month = parts.find((p) => p.type === "month")?.value;
+	      const day = parts.find((p) => p.type === "day")?.value;
+	      if (!year || !month || !day) return "";
+	      return `${year}-${month}-${day}`;
 	    };
 
 	    const pad2 = (num) => String(num).padStart(2, "0");
-	    const dayLabel = (date) => {
-	      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-	      return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)} ${dayNames[date.getDay()]}`;
+
+	    const eachDateKeyInRange = (fromYmd, toYmd) => {
+	      const startUtcNoon = new Date(Date.UTC(fromYmd.year, fromYmd.month - 1, fromYmd.day, 12, 0, 0, 0));
+	      const endUtcNoon = new Date(Date.UTC(toYmd.year, toYmd.month - 1, toYmd.day, 12, 0, 0, 0));
+	      const keys = [];
+	      const cursor = new Date(startUtcNoon);
+	      while (cursor <= endUtcNoon) {
+	        const parts = new Intl.DateTimeFormat("en-GB", {
+	          timeZone: IST_TIME_ZONE,
+	          year: "numeric",
+	          month: "2-digit",
+	          day: "2-digit",
+	        }).formatToParts(cursor);
+	        const year = parts.find((p) => p.type === "year")?.value;
+	        const month = parts.find((p) => p.type === "month")?.value;
+	        const day = parts.find((p) => p.type === "day")?.value;
+	        if (year && month && day) keys.push(`${year}-${month}-${day}`);
+	        cursor.setUTCDate(cursor.getUTCDate() + 1);
+	      }
+	      return keys;
 	    };
 
-	    const eachDateInRange = (from, to) => {
-	      const dates = [];
-	      const current = new Date(from);
-	      current.setHours(0, 0, 0, 0);
-	      const endDate = new Date(to);
-	      endDate.setHours(0, 0, 0, 0);
-	      while (current <= endDate) {
-	        dates.push(new Date(current));
-	        current.setDate(current.getDate() + 1);
-	      }
-	      return dates;
+	    const dayLabelFromKey = (dateKey) => {
+	      const dt = new Date(`${dateKey}T12:00:00.000+05:30`);
+	      if (Number.isNaN(dt.getTime())) return dateKey;
+	      const parts = new Intl.DateTimeFormat("en-GB", {
+	        timeZone: IST_TIME_ZONE,
+	        day: "2-digit",
+	        month: "2-digit",
+	        weekday: "short",
+	      }).formatToParts(dt);
+	      const day = parts.find((p) => p.type === "day")?.value;
+	      const month = parts.find((p) => p.type === "month")?.value;
+	      const weekday = parts.find((p) => p.type === "weekday")?.value;
+	      if (!day || !month || !weekday) return dateKey;
+	      return `${day}/${month} ${weekday}`;
 	    };
 
 	    const shiftHourToString = (value) => {
@@ -1595,8 +1650,8 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	      CreatedDate: new Date()
 	    };
 
-	    const dates = eachDateInRange(start, end);
-	    const dateKeys = dates.map((d) => toDateKey(d));
+	    const dateKeys = eachDateKeyInRange(startYmd, endYmd);
+	    const dateLabels = dateKeys.map((k) => dayLabelFromKey(k));
 
 	    const employeeMap = new Map();
 	    const ensureEmployee = (emp) => {
@@ -1635,13 +1690,13 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 
 	              const rowRef = ensureEmployee(emp);
 
-	              (emp.dailyStatus || []).forEach((ds) => {
-	                const dsDate = new Date(ds.date);
-	                if (Number.isNaN(dsDate.getTime())) return;
-	                if (dsDate < start || dsDate > end) return;
+		              (emp.dailyStatus || []).forEach((ds) => {
+		                const dsDate = new Date(ds.date);
+		                if (Number.isNaN(dsDate.getTime())) return;
+		                if (dsDate < start || dsDate > end) return;
 
-	              const dateKey = toDateKey(dsDate);
-	              if (!dateKey) return;
+		              const dateKey = toIstDateKey(dsDate);
+		              if (!dateKey) return;
 
 	              rowRef.dailyByDateKey.set(dateKey, {
 	                status: ds.status || "",
@@ -1702,9 +1757,23 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 
 	    const formatTime = (value) => {
 	      if (!value) return "";
+	      if (typeof value === "string") {
+	        const trimmed = value.trim();
+	        const timeOnly = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+	        if (timeOnly) return `${pad2(timeOnly[1])}:${pad2(timeOnly[2])}`;
+	      }
 	      const d = value instanceof Date ? value : new Date(value);
 	      if (Number.isNaN(d.getTime())) return "";
-	      return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+	      const parts = new Intl.DateTimeFormat("en-GB", {
+	        timeZone: IST_TIME_ZONE,
+	        hour: "2-digit",
+	        minute: "2-digit",
+	        hour12: false,
+	      }).formatToParts(d);
+	      const hour = parts.find((p) => p.type === "hour")?.value;
+	      const minute = parts.find((p) => p.type === "minute")?.value;
+	      if (!hour || !minute) return "";
+	      return `${hour}:${minute}`;
 	    };
 
 	    const buildSnapshotSheet = () => {
@@ -1721,8 +1790,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	      // Keep "1 employee = 1 row" format; add per-day grouped columns so
 	      // the export mirrors the roster sheet style while still showing what
 	      // Transport and Department updated.
-	      dates.forEach((d) => {
-	        const label = dayLabel(d);
+	      dateLabels.forEach((label) => {
 	        header.push(
 	          `${label} Status`,
 	          `${label} Transport Status`,
@@ -1786,7 +1854,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	        ]);
 	      });
 
-	      const perDayCols = dates.length * 5;
+	      const perDayCols = dateKeys.length * 5;
 	      const ws = XLSX.utils.aoa_to_sheet(rows);
 	      ws["!cols"] = [
 	        ...commonCols,
@@ -1799,8 +1867,8 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	    buildSnapshotSheet();
 
 	    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-	    const startKey = toDateKey(start);
-	    const endKey = toDateKey(end);
+	    const startKey = startDate;
+	    const endKey = endDate;
 	    const deptSuffix = deptFilter ? `_dept_${deptFilter.replace(/\s+/g, "-")}` : "";
 
     res.setHeader(
@@ -4465,16 +4533,17 @@ export const rosterUploadFromExcel = async (req, res) => {
       return header.toString().replace(/^\uFEFF/, '').trim();
     });
     
-    // Convert to array of objects
-    const formattedData = dataRows.map(row => {
-      const obj = {};
-      cleanHeaders.forEach((header, index) => {
-        if (header) {
-          obj[header] = row[index] || '';
-        }
-      });
-      return obj;
-    }).filter(row => row.Name && row.Name.toString().trim() !== '');
+	    // Convert to array of objects
+	    const formattedData = dataRows.map(row => {
+	      const obj = {};
+	      cleanHeaders.forEach((header, index) => {
+	        if (header) {
+	          // Preserve valid falsy values like 0 (important for shiftStartHour = 0).
+	          obj[header] = row[index] ?? '';
+	        }
+	      });
+	      return obj;
+	    }).filter(row => row.Name && row.Name.toString().trim() !== '');
     
     if (!formattedData || formattedData.length === 0) {
       return res.status(400).json({
@@ -4587,14 +4656,54 @@ export const rosterUploadFromExcel = async (req, res) => {
           continue;
         }
         
-        // Shift hours
-        const shiftStartHour = parseInt(row[columnMap['Shift Start Hour']]);
-        const shiftEndHour = parseInt(row[columnMap['Shift End Hour']]);
-        
-        if (isNaN(shiftStartHour) || isNaN(shiftEndHour)) {
-          errors.push(`Row ${index + dataStartRowIndex + 1}: Invalid shift hours`);
-          continue;
-        }
+	        // Shift hours
+	        const parseShiftHour = (raw) => {
+	          if (raw === null || raw === undefined) return NaN;
+	          if (typeof raw === "string") {
+	            const trimmed = raw.trim();
+	            if (!trimmed) return NaN;
+	            const hm = trimmed.match(/^(\d{1,2})(?::(\d{2}))?$/);
+	            if (hm) return Number(hm[1]);
+
+	            // Try numeric strings like "0.5" (Excel time serial fraction of a day)
+	            const num = Number(trimmed);
+	            if (Number.isFinite(num)) raw = num;
+	            else return NaN;
+	          }
+
+	          if (typeof raw === "number") {
+	            if (!Number.isFinite(raw)) return NaN;
+
+	            // Excel may encode time-of-day as fraction of a day (0..1)
+	            if (raw >= 0 && raw < 1) {
+	              const hours = Math.floor(raw * 24 + 1e-9);
+	              return hours;
+	            }
+
+	            // Otherwise treat as hour number
+	            return Math.trunc(raw);
+	          }
+
+	          if (raw instanceof Date) {
+	            // Interpret Date as local clock hour (timezone not meaningful for shift hours)
+	            return raw.getHours();
+	          }
+
+	          return NaN;
+	        };
+
+	        const shiftStartHour = parseShiftHour(row[columnMap['Shift Start Hour']]);
+	        const shiftEndHour = parseShiftHour(row[columnMap['Shift End Hour']]);
+	        
+	        if (!Number.isFinite(shiftStartHour) || !Number.isFinite(shiftEndHour)) {
+	          errors.push(`Row ${index + dataStartRowIndex + 1}: Invalid shift hours`);
+	          continue;
+	        }
+
+	        if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
+	          errors.push(`Row ${index + dataStartRowIndex + 1}: Shift hours must be between 0 and 23`);
+	          continue;
+	        }
         
         employeesData.push({
           userId: null,
@@ -6465,6 +6574,113 @@ export const updateAttendance = async (req, res) => {
   }
 };
 
+export const searchBulkEditEmployees = async (req, res) => {
+  try {
+    const { rosterId } = req.params;
+    const user = req.user;
+    const userAccountType = user?.accountType;
+
+    const q = typeof req.query?.q === "string" ? req.query.q.trim() : "";
+    const searchByRaw = typeof req.query?.searchBy === "string" ? req.query.searchBy.trim() : "";
+    const searchBy = searchByRaw || "all"; // all | name | department | teamLeader
+    const department = typeof req.query?.department === "string" ? req.query.department.trim() : "";
+
+    if (!rosterId) {
+      return res.status(400).json({
+        success: false,
+        message: "rosterId is required",
+      });
+    }
+
+    if (!["superAdmin", "HR"].includes(userAccountType)) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only Super Admin and HR can search bulk edit rosters",
+        userAccountType,
+      });
+    }
+
+    // Populate only what we need for search (department can come from userId).
+    const roster = await Roster.findById(rosterId).populate("weeks.employees.userId", "department username");
+    if (!roster) {
+      return res.status(404).json({
+        success: false,
+        message: "Roster not found",
+      });
+    }
+
+    const needle = q ? q.toLowerCase() : "";
+    const by = String(searchBy || "all").toLowerCase();
+    const deptNeedle = department ? department.toLowerCase() : "";
+    const contains = (value) => String(value || "").toLowerCase().includes(needle);
+    const sameDept = (value) => String(value || "").toLowerCase() === deptNeedle;
+
+    const hasAnyFilter = Boolean(needle || deptNeedle);
+
+    const matchingEmployeeIdsByWeek = {};
+    const allMatching = new Set();
+
+    (roster.weeks || []).forEach((week) => {
+      if (!week) return;
+      const weekNumber = String(week.weekNumber ?? "");
+      if (!weekNumber) return;
+
+      const ids = [];
+      const employees = (week.employees || []).filter((emp) => emp !== null);
+
+      employees.forEach((emp) => {
+        if (!emp) return;
+
+        const empName = emp.name || "";
+        const empTeamLeader = emp.teamLeader || "";
+        const empDepartment = emp.department || emp.userId?.department || "General";
+
+        let matches = true;
+
+        if (deptNeedle) {
+          matches = matches && sameDept(empDepartment);
+        }
+
+        if (needle) {
+          if (by === "department") matches = matches && contains(empDepartment);
+          else if (by === "name") matches = matches && contains(empName);
+          else if (by === "teamleader") matches = matches && contains(empTeamLeader);
+          else matches = matches && (contains(empName) || contains(empDepartment) || contains(empTeamLeader));
+        }
+
+        if (!matches) return;
+
+        const idStr = emp._id ? String(emp._id) : null;
+        if (!idStr) return;
+        ids.push(idStr);
+        allMatching.add(idStr);
+      });
+
+      matchingEmployeeIdsByWeek[weekNumber] = ids;
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        rosterId: String(roster._id),
+        q,
+        searchBy,
+        department,
+        hasAnyFilter,
+        totalMatches: allMatching.size,
+        matchingEmployeeIds: Array.from(allMatching),
+        matchingEmployeeIdsByWeek,
+      },
+    });
+  } catch (error) {
+    console.error("Error searching roster for bulk edit:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to search roster for bulk editing",
+    });
+  }
+};
+
 export const updateAttendanceBulk = async (req, res) => {
   try {
     const {
@@ -7000,6 +7216,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     const user = req.user;
     const rawPage = req.query?.page;
     const rawLimit = req.query?.limit;
+    const q = typeof req.query?.q === "string" ? req.query.q.trim() : "";
+    const searchByRaw = typeof req.query?.searchBy === "string" ? req.query.searchBy.trim() : "";
+    const searchBy = searchByRaw || "all";
 
     console.log("📡 Fetching updates for:", { 
       rosterId, 
@@ -7092,6 +7311,20 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     }
 
     // 🔥 FIXED: Format employees with ALL status and arrival time data
+    // Optional server-side search (department/name/teamLeader)
+    if (q) {
+      const needle = q.toLowerCase();
+      const contains = (value) => String(value || "").toLowerCase().includes(needle);
+      const by = String(searchBy || "all").toLowerCase();
+      filteredEmployees = filteredEmployees.filter((emp) => {
+        if (!emp) return false;
+        if (by === "department") return contains(emp.department);
+        if (by === "name") return contains(emp.name);
+        if (by === "teamleader") return contains(emp.teamLeader);
+        return contains(emp.name) || contains(emp.department) || contains(emp.teamLeader);
+      });
+    }
+
     const totalEmployees = filteredEmployees.length;
 
     // Pagination (optional; backward compatible when not provided)
@@ -7190,13 +7423,15 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 	      message: resolvedByDate
 	        ? `Employees for updates (resolved week by date: ${date})`
 	        : `Employees for updates (Team Leader: ${user.username})`,
-	      data: {
-	        rosterId: roster._id,
-	        requestedDate: date,
-	        weekNumber: week.weekNumber,
-	        startDate: week.startDate,
-	        endDate: week.endDate,
-	        currentDate: currentDate,
+		      data: {
+		        rosterId: roster._id,
+		        requestedDate: date,
+		        q,
+		        searchBy,
+		        weekNumber: week.weekNumber,
+		        startDate: week.startDate,
+		        endDate: week.endDate,
+		        currentDate: currentDate,
 		        canEdit: canEdit,
 	        editMessage: editMessage,
 	        rosterEntries: formattedRosterEntries,
