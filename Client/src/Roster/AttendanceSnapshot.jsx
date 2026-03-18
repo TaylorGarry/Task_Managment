@@ -1,7 +1,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice';
+import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice.js';
 import { Calendar, Users, Clock, RefreshCw, AlertCircle, ChevronDown, SlidersHorizontal, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import AdminNavbar from "../components/AdminNavbar.jsx";
 
