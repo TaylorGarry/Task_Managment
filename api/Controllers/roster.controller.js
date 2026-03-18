@@ -4143,6 +4143,7 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
     });
   }
 };
+
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
@@ -4327,7 +4328,8 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
       error: error.stack
     });
   }
-}; 
+};
+
 export const updateOpsMetaRoster = async (req, res) => {
   try {
     const { employeeId, updates } = req.body;
@@ -4416,6 +4418,7 @@ export const updateOpsMetaRoster = async (req, res) => {
     return res.status(500).json({ success: false, message: error.message });
   }
 };
+
 //by farhan
 export const rosterUploadFromExcel = async (req, res) => {
   try {
@@ -4903,6 +4906,7 @@ export const rosterUploadFromExcel = async (req, res) => {
     });
   }
 };
+
 // export const rosterUploadFromExcel = async (req, res) => {
 //   try {
 //     const user = req.user;
@@ -5391,6 +5395,7 @@ export const rosterUploadFromExcel = async (req, res) => {
 // };
 
 //by farhan
+
 export const exportRosterTemplate = async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -7358,6 +7363,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       shiftEndHour: emp.shiftEndHour || 0,
       dailyStatus: (emp.dailyStatus || []).map(ds => ({
         date: ds.date,
+        status: ds.status || '',
         // 🔥 STATUS FIELDS - NEW
         transportStatus: ds.transportStatus || '',
         departmentStatus: ds.departmentStatus || '',
@@ -7651,9 +7657,6 @@ export const getTransportDetailForSuperAdmin = async (req, res) => {
     });
   }
 };
-
-// rostercomtroller
-// Modified: Department-wise attendance view
 export const getDepartmentWiseAttendance = async (req, res) => {
   try {
     const { rosterId, weekNumber, date } = req.params;
