@@ -127,6 +127,8 @@ import {
 		  getDepartmentWiseAttendance,
 		  exportAttendanceSnapshotToExcel,
 		  searchBulkEditEmployees,
+      updatePunchTimes,
+      bulkUpdatePunchTimes,
 			} from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
@@ -249,5 +251,16 @@ router.get(
   '/attendance/department-wise/:rosterId/:weekNumber/:date',
   authMiddleware,
   getDepartmentWiseAttendance
+);
+
+router.put(
+  "/update-punch-times",
+  authMiddleware,
+  updatePunchTimes  // You need to import this from controller
+);
+router.put(
+  "/update-punch-times/bulk",
+  authMiddleware,
+  bulkUpdatePunchTimes  // Bulk update
 );
 export default router;

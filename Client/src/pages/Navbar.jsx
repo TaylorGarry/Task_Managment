@@ -448,7 +448,7 @@ const Navbar = () => {
   const isTransportDepartment = user?.department === "Transport";
 
   // ✅ Attendance Update Permission
-  const allowedAttendanceDepartments = ["Ops - Meta", "Transport"];
+  const allowedAttendanceDepartments = ["Ops - Meta", "Transport", "Developer", "Marketing", "Ticketing"];
 
   const canAccessAttendanceUpdate =
     (user?.accountType === "employee" &&

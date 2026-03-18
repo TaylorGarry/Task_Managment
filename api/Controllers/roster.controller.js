@@ -151,8 +151,6 @@ import User from "../Modals/User.modal.js";
 //   }
 // };
 
-
-
 export const deleteEmployeeFromRoster = async (req, res) => {
   try {
     const { rosterId, weekNumber, employeeId } = req.body;
@@ -7364,6 +7362,13 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       dailyStatus: (emp.dailyStatus || []).map(ds => ({
         date: ds.date,
         status: ds.status || '',
+         // 🔥 NEW PUNCH FIELDS
+    punchIn: ds.punchIn || null,
+    punchOut: ds.punchOut || null,
+    totalHours: ds.totalHours || null,
+    punchUpdatedBy: ds.punchUpdatedBy || null,
+    punchUpdatedAt: ds.punchUpdatedAt || null,
+    isPunchCalculated: ds.isPunchCalculated || false,
         // 🔥 STATUS FIELDS - NEW
         transportStatus: ds.transportStatus || '',
         departmentStatus: ds.departmentStatus || '',
@@ -7931,6 +7936,522 @@ export const getDepartmentWiseAttendance = async (req, res) => {
       success: false,
       message: error.message || "Server error",
       error: error.stack
+    });
+  }
+};
+// ===========================================
+// NEW: Update Punch In/Out Times (HR only)
+// ===========================================
+export const updatePunchTimes = async (req, res) => {
+  try {
+    const { 
+      rosterId, 
+      weekNumber, 
+      employeeId, 
+      date, 
+      punchIn, 
+      punchOut 
+    } = req.body;
+    
+    const user = req.user;
+
+    // Validation
+    if (!rosterId || !weekNumber || !employeeId || !date) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, employeeId, date"
+      });
+    }
+
+    // Only HR and Super Admin can update punch times
+    if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can update punch in/out times"
+      });
+    }
+
+    // Find roster
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    // Find week
+    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    // Find employee
+    const employee = week.employees.id(employeeId);
+    if (!employee) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    // Process date
+    const selectedDate = new Date(date);
+    if (isNaN(selectedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    selectedDate.setHours(0, 0, 0, 0);
+
+    // Find or create daily status
+    let daily = employee.dailyStatus.find(d => {
+      const dDate = new Date(d.date);
+      dDate.setHours(0, 0, 0, 0);
+      return dDate.getTime() === selectedDate.getTime();
+    });
+
+    const changes = [];
+    const isNewDay = !daily;
+
+    if (isNewDay) {
+      daily = { 
+        date: selectedDate,
+        status: employee.dailyStatus?.[0]?.status || "P",
+        punchIn: null,
+        punchOut: null,
+        totalHours: null,
+        punchUpdatedBy: null,
+        punchUpdatedAt: null,
+        isPunchCalculated: false,
+        transportStatus: "",
+        departmentStatus: "",
+        transportStatusUpdatedBy: null,
+        transportStatusUpdatedAt: null,
+        departmentStatusUpdatedBy: null,
+        departmentStatusUpdatedAt: null,
+        transportArrivalTime: null,
+        departmentArrivalTime: null,
+        transportUpdatedBy: null,
+        transportUpdatedAt: null,
+        departmentUpdatedBy: null,
+        departmentUpdatedAt: null
+      };
+      employee.dailyStatus.push(daily);
+      daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+    }
+
+    // Track old values for edit history
+    const oldPunchIn = daily.punchIn;
+    const oldPunchOut = daily.punchOut;
+    const oldTotalHours = daily.totalHours;
+
+    // Update punch times
+    if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(punchIn)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid punch in time format. Please use HH:MM format (e.g., 09:30)"
+        });
+      }
+
+      const [hours, minutes] = punchIn.split(':').map(Number);
+      const newPunchIn = new Date(selectedDate);
+      newPunchIn.setHours(hours, minutes, 0, 0);
+      
+      if (isNaN(newPunchIn.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid punch in time"
+        });
+      }
+      
+      daily.punchIn = newPunchIn;
+    }
+
+    if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(punchOut)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid punch out time format. Please use HH:MM format (e.g., 18:30)"
+        });
+      }
+
+      const [hours, minutes] = punchOut.split(':').map(Number);
+      const newPunchOut = new Date(selectedDate);
+      newPunchOut.setHours(hours, minutes, 0, 0);
+      
+      // FIXED: Only add a day if it's an overnight shift AND the time is actually less
+      // For early morning shifts (1 AM to 9 AM), both times are on the same day
+      if (daily.punchIn) {
+        // Check if it's an overnight shift (punch out time is less than punch in time)
+        // This means it crosses midnight (e.g., 10 PM to 6 AM)
+        if (newPunchOut < daily.punchIn) {
+          newPunchOut.setDate(newPunchOut.getDate() + 1);
+        }
+      }
+      
+      if (isNaN(newPunchOut.getTime())) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid punch out time"
+        });
+      }
+      
+      daily.punchOut = newPunchOut;
+    }
+
+    // Calculate total hours if both punch in and out are present
+    if (daily.punchIn && daily.punchOut) {
+      const punchInTime = daily.punchIn.getTime();
+      const punchOutTime = daily.punchOut.getTime();
+      
+      const hoursWorked = (punchOutTime - punchInTime) / (1000 * 60 * 60);
+      daily.totalHours = Math.round(hoursWorked * 10) / 10;
+      
+      // Validate that hours are within reasonable range (max 24 hours)
+      if (daily.totalHours > 24) {
+        return res.status(400).json({
+          success: false,
+          message: "Punch times cannot span more than 24 hours"
+        });
+      }
+      
+      // Set isPunchCalculated to true to indicate punches exist
+      daily.isPunchCalculated = true;
+    } else {
+      daily.totalHours = null;
+      daily.isPunchCalculated = false;
+    }
+
+    // Track changes for edit history
+    if (oldPunchIn?.getTime() !== daily.punchIn?.getTime()) {
+      changes.push({
+        field: `punchIn (${date})`,
+        oldValue: oldPunchIn || null,
+        newValue: daily.punchIn || null
+      });
+    }
+
+    if (oldPunchOut?.getTime() !== daily.punchOut?.getTime()) {
+      changes.push({
+        field: `punchOut (${date})`,
+        oldValue: oldPunchOut || null,
+        newValue: daily.punchOut || null
+      });
+    }
+
+    if (oldTotalHours !== daily.totalHours) {
+      changes.push({
+        field: `totalHours (${date})`,
+        oldValue: oldTotalHours || null,
+        newValue: daily.totalHours || null
+      });
+    }
+
+    // Update tracking info
+    daily.punchUpdatedBy = user._id;
+    daily.punchUpdatedAt = new Date();
+
+    // Add edit history if there are changes
+    if (changes.length > 0) {
+      roster.editHistory.push({
+        editedBy: user._id,
+        editedByName: user.username,
+        accountType: user.accountType,
+        actionType: "punch-update",
+        weekNumber,
+        employeeId: employee._id,
+        employeeName: employee.name,
+        changes
+      });
+    }
+
+    // Mark as modified and save
+    employee.markModified('dailyStatus');
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "Punch times updated successfully",
+      data: {
+        punchIn: daily.punchIn,
+        punchOut: daily.punchOut,
+        totalHours: daily.totalHours,
+        departmentStatus: daily.departmentStatus,
+        isPunchCalculated: daily.isPunchCalculated
+      }
+    });
+
+  } catch (error) {
+    console.error("Punch Update Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+// Add this to your controller file (where updatePunchTimes is defined)
+
+export const bulkUpdatePunchTimes = async (req, res) => {
+  try {
+    const { 
+      rosterId, 
+      weekNumber, 
+      employeeIds, 
+      date, 
+      punchIn, 
+      punchOut 
+    } = req.body;
+    
+    const user = req.user;
+
+    // Validation
+    if (!rosterId || !weekNumber || !employeeIds || !date || !Array.isArray(employeeIds) || employeeIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: rosterId, weekNumber, employeeIds (non-empty array), date"
+      });
+    }
+
+    // Only HR and Super Admin can update punch times
+    if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can update punch in/out times"
+      });
+    }
+
+    // Find roster
+    const roster = await Roster.findById(rosterId);
+    if (!roster) {
+      return res.status(404).json({ success: false, message: "Roster not found" });
+    }
+
+    // Find week
+    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    // Process date
+    const selectedDate = new Date(date);
+    if (isNaN(selectedDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    selectedDate.setHours(0, 0, 0, 0);
+
+    // Validate time formats if provided
+    if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(punchIn)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid punch in time format. Please use HH:MM format (e.g., 09:30)"
+        });
+      }
+    }
+
+    if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(punchOut)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid punch out time format. Please use HH:MM format (e.g., 18:30)"
+        });
+      }
+    }
+
+    // Results tracking
+    const results = [];
+    const errors = [];
+
+    // Process each employee
+    for (const employeeId of employeeIds) {
+      try {
+        // Find employee
+        const employee = week.employees.id(employeeId);
+        if (!employee) {
+          errors.push({ employeeId, error: "Employee not found" });
+          continue;
+        }
+
+        // Find or create daily status
+        let daily = employee.dailyStatus.find(d => {
+          const dDate = new Date(d.date);
+          dDate.setHours(0, 0, 0, 0);
+          return dDate.getTime() === selectedDate.getTime();
+        });
+
+        const changes = [];
+        const isNewDay = !daily;
+
+        if (isNewDay) {
+          daily = { 
+            date: selectedDate,
+            status: employee.dailyStatus?.[0]?.status || "P",
+            punchIn: null,
+            punchOut: null,
+            totalHours: null,
+            punchUpdatedBy: null,
+            punchUpdatedAt: null,
+            isPunchCalculated: false,
+            transportStatus: "",
+            departmentStatus: "",
+            transportStatusUpdatedBy: null,
+            transportStatusUpdatedAt: null,
+            departmentStatusUpdatedBy: null,
+            departmentStatusUpdatedAt: null,
+            transportArrivalTime: null,
+            departmentArrivalTime: null,
+            transportUpdatedBy: null,
+            transportUpdatedAt: null,
+            departmentUpdatedBy: null,
+            departmentUpdatedAt: null
+          };
+          employee.dailyStatus.push(daily);
+          daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+        }
+
+        // Track old values
+        const oldPunchIn = daily.punchIn;
+        const oldPunchOut = daily.punchOut;
+        const oldTotalHours = daily.totalHours;
+
+        // Update punch times if provided
+        if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
+          const [hours, minutes] = punchIn.split(':').map(Number);
+          const newPunchIn = new Date(selectedDate);
+          newPunchIn.setHours(hours, minutes, 0, 0);
+          daily.punchIn = newPunchIn;
+        }
+
+        // FIXED: Update punch out with proper overnight shift detection
+        if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
+          const [hours, minutes] = punchOut.split(':').map(Number);
+          const newPunchOut = new Date(selectedDate);
+          newPunchOut.setHours(hours, minutes, 0, 0);
+          
+          // FIXED: Only add a day if it's an overnight shift AND the time is actually less
+          // For early morning shifts (1 AM to 9 AM), both times are on the same day
+          if (daily.punchIn) {
+            // Check if it's an overnight shift (punch out time is less than punch in time)
+            // This means it crosses midnight (e.g., 10 PM to 6 AM)
+            if (newPunchOut < daily.punchIn) {
+              newPunchOut.setDate(newPunchOut.getDate() + 1);
+            }
+          }
+          
+          daily.punchOut = newPunchOut;
+        }
+
+        // Calculate total hours if both punches present
+        if (daily.punchIn && daily.punchOut) {
+          const punchInTime = daily.punchIn.getTime();
+          const punchOutTime = daily.punchOut.getTime();
+          
+          const hoursWorked = (punchOutTime - punchInTime) / (1000 * 60 * 60);
+          daily.totalHours = Math.round(hoursWorked * 10) / 10;
+          
+          // Validate that hours are within reasonable range (max 24 hours)
+          if (daily.totalHours > 24) {
+            errors.push({ employeeId, error: "Punch times cannot span more than 24 hours" });
+            continue;
+          }
+          
+          // Set isPunchCalculated to true to indicate punches exist
+          daily.isPunchCalculated = true;
+          
+        } else {
+          daily.totalHours = null;
+          daily.isPunchCalculated = false;
+        }
+
+        // Track changes for edit history
+        if (oldPunchIn?.getTime() !== daily.punchIn?.getTime()) {
+          changes.push({
+            field: `punchIn (${date})`,
+            oldValue: oldPunchIn || null,
+            newValue: daily.punchIn || null
+          });
+        }
+
+        if (oldPunchOut?.getTime() !== daily.punchOut?.getTime()) {
+          changes.push({
+            field: `punchOut (${date})`,
+            oldValue: oldPunchOut || null,
+            newValue: daily.punchOut || null
+          });
+        }
+
+        if (oldTotalHours !== daily.totalHours) {
+          changes.push({
+            field: `totalHours (${date})`,
+            oldValue: oldTotalHours || null,
+            newValue: daily.totalHours || null
+          });
+        }
+
+        // Update tracking info
+        daily.punchUpdatedBy = user._id;
+        daily.punchUpdatedAt = new Date();
+
+        // Add edit history if there are changes
+        if (changes.length > 0) {
+          roster.editHistory.push({
+            editedBy: user._id,
+            editedByName: user.username,
+            accountType: user.accountType,
+            actionType: "bulk-punch-update",
+            weekNumber,
+            employeeId: employee._id,
+            employeeName: employee.name,
+            changes
+          });
+        }
+
+        // Mark as modified
+        employee.markModified('dailyStatus');
+        
+        results.push({
+          employeeId,
+          success: true,
+          data: {
+            punchIn: daily.punchIn,
+            punchOut: daily.punchOut,
+            totalHours: daily.totalHours,
+            departmentStatus: daily.departmentStatus,
+            isPunchCalculated: daily.isPunchCalculated
+          }
+        });
+
+      } catch (err) {
+        console.error(`Error updating employee ${employeeId}:`, err);
+        errors.push({ employeeId, error: err.message });
+      }
+    }
+
+    // Save the roster with all updates
+    await roster.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Bulk punch update completed. Updated: ${results.length}, Failed: ${errors.length}`,
+      data: {
+        results,
+        errors,
+        updatedCount: results.length,
+        failedCount: errors.length
+      }
+    });
+
+  } catch (error) {
+    console.error("Bulk Punch Update Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+      error: error.message
     });
   }
 };
