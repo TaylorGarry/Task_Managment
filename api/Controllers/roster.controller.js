@@ -6016,7 +6016,7 @@ export const getRostersByDepartment = async (req, res) => {
 export const updateArrivalTime = async (req, res) => {
   try {
     const { rosterId, weekNumber, employeeId, date, arrivalTime } = req.body;
-    const user = req.user; // logged in user from auth middleware
+    const user = req.user;
 
     // Validation
     if (!rosterId || !weekNumber || !employeeId || !date) {
@@ -6026,7 +6026,6 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // 🔥 FIX: Validate arrivalTime
     if (!arrivalTime) {
       return res.status(400).json({
         success: false,
@@ -6046,9 +6045,7 @@ export const updateArrivalTime = async (req, res) => {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
 
-    // Week edit rules:
-    // - HR/superAdmin: can update past/future/current
-    // - Transport/Department: current week only
+    // Week edit rules
     const now = new Date();
     const weekStartDate = new Date(week.startDate);
     const weekEndDate = new Date(week.endDate);
@@ -6070,7 +6067,7 @@ export const updateArrivalTime = async (req, res) => {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
-    // 🔐 TEAM LEADER VALIDATION
+    // Team leader validation
     if (user.accountType !== "superAdmin" && user.accountType !== "HR" && user.department !== "Transport") {
       if (employee.teamLeader !== user.username) {
         return res.status(403).json({
@@ -6083,21 +6080,7 @@ export const updateArrivalTime = async (req, res) => {
     // Parse date parts
     const [year, month, day] = date.split('-').map(Number);
     
-    // Create date in UTC for the selected date
-    const selectedDate = new Date(Date.UTC(year, month-1, day, 0, 0, 0));
-
-    // Ensure requested date belongs to the requested week
-    const selectedDayEnd = new Date(selectedDate);
-    selectedDayEnd.setUTCHours(23, 59, 59, 999);
-    if (selectedDayEnd < weekStartDate || selectedDate > weekEndDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Selected date does not fall within the requested week"
-      });
-    }
-
-    // 🔥 FIX: Validate arrivalTime is a valid time string
-    // Expected format: "HH:MM" like "09:30" or "14:45"
+    // Validate arrival time format
     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
     if (!timeRegex.test(arrivalTime)) {
       return res.status(400).json({
@@ -6106,27 +6089,28 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // Parse IST time
+    // Parse IST time (e.g., "20:12" = 8:12 PM)
     const [hours, minutes] = arrivalTime.split(':').map(Number);
     
-    // Convert IST to UTC for storage
+    // 🔥 FIX: Convert IST to UTC correctly
     // IST is UTC+5:30, so subtract 5 hours 30 minutes
     let utcHours = hours - 5;
     let utcMinutes = minutes - 30;
     
+    // Handle minute underflow
     if (utcMinutes < 0) {
       utcMinutes += 60;
       utcHours -= 1;
     }
     
+    // Handle hour underflow (if time goes to previous day)
     if (utcHours < 0) {
       utcHours += 24;
     }
     
-    // Create UTC date for arrival time
+    // Create UTC date
     const newArrival = new Date(Date.UTC(year, month-1, day, utcHours, utcMinutes, 0));
 
-    // Verify it's a valid date
     if (isNaN(newArrival.getTime())) {
       return res.status(400).json({
         success: false,
@@ -6134,7 +6118,7 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // Find or create daily status for this date
+    // Find or create daily status
     let daily = employee.dailyStatus.find(d => {
       const dDate = new Date(d.date);
       return dDate.toISOString().split('T')[0] === date;
@@ -6144,14 +6128,14 @@ export const updateArrivalTime = async (req, res) => {
     const oldValues = {};
 
     if (isNewDay) {
+      const selectedDate = new Date(Date.UTC(year, month-1, day, 0, 0, 0));
       daily = {
         date: selectedDate,
-        status: "P" // Default status
+        status: "P"
       };
       employee.dailyStatus.push(daily);
       daily = employee.dailyStatus[employee.dailyStatus.length - 1];
     } else {
-      // Store old values for edit history
       if (user.department === "Transport") {
         oldValues.transportArrivalTime = daily.transportArrivalTime;
       } else if (user.department === employee.department || user.accountType === "superAdmin" || user.accountType === "HR") {
@@ -6174,9 +6158,8 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
     
-    // 👑 SUPERADMIN/HR UPDATE - can update both
+    // 👑 SUPERADMIN/HR UPDATE
     else if (user.accountType === "superAdmin" || user.accountType === "HR") {
-      // Update both transport and department fields
       daily.transportArrivalTime = newArrival;
       daily.transportUpdatedBy = user._id;
       daily.transportUpdatedAt = new Date();
@@ -6192,7 +6175,7 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
     
-    // 👥 DEPARTMENT UPDATE (Team Leader)
+    // 👥 DEPARTMENT UPDATE
     else if (user.department === employee.department) {
       daily.departmentArrivalTime = newArrival;
       daily.departmentUpdatedBy = user._id;
@@ -6213,7 +6196,7 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // 📝 Add edit history
+    // Add edit history
     roster.editHistory.push({
       editedBy: user._id,
       editedByName: user.username,
@@ -6225,7 +6208,6 @@ export const updateArrivalTime = async (req, res) => {
       changes
     });
 
-    // Save roster
     await roster.save();
 
     return res.status(200).json({
