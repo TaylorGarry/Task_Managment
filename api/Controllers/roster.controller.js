@@ -8236,17 +8236,15 @@ export const updatePunchTimes = async (req, res) => {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
-    // Parse date parts (YYYY-MM-DD)
+    // Parse date parts
     const [year, month, day] = date.split('-').map(Number);
     
-    // Create date in IST (by using UTC with IST offset)
-    // IST is UTC+5:30, so we create UTC date and then adjust
+    // Create base date in UTC
     const selectedDate = new Date(Date.UTC(year, month-1, day, 0, 0, 0));
     
     // Find or create daily status
     let daily = employee.dailyStatus.find(d => {
       const dDate = new Date(d.date);
-      // Compare dates without time
       return dDate.toISOString().split('T')[0] === date;
     });
 
@@ -8280,12 +8278,19 @@ export const updatePunchTimes = async (req, res) => {
       daily = employee.dailyStatus[employee.dailyStatus.length - 1];
     }
 
-    // Track old values for edit history
+    // Track old values
     const oldPunchIn = daily.punchIn;
     const oldPunchOut = daily.punchOut;
     const oldTotalHours = daily.totalHours;
 
-    // Update punch times
+    // Store IST times for calculation
+    let istPunchInHours = null;
+    let istPunchInMinutes = null;
+    let istPunchOutHours = null;
+    let istPunchOutMinutes = null;
+    let isNextDay = false;
+
+    // Update punch in
     if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!timeRegex.test(punchIn)) {
@@ -8295,12 +8300,11 @@ export const updatePunchTimes = async (req, res) => {
         });
       }
 
-      const [hours, minutes] = punchIn.split(':').map(Number);
+      [istPunchInHours, istPunchInMinutes] = punchIn.split(':').map(Number);
       
-      // Create date in IST and convert to UTC for storage
-      // IST to UTC: subtract 5 hours 30 minutes
-      let utcHours = hours - 5;
-      let utcMinutes = minutes - 30;
+      // Convert IST to UTC for storage
+      let utcHours = istPunchInHours - 5;
+      let utcMinutes = istPunchInMinutes - 30;
       
       if (utcMinutes < 0) {
         utcMinutes += 60;
@@ -8323,6 +8327,7 @@ export const updatePunchTimes = async (req, res) => {
       daily.punchIn = newPunchIn;
     }
 
+    // Update punch out
     if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!timeRegex.test(punchOut)) {
@@ -8332,17 +8337,16 @@ export const updatePunchTimes = async (req, res) => {
         });
       }
 
-      const [hours, minutes] = punchOut.split(':').map(Number);
+      [istPunchOutHours, istPunchOutMinutes] = punchOut.split(':').map(Number);
       
-      // Determine if this is next day (overnight shift)
-      let targetDay = day;
-      if (punchIn && hours < parseInt(punchIn.split(':')[0])) {
-        targetDay = day + 1;
+      // Check if this is next day (overnight shift)
+      if (istPunchInHours !== null && istPunchOutHours < istPunchInHours) {
+        isNextDay = true;
       }
       
-      // Convert IST to UTC
-      let utcHours = hours - 5;
-      let utcMinutes = minutes - 30;
+      // Convert IST to UTC for storage
+      let utcHours = istPunchOutHours - 5;
+      let utcMinutes = istPunchOutMinutes - 30;
       
       if (utcMinutes < 0) {
         utcMinutes += 60;
@@ -8351,11 +8355,9 @@ export const updatePunchTimes = async (req, res) => {
       
       if (utcHours < 0) {
         utcHours += 24;
-        if (!punchIn || hours >= parseInt(punchIn.split(':')[0])) {
-          targetDay = day + 1;
-        }
       }
       
+      const targetDay = isNextDay ? day + 1 : day;
       const newPunchOut = new Date(Date.UTC(year, month-1, targetDay, utcHours, utcMinutes, 0));
       
       if (isNaN(newPunchOut.getTime())) {
@@ -8368,15 +8370,22 @@ export const updatePunchTimes = async (req, res) => {
       daily.punchOut = newPunchOut;
     }
 
-    // Calculate total hours if both punch in and out are present
-    if (daily.punchIn && daily.punchOut) {
-      const punchInTime = daily.punchIn.getTime();
-      const punchOutTime = daily.punchOut.getTime();
+    // Calculate total hours using IST times (not UTC)
+    if (istPunchInHours !== null && istPunchOutHours !== null) {
+      // Convert both times to minutes since midnight in IST
+      const punchInTotalMinutes = istPunchInHours * 60 + istPunchInMinutes;
+      let punchOutTotalMinutes = istPunchOutHours * 60 + istPunchOutMinutes;
       
-      const hoursWorked = (punchOutTime - punchInTime) / (1000 * 60 * 60);
+      // If it's next day, add 24 hours (1440 minutes)
+      if (isNextDay) {
+        punchOutTotalMinutes += 24 * 60;
+      }
+      
+      const diffMinutes = punchOutTotalMinutes - punchInTotalMinutes;
+      const hoursWorked = diffMinutes / 60;
       daily.totalHours = Math.round(hoursWorked * 10) / 10;
       
-      // Validate that hours are within reasonable range (max 24 hours)
+      // Validate hours
       if (daily.totalHours > 24) {
         return res.status(400).json({
           success: false,
@@ -8384,7 +8393,6 @@ export const updatePunchTimes = async (req, res) => {
         });
       }
       
-      // Set isPunchCalculated to true to indicate punches exist
       daily.isPunchCalculated = true;
     } else {
       daily.totalHours = null;
@@ -8791,6 +8799,23 @@ export const bulkUpdatePunchTimes = async (req, res) => {
       }
     }
 
+    // Parse IST times
+    let istPunchInHours = null;
+    let istPunchInMinutes = null;
+    let istPunchOutHours = null;
+    let istPunchOutMinutes = null;
+    
+    if (punchIn) {
+      [istPunchInHours, istPunchInMinutes] = punchIn.split(':').map(Number);
+    }
+    
+    if (punchOut) {
+      [istPunchOutHours, istPunchOutMinutes] = punchOut.split(':').map(Number);
+    }
+    
+    const isNextDay = istPunchInHours !== null && istPunchOutHours !== null && 
+                      istPunchOutHours < istPunchInHours;
+
     // Results tracking
     const results = [];
     const errors = [];
@@ -8846,13 +8871,11 @@ export const bulkUpdatePunchTimes = async (req, res) => {
         const oldPunchOut = daily.punchOut;
         const oldTotalHours = daily.totalHours;
 
-        // Update punch times if provided
+        // Update punch in if provided
         if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
-          const [hours, minutes] = punchIn.split(':').map(Number);
-          
-          // Convert IST to UTC
-          let utcHours = hours - 5;
-          let utcMinutes = minutes - 30;
+          // Convert IST to UTC for storage
+          let utcHours = istPunchInHours - 5;
+          let utcMinutes = istPunchInMinutes - 30;
           
           if (utcMinutes < 0) {
             utcMinutes += 60;
@@ -8867,18 +8890,11 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           daily.punchIn = newPunchIn;
         }
 
+        // Update punch out if provided
         if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
-          const [hours, minutes] = punchOut.split(':').map(Number);
-          
-          // Determine if this is next day
-          let targetDay = day;
-          if (punchIn && hours < parseInt(punchIn.split(':')[0])) {
-            targetDay = day + 1;
-          }
-          
-          // Convert IST to UTC
-          let utcHours = hours - 5;
-          let utcMinutes = minutes - 30;
+          // Convert IST to UTC for storage
+          let utcHours = istPunchOutHours - 5;
+          let utcMinutes = istPunchOutMinutes - 30;
           
           if (utcMinutes < 0) {
             utcMinutes += 60;
@@ -8887,32 +8903,35 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           
           if (utcHours < 0) {
             utcHours += 24;
-            if (!punchIn || hours >= parseInt(punchIn.split(':')[0])) {
-              targetDay = day + 1;
-            }
           }
           
+          const targetDay = isNextDay ? day + 1 : day;
           const newPunchOut = new Date(Date.UTC(year, month-1, targetDay, utcHours, utcMinutes, 0));
           daily.punchOut = newPunchOut;
         }
 
-        // Calculate total hours if both punches present
-        if (daily.punchIn && daily.punchOut) {
-          const punchInTime = daily.punchIn.getTime();
-          const punchOutTime = daily.punchOut.getTime();
+        // Calculate total hours using IST times
+        if (istPunchInHours !== null && istPunchOutHours !== null) {
+          // Convert both times to minutes since midnight in IST
+          const punchInTotalMinutes = istPunchInHours * 60 + istPunchInMinutes;
+          let punchOutTotalMinutes = istPunchOutHours * 60 + istPunchOutMinutes;
           
-          const hoursWorked = (punchOutTime - punchInTime) / (1000 * 60 * 60);
+          // If it's next day, add 24 hours (1440 minutes)
+          if (isNextDay) {
+            punchOutTotalMinutes += 24 * 60;
+          }
+          
+          const diffMinutes = punchOutTotalMinutes - punchInTotalMinutes;
+          const hoursWorked = diffMinutes / 60;
           daily.totalHours = Math.round(hoursWorked * 10) / 10;
           
-          // Validate that hours are within reasonable range (max 24 hours)
+          // Validate hours
           if (daily.totalHours > 24) {
             errors.push({ employeeId, error: "Punch times cannot span more than 24 hours" });
             continue;
           }
           
-          // Set isPunchCalculated to true to indicate punches exist
           daily.isPunchCalculated = true;
-          
         } else {
           daily.totalHours = null;
           daily.isPunchCalculated = false;
