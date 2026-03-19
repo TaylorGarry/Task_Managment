@@ -6013,7 +6013,6 @@ export const getRostersByDepartment = async (req, res) => {
     });
   }
 };
-
 export const updateArrivalTime = async (req, res) => {
   try {
     const { rosterId, weekNumber, employeeId, date, arrivalTime } = req.body;
@@ -6042,64 +6041,60 @@ export const updateArrivalTime = async (req, res) => {
     }
 
     // Find week
-	    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-	    if (!week) {
-	      return res.status(404).json({ success: false, message: "Week not found" });
-	    }
+    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
 
-	    // Week edit rules:
-	    // - HR/superAdmin: can update past/future/current
-	    // - Transport/Department: current week only
-	    const now = new Date();
-	    const weekStartDate = new Date(week.startDate);
-	    const weekEndDate = new Date(week.endDate);
-	    weekStartDate.setHours(0, 0, 0, 0);
-	    weekEndDate.setHours(23, 59, 59, 999);
-	    const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
-	    const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+    // Week edit rules:
+    // - HR/superAdmin: can update past/future/current
+    // - Transport/Department: current week only
+    const now = new Date();
+    const weekStartDate = new Date(week.startDate);
+    const weekEndDate = new Date(week.endDate);
+    weekStartDate.setHours(0, 0, 0, 0);
+    weekEndDate.setHours(23, 59, 59, 999);
+    const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+    const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
 
-	    if (!isCurrentWeek && !canEditAnyWeek) {
-	      return res.status(403).json({
-	        success: false,
-	        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
-	      });
-	    }
+    if (!isCurrentWeek && !canEditAnyWeek) {
+      return res.status(403).json({
+        success: false,
+        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+      });
+    }
 
-	    // Find employee
-	    const employee = week.employees.id(employeeId);
-	    if (!employee) {
+    // Find employee
+    const employee = week.employees.id(employeeId);
+    if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
     // 🔐 TEAM LEADER VALIDATION
-	    if (user.accountType !== "superAdmin" && user.accountType !== "HR" && user.department !== "Transport") {
-	      if (employee.teamLeader !== user.username) {
-	        return res.status(403).json({
-	          success: false,
-	          message: "You can only update your own team members"
+    if (user.accountType !== "superAdmin" && user.accountType !== "HR" && user.department !== "Transport") {
+      if (employee.teamLeader !== user.username) {
+        return res.status(403).json({
+          success: false,
+          message: "You can only update your own team members"
         });
       }
     }
 
-    // Process date
-    const selectedDate = new Date(date);
-    if (isNaN(selectedDate.getTime())) {
+    // Parse date parts
+    const [year, month, day] = date.split('-').map(Number);
+    
+    // Create date in UTC for the selected date
+    const selectedDate = new Date(Date.UTC(year, month-1, day, 0, 0, 0));
+
+    // Ensure requested date belongs to the requested week
+    const selectedDayEnd = new Date(selectedDate);
+    selectedDayEnd.setUTCHours(23, 59, 59, 999);
+    if (selectedDayEnd < weekStartDate || selectedDate > weekEndDate) {
       return res.status(400).json({
         success: false,
-        message: "Invalid date format"
+        message: "Selected date does not fall within the requested week"
       });
-	    }
-	    selectedDate.setHours(0, 0, 0, 0);
-
-	    // Ensure requested date belongs to the requested week
-	    const selectedDayEnd = new Date(selectedDate);
-	    selectedDayEnd.setHours(23, 59, 59, 999);
-	    if (selectedDayEnd < weekStartDate || selectedDate > weekEndDate) {
-	      return res.status(400).json({
-	        success: false,
-	        message: "Selected date does not fall within the requested week"
-	      });
-	    }
+    }
 
     // 🔥 FIX: Validate arrivalTime is a valid time string
     // Expected format: "HH:MM" like "09:30" or "14:45"
@@ -6111,10 +6106,25 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // Create a proper date object by combining the selected date with the arrival time
+    // Parse IST time
     const [hours, minutes] = arrivalTime.split(':').map(Number);
-    const newArrival = new Date(selectedDate);
-    newArrival.setHours(hours, minutes, 0, 0);
+    
+    // Convert IST to UTC for storage
+    // IST is UTC+5:30, so subtract 5 hours 30 minutes
+    let utcHours = hours - 5;
+    let utcMinutes = minutes - 30;
+    
+    if (utcMinutes < 0) {
+      utcMinutes += 60;
+      utcHours -= 1;
+    }
+    
+    if (utcHours < 0) {
+      utcHours += 24;
+    }
+    
+    // Create UTC date for arrival time
+    const newArrival = new Date(Date.UTC(year, month-1, day, utcHours, utcMinutes, 0));
 
     // Verify it's a valid date
     if (isNaN(newArrival.getTime())) {
@@ -6127,8 +6137,7 @@ export const updateArrivalTime = async (req, res) => {
     // Find or create daily status for this date
     let daily = employee.dailyStatus.find(d => {
       const dDate = new Date(d.date);
-      dDate.setHours(0, 0, 0, 0);
-      return dDate.getTime() === selectedDate.getTime();
+      return dDate.toISOString().split('T')[0] === date;
     });
 
     const isNewDay = !daily;
@@ -6145,10 +6154,10 @@ export const updateArrivalTime = async (req, res) => {
       // Store old values for edit history
       if (user.department === "Transport") {
         oldValues.transportArrivalTime = daily.transportArrivalTime;
-	      } else if (user.department === employee.department || user.accountType === "superAdmin" || user.accountType === "HR") {
-	        oldValues.departmentArrivalTime = daily.departmentArrivalTime;
-	      }
-	    }
+      } else if (user.department === employee.department || user.accountType === "superAdmin" || user.accountType === "HR") {
+        oldValues.departmentArrivalTime = daily.departmentArrivalTime;
+      }
+    }
 
     const changes = [];
 
@@ -6165,12 +6174,12 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
     
-    // 👑 SUPERADMIN UPDATE - can update both
-	    else if (user.accountType === "superAdmin" || user.accountType === "HR") {
-	      // Update both transport and department fields
-	      daily.transportArrivalTime = newArrival;
-	      daily.transportUpdatedBy = user._id;
-	      daily.transportUpdatedAt = new Date();
+    // 👑 SUPERADMIN/HR UPDATE - can update both
+    else if (user.accountType === "superAdmin" || user.accountType === "HR") {
+      // Update both transport and department fields
+      daily.transportArrivalTime = newArrival;
+      daily.transportUpdatedBy = user._id;
+      daily.transportUpdatedAt = new Date();
       
       daily.departmentArrivalTime = newArrival;
       daily.departmentUpdatedBy = user._id;
@@ -6234,6 +6243,227 @@ export const updateArrivalTime = async (req, res) => {
     });
   }
 };
+
+// export const updateArrivalTime = async (req, res) => {
+//   try {
+//     const { rosterId, weekNumber, employeeId, date, arrivalTime } = req.body;
+//     const user = req.user; // logged in user from auth middleware
+
+//     // Validation
+//     if (!rosterId || !weekNumber || !employeeId || !date) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Missing required fields: rosterId, weekNumber, employeeId, date are required"
+//       });
+//     }
+
+//     // 🔥 FIX: Validate arrivalTime
+//     if (!arrivalTime) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Arrival time is required"
+//       });
+//     }
+
+//     // Find roster
+//     const roster = await Roster.findById(rosterId);
+//     if (!roster) {
+//       return res.status(404).json({ success: false, message: "Roster not found" });
+//     }
+
+//     // Find week
+// 	    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
+// 	    if (!week) {
+// 	      return res.status(404).json({ success: false, message: "Week not found" });
+// 	    }
+
+// 	    // Week edit rules:
+// 	    // - HR/superAdmin: can update past/future/current
+// 	    // - Transport/Department: current week only
+// 	    const now = new Date();
+// 	    const weekStartDate = new Date(week.startDate);
+// 	    const weekEndDate = new Date(week.endDate);
+// 	    weekStartDate.setHours(0, 0, 0, 0);
+// 	    weekEndDate.setHours(23, 59, 59, 999);
+// 	    const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+// 	    const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+
+// 	    if (!isCurrentWeek && !canEditAnyWeek) {
+// 	      return res.status(403).json({
+// 	        success: false,
+// 	        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+// 	      });
+// 	    }
+
+// 	    // Find employee
+// 	    const employee = week.employees.id(employeeId);
+// 	    if (!employee) {
+//       return res.status(404).json({ success: false, message: "Employee not found" });
+//     }
+
+//     // 🔐 TEAM LEADER VALIDATION
+// 	    if (user.accountType !== "superAdmin" && user.accountType !== "HR" && user.department !== "Transport") {
+// 	      if (employee.teamLeader !== user.username) {
+// 	        return res.status(403).json({
+// 	          success: false,
+// 	          message: "You can only update your own team members"
+//         });
+//       }
+//     }
+
+//     // Process date
+//     const selectedDate = new Date(date);
+//     if (isNaN(selectedDate.getTime())) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid date format"
+//       });
+// 	    }
+// 	    selectedDate.setHours(0, 0, 0, 0);
+
+// 	    // Ensure requested date belongs to the requested week
+// 	    const selectedDayEnd = new Date(selectedDate);
+// 	    selectedDayEnd.setHours(23, 59, 59, 999);
+// 	    if (selectedDayEnd < weekStartDate || selectedDate > weekEndDate) {
+// 	      return res.status(400).json({
+// 	        success: false,
+// 	        message: "Selected date does not fall within the requested week"
+// 	      });
+// 	    }
+
+//     // 🔥 FIX: Validate arrivalTime is a valid time string
+//     // Expected format: "HH:MM" like "09:30" or "14:45"
+//     const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+//     if (!timeRegex.test(arrivalTime)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+//       });
+//     }
+
+//     // Create a proper date object by combining the selected date with the arrival time
+//     const [hours, minutes] = arrivalTime.split(':').map(Number);
+//     const newArrival = new Date(selectedDate);
+//     newArrival.setHours(hours, minutes, 0, 0);
+
+//     // Verify it's a valid date
+//     if (isNaN(newArrival.getTime())) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid arrival time"
+//       });
+//     }
+
+//     // Find or create daily status for this date
+//     let daily = employee.dailyStatus.find(d => {
+//       const dDate = new Date(d.date);
+//       dDate.setHours(0, 0, 0, 0);
+//       return dDate.getTime() === selectedDate.getTime();
+//     });
+
+//     const isNewDay = !daily;
+//     const oldValues = {};
+
+//     if (isNewDay) {
+//       daily = {
+//         date: selectedDate,
+//         status: "P" // Default status
+//       };
+//       employee.dailyStatus.push(daily);
+//       daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+//     } else {
+//       // Store old values for edit history
+//       if (user.department === "Transport") {
+//         oldValues.transportArrivalTime = daily.transportArrivalTime;
+// 	      } else if (user.department === employee.department || user.accountType === "superAdmin" || user.accountType === "HR") {
+// 	        oldValues.departmentArrivalTime = daily.departmentArrivalTime;
+// 	      }
+// 	    }
+
+//     const changes = [];
+
+//     // 🚌 TRANSPORT UPDATE
+//     if (user.department === "Transport") {
+//       daily.transportArrivalTime = newArrival;
+//       daily.transportUpdatedBy = user._id;
+//       daily.transportUpdatedAt = new Date();
+      
+//       changes.push({
+//         field: `transportArrivalTime (${date})`,
+//         oldValue: oldValues.transportArrivalTime || null,
+//         newValue: newArrival
+//       });
+//     }
+    
+//     // 👑 SUPERADMIN UPDATE - can update both
+// 	    else if (user.accountType === "superAdmin" || user.accountType === "HR") {
+// 	      // Update both transport and department fields
+// 	      daily.transportArrivalTime = newArrival;
+// 	      daily.transportUpdatedBy = user._id;
+// 	      daily.transportUpdatedAt = new Date();
+      
+//       daily.departmentArrivalTime = newArrival;
+//       daily.departmentUpdatedBy = user._id;
+//       daily.departmentUpdatedAt = new Date();
+      
+//       changes.push({
+//         field: `arrivalTime (${date})`,
+//         oldValue: oldValues.departmentArrivalTime || null,
+//         newValue: newArrival
+//       });
+//     }
+    
+//     // 👥 DEPARTMENT UPDATE (Team Leader)
+//     else if (user.department === employee.department) {
+//       daily.departmentArrivalTime = newArrival;
+//       daily.departmentUpdatedBy = user._id;
+//       daily.departmentUpdatedAt = new Date();
+      
+//       changes.push({
+//         field: `departmentArrivalTime (${date})`,
+//         oldValue: oldValues.departmentArrivalTime || null,
+//         newValue: newArrival
+//       });
+//     }
+    
+//     // ❌ UNAUTHORIZED
+//     else {
+//       return res.status(403).json({
+//         success: false,
+//         message: "You are not allowed to update this employee's arrival time"
+//       });
+//     }
+
+//     // 📝 Add edit history
+//     roster.editHistory.push({
+//       editedBy: user._id,
+//       editedByName: user.username,
+//       accountType: user.accountType,
+//       actionType: "update",
+//       weekNumber,
+//       employeeId: employee._id,
+//       employeeName: employee.name,
+//       changes
+//     });
+
+//     // Save roster
+//     await roster.save();
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Arrival time updated successfully",
+//       data: daily
+//     });
+
+//   } catch (error) {
+//     console.error("Arrival Update Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: error.message
+//     });
+//   }
+// };
 //This is updated by keshav
 export const updateAttendance = async (req, res) => {
   try {
@@ -7939,9 +8169,6 @@ export const getDepartmentWiseAttendance = async (req, res) => {
     });
   }
 };
-// ===========================================
-// NEW: Update Punch In/Out Times (HR only)
-// ===========================================
 // export const updatePunchTimes = async (req, res) => {
 //   try {
 //     const { 
