@@ -8283,12 +8283,63 @@ export const updatePunchTimes = async (req, res) => {
     const oldPunchOut = daily.punchOut;
     const oldTotalHours = daily.totalHours;
 
-    // Store IST times for calculation
+    // Get existing IST times from current daily status (if they exist)
     let istPunchInHours = null;
     let istPunchInMinutes = null;
     let istPunchOutHours = null;
     let istPunchOutMinutes = null;
     let isNextDay = false;
+
+    // If there's an existing punch in, convert it to IST for calculation
+    if (daily.punchIn) {
+      const punchInDate = new Date(daily.punchIn);
+      // Convert UTC to IST (add 5:30)
+      let utcHours = punchInDate.getUTCHours();
+      let utcMinutes = punchInDate.getUTCMinutes();
+      
+      let istHours = utcHours + 5;
+      let istMinutes = utcMinutes + 30;
+      
+      if (istMinutes >= 60) {
+        istMinutes -= 60;
+        istHours += 1;
+      }
+      
+      if (istHours >= 24) {
+        istHours -= 24;
+      }
+      
+      istPunchInHours = istHours;
+      istPunchInMinutes = istMinutes;
+    }
+
+    // If there's an existing punch out, convert it to IST for calculation
+    if (daily.punchOut) {
+      const punchOutDate = new Date(daily.punchOut);
+      let utcHours = punchOutDate.getUTCHours();
+      let utcMinutes = punchOutDate.getUTCMinutes();
+      const punchOutDay = punchOutDate.getUTCDate();
+      
+      let istHours = utcHours + 5;
+      let istMinutes = utcMinutes + 30;
+      
+      if (istMinutes >= 60) {
+        istMinutes -= 60;
+        istHours += 1;
+      }
+      
+      if (istHours >= 24) {
+        istHours -= 24;
+      }
+      
+      istPunchOutHours = istHours;
+      istPunchOutMinutes = istMinutes;
+      
+      // Check if punch out is on next day
+      if (punchOutDay > day) {
+        isNextDay = true;
+      }
+    }
 
     // Update punch in
     if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
@@ -8342,6 +8393,8 @@ export const updatePunchTimes = async (req, res) => {
       // Check if this is next day (overnight shift)
       if (istPunchInHours !== null && istPunchOutHours < istPunchInHours) {
         isNextDay = true;
+      } else {
+        isNextDay = false;
       }
       
       // Convert IST to UTC for storage
@@ -8370,7 +8423,7 @@ export const updatePunchTimes = async (req, res) => {
       daily.punchOut = newPunchOut;
     }
 
-    // Calculate total hours using IST times (not UTC)
+    // Calculate total hours using IST times (either from existing or new)
     if (istPunchInHours !== null && istPunchOutHours !== null) {
       // Convert both times to minutes since midnight in IST
       const punchInTotalMinutes = istPunchInHours * 60 + istPunchInMinutes;
