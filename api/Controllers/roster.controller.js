@@ -6077,7 +6077,7 @@ export const updateArrivalTime = async (req, res) => {
       }
     }
 
-    // Parse date parts
+    // Parse date parts from the input date string (YYYY-MM-DD)
     const [year, month, day] = date.split('-').map(Number);
     
     // Validate arrival time format
@@ -6089,10 +6089,10 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // Parse IST time (e.g., "20:12" = 8:12 PM)
+    // Parse IST time (e.g., "20:12" = 8:12 PM IST)
     const [hours, minutes] = arrivalTime.split(':').map(Number);
     
-    // 🔥 FIX: Convert IST to UTC correctly
+    // 🔥 FIX: Convert IST to UTC correctly for storage
     // IST is UTC+5:30, so subtract 5 hours 30 minutes
     let utcHours = hours - 5;
     let utcMinutes = minutes - 30;
@@ -6103,12 +6103,12 @@ export const updateArrivalTime = async (req, res) => {
       utcHours -= 1;
     }
     
-    // Handle hour underflow (if time goes to previous day)
+    // Handle hour underflow (if time goes to previous day UTC)
     if (utcHours < 0) {
       utcHours += 24;
     }
     
-    // Create UTC date
+    // Create UTC date using Date.UTC() - this ensures the date is stored in UTC
     const newArrival = new Date(Date.UTC(year, month-1, day, utcHours, utcMinutes, 0));
 
     if (isNaN(newArrival.getTime())) {
@@ -6118,7 +6118,7 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // Find or create daily status
+    // Find or create daily status for this date
     let daily = employee.dailyStatus.find(d => {
       const dDate = new Date(d.date);
       return dDate.toISOString().split('T')[0] === date;
@@ -6128,6 +6128,7 @@ export const updateArrivalTime = async (req, res) => {
     const oldValues = {};
 
     if (isNewDay) {
+      // Create UTC date for the selected date
       const selectedDate = new Date(Date.UTC(year, month-1, day, 0, 0, 0));
       daily = {
         date: selectedDate,
