@@ -6942,7 +6942,6 @@ export const updateAttendanceBulk = async (req, res) => {
     }
 
     // Validate time format (HH:MM) if provided
-    let newArrival = null;
     if (arrivalTime) {
       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!timeRegex.test(arrivalTime)) {
@@ -6982,17 +6981,12 @@ export const updateAttendanceBulk = async (req, res) => {
       });
     }
 
-    const selectedDate = new Date(date);
-    if (Number.isNaN(selectedDate.getTime())) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format"
-      });
-    }
-
-    selectedDate.setHours(0, 0, 0, 0);
+    // 🔥 FIX: Parse date parts and create UTC date
+    const [year, month, day] = date.split('-').map(Number);
+    const selectedDate = new Date(Date.UTC(year, month-1, day, 0, 0, 0));
+    
     const selectedDayEnd = new Date(selectedDate);
-    selectedDayEnd.setHours(23, 59, 59, 999);
+    selectedDayEnd.setUTCHours(23, 59, 59, 999);
 
     if (selectedDayEnd < weekStartDate || selectedDate > weekEndDate) {
       return res.status(400).json({
@@ -7001,10 +6995,29 @@ export const updateAttendanceBulk = async (req, res) => {
       });
     }
 
+    // 🔥 FIX: Convert arrivalTime from IST to UTC for storage
+    let newArrival = null;
     if (arrivalTime) {
       const [hours, minutes] = arrivalTime.split(":").map(Number);
-      newArrival = new Date(selectedDate);
-      newArrival.setHours(hours, minutes, 0, 0);
+      
+      // Convert IST to UTC (subtract 5 hours 30 minutes)
+      let utcHours = hours - 5;
+      let utcMinutes = minutes - 30;
+      
+      // Handle minute underflow
+      if (utcMinutes < 0) {
+        utcMinutes += 60;
+        utcHours -= 1;
+      }
+      
+      // Handle hour underflow
+      if (utcHours < 0) {
+        utcHours += 24;
+      }
+      
+      // Create UTC date
+      newArrival = new Date(Date.UTC(year, month-1, day, utcHours, utcMinutes, 0));
+      
       if (Number.isNaN(newArrival.getTime())) {
         return res.status(400).json({
           success: false,
@@ -7041,10 +7054,9 @@ export const updateAttendanceBulk = async (req, res) => {
           }
         }
 
+        // 🔥 FIX: Find daily status using date string comparison
         let daily = employee.dailyStatus.find((d) => {
-          const dDate = new Date(d.date);
-          dDate.setHours(0, 0, 0, 0);
-          return dDate.getTime() === selectedDate.getTime();
+          return d.date.toISOString().split('T')[0] === date;
         });
 
         if (!daily) {
