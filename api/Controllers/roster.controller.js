@@ -4145,12 +4145,12 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
-    const allowedTeamLeaderDepartments = ["Ops - Meta", "Marketing", "CS"];
+    const allowedTeamLeaderDepartments = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
     
     if (!allowedTeamLeaderDepartments.includes(user.department)) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. Only Ops-Meta, Marketing, or CS department employees can access this."
+        message: "Access denied. Only Ops-Meta, Marketing, CS, Developer, Ticketing, or Seo department employees can access this."
       });
     }
 
@@ -4424,14 +4424,14 @@ export const rosterUploadFromExcel = async (req, res) => {
 	    const isSuperAdmin = user.accountType === "superAdmin";
 	    const isHR = user.accountType === "HR";
 	    const isAdmin = user.accountType === "admin";
-	    const allowedEmployeeDepartments = ["Ops - Meta", "Marketing", "CS"];
+	    const allowedEmployeeDepartments = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
 	    const isAllowedDepartmentEmployee = user.accountType === "employee" && allowedEmployeeDepartments.includes(user.department);
 	    const isHrOrSuperAdmin = isSuperAdmin || isHR;
 	    
 	    if (!isSuperAdmin && !isHR && !isAdmin && !isAllowedDepartmentEmployee) {
 	      return res.status(403).json({
 	        success: false,
-	        message: "Access denied. Only superAdmin, admin, HR, or Ops-Meta/Marketing/CS department employees can upload roster."
+	        message: "Access denied. Only superAdmin, admin, HR, or Ops-Meta/Marketing/CS/Developer/Ticketing/Seo department employees can upload roster."
 	      });
 	    }
     
@@ -4483,7 +4483,7 @@ export const rosterUploadFromExcel = async (req, res) => {
       if (selectedStartDate < tomorrow) {
         return res.status(400).json({
           success: false,
-          message: "Ops-Meta, Marketing, and CS employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
+	          message: "Ops-Meta, Marketing, CS, Developer, Ticketing, and Seo employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
         });
       }
 	    } 
@@ -8742,7 +8742,6 @@ export const updatePunchTimes = async (req, res) => {
     });
   }
 };
-// Add this to your controller file (where updatePunchTimes is defined)
 
 // export const bulkUpdatePunchTimes = async (req, res) => {
 //   try {
@@ -9049,11 +9048,7 @@ export const bulkUpdatePunchTimes = async (req, res) => {
     if (!week) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
-
-    // Parse date parts
     const [year, month, day] = date.split('-').map(Number);
-
-    // Validate time formats if provided
     if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!timeRegex.test(punchIn)) {
@@ -9073,8 +9068,6 @@ export const bulkUpdatePunchTimes = async (req, res) => {
         });
       }
     }
-
-    // Parse IST times
     let istPunchInHours = null;
     let istPunchInMinutes = null;
     let istPunchOutHours = null;
@@ -9091,21 +9084,17 @@ export const bulkUpdatePunchTimes = async (req, res) => {
     const isNextDay = istPunchInHours !== null && istPunchOutHours !== null && 
                       istPunchOutHours < istPunchInHours;
 
-    // Results tracking
     const results = [];
     const errors = [];
 
-    // Process each employee
     for (const employeeId of employeeIds) {
       try {
-        // Find employee
         const employee = week.employees.id(employeeId);
         if (!employee) {
           errors.push({ employeeId, error: "Employee not found" });
           continue;
         }
 
-        // Find or create daily status
         let daily = employee.dailyStatus.find(d => {
           return d.date.toISOString().split('T')[0] === date;
         });
@@ -9141,14 +9130,11 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           daily = employee.dailyStatus[employee.dailyStatus.length - 1];
         }
 
-        // Track old values
         const oldPunchIn = daily.punchIn;
         const oldPunchOut = daily.punchOut;
         const oldTotalHours = daily.totalHours;
 
-        // Update punch in if provided
         if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
-          // Convert IST to UTC for storage
           let utcHours = istPunchInHours - 5;
           let utcMinutes = istPunchInMinutes - 30;
           
@@ -9165,9 +9151,7 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           daily.punchIn = newPunchIn;
         }
 
-        // Update punch out if provided
         if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
-          // Convert IST to UTC for storage
           let utcHours = istPunchOutHours - 5;
           let utcMinutes = istPunchOutMinutes - 30;
           
@@ -9185,13 +9169,10 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           daily.punchOut = newPunchOut;
         }
 
-        // Calculate total hours using IST times
         if (istPunchInHours !== null && istPunchOutHours !== null) {
-          // Convert both times to minutes since midnight in IST
           const punchInTotalMinutes = istPunchInHours * 60 + istPunchInMinutes;
           let punchOutTotalMinutes = istPunchOutHours * 60 + istPunchOutMinutes;
           
-          // If it's next day, add 24 hours (1440 minutes)
           if (isNextDay) {
             punchOutTotalMinutes += 24 * 60;
           }
@@ -9200,7 +9181,6 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           const hoursWorked = diffMinutes / 60;
           daily.totalHours = Math.round(hoursWorked * 10) / 10;
           
-          // Validate hours
           if (daily.totalHours > 24) {
             errors.push({ employeeId, error: "Punch times cannot span more than 24 hours" });
             continue;
@@ -9212,7 +9192,6 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           daily.isPunchCalculated = false;
         }
 
-        // Track changes for edit history
         if (oldPunchIn?.getTime() !== daily.punchIn?.getTime()) {
           changes.push({
             field: `punchIn (${date})`,
@@ -9237,11 +9216,9 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           });
         }
 
-        // Update tracking info
         daily.punchUpdatedBy = user._id;
         daily.punchUpdatedAt = new Date();
 
-        // Add edit history if there are changes
         if (changes.length > 0) {
           roster.editHistory.push({
             editedBy: user._id,
@@ -9255,7 +9232,6 @@ export const bulkUpdatePunchTimes = async (req, res) => {
           });
         }
 
-        // Mark as modified
         employee.markModified('dailyStatus');
         
         results.push({
@@ -9276,7 +9252,6 @@ export const bulkUpdatePunchTimes = async (req, res) => {
       }
     }
 
-    // Save the roster with all updates
     await roster.save();
 
     return res.status(200).json({
