@@ -630,8 +630,23 @@ export const updateRoster = async (req, res) => {
 	    const weekEndDate = new Date(foundWeek.endDate);
 	    weekStartDate.setHours(0, 0, 0, 0);
 	    weekEndDate.setHours(23, 59, 59, 999);
+      const toIstDateKey = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).formatToParts(date);
+        const year = parts.find((p) => p.type === "year")?.value;
+        const month = parts.find((p) => p.type === "month")?.value;
+        const day = parts.find((p) => p.type === "day")?.value;
+        return year && month && day ? `${year}-${month}-${day}` : null;
+      };
 
-	    const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+	    const accountType = String(user?.accountType || "").toLowerCase();
+      const canEditAnyWeek = accountType === "superAdmin" || accountType === "Hr";
 	    
 	    // Past week edits: only HR + SuperAdmin
 	    if (currentDate > weekEndDate && !canEditAnyWeek) {
@@ -649,15 +664,52 @@ export const updateRoster = async (req, res) => {
 	      });
 	    }
     
-    const isCurrentWeek = currentDate >= weekStartDate && currentDate <= weekEndDate;
-    if (isCurrentWeek) {
-      if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
-        return res.status(403).json({
-          success: false,
-          message: "Only HR and Super Admin can edit current week roster"
-        });
+	    const isCurrentWeek = currentDate >= weekStartDate && currentDate <= weekEndDate;
+	      const isLimitedCurrentWeekEditor = isCurrentWeek && accountType === "employee";
+      if (isLimitedCurrentWeekEditor) {
+        const updateFields = Object.keys(updates || {});
+        const nonDailyFields = updateFields.filter((field) => field !== "dailyStatus");
+        if (nonDailyFields.length > 0) {
+          return res.status(403).json({
+            success: false,
+            message: "For current week, you can update only daily status from today onward."
+          });
+        }
+
+        if (!Array.isArray(updates.dailyStatus)) {
+          return res.status(400).json({
+            success: false,
+            message: "dailyStatus array is required for current week updates."
+          });
+        }
+
+        const todayKey = toIstDateKey(new Date());
+        const existingStatusByDate = new Map(
+          (foundEmployee.dailyStatus || [])
+            .map((d) => {
+              const dateKey = toIstDateKey(d?.date);
+              if (!dateKey) return null;
+              const status = d?.status || d?.departmentStatus || d?.transportStatus || "P";
+              return [dateKey, status];
+            })
+            .filter(Boolean)
+        );
+
+        for (const day of updates.dailyStatus) {
+          const dateKey = toIstDateKey(day?.date);
+          if (!dateKey || !todayKey) continue;
+          if (dateKey < todayKey) {
+            const existingStatus = existingStatusByDate.get(dateKey) || "P";
+            const incomingStatus = day?.status || day?.departmentStatus || day?.transportStatus || "P";
+            if (incomingStatus !== existingStatus) {
+              return res.status(403).json({
+                success: false,
+                message: "Past dates in the current week cannot be edited."
+              });
+            }
+          }
+        }
       }
-    }
     
     const allowedFields = [
       "name",
@@ -734,8 +786,27 @@ export const updateRoster = async (req, res) => {
       }
     });
     
-    foundEmployee.shiftStartHour = shiftStartHour;
-    foundEmployee.shiftEndHour = shiftEndHour;
+	    foundEmployee.shiftStartHour = shiftStartHour;
+	    foundEmployee.shiftEndHour = shiftEndHour;
+
+      // Guard against legacy bad rows so single-employee updates don't fail full-document validation.
+      const normalizeHour = (value, fallback = 0) => {
+        const parsed = Number.parseInt(value, 10);
+        if (!Number.isFinite(parsed) || parsed < 0 || parsed > 23) return fallback;
+        return parsed;
+      };
+      const employeeDefaultStart = normalizeHour(foundEmployee.shiftStartHour, 0);
+      const employeeDefaultEnd = normalizeHour(foundEmployee.shiftEndHour, 0);
+      (roster.weeks || []).forEach((week) => {
+        (week.employees || []).forEach((emp) => {
+          const rawStart = emp?.shiftStartHour;
+          const rawEnd = emp?.shiftEndHour;
+          const missingStart = rawStart === undefined || rawStart === null || rawStart === "" || Number.isNaN(Number.parseInt(rawStart, 10));
+          const missingEnd = rawEnd === undefined || rawEnd === null || rawEnd === "" || Number.isNaN(Number.parseInt(rawEnd, 10));
+          if (missingStart) emp.shiftStartHour = employeeDefaultStart;
+          if (missingEnd) emp.shiftEndHour = employeeDefaultEnd;
+        });
+      });
     
     if (foundEmployee.shiftStartHour === undefined || foundEmployee.shiftEndHour === undefined) {
       return res.status(400).json({
@@ -4332,6 +4403,22 @@ export const updateOpsMetaRoster = async (req, res) => {
   try {
     const { employeeId, updates } = req.body;
     const user = req.user;
+    const accountType = String(user?.accountType || "").toLowerCase();
+    const canBypassDateRestriction = accountType === "superadmin" || accountType === "hr";
+    const toIstDateKey = (value) => {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(date);
+      const year = parts.find((p) => p.type === "year")?.value;
+      const month = parts.find((p) => p.type === "month")?.value;
+      const day = parts.find((p) => p.type === "day")?.value;
+      return year && month && day ? `${year}-${month}-${day}` : null;
+    };
 
     const currentDate = new Date();
     const roster = await Roster.findOne({
@@ -4356,6 +4443,44 @@ export const updateOpsMetaRoster = async (req, res) => {
     const employee = week.employees.id(employeeId);
     if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
+    }
+
+    if (accountType === "employee") {
+      if (String(employee.department || "") !== String(user.department || "")) {
+        return res.status(403).json({
+          success: false,
+          message: "Employees can update only their own department roster."
+        });
+      }
+
+      if (!canBypassDateRestriction && Array.isArray(updates?.dailyStatus)) {
+        const todayKey = toIstDateKey(new Date());
+        const existingStatusByDate = new Map(
+          (employee.dailyStatus || [])
+            .map((d) => {
+              const dateKey = toIstDateKey(d?.date);
+              if (!dateKey) return null;
+              const status = d?.status || "P";
+              return [dateKey, status];
+            })
+            .filter(Boolean)
+        );
+
+        for (const day of updates.dailyStatus) {
+          const dateKey = toIstDateKey(day?.date);
+          if (!dateKey || !todayKey) continue;
+          if (dateKey < todayKey) {
+            const existingStatus = existingStatusByDate.get(dateKey) || "P";
+            const incomingStatus = day?.status || "P";
+            if (incomingStatus !== existingStatus) {
+              return res.status(403).json({
+                success: false,
+                message: "Past dates in the current week cannot be edited."
+              });
+            }
+          }
+        }
+      }
     }
 
     const changes = [];
@@ -4404,6 +4529,25 @@ export const updateOpsMetaRoster = async (req, res) => {
     roster.updatedBy = user._id;
     roster.markModified("weeks");
     roster.markModified("editHistory");
+
+    // Guard against legacy rows with missing shift hours to avoid full-document save failure.
+    const normalizeHour = (value, fallback = 0) => {
+      const parsed = Number.parseInt(value, 10);
+      if (!Number.isFinite(parsed) || parsed < 0 || parsed > 23) return fallback;
+      return parsed;
+    };
+    const employeeDefaultStart = normalizeHour(employee.shiftStartHour, 0);
+    const employeeDefaultEnd = normalizeHour(employee.shiftEndHour, 0);
+    (roster.weeks || []).forEach((rosterWeek) => {
+      (rosterWeek.employees || []).forEach((emp) => {
+        const rawStart = emp?.shiftStartHour;
+        const rawEnd = emp?.shiftEndHour;
+        const missingStart = rawStart === undefined || rawStart === null || rawStart === "" || Number.isNaN(Number.parseInt(rawStart, 10));
+        const missingEnd = rawEnd === undefined || rawEnd === null || rawEnd === "" || Number.isNaN(Number.parseInt(rawEnd, 10));
+        if (missingStart) emp.shiftStartHour = employeeDefaultStart;
+        if (missingEnd) emp.shiftEndHour = employeeDefaultEnd;
+      });
+    });
 
     await roster.save();
 
