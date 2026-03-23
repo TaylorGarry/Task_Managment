@@ -269,6 +269,7 @@ const AttendanceUpdateWrapper = () => {
     }
   };
   const currentUser = getCurrentUser();
+  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
 
 	  useEffect(() => {
 	    dispatch(fetchAllRosters({
@@ -290,7 +291,7 @@ const AttendanceUpdateWrapper = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {currentUser?.accountType === "superAdmin" ? <AdminNavbar /> : <Navbar />}
+      {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
       
       <div className="container mx-auto px-2 ">
         <div className="bg-white rounded-lg shadow p-6 mb-6">

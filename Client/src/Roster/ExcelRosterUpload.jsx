@@ -643,7 +643,7 @@ const ExcelRosterUpload = () => {
   const user = JSON.parse(localStorage.getItem('user')) || {};
   const isSuperAdmin = user.accountType === 'superAdmin';
   const isAdmin = ['admin', 'HR'].includes(user.accountType);
-  const allowedRosterDepartments = ['Ops - Meta', 'Marketing', 'CS'];
+  const allowedRosterDepartments = ['Ops - Meta', 'Marketing', 'CS', 'Developer', 'Ticketing', 'Seo'];
   const isAllowedDepartmentEmployee =
     user.accountType === 'employee' &&
     allowedRosterDepartments.includes(user.department);
@@ -665,7 +665,7 @@ const ExcelRosterUpload = () => {
 
   const getRoleDateHint = () => {
     if (isSuperAdmin) return 'SuperAdmin can upload for any date (past, present, future).';
-    if (isAllowedDepartmentEmployee) return 'Ops-Meta/Marketing/CS employees can upload only from tomorrow onward.';
+    if (isAllowedDepartmentEmployee) return 'Ops-Meta/Marketing/CS/Developer/Ticketing/Seo employees can upload only from tomorrow onward.';
     return 'Admin/HR can upload for today and future dates.';
   };
 
@@ -680,7 +680,7 @@ const ExcelRosterUpload = () => {
       today.setHours(0, 0, 0, 0);
 
       if (isAllowedDepartmentEmployee && startDate < tomorrowFormatted) {
-        errors.startDate = 'Ops-Meta/Marketing/CS employees can only upload roster starting from tomorrow';
+        errors.startDate = 'Ops-Meta/Marketing/CS/Developer/Ticketing/Seo employees can only upload roster starting from tomorrow';
       } else if (!isSuperAdmin && start < today) {
         errors.startDate = 'Cannot select past dates';
       }
@@ -1065,7 +1065,7 @@ const ExcelRosterUpload = () => {
                 <span className="text-gray-700">
                   {isSuperAdmin && 'SuperAdmin can upload for any date (past, present, future)'}
                   {isAdmin && 'Admin/HR can upload for today and future dates'}
-                  {isAllowedDepartmentEmployee && 'Ops-Meta/Marketing/CS employees can upload from tomorrow onward only'}
+                  {isAllowedDepartmentEmployee && 'Ops-Meta/Marketing/CS/Developer/Ticketing/Seo employees can upload from tomorrow onward only'}
                 </span>
               </li>
               <li className="flex items-start">

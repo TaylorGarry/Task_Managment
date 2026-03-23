@@ -404,7 +404,7 @@
 
 
 import React from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
@@ -429,7 +429,7 @@ import AttendanceUpdateWrapper from "./Roster/AttendanceUpdateWrapper.jsx";
 import SuperAdminTransportView from "./Roster/SuperAdminTransportView.jsx";
 import AttendanceSnapshot from "./Roster/AttendanceSnapshot.jsx";
 
-const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS"];
+const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
 
 
 const ProtectedRoute = ({ children, adminOnly }) => {
@@ -534,12 +534,13 @@ const AttendanceSnapshotRoute = ({ children }) => {
 
 function App() {
   const { user } = useSelector((state) => state.auth);
+  const location = useLocation();
 
   return (
     <>
       <ToastContainer position="top-right" autoClose={3000} />
 
-      <Routes>
+      <Routes location={location} key={`${location.pathname}${location.search}${location.hash}`}>
         <Route
           path="/signup"
           element={

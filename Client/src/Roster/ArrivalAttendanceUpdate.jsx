@@ -47,51 +47,21 @@ const toLocalDateKey = (value) => {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return getLocalDateKey(new Date(value));
 };
-
-// Time validation function
+ 
 const isValidTimeFormat = (time) => {
   if (!time || time === "") return true;
   const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
   return timeRegex.test(time);
 };
-
-// Function to determine HR attendance based on hours worked
+ 
 const getHRAttendanceFromHours = (hours) => {
   if (!hours) return null;
-  if (hours >= 8.5) return "P";
-  if (hours >= 5 && hours < 8.5) return "HD";
+  if (hours >= 7.5) return "P";
+  if (hours >= 5 && hours < 7.5) return "HD";
   if (hours > 0 && hours < 5) return "LWP";
   return null;
 };
 
-const formatTimeForInput = (dateString) => {
-  if (!dateString) return '';
-  
-  // If it's already in HH:MM format, return as is
-  if (typeof dateString === "string" && /^\d{2}:\d{2}$/.test(dateString)) {
-    return dateString;
-  }
-  
-  // Handle ISO date strings from API
-  if (typeof dateString === "string" && dateString.includes("T")) {
-    try {
-      const date = new Date(dateString);
-      if (Number.isNaN(date.getTime())) return '';
-      
-      // Get hours and minutes in local time
-      const hours = date.getHours().toString().padStart(2, '0');
-      const minutes = date.getMinutes().toString().padStart(2, '0');
-      
-      return `${hours}:${minutes}`;
-    } catch (e) {
-      return '';
-    }
-  }
-  
-  return '';
-};
-
-// FIXED: Format time for display (HH:MM AM/PM) - Uses local time
 const formatTimeForDisplay = (dateString) => {
   if (!dateString) return '--:-- --';
   
@@ -103,26 +73,66 @@ const formatTimeForDisplay = (dateString) => {
     return `${hour12}:${minutes.toString().padStart(2, '0')} ${suffix}`;
   }
   
-  // Handle ISO date strings from API
+  // Handle ISO date strings from API - Extract time in IST (Indian timezone)
   if (typeof dateString === "string" && dateString.includes("T")) {
     try {
+      // Create a date object from the ISO string (which is in UTC)
       const date = new Date(dateString);
       if (Number.isNaN(date.getTime())) return '--:-- --';
       
-      // Get hours and minutes in local time (browser will handle timezone)
-      const hours = date.getHours();
-      const minutes = date.getMinutes();
+      // Create a date formatter that always uses Indian timezone
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+      });
       
-      const suffix = hours >= 12 ? "PM" : "AM";
-      const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-      
-      return `${hour12}:${minutes.toString().padStart(2, '0')} ${suffix}`;
+      return formatter.format(date).toUpperCase();
     } catch (e) {
       return '--:-- --';
     }
   }
   
   return '--:-- --';
+};
+
+// Format time for input field (HH:MM) - FIXED FOR PRODUCTION
+const formatTimeForInput = (dateString) => {
+  if (!dateString) return '';
+  
+  // If it's already in HH:MM format, return as is
+  if (typeof dateString === "string" && /^\d{2}:\d{2}$/.test(dateString)) {
+    return dateString;
+  }
+  
+  // Handle ISO date strings from API - Extract time in IST (Indian timezone)
+  if (typeof dateString === "string" && dateString.includes("T")) {
+    try {
+      const date = new Date(dateString);
+      if (Number.isNaN(date.getTime())) return '';
+      
+      // Create a date formatter that always uses Indian timezone for hours and minutes
+      const formatter = new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: false
+      });
+      
+      // Format returns something like "03, 17" for hour and minute
+      // Split and pad to ensure HH:MM format
+      const parts = formatter.formatToParts(date);
+      const hour = parts.find(p => p.type === 'hour')?.value.padStart(2, '0') || '00';
+      const minute = parts.find(p => p.type === 'minute')?.value.padStart(2, '0') || '00';
+      
+      return `${hour}:${minute}`;
+    } catch (e) {
+      return '';
+    }
+  }
+  
+  return '';
 };
 
 const formatShift = (startHour, endHour) => {
@@ -151,6 +161,7 @@ const getStatusColor = (status) => {
 const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const dispatch = useDispatch();
   const currentUser = getCurrentUser();
+  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
   const { updateEmployeesData, loading } = useSelector((state) => state.roster);
   
   // Use ref to track if initial fetch has been done
@@ -185,7 +196,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   if (!rosterId) {
     return (
       <div className="min-h-screen bg-gray-100">
-        {currentUser?.accountType === "superAdmin" ? <AdminNavbar /> : <Navbar />}
+        {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
         <div className="container mx-auto px-4 py-8">
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
@@ -323,104 +334,6 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     setSelectedEmployeeIds((prev) => prev.filter((id) => currentIds.has(String(id))));
   }, [rosterEntries]);
 
-  // Handle punch in change
-  const handlePunchInChange = (employeeId, value) => {
-    if (!isValidTimeFormat(value) && value !== "") {
-      setPunchTimeErrors(prev => ({
-        ...prev,
-        [employeeId]: { ...prev[employeeId], punchIn: "Invalid time format (HH:MM)" }
-      }));
-    } else {
-      setPunchTimeErrors(prev => {
-        const newErrors = { ...prev };
-        if (newErrors[employeeId]) delete newErrors[employeeId].punchIn;
-        if (newErrors[employeeId] && Object.keys(newErrors[employeeId]).length === 0) {
-          delete newErrors[employeeId];
-        }
-        return newErrors;
-      });
-    }
-
-    setUpdates(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        punchIn: value
-      }
-    }));
-  };
-
-  // Handle punch out change
-  const handlePunchOutChange = (employeeId, value) => {
-    if (!isValidTimeFormat(value) && value !== "") {
-      setPunchTimeErrors(prev => ({
-        ...prev,
-        [employeeId]: { ...prev[employeeId], punchOut: "Invalid time format (HH:MM)" }
-      }));
-    } else {
-      setPunchTimeErrors(prev => {
-        const newErrors = { ...prev };
-        if (newErrors[employeeId]) delete newErrors[employeeId].punchOut;
-        if (newErrors[employeeId] && Object.keys(newErrors[employeeId]).length === 0) {
-          delete newErrors[employeeId];
-        }
-        return newErrors;
-      });
-    }
-
-    setUpdates(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        punchOut: value
-      }
-    }));
-  };
-
-  // Handle transport arrival update
-  const handleTransportArrivalChange = (employeeId, value) => {
-    setUpdates(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        transportArrivalTime: value
-      }
-    }));
-  };
-
-  // Handle department arrival update
-  const handleDepartmentArrivalChange = (employeeId, value) => {
-    setUpdates(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        departmentArrivalTime: value
-      }
-    }));
-  };
-
-  // Handle transport status change
-  const handleTransportStatusChange = (employeeId, value) => {
-    setUpdates(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        transportStatus: value
-      }
-    }));
-  };
-
-  // Handle department status change
-  const handleDepartmentStatusChange = (employeeId, value) => {
-    setUpdates(prev => ({
-      ...prev,
-      [employeeId]: {
-        ...prev[employeeId],
-        departmentStatus: value
-      }
-    }));
-  };
-
   const clearEmployeeUpdateField = (employeeId, field) => {
     setUpdates((prev) => {
       const existing = prev?.[employeeId];
@@ -453,200 +366,21 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
     );
   };
 
-  // Handle punch time update
-  const handlePunchTimeUpdate = async (employee) => {
-    const employeeUpdate = updates[employee._id];
-    const hasPunchIn = employeeUpdate?.punchIn !== undefined && employeeUpdate?.punchIn !== "";
-    const hasPunchOut = employeeUpdate?.punchOut !== undefined && employeeUpdate?.punchOut !== "";
-    
-    if (!hasPunchIn && !hasPunchOut) {
-      alert(`Please enter punch in or punch out time for ${employee.name}`);
-      return;
-    }
-
-    if (hasPunchIn && !isValidTimeFormat(employeeUpdate.punchIn)) {
-      alert(`Invalid punch in time format for ${employee.name}. Use HH:MM format (e.g., 09:30)`);
-      return;
-    }
-    
-    if (hasPunchOut && !isValidTimeFormat(employeeUpdate.punchOut)) {
-      alert(`Invalid punch out time format for ${employee.name}. Use HH:MM format (e.g., 18:30)`);
-      return;
-    }
-
-    setUpdatingId(employee._id);
-
-    try {
-      const payload = {
-        rosterId,
-        weekNumber: parseInt(selectedWeek),
-        employeeId: employee._id,
-        date: selectedDate,
-      };
-      
-      if (hasPunchIn) payload.punchIn = employeeUpdate.punchIn;
-      if (hasPunchOut) payload.punchOut = employeeUpdate.punchOut;
-
-      await dispatch(updatePunchTimes(payload)).unwrap();
-
-      clearEmployeeUpdateField(employee._id, "punchIn");
-      clearEmployeeUpdateField(employee._id, "punchOut");
-      
-      setPunchTimeErrors(prev => {
-        const newErrors = { ...prev };
-        delete newErrors[employee._id];
-        return newErrors;
-      });
-      
-      refetchEmployees();
-      
-      toast.success(`Punch times updated for ${employee.name}`);
-    } catch (error) {
-      console.error("Failed to update punch times:", error);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleTransportArrivalUpdate = async (employee) => {
-    const employeeUpdate = updates[employee._id];
-    if (!employeeUpdate?.transportArrivalTime) {
-      alert(`Please select transport arrival time for ${employee.name}`);
-      return;
-    }
-
-    setUpdatingId(employee._id);
-
-    try {
-      await dispatch(
-        updateArrivalTime({
-          rosterId,
-          weekNumber: parseInt(selectedWeek),
-          employeeId: employee._id,
-          date: selectedDate,
-          arrivalTime: employeeUpdate.transportArrivalTime,
-        })
-      ).unwrap();
-
-      clearEmployeeUpdateField(employee._id, "transportArrivalTime");
-      refetchEmployees();
-      
-      toast.success(`Transport arrival updated for ${employee.name}`);
-    } catch (error) {
-      console.error("Failed to update transport arrival:", error);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleDepartmentArrivalUpdate = async (employee) => {
-    const employeeUpdate = updates[employee._id];
-    if (!employeeUpdate?.departmentArrivalTime) {
-      alert(`Please select department arrival time for ${employee.name}`);
-      return;
-    }
-
-    setUpdatingId(employee._id);
-
-    try {
-      await dispatch(
-        updateAttendance({
-          rosterId,
-          weekNumber: parseInt(selectedWeek),
-          employeeId: employee._id,
-          date: selectedDate,
-          ...(employeeUpdate.departmentStatus && { departmentStatus: employeeUpdate.departmentStatus }),
-          ...(employeeUpdate.transportStatus && { transportStatus: employeeUpdate.transportStatus }),
-          arrivalTime: employeeUpdate.departmentArrivalTime,
-        })
-      ).unwrap();
-
-      clearEmployeeUpdateField(employee._id, "departmentArrivalTime");
-      refetchEmployees();
-      
-      toast.success(`Department arrival updated for ${employee.name}`);
-    } catch (error) {
-      console.error("Failed to update department arrival:", error);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleTransportStatusUpdate = async (employee) => {
-    const employeeUpdate = updates[employee._id];
-    if (!employeeUpdate?.transportStatus) {
-      alert(`Please select transport status for ${employee.name}`);
-      return;
-    }
-
-    setUpdatingId(employee._id);
-
-    try {
-      await dispatch(
-        updateAttendance({
-          rosterId,
-          weekNumber: parseInt(selectedWeek),
-          employeeId: employee._id,
-          date: selectedDate,
-          transportStatus: employeeUpdate.transportStatus,
-        })
-      ).unwrap();
-
-      clearEmployeeUpdateField(employee._id, "transportStatus");
-      refetchEmployees();
-      
-      toast.success(`Transport status updated for ${employee.name}`);
-    } catch (error) {
-      console.error("Failed to update transport status:", error);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
-  const handleDepartmentStatusUpdate = async (employee) => {
-    const employeeUpdate = updates[employee._id];
-    if (!employeeUpdate?.departmentStatus) {
-      alert(`Please select department status for ${employee.name}`);
-      return;
-    }
-
-    setUpdatingId(employee._id);
-
-    try {
-      await dispatch(
-        updateAttendance({
-          rosterId,
-          weekNumber: parseInt(selectedWeek),
-          employeeId: employee._id,
-          date: selectedDate,
-          departmentStatus: employeeUpdate.departmentStatus,
-        })
-      ).unwrap();
-
-      clearEmployeeUpdateField(employee._id, "departmentStatus");
-      refetchEmployees();
-      
-      toast.success(`Department status updated for ${employee.name}`);
-    } catch (error) {
-      console.error("Failed to update department status:", error);
-    } finally {
-      setUpdatingId(null);
-    }
-  };
-
   const getTodayStatus = (employee) => {
     if (!employee?.dailyStatus || !Array.isArray(employee.dailyStatus)) {
       return null;
     }
 
-    const selectedDateObj = new Date(selectedDate);
-    selectedDateObj.setHours(0, 0, 0, 0);
+    // Parse the selected date in IST timezone
+    const selectedDateStr = selectedDate; // This is in YYYY-MM-DD format from the input
+    const selectedDateObj = new Date(selectedDateStr + 'T00:00:00+05:30'); // Force IST midnight
     
     const match = employee.dailyStatus.find(d => {
       if (!d?.date) return false;
-      const dDate = new Date(d.date);
-      dDate.setHours(0, 0, 0, 0);
-      return dDate.getTime() === selectedDateObj.getTime();
+      
+      // Parse the stored date in IST timezone
+      const dDateStr = new Date(d.date).toISOString().split('T')[0];
+      return dDateStr === selectedDateStr;
     });
     
     return match;
@@ -658,6 +392,16 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
   const canUpdateDepartment = (!viewType.isTransport) && (viewType.isSuperAdmin || viewType.isHR || viewType.isEmployee) && weekInfo?.canEdit !== false;
   // HR and SuperAdmin can update punch times
   const canUpdatePunchTimes = (viewType.isHR || viewType.isSuperAdmin) && weekInfo?.canEdit !== false;
+  const isEmployeeUser = viewType.isEmployee === true;
+  const isEmployeeTransportUser = isEmployeeUser && viewType.department === "Transport";
+  const isEmployeeNonTransportUser = isEmployeeUser && viewType.department !== "Transport";
+  const canViewPunchColumns = !isEmployeeUser;
+  const canViewTotalHours = !isEmployeeUser;
+  const canViewHrAttendance = !isEmployeeUser;
+  const canViewTransportStatus = !isEmployeeUser;
+  const canViewTransportArrival = !isEmployeeNonTransportUser;
+  const canViewDepartmentStatus = !isEmployeeTransportUser;
+  const canViewDepartmentArrival = !isEmployeeTransportUser;
 
   const isAllSelected = rosterEntries.length > 0 && selectedEmployeeIds.length === rosterEntries.length;
 
@@ -769,7 +513,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {viewType.isSuperAdmin ? <AdminNavbar /> : <Navbar />}
+      {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
 
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
@@ -1072,41 +816,47 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Shift</th>
                     
                     {/* Punch In/Out Column Headers */}
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Punch In</th>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Punch Out</th>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Total Hours</th>
+                    {canViewPunchColumns && (
+                      <>
+                        <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Punch In</th>
+                        <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Punch Out</th>
+                      </>
+                    )}
+                    {canViewTotalHours && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Total Hours</th>
+                    )}
                     
                     {/* HR Attendance Column - Auto-calculated from punch hours */}
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>
-                      HR Attendance
-                      {canUpdatePunchTimes && (
-                        <span className="ml-1 text-xs text-purple-400">(auto)</span>
-                      )}
-                    </th>
+                    {canViewHrAttendance && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>
+                        HR Attendance
+                        {/* {canUpdatePunchTimes && (
+                          <span className="ml-1 text-xs text-purple-400">(auto)</span>
+                        )} */}
+                      </th>
+                    )}
                     
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Roster Status</th>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Status</th>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Status</th>
+                    {canViewTransportStatus && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Status</th>
+                    )}
+                    {canViewDepartmentStatus && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Status</th>
+                    )}
                     
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Arrival</th>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Arrival</th>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Actions</th>
+                    {canViewTransportArrival && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Arrival</th>
+                    )}
+                    {canViewDepartmentArrival && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Arrival</th>
+                    )}
+                    {/* Actions column header removed */}
                   </tr>
                 </thead>
                 <tbody className={isDarkTable ? "bg-neutral-900 divide-y divide-neutral-800" : "bg-white divide-y divide-gray-200"}>
                   {rosterEntries.map((employee) => {
                     const todayStatus = getTodayStatus(employee);
-                    const employeeUpdate = updates[employee._id] || {};
-                    const isUpdating = updatingId === employee._id;
                     const isSelected = selectedEmployeeIds.some((id) => String(id) === String(employee._id));
-                    
-                    const punchIn = employeeUpdate.punchIn !== undefined 
-                      ? employeeUpdate.punchIn 
-                      : (todayStatus?.punchIn ? formatTimeForInput(todayStatus.punchIn) : '');
-                    
-                    const punchOut = employeeUpdate.punchOut !== undefined 
-                      ? employeeUpdate.punchOut 
-                      : (todayStatus?.punchOut ? formatTimeForInput(todayStatus.punchOut) : '');
                     
                     const totalHours = todayStatus?.totalHours;
                     
@@ -1149,104 +899,56 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                           {formatShift(employee.shiftStartHour, employee.shiftEndHour)}
                         </td>
                         
-                        {/* Punch In Field */}
-                        <td className="px-4 py-3">
-                          {canUpdatePunchTimes ? (
-                            <div className="flex flex-col gap-1">
-                              <input
-                                type="time"
-                                value={punchIn}
-                                onChange={(e) => handlePunchInChange(employee._id, e.target.value)}
-                                disabled={isUpdating}
-                                className={`w-28 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
-                                  punchTimeErrors[employee._id]?.punchIn 
-                                    ? 'border-red-500' 
-                                    : isDarkTable 
-                                      ? 'bg-neutral-950 border-neutral-700 text-neutral-200' 
-                                      : 'bg-white border-gray-300 text-gray-900'
-                                }`}
-                                placeholder="--:--"
-                                step="60"
-                              />
-                              {punchTimeErrors[employee._id]?.punchIn && (
-                                <span className="text-[10px] text-red-500">{punchTimeErrors[employee._id].punchIn}</span>
-                              )}
-                              {todayStatus?.punchIn && !employeeUpdate.punchIn && (
-                                <span className="text-[10px] text-purple-600">
-                                  {/* Current: {formatTimeForDisplay(todayStatus.punchIn)} */}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
+                        {/* Punch In Field - READONLY DISPLAY */}
+                        {canViewPunchColumns && (
+                          <td className="px-4 py-3">
                             <span className={isDarkTable ? "text-neutral-300" : "text-gray-700"}>
                               {todayStatus?.punchIn ? formatTimeForDisplay(todayStatus.punchIn) : '--:-- --'}
                             </span>
-                          )}
-                        </td>
+                          </td>
+                        )}
                         
-                        {/* Punch Out Field */}
-                        <td className="px-4 py-3">
-                          {canUpdatePunchTimes ? (
-                            <div className="flex flex-col gap-1">
-                              <input
-                                type="time"
-                                value={punchOut}
-                                onChange={(e) => handlePunchOutChange(employee._id, e.target.value)}
-                                disabled={isUpdating}
-                                className={`w-28 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-purple-400 ${
-                                  punchTimeErrors[employee._id]?.punchOut 
-                                    ? 'border-red-500' 
-                                    : isDarkTable 
-                                      ? 'bg-neutral-950 border-neutral-700 text-neutral-200' 
-                                      : 'bg-white border-gray-300 text-gray-900'
-                                }`}
-                                placeholder="--:--"
-                                step="60"
-                              />
-                              {punchTimeErrors[employee._id]?.punchOut && (
-                                <span className="text-[10px] text-red-500">{punchTimeErrors[employee._id].punchOut}</span>
-                              )}
-                              {todayStatus?.punchOut && !employeeUpdate.punchOut && (
-                                <span className="text-[10px] text-purple-600">
-                                  {/* Current: {formatTimeForDisplay(todayStatus.punchOut)} */}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
+                        {/* Punch Out Field - READONLY DISPLAY */}
+                        {canViewPunchColumns && (
+                          <td className="px-4 py-3">
                             <span className={isDarkTable ? "text-neutral-300" : "text-gray-700"}>
                               {todayStatus?.punchOut ? formatTimeForDisplay(todayStatus.punchOut) : '--:-- --'}
                             </span>
-                          )}
-                        </td>
+                          </td>
+                        )}
                         
                         {/* Total Hours Display */}
-                        <td className="px-4 py-3">
-                          {totalHours ? (
-                            <span className={`font-medium ${isDarkTable ? 'text-purple-300' : 'text-purple-700'}`}>
-                              {totalHours} hrs
-                            </span>
-                          ) : (
-                            <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>
-                              --
-                            </span>
-                          )}
-                        </td>
+                        {canViewTotalHours && (
+                          <td className="px-4 py-3">
+                            {totalHours ? (
+                              <span className={`font-medium ${isDarkTable ? 'text-purple-300' : 'text-purple-700'}`}>
+                                {totalHours} hrs
+                              </span>
+                            ) : (
+                              <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>
+                                --
+                              </span>
+                            )}
+                          </td>
+                        )}
                         
                         {/* HR Attendance Display - Auto-calculated from punch hours */}
-                        <td className="px-4 py-3">
-                          {hrAttendance ? (
-                            <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(hrAttendance)}`}>
-                              {hrAttendance}
-                              {canUpdatePunchTimes && !todayStatus?.departmentStatus && (
-                                <span className="ml-1 text-[8px]">(auto)</span>
-                              )}
-                            </span>
-                          ) : (
-                            <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>
-                              --
-                            </span>
-                          )}
-                        </td>
+                        {canViewHrAttendance && (
+                          <td className="px-4 py-3">
+                            {hrAttendance ? (
+                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(hrAttendance)}`}>
+                                {hrAttendance}
+                                {canUpdatePunchTimes && !todayStatus?.departmentStatus && (
+                                  <span className="ml-1 text-[8px]">(auto)</span>
+                                )}
+                              </span>
+                            ) : (
+                              <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>
+                                --
+                              </span>
+                            )}
+                          </td>
+                        )}
                         
                         {/* Roster Status Display */}
                         <td className="px-4 py-3">
@@ -1262,222 +964,62 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
                         </td>
                         
                         {/* Transport Status Display */}
-                        <td className="px-4 py-3">
-                          {todayStatus?.transportStatus ? (
-                            <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(todayStatus.transportStatus)}`}>
-                              {todayStatus.transportStatus}
-                            </span>
-                          ) : (
-                            <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>Not set</span>
-                          )}
-                        </td>
+                        {canViewTransportStatus && (
+                          <td className="px-4 py-3">
+                            {todayStatus?.transportStatus ? (
+                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(todayStatus.transportStatus)}`}>
+                                {todayStatus.transportStatus}
+                              </span>
+                            ) : (
+                              <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>Not set</span>
+                            )}
+                          </td>
+                        )}
 
                         {/* Department Status Display - Shows only short code */}
-<td className="px-4 py-3">
-  {todayStatus?.departmentStatus ? (
-    <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(todayStatus.departmentStatus)}`}>
-      {todayStatus.departmentStatus}
-    </span>
-  ) : (
-    <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>Not set</span>
-  )}
-</td>
+                        {canViewDepartmentStatus && (
+                          <td className="px-4 py-3">
+                            {todayStatus?.departmentStatus ? (
+                              <span className={`px-2 py-1 text-xs rounded-full ${getStatusColor(todayStatus.departmentStatus)}`}>
+                                {todayStatus.departmentStatus}
+                              </span>
+                            ) : (
+                              <span className={isDarkTable ? "text-neutral-500 text-xs" : "text-gray-400 text-xs"}>Not set</span>
+                            )}
+                          </td>
+                        )}
                         
-                        {/* Transport Arrival */}
-                        <td className="px-4 py-3">
-                          {canUpdateTransport ? (
-                            <div className="flex flex-col gap-1">
-                              <input
-                                type="time"
-                                value={
-                                  employeeUpdate.transportArrivalTime !== undefined 
-                                    ? employeeUpdate.transportArrivalTime 
-                                    : (todayStatus?.transportArrivalTime 
-                                        ? formatTimeForInput(todayStatus.transportArrivalTime)
-                                        : '')
-                                }
-                                onChange={(e) => handleTransportArrivalChange(employee._id, e.target.value)}
-                                disabled={isUpdating}
-                                className="w-28 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
-                                placeholder="Transport"
-                              />
-                              {todayStatus?.transportArrivalTime && !employeeUpdate.transportArrivalTime && (
-                                <span className="text-[10px] text-blue-600">
-                                  {/* Current: {formatTimeForDisplay(todayStatus.transportArrivalTime)} */}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-700">
+                        {/* Transport Arrival - READONLY DISPLAY */}
+                        {canViewTransportArrival && (
+                          <td className="px-4 py-3">
+                            <div className="text-sm">
                               {todayStatus?.transportArrivalTime ? (
-                                <span className="text-blue-600 font-medium">
+                                <span className={isDarkTable ? "text-blue-300" : "text-blue-600 font-medium"}>
                                   {formatTimeForDisplay(todayStatus.transportArrivalTime)}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">--:-- --</span>
+                                <span className={isDarkTable ? "text-neutral-500" : "text-gray-400"}>--:-- --</span>
                               )}
                             </div>
-                          )}
-                        </td>
+                          </td>
+                        )}
 
-                        {/* Department Arrival */}
-                        <td className="px-4 py-3">
-                          {canUpdateDepartment ? (
-                            <div className="flex flex-col gap-1">
-                              <input
-                                type="time"
-                                value={
-                                  employeeUpdate.departmentArrivalTime !== undefined 
-                                    ? employeeUpdate.departmentArrivalTime 
-                                    : (todayStatus?.departmentArrivalTime 
-                                        ? formatTimeForInput(todayStatus.departmentArrivalTime)
-                                        : '')
-                                }
-                                onChange={(e) => handleDepartmentArrivalChange(employee._id, e.target.value)}
-                                disabled={isUpdating}
-                                className="w-28 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-green-400"
-                                placeholder="Department"
-                              />
-                              {todayStatus?.departmentArrivalTime && !employeeUpdate.departmentArrivalTime && (
-                                <span className="text-[10px] text-green-600">
-                                  {/* Current: {formatTimeForDisplay(todayStatus.departmentArrivalTime)} */}
-                                </span>
-                              )}
-                            </div>
-                          ) : (
-                            <div className="text-sm text-gray-700">
+                        {/* Department Arrival - READONLY DISPLAY */}
+                        {canViewDepartmentArrival && (
+                          <td className="px-4 py-3">
+                            <div className="text-sm">
                               {todayStatus?.departmentArrivalTime ? (
-                                <span className="text-green-600 font-medium">
+                                <span className={isDarkTable ? "text-green-300" : "text-green-600 font-medium"}>
                                   {formatTimeForDisplay(todayStatus.departmentArrivalTime)}
                                 </span>
                               ) : (
-                                <span className="text-gray-400">--:-- --</span>
+                                <span className={isDarkTable ? "text-neutral-500" : "text-gray-400"}>--:-- --</span>
                               )}
                             </div>
-                          )}
-                        </td>
+                          </td>
+                        )}
 
-                        {/* Actions */}
-                        <td className="px-4 py-3">
-                          <div className="flex flex-col gap-2">
-                            
-                            {/* Punch Time Update Button - Only for HR/SuperAdmin */}
-                            {canUpdatePunchTimes && (
-                              (employeeUpdate.punchIn !== undefined || employeeUpdate.punchOut !== undefined) && 
-                              (employeeUpdate.punchIn !== (todayStatus?.punchIn ? formatTimeForInput(todayStatus.punchIn) : '') ||
-                               employeeUpdate.punchOut !== (todayStatus?.punchOut ? formatTimeForInput(todayStatus.punchOut) : ''))
-                            ) && (
-                              <button
-                                onClick={() => handlePunchTimeUpdate(employee)}
-                                disabled={isUpdating || punchTimeErrors[employee._id]}
-                                className={`${isDarkTable ? 'bg-purple-600' : 'bg-purple-600'} text-white px-2 py-1 text-xs rounded hover:bg-purple-700 flex items-center justify-center gap-1`}
-                              >
-                                <Coffee className={`w-3 h-3 ${isDarkTable ? 'text-white' : 'text-white'}`} />
-                                Update Punch Times
-                              </button>
-                            )}
-                            
-                            {/* Transport Status Update */}
-                            {canUpdateTransport && (
-                              <div className="flex flex-col gap-1 mb-2">
-                                <select
-                                  value={
-                                    employeeUpdate.transportStatus !== undefined 
-                                      ? employeeUpdate.transportStatus 
-                                      : (todayStatus?.transportStatus || '')
-                                  }
-                                  onChange={(e) => handleTransportStatusChange(employee._id, e.target.value)}
-                                  disabled={isUpdating}
-                                  className={isDarkTable ? "w-32 bg-neutral-950 text-neutral-200 border border-neutral-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" : "w-32 bg-white text-gray-900 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"}
-                                >
-                                  <option value="">Transport Attendance</option>
-                                  {STATUS_OPTIONS.map(option => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                                {todayStatus?.transportStatus && !employeeUpdate.transportStatus && (
-                                  <span className="text-[10px] text-blue-600">
-                                    {/* Current: {todayStatus.transportStatus} */}
-                                  </span>
-                                )}
-                                {employeeUpdate.transportStatus && employeeUpdate.transportStatus !== todayStatus?.transportStatus && (
-                                  <button
-                                    onClick={() => handleTransportStatusUpdate(employee)}
-                                    disabled={isUpdating}
-                                    className={`${isDarkTable ? 'bg-blue-600' : 'bg-blue-600'} text-white px-2 py-1 text-xs rounded hover:bg-blue-700 flex items-center justify-center gap-1`}
-                                  >
-                                    <CheckCircle className={`w-3 h-3 ${isDarkTable ? 'text-white' : 'text-white'}`} />
-                                    Update Transport Status
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Department Status Update */}
-                            {canUpdateDepartment && (
-                              <div className="flex flex-col gap-1 mb-2">
-                                <select
-                                  value={
-                                    employeeUpdate.departmentStatus !== undefined 
-                                      ? employeeUpdate.departmentStatus 
-                                      : (todayStatus?.departmentStatus || '')
-                                  }
-                                  onChange={(e) => handleDepartmentStatusChange(employee._id, e.target.value)}
-                                  disabled={isUpdating}
-                                  className={isDarkTable ? "w-32 bg-neutral-950 text-neutral-200 border border-neutral-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-500" : "w-32 bg-white text-gray-900 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-green-400"}
-                                >
-                                  <option value="">Dept ATTENDANCE</option>
-                                  {STATUS_OPTIONS.map(option => (
-                                    <option key={option.value} value={option.value}>
-                                      {option.label}
-                                    </option>
-                                  ))}
-                                </select>
-                                {todayStatus?.departmentStatus && !employeeUpdate.departmentStatus && (
-                                  <span className="text-[10px] text-green-600">
-                                    {/* Current: {todayStatus.departmentStatus} */}
-                                  </span>
-                                )}
-                                {employeeUpdate.departmentStatus && employeeUpdate.departmentStatus !== todayStatus?.departmentStatus && (
-                                  <button
-                                    onClick={() => handleDepartmentStatusUpdate(employee)}
-                                    disabled={isUpdating}
-                                    className={`${isDarkTable ? 'bg-green-600' : 'bg-green-600'} text-white px-2 py-1 text-xs rounded hover:bg-green-700 flex items-center justify-center gap-1`}
-                                  >
-                                    <CheckCircle className={`w-3 h-3 ${isDarkTable ? 'text-white' : 'text-white'}`} />
-                                    Update Dept Status
-                                  </button>
-                                )}
-                              </div>
-                            )}
-                            
-                            {/* Transport Arrival Update */}
-                            {canUpdateTransport && employeeUpdate.transportArrivalTime && employeeUpdate.transportArrivalTime !== formatTimeForInput(todayStatus?.transportArrivalTime) && (
-                              <button
-                                onClick={() => handleTransportArrivalUpdate(employee)}
-                                disabled={isUpdating}
-                                className={`${isDarkTable ? 'bg-blue-600' : 'bg-blue-600'} text-white px-2 py-1 text-xs rounded hover:bg-blue-700 flex items-center justify-center gap-1 mt-1`}
-                              >
-                                <Truck className={`w-3 h-3 ${isDarkTable ? 'text-white' : 'text-white'}`} />
-                                Update Transport Arrival
-                              </button>
-                            )}
-                            
-                            {/* Department Arrival Update */}
-                            {canUpdateDepartment && employeeUpdate.departmentArrivalTime && employeeUpdate.departmentArrivalTime !== formatTimeForInput(todayStatus?.departmentArrivalTime) && (
-                              <button
-                                onClick={() => handleDepartmentArrivalUpdate(employee)}
-                                disabled={isUpdating}
-                                className={`${isDarkTable ? 'bg-green-600' : 'bg-green-600'} text-white px-2 py-1 text-xs rounded hover:bg-green-700 flex items-center justify-center gap-1 mt-1`}
-                              >
-                                <Users className={`w-3 h-3 ${isDarkTable ? 'text-white' : 'text-white'}`} />
-                                Update Dept Arrival
-                              </button>
-                            )}
-                          </div>
-                        </td>
+                        {/* Actions cell completely removed */}
                       </tr>
                     );
                   })}
@@ -1557,8 +1099,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
               <p className="text-xs text-gray-500">
                 <span className="inline-block w-2 h-2 rounded-full bg-purple-400 mr-1"></span>
                 HR Attendance (Auto-calculated): Based on punch hours:
-                <span className="ml-2 px-1 bg-green-100 text-green-800 rounded">P (≥8.5h)</span>
-                <span className="ml-1 px-1 bg-cyan-100 text-cyan-800 rounded">HD (5-8.5h)</span>
+                <span className="ml-2 px-1 bg-green-100 text-green-800 rounded">P (≥7.5h)</span>
+                <span className="ml-1 px-1 bg-cyan-100 text-cyan-800 rounded">HD (5-7.5h)</span>
                 <span className="ml-1 px-1 bg-purple-100 text-purple-800 rounded">LWP (&lt;5h)</span>
               </p>
             </div>
