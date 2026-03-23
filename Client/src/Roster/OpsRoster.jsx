@@ -11,6 +11,7 @@ import Navbar from '../pages/Navbar.jsx';
 
 const OpsRoster = () => {
   const dispatch = useDispatch();
+  const { user: authUser } = useSelector((state) => state.auth || {});
   const {
     opsMetaRoster,
     opsMetaLoading,
@@ -34,8 +35,25 @@ const OpsRoster = () => {
   // Search and filter state
   const [searchQuery, setSearchQuery] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState('all');
-  const [sortField, setSortField] = useState('name');
-  const [sortDirection, setSortDirection] = useState('asc');
+	  const [sortField, setSortField] = useState('name');
+	  const [sortDirection, setSortDirection] = useState('asc');
+  const currentUser = authUser || JSON.parse(localStorage.getItem("user") || "null");
+  const accountTypeLower = String(currentUser?.accountType || "").toLowerCase();
+  const isEmployeeEditor = accountTypeLower === "employee";
+  const toIstDateKey = useCallback((value) => {
+    const date = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(date);
+    const year = parts.find((p) => p.type === "year")?.value;
+    const month = parts.find((p) => p.type === "month")?.value;
+    const day = parts.find((p) => p.type === "day")?.value;
+    return year && month && day ? `${year}-${month}-${day}` : null;
+  }, []);
 
   // Load roster data on component mount
   useEffect(() => {
@@ -829,34 +847,43 @@ const OpsRoster = () => {
           <div className="mt-6">
             <h4 className="text-sm font-medium text-gray-700 mb-3">Daily Status</h4>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-              {editForm.dailyStatus?.map((day, index) => (
-                <div key={index}>
-                  <div className="text-xs text-gray-500 mb-1 font-medium">{formatDate(day.date)}</div>
-                  <select
-                    value={day.status}
-                    onChange={(e) => {
-                      const newStatus = [...editForm.dailyStatus];
-                      newStatus[index].status = e.target.value;
-                      setEditForm({
-                        ...editForm,
-                        dailyStatus: newStatus
-                      });
-                    }}
-                    className="w-full px-3 py-2 border cursor-pointer border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                  >
-                    <option value="P">Present</option>
-                    <option value="WO">Week Off</option>
+	              {editForm.dailyStatus?.map((day, index) => (
+	                <div key={index}>
+	                  <div className="text-xs text-gray-500 mb-1 font-medium">{formatDate(day.date)}</div>
+                    {(() => {
+                      const dayKey = toIstDateKey(day?.date);
+                      const todayKey = toIstDateKey(new Date());
+                      const isPastDateLocked = isEmployeeEditor && Boolean(dayKey && todayKey && dayKey < todayKey);
+                      return (
+	                  <select
+	                    value={day.status}
+	                    onChange={(e) => {
+                        if (isPastDateLocked) return;
+	                      const newStatus = [...editForm.dailyStatus];
+	                      newStatus[index].status = e.target.value;
+	                      setEditForm({
+	                        ...editForm,
+	                        dailyStatus: newStatus
+	                      });
+	                    }}
+                      disabled={isPastDateLocked}
+	                    className={`w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm ${isPastDateLocked ? "bg-gray-100 text-gray-400 cursor-not-allowed" : "cursor-pointer"}`}
+	                  >
+	                    <option value="P">Present</option>
+	                    <option value="WO">Week Off</option>
                     <option value="L">Leave</option>
                     <option value="NCNS">No Call No Show</option>
                     <option value="UL">Unpaid Leave</option>
                     <option value="LWP">Leave With Pay</option>
                     <option value="BL">Business Leave</option>
-                    <option value="H">Holiday</option>
-                    <option value="LWD">Leave Without Pay</option>
-                  </select>
-                </div>
-              ))}
-            </div>
+	                    <option value="H">Holiday</option>
+	                    <option value="LWD">Leave Without Pay</option>
+	                  </select>
+                      );
+                    })()}
+	                </div>
+	              ))}
+	            </div>
           </div>
         </div>
         

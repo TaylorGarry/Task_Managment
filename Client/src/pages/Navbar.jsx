@@ -443,23 +443,16 @@ const Navbar = () => {
     toast.success("Logged out successfully!");
     navigate("/login");
   };
-
-  // ✅ Check if user is from Transport department
   const isTransportDepartment = user?.department === "Transport";
-
-  // ✅ Attendance Update Permission
-  const allowedAttendanceDepartments = ["Ops - Meta", "Transport", "Developer", "Marketing", "Ticketing"];
+  const allowedAttendanceDepartments = ["Ops - Meta", "Transport", "Developer", "Marketing", "Ticketing", "Seo"];
 
   const canAccessAttendanceUpdate =
     (user?.accountType === "employee" &&
       allowedAttendanceDepartments.includes(user?.department)) ||
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
 
-  // ✅ Attendance Snapshot Permission - 
   const canAccessAttendanceSnapshot = true; 
-
-  // ✅ Roster Permission
-  const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS"];
+  const allowedRosterDepartments = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];  
 
   const isAllowedRosterDepartmentEmployee =
     user?.accountType === "employee" &&

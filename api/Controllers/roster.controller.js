@@ -1412,6 +1412,29 @@ export const exportRosterToExcel = async (req, res) => {
       return `${formattedDate} ${day}`;
     };
 
+    const usedSheetNames = new Set();
+    const getUniqueSheetName = (baseName) => {
+      const maxLen = 31;
+      const trimmedBase = String(baseName || "Sheet").slice(0, maxLen);
+      if (!usedSheetNames.has(trimmedBase)) {
+        usedSheetNames.add(trimmedBase);
+        return trimmedBase;
+      }
+      let idx = 2;
+      while (idx < 1000) {
+        const suffix = ` (${idx})`;
+        const candidate = `${trimmedBase.slice(0, maxLen - suffix.length)}${suffix}`;
+        if (!usedSheetNames.has(candidate)) {
+          usedSheetNames.add(candidate);
+          return candidate;
+        }
+        idx += 1;
+      }
+      const fallback = `${trimmedBase.slice(0, maxLen - 4)}_dup`;
+      usedSheetNames.add(fallback);
+      return fallback;
+    };
+
     roster.weeks.forEach((week) => {
       const data = [];
       
@@ -1537,7 +1560,8 @@ export const exportRosterToExcel = async (req, res) => {
       
       worksheet['!cols'] = colWidths;
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, `Week ${week.weekNumber}`);
+      const sheetName = getUniqueSheetName(`Week ${week.weekNumber}`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     });
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
@@ -2538,6 +2562,29 @@ export const exportSavedRoster = async (req, res) => {
       return `${formattedDate} ${day}`;
     };
 
+    const usedSheetNames = new Set();
+    const getUniqueSheetName = (baseName) => {
+      const maxLen = 31;
+      const trimmedBase = String(baseName || "Sheet").slice(0, maxLen);
+      if (!usedSheetNames.has(trimmedBase)) {
+        usedSheetNames.add(trimmedBase);
+        return trimmedBase;
+      }
+      let idx = 2;
+      while (idx < 1000) {
+        const suffix = ` (${idx})`;
+        const candidate = `${trimmedBase.slice(0, maxLen - suffix.length)}${suffix}`;
+        if (!usedSheetNames.has(candidate)) {
+          usedSheetNames.add(candidate);
+          return candidate;
+        }
+        idx += 1;
+      }
+      const fallback = `${trimmedBase.slice(0, maxLen - 4)}_dup`;
+      usedSheetNames.add(fallback);
+      return fallback;
+    };
+
     const STATUS_TYPES = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD"];
     const STATUS_NAMES = {
       "P": "Present",
@@ -2640,7 +2687,8 @@ export const exportSavedRoster = async (req, res) => {
         ...Array(STATUS_TYPES.length).fill({ wch: 15 })
       ];
 
-      XLSX.utils.book_append_sheet(workbook, worksheet, `Week ${week.weekNumber}`);
+      const sheetName = getUniqueSheetName(`Week ${week.weekNumber}`);
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
     });
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
@@ -6183,10 +6231,17 @@ export const updateArrivalTime = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-    // Find week
-    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-    if (!week) {
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    const weekCandidates = (roster.weeks || []).filter(
+      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    );
+    if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    const week = weekCandidates.find((w) => w.employees?.id(employeeId));
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
     }
 
     // Week edit rules
@@ -6205,11 +6260,7 @@ export const updateArrivalTime = async (req, res) => {
       });
     }
 
-    // Find employee
     const employee = week.employees.id(employeeId);
-    if (!employee) {
-      return res.status(404).json({ success: false, message: "Employee not found" });
-    }
 
     // Team leader validation
     if (user.accountType !== "superAdmin" && user.accountType !== "HR" && user.department !== "Transport") {
@@ -6347,7 +6398,7 @@ export const updateArrivalTime = async (req, res) => {
       editedByName: user.username,
       accountType: user.accountType,
       actionType: "update",
-      weekNumber,
+      weekNumber: parsedWeekNumber,
       employeeId: employee._id,
       employeeName: employee.name,
       changes
@@ -6638,10 +6689,18 @@ export const updateAttendance = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-	    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-	    if (!week) {
-	      return res.status(404).json({ success: false, message: "Week not found" });
-	    }
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    const weekCandidates = (roster.weeks || []).filter(
+      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    );
+    if (!weekCandidates.length) {
+      return res.status(404).json({ success: false, message: "Week not found" });
+    }
+
+    const week = weekCandidates.find((w) => w.employees?.id(employeeId));
+    if (!week) {
+      return res.status(404).json({ success: false, message: "Employee not found" });
+    }
 
 	    // Week edit rules:
 	    // - HR/superAdmin: can update past/future/current
@@ -6661,10 +6720,7 @@ export const updateAttendance = async (req, res) => {
 	      });
 	    }
 
-	    const employee = week.employees.id(employeeId);
-	    if (!employee) {
-	      return res.status(404).json({ success: false, message: "Employee not found" });
-    }
+    const employee = week.employees.id(employeeId);
 	    if (user.accountType === "superAdmin" || user.accountType === "HR") {
 	      console.log("Admin access granted");
 	    } 
@@ -6906,8 +6962,8 @@ export const updateAttendance = async (req, res) => {
         editedBy: user._id,
         editedByName: user.username,
         accountType: user.accountType,
-        actionType: "update",
-        weekNumber,
+	        actionType: "update",
+	        weekNumber: parsedWeekNumber,
         employeeId: employee._id,
         employeeName: employee.name,
         changes
@@ -7102,8 +7158,10 @@ export const updateAttendanceBulk = async (req, res) => {
     }
 
     const parsedWeekNumber = parseInt(weekNumber);
-    const week = roster.weeks.find((w) => w.weekNumber === parsedWeekNumber);
-    if (!week) {
+    const weekCandidates = (roster.weeks || []).filter(
+      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    );
+    if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
 
@@ -7111,8 +7169,12 @@ export const updateAttendanceBulk = async (req, res) => {
     // - HR/superAdmin: can update past/future/current
     // - Transport/Department: current week only
     const now = new Date();
-    const weekStartDate = new Date(week.startDate);
-    const weekEndDate = new Date(week.endDate);
+    const weekStartDate = new Date(
+      Math.min(...weekCandidates.map((w) => new Date(w.startDate).getTime()))
+    );
+    const weekEndDate = new Date(
+      Math.max(...weekCandidates.map((w) => new Date(w.endDate).getTime()))
+    );
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
     const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
@@ -7175,7 +7237,8 @@ export const updateAttendanceBulk = async (req, res) => {
 
     for (const employeeId of employeeIds) {
       try {
-        const employee = week.employees.id(employeeId);
+        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
+        const employee = matchedWeek?.employees?.id(employeeId);
         if (!employee) {
           failed.push({ employeeId, message: "Employee not found" });
           continue;
@@ -7614,11 +7677,14 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-    // Find the specific week (fallback to date-based lookup to avoid weekNumber mismatches)
-    let week = roster.weeks.find(w => w && w.weekNumber === parseInt(weekNumber));
+    // Find the specific week group (DB can contain duplicate weekNumber entries across departments)
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    let selectedWeekGroup = (roster.weeks || []).filter(
+      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    );
     let resolvedByDate = false;
 
-    if (!week) {
+    if (!selectedWeekGroup.length) {
       const requestedDate = new Date(date);
       if (isNaN(requestedDate.getTime())) {
         return res.status(400).json({
@@ -7628,7 +7694,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       }
 
       requestedDate.setHours(0, 0, 0, 0);
-      week = roster.weeks.find(w => {
+      const matchedWeek = roster.weeks.find(w => {
         if (!w) return false;
         const start = new Date(w.startDate);
         const end = new Date(w.endDate);
@@ -7636,29 +7702,45 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         end.setHours(23, 59, 59, 999);
         return requestedDate >= start && requestedDate <= end;
       });
-      resolvedByDate = !!week;
+      if (matchedWeek) {
+        selectedWeekGroup = (roster.weeks || []).filter(
+          (w) => w && Number.parseInt(w.weekNumber, 10) === Number.parseInt(matchedWeek.weekNumber, 10)
+        );
+      }
+      resolvedByDate = !!matchedWeek;
     }
 
-    if (!week) {
+    if (!selectedWeekGroup.length) {
       return res.status(404).json({ 
         success: false, 
-        message: `Week ${weekNumber} not found in roster. Available weeks: ${roster.weeks.filter(w => w).map(w => w.weekNumber).join(', ')}`
+        message: `Week ${weekNumber} not found in roster. Available weeks: ${[...new Set(roster.weeks.filter(w => w).map(w => w.weekNumber))].join(', ')}`
       });
     }
 
-    console.log(`📅 Found week ${weekNumber} with ${week.employees?.filter(e => e).length || 0} employees`);
+
+    const selectedWeekEmployees = selectedWeekGroup.flatMap((w) => (w.employees || []).filter((e) => e !== null));
+    const selectedWeekEmployeesUnique = [];
+    const selectedWeekEmployeeIds = new Set();
+    selectedWeekEmployees.forEach((emp) => {
+      const key = String(emp?._id || "");
+      if (!key || selectedWeekEmployeeIds.has(key)) return;
+      selectedWeekEmployeeIds.add(key);
+      selectedWeekEmployeesUnique.push(emp);
+    });
+
+    console.log(`Found week ${weekNumber} with ${selectedWeekEmployeesUnique.length} employees`);
 
     let filteredEmployees = [];
 
     // 👑 SUPERADMIN - sees all employees (filter out nulls)
     if (user.accountType === "superAdmin" || user.accountType === "HR") {
-      filteredEmployees = (week.employees || []).filter(emp => emp !== null);
+      filteredEmployees = selectedWeekEmployeesUnique;
       console.log(`👑 SuperAdmin: Found ${filteredEmployees.length} employees`);
     }
     
     // 🚌 TRANSPORT - sees all employees (filter out nulls)
     else if (user.department === "Transport") {
-      filteredEmployees = (week.employees || []).filter(emp => emp !== null);
+      filteredEmployees = selectedWeekEmployeesUnique;
       console.log(`🚌 Transport: Found ${filteredEmployees.length} employees`);
     }
     
@@ -7666,7 +7748,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     else if (user.accountType === "employee") {
       console.log(`👥 Team Leader check: ${user.username}`);
       
-      filteredEmployees = (week.employees || []).filter(emp => {
+      filteredEmployees = selectedWeekEmployeesUnique.filter(emp => {
         if (!emp) return false;
         return emp.teamLeader === user.username;
       });
@@ -7757,22 +7839,49 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       }))
     }));
 
-    // Also return all weeks for the dropdown
-    const weeksForDropdown = roster.weeks
-      .filter(w => w !== null)
-      .map(w => ({
+    // Also return all weeks for the dropdown (merged by weekNumber)
+    const weeksMap = new Map();
+    roster.weeks
+      .filter((w) => w !== null)
+      .forEach((w) => {
+        const key = String(w.weekNumber);
+        if (!weeksMap.has(key)) {
+          weeksMap.set(key, {
+            weekNumber: w.weekNumber,
+            startDate: w.startDate,
+            endDate: w.endDate,
+            employeeIds: new Set(),
+          });
+        }
+        const grouped = weeksMap.get(key);
+        const currentStart = new Date(w.startDate);
+        const currentEnd = new Date(w.endDate);
+        if (currentStart < new Date(grouped.startDate)) grouped.startDate = w.startDate;
+        if (currentEnd > new Date(grouped.endDate)) grouped.endDate = w.endDate;
+        (w.employees || []).filter((e) => e !== null).forEach((emp) => {
+          grouped.employeeIds.add(String(emp._id));
+        });
+      });
+
+    const weeksForDropdown = Array.from(weeksMap.values())
+      .map((w) => ({
         weekNumber: w.weekNumber,
         startDate: w.startDate,
         endDate: w.endDate,
-        employeeCount: w.employees?.filter(e => e !== null).length || 0
-      }));
+        employeeCount: w.employeeIds.size,
+      }))
+      .sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber));
 
     // Calculate today's date for comparison
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
     
-    const weekStartDate = new Date(week.startDate);
-    const weekEndDate = new Date(week.endDate);
+    const weekStartDate = new Date(
+      Math.min(...selectedWeekGroup.map((w) => new Date(w.startDate).getTime()))
+    );
+    const weekEndDate = new Date(
+      Math.max(...selectedWeekGroup.map((w) => new Date(w.endDate).getTime()))
+    );
     
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
@@ -7808,9 +7917,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 		        requestedDate: date,
 		        q,
 		        searchBy,
-		        weekNumber: week.weekNumber,
-		        startDate: week.startDate,
-		        endDate: week.endDate,
+			        weekNumber: Number.parseInt(selectedWeekGroup[0].weekNumber, 10),
+			        startDate: weekStartDate,
+			        endDate: weekEndDate,
 		        currentDate: currentDate,
 		        canEdit: canEdit,
 	        editMessage: editMessage,
@@ -8590,14 +8699,16 @@ export const updatePunchTimes = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-    // Find week
-    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-    if (!week) {
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    const weekCandidates = (roster.weeks || []).filter(
+      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    );
+    if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
 
-    // Find employee
-    const employee = week.employees.id(employeeId);
+    const week = weekCandidates.find((w) => w.employees?.id(employeeId));
+    const employee = week?.employees?.id(employeeId);
     if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
@@ -8854,7 +8965,7 @@ export const updatePunchTimes = async (req, res) => {
         editedByName: user.username,
         accountType: user.accountType,
         actionType: "punch-update",
-        weekNumber,
+        weekNumber: parsedWeekNumber,
         employeeId: employee._id,
         employeeName: employee.name,
         changes
@@ -9187,9 +9298,11 @@ export const bulkUpdatePunchTimes = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-    // Find week
-    const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-    if (!week) {
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    const weekCandidates = (roster.weeks || []).filter(
+      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    );
+    if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
     const [year, month, day] = date.split('-').map(Number);
@@ -9233,7 +9346,8 @@ export const bulkUpdatePunchTimes = async (req, res) => {
 
     for (const employeeId of employeeIds) {
       try {
-        const employee = week.employees.id(employeeId);
+        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
+        const employee = matchedWeek?.employees?.id(employeeId);
         if (!employee) {
           errors.push({ employeeId, error: "Employee not found" });
           continue;
@@ -9369,7 +9483,7 @@ export const bulkUpdatePunchTimes = async (req, res) => {
             editedByName: user.username,
             accountType: user.accountType,
             actionType: "bulk-punch-update",
-            weekNumber,
+            weekNumber: parsedWeekNumber,
             employeeId: employee._id,
             employeeName: employee.name,
             changes

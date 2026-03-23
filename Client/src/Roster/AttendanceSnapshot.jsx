@@ -4,6 +4,8 @@ import { useDispatch, useSelector } from 'react-redux';
 import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice.js';
 import { Calendar, Users, Clock, RefreshCw, AlertCircle, ChevronDown, SlidersHorizontal, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import AdminNavbar from "../components/AdminNavbar.jsx";
+import Navbar from "../pages/Navbar.jsx";
+import html2canvas from "html2canvas";
 
 const toDateKeyLocal = (value) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -21,17 +23,23 @@ const toDateKeyLocal = (value) => {
   return `${year}-${month}-${day}`;
 };
 
-const AttendanceSnapshot = () => {
-	  const dispatch = useDispatch();
-	  const { user } = useSelector((state) => state.auth);
+		const AttendanceSnapshot = () => {
+			  const dispatch = useDispatch();
+			  const { user } = useSelector((state) => state.auth);
+			  const currentUser = user || JSON.parse(localStorage.getItem("user") || "null");
+			  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
+			  const isEmployeeUser = currentUser?.accountType === "employee";
+			  const isEmployeeTransportUser = isEmployeeUser && currentUser?.department === "Transport";
+			  const isEmployeeNonTransportUser = isEmployeeUser && currentUser?.department !== "Transport";
+			  const canDownloadSnapshotImage = ["HR", "superAdmin", "employee"].includes(currentUser?.accountType);
+			  const canDownloadExcel = !isEmployeeUser;
 		  const { 
-		    updateEmployeesData,
-	    allRosters,
-	    loading,
-	    rosterDetailLoading,
-	    rosterDetailError,
-	    error,
-	  } = useSelector((state) => state.roster);
+			    updateEmployeesData,
+		    allRosters,
+		    rosterDetailLoading,
+		    rosterDetailError,
+		    error,
+		  } = useSelector((state) => state.roster);
 
 		  const [selectedDate, setSelectedDate] = useState(() => toDateKeyLocal(new Date()));
 		  
@@ -46,20 +54,24 @@ const AttendanceSnapshot = () => {
 		  const [summary, setSummary] = useState(null);
 		  const [rostersByMonth, setRostersByMonth] = useState({});
 		  const dateInputRef = useRef(null);
+		  const exportCaptureRef = useRef(null);
 			  const [showColumnMenu, setShowColumnMenu] = useState(false);
-			  const [columnVisibility, setColumnVisibility] = useState({
-			    employee: true,
-			    teamLeader: true,
-			    department: true,
-			    shift: true,
-			    transportStatus: true,
-			    departmentStatus: true,
-			    transportArrival: true,
-			    departmentArrival: true,
-			  });
+					  const [columnVisibility, setColumnVisibility] = useState({
+					    employee: true,
+					    teamLeader: true,
+					    department: true,
+					    shift: true,
+					    rosterStatus: true,
+					    transportStatus: true,
+					    departmentStatus: true,
+					    hrAttendance: true,
+					    transportArrival: true,
+					    departmentArrival: true,
+				  });
 		  const [currentPage, setCurrentPage] = useState(1);
 		  const [pageSize, setPageSize] = useState(25);
 		  const [tableTheme, setTableTheme] = useState("dark"); // "dark" | "light"
+		  const [isDownloadingImage, setIsDownloadingImage] = useState(false);
 	  
 	  // Month and Year state
 	  const [selectedMonth, setSelectedMonth] = useState(() => {
@@ -133,60 +145,65 @@ const AttendanceSnapshot = () => {
 
   // ✅ Process allRosters data to find available rosters
   useEffect(() => {
-    if (allRosters?.success && allRosters?.data) {
-	      
-      // Create a map of rosters by month/year
-      const rosterMap = {};
-      
-      allRosters.data.forEach(roster => {
+    if (rosterDetailLoading) return;
+
+    const rosterList = Array.isArray(allRosters?.data)
+      ? allRosters.data
+      : Array.isArray(allRosters)
+        ? allRosters
+        : [];
+
+    // Create a map of rosters by month/year
+    const rosterMap = {};
+
+    rosterList.forEach(roster => {
         const key = `${roster.month}-${roster.year}`;
         rosterMap[key] = roster;
       });
-      
-      setRostersByMonth(rosterMap);
-      
-      // Check if we have a roster for the selected month/year
-      const currentKey = `${selectedMonth}-${selectedYear}`;
-      const currentRoster = rosterMap[currentKey];
-      
-      if (currentRoster) {
-	        setSelectedRoster(currentRoster._id);
-        
-	        const weeks = currentRoster.weeks || [];
-	        if (Array.isArray(weeks) && weeks.length > 0) {
-	          setAvailableWeeks(weeks.map(w => ({
-	            weekNumber: w.weekNumber,
-	            startDate: w.startDate,
-	            endDate: w.endDate,
-	            employeeCount: w.employees?.length || 0
-	          })));
-	        } else {
-	          setAvailableWeeks([]);
-	        }
 
-	        const weekNumber = pickWeekNumberForDate(currentRoster, selectedDate);
-	        if (weekNumber != null) {
-	          setSelectedWeek(weekNumber);
-	          setLoadingState('loading');
-	          dispatch(getEmployeesForUpdates({
-	            rosterId: currentRoster._id,
-	            weekNumber,
-	            date: selectedDate
-	          }));
-	        } else {
-	          setAllEmployees([]);
-	          setSelectedWeek(null);
-	          setLoadingState('success');
-	        }
-      } else {
+    setRostersByMonth(rosterMap);
+
+    // Check if we have a roster for the selected month/year
+    const currentKey = `${selectedMonth}-${selectedYear}`;
+    const currentRoster = rosterMap[currentKey];
+
+    if (currentRoster) {
+	      setSelectedRoster(currentRoster._id);
+
+	      const weeks = currentRoster.weeks || [];
+	      if (Array.isArray(weeks) && weeks.length > 0) {
+	        setAvailableWeeks(weeks.map(w => ({
+	          weekNumber: w.weekNumber,
+	          startDate: w.startDate,
+	          endDate: w.endDate,
+	          employeeCount: w.employees?.length || 0
+	        })));
+	      } else {
+	        setAvailableWeeks([]);
+	      }
+
+	      const weekNumber = pickWeekNumberForDate(currentRoster, selectedDate);
+	      if (weekNumber != null) {
+	        setSelectedWeek(weekNumber);
+	        setLoadingState('loading');
+	        dispatch(getEmployeesForUpdates({
+	          rosterId: currentRoster._id,
+	          weekNumber,
+	          date: selectedDate
+	        }));
+	      } else {
 	        setAllEmployees([]);
-        setSelectedRoster(null);
-        setSelectedWeek(null);
-        setAvailableWeeks([]);
-        setLoadingState('success');
-      }
+	        setSelectedWeek(null);
+	        setLoadingState('success');
+	      }
+    } else {
+	      setAllEmployees([]);
+      setSelectedRoster(null);
+      setSelectedWeek(null);
+      setAvailableWeeks([]);
+      setLoadingState('success');
     }
-  }, [allRosters, selectedMonth, selectedYear, dispatch, selectedDate]);
+  }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, selectedDate]);
 
   // ✅ Process the dynamic data from API
   useEffect(() => {
@@ -223,26 +240,30 @@ const AttendanceSnapshot = () => {
   // Format date for display
   const formatDate = (dateString) => {
     if (!dateString) return '';
+    // Prevent timezone drift for date-only strings (YYYY-MM-DD).
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split("-");
+      return `${day}/${month}/${year}`;
+    }
     const date = new Date(dateString);
-    return date.toLocaleDateString('en-GB', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    }).split('/').join('/');
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
+    });
   };
 
-  // Get attendance for specific date
+  // Get attendance for specific date using IST date keys to avoid timezone drift.
 	  const getAttendanceForDate = (employee, date) => {
 	    if (!employee?.dailyStatus || !Array.isArray(employee.dailyStatus)) return null;
-    
-    const selectedDateObj = new Date(date);
-    selectedDateObj.setHours(0, 0, 0, 0);
-    
-	    return employee.dailyStatus.find(d => {
-      if (!d?.date) return false;
-      const dDate = new Date(d.date);
-      dDate.setHours(0, 0, 0, 0);
-      return dDate.getTime() === selectedDateObj.getTime();
+	    const targetKey = typeof date === "string" ? date : toDateKeyLocal(date);
+	    if (!targetKey) return null;
+
+	    return employee.dailyStatus.find((d) => {
+	      if (!d?.date) return false;
+	      return toDateKeyLocal(d.date) === targetKey;
 	    });
 	  };
 
@@ -447,6 +468,30 @@ const AttendanceSnapshot = () => {
     }
   };
 
+  const getHRAttendanceFromHours = (hours) => {
+    const numericHours = Number(hours);
+    if (!Number.isFinite(numericHours) || numericHours <= 0) return null;
+    if (numericHours >= 7.5) return "P";
+    if (numericHours >= 5) return "HD";
+    return "LWP";
+  };
+
+  const getStatusInlineStyle = (status) => {
+    const palette = {
+      P: { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#86efac" },
+      WO: { backgroundColor: "#dbeafe", color: "#1d4ed8", borderColor: "#93c5fd" },
+      LWP: { backgroundColor: "#ffedd5", color: "#c2410c", borderColor: "#fdba74" },
+      HD: { backgroundColor: "#ccfbf1", color: "#0f766e", borderColor: "#5eead4" },
+      L: { backgroundColor: "#fef9c3", color: "#a16207", borderColor: "#fde047" },
+      NCNS: { backgroundColor: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" },
+      H: { backgroundColor: "#f3e8ff", color: "#7e22ce", borderColor: "#d8b4fe" },
+      BL: { backgroundColor: "#fce7f3", color: "#be185d", borderColor: "#f9a8d4" },
+      UL: { backgroundColor: "#f3f4f6", color: "#374151", borderColor: "#d1d5db" },
+      LWD: { backgroundColor: "#e0e7ff", color: "#4338ca", borderColor: "#a5b4fc" },
+    };
+    return palette[status] || { backgroundColor: "#f3f4f6", color: "#6b7280", borderColor: "#d1d5db" };
+  };
+
   // Check if current month has roster
 	  const currentMonthHasRoster = () => {
 	    const key = `${selectedMonth}-${selectedYear}`;
@@ -529,18 +574,80 @@ const AttendanceSnapshot = () => {
 			    return matchesDepartment && matchesTeamLeader;
 			  });
 
-		  const totalEmployees = filteredEmployees.length;
-		  const totalPages = Math.max(1, Math.ceil(totalEmployees / pageSize));
-		  const safePage = Math.min(currentPage, totalPages);
-		  const startIndex = (safePage - 1) * pageSize;
-		  const endIndexExclusive = startIndex + pageSize;
-		  const pagedEmployees = filteredEmployees.slice(startIndex, endIndexExclusive);
-		  const rangeStart = totalEmployees === 0 ? 0 : startIndex + 1;
-		  const rangeEnd = Math.min(startIndex + pagedEmployees.length, totalEmployees);
-		  const isDarkTable = tableTheme === "dark";
+				  const totalEmployees = filteredEmployees.length;
+				  const totalPages = Math.max(1, Math.ceil(totalEmployees / pageSize));
+				  const safePage = Math.min(currentPage, totalPages);
+			  const startIndex = (safePage - 1) * pageSize;
+			  const endIndexExclusive = startIndex + pageSize;
+			  const pagedEmployees = filteredEmployees.slice(startIndex, endIndexExclusive);
+			  const rangeStart = totalEmployees === 0 ? 0 : startIndex + 1;
+				  const rangeEnd = Math.min(startIndex + pagedEmployees.length, totalEmployees);
+				  const isDarkTable = tableTheme === "dark";
+          const effectiveColumnVisibility = {
+            ...columnVisibility,
+            transportStatus: columnVisibility.transportStatus && !isEmployeeUser,
+            hrAttendance: columnVisibility.hrAttendance && !isEmployeeUser,
+            transportArrival: columnVisibility.transportArrival && !isEmployeeNonTransportUser,
+            departmentStatus: columnVisibility.departmentStatus && !isEmployeeTransportUser,
+            departmentArrival: columnVisibility.departmentArrival && !isEmployeeTransportUser,
+          };
+          const exportColumnDefs = [
+            { key: "employee", label: "Employee" },
+            { key: "teamLeader", label: "Team Leader" },
+            { key: "department", label: "Department" },
+            { key: "shift", label: "Shift" },
+            { key: "rosterStatus", label: "Roster Status" },
+            { key: "transportStatus", label: "Transport Status" },
+            { key: "departmentStatus", label: "Dept Status" },
+            { key: "hrAttendance", label: "Hr Attendance" },
+            { key: "transportArrival", label: "Transport Arrival" },
+            { key: "departmentArrival", label: "Dept Arrival" },
+          ].filter((col) => {
+            if (col.key === "transportStatus" || col.key === "hrAttendance") return !isEmployeeUser;
+            if (col.key === "transportArrival") return !isEmployeeNonTransportUser;
+            if (col.key === "departmentStatus" || col.key === "departmentArrival") return !isEmployeeTransportUser;
+            return true;
+          });
+
+				  const hrSummaryCounts = !isEmployeeUser ? filteredEmployees.reduce((acc, emp) => {
+				    const attendance = getAttendanceForDate(emp, selectedDate);
+				    const status = attendance?.hrAttendance || getHRAttendanceFromHours(attendance?.totalHours);
+				    if (!status) return acc;
+				    acc[status] = (acc[status] || 0) + 1;
+				    return acc;
+				  }, {}) : {};
+
+			  const handleDownloadSnapshotImage = async () => {
+			    if (!canDownloadSnapshotImage || !exportCaptureRef.current || filteredEmployees.length === 0 || isDownloadingImage) {
+			      return;
+			    }
+			    setIsDownloadingImage(true);
+			    try {
+			      // Wait a tick so DOM reflects latest selected filters/date before capture.
+			      await new Promise((resolve) => setTimeout(resolve, 60));
+			      const node = exportCaptureRef.current;
+			      const canvas = await html2canvas(node, {
+			        scale: 2,
+			        useCORS: true,
+			        backgroundColor: "#f8fafc",
+			        windowWidth: node.scrollWidth,
+			        windowHeight: node.scrollHeight,
+			        scrollX: 0,
+			        scrollY: 0,
+			      });
+			      const link = document.createElement("a");
+			      link.download = `attendance-snapshot-${selectedDate || "selected-date"}.png`;
+			      link.href = canvas.toDataURL("image/png");
+			      link.click();
+			    } catch (captureError) {
+			      console.error("Failed to export snapshot image:", captureError);
+			    } finally {
+			      setIsDownloadingImage(false);
+			    }
+			  };
 
 	  // Loading state
-		  if (rosterDetailLoading || loadingState === 'loading' || (loading && (allEmployees?.length ?? 0) === 0)) {
+		  if (rosterDetailLoading || loadingState === 'loading') {
 		    return (
 		      <div className="min-h-screen bg-gray-50 p-6">
 		        <div className="max-w-7xl mx-auto">
@@ -576,8 +683,8 @@ const AttendanceSnapshot = () => {
 
 	  return (
 	    <div className="min-h-screen bg-gray-50 p-6">
-      <AdminNavbar/>
-      <div className="max-w-7xl mx-auto">
+	      {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
+	      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">
           <div>
@@ -753,16 +860,28 @@ const AttendanceSnapshot = () => {
 	            </button>
 
 	            {/* Export (HR/SuperAdmin) */}
-	            <button
-	              onClick={handleExportSnapshot}
-	              disabled={!selectedWeek}
-	              className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
-	              title={!selectedWeek ? 'Select a week to export' : 'Download attendance snapshot Excel'}
-	            >
-	              Download Excel
-	            </button>
-	          </div>
-	        </div>
+		            {canDownloadExcel && (
+		              <button
+		                onClick={handleExportSnapshot}
+		                disabled={!selectedWeek}
+		                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
+		                title={!selectedWeek ? 'Select a week to export' : 'Download attendance snapshot Excel'}
+		              >
+		                Download Excel
+		              </button>
+		            )}
+		            {canDownloadSnapshotImage && (
+		              <button
+		                onClick={handleDownloadSnapshotImage}
+		                disabled={!selectedWeek || filteredEmployees.length === 0 || isDownloadingImage}
+		                className="flex items-center gap-2 px-4 py-2 bg-fuchsia-50 text-fuchsia-700 rounded-lg hover:bg-fuchsia-100 disabled:opacity-50 disabled:cursor-not-allowed"
+		                title={!selectedWeek ? "Select a week to export image" : "Download full snapshot image"}
+		              >
+		                {isDownloadingImage ? "Generating Snapshot..." : "Download Snapshot"}
+		              </button>
+		            )}
+		          </div>
+		        </div>
 
         {/* No Data Message */}
         {allEmployees.length === 0 ? (
@@ -823,26 +942,33 @@ const AttendanceSnapshot = () => {
 
 		                {showColumnMenu && (
 		                  <div className={isDarkTable ? "absolute right-0 mt-2 w-60 rounded-lg border border-neutral-800 bg-neutral-950 shadow-lg p-2 z-20" : "absolute right-0 mt-2 w-60 rounded-lg border border-gray-200 bg-white shadow-lg p-2 z-20"}>
-		                    {[
-		                      { key: "employee", label: "Employee" },
-		                      { key: "teamLeader", label: "Team Leader" },
-		                      { key: "department", label: "Department" },
-		                      { key: "shift", label: "Shift" },
-		                      { key: "transportStatus", label: "Transport Status" },
-		                      { key: "departmentStatus", label: "Dept Status" },
-		                      { key: "transportArrival", label: "Transport Arrival" },
-	                      { key: "departmentArrival", label: "Dept Arrival" },
-	                    ].map((col) => (
-	                      <label
-	                        key={col.key}
-	                        className={isDarkTable ? "flex items-center gap-2 px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-900 rounded" : "flex items-center gap-2 px-2 py-1 text-sm text-gray-800 hover:bg-gray-50 rounded"}
-	                      >
-	                        <input
-	                          type="checkbox"
-	                          checked={Boolean(columnVisibility[col.key])}
-	                          onChange={(e) =>
-	                            setColumnVisibility((prev) => ({ ...prev, [col.key]: e.target.checked }))
-	                          }
+				                    {[
+				                      { key: "employee", label: "Employee" },
+				                      { key: "teamLeader", label: "Team Leader" },
+				                      { key: "department", label: "Department" },
+				                      { key: "shift", label: "Shift" },
+				                      { key: "rosterStatus", label: "Roster Status" },
+				                      { key: "transportStatus", label: "Transport Status" },
+				                      { key: "departmentStatus", label: "Dept Status" },
+				                      { key: "hrAttendance", label: "Hr Attendance" },
+				                      { key: "transportArrival", label: "Transport Arrival" },
+			                      { key: "departmentArrival", label: "Dept Arrival" },
+			                    ].filter((col) => {
+                            if (col.key === "transportStatus" || col.key === "hrAttendance") return !isEmployeeUser;
+                            if (col.key === "transportArrival") return !isEmployeeNonTransportUser;
+                            if (col.key === "departmentStatus" || col.key === "departmentArrival") return !isEmployeeTransportUser;
+                            return true;
+                          }).map((col) => (
+		                      <label
+		                        key={col.key}
+		                        className={isDarkTable ? "flex items-center gap-2 px-2 py-1 text-sm text-neutral-200 hover:bg-neutral-900 rounded" : "flex items-center gap-2 px-2 py-1 text-sm text-gray-800 hover:bg-gray-50 rounded"}
+		                      >
+		                        <input
+		                          type="checkbox"
+		                          checked={Boolean(effectiveColumnVisibility[col.key])}
+		                          onChange={(e) =>
+		                            setColumnVisibility((prev) => ({ ...prev, [col.key]: e.target.checked }))
+		                          }
 	                          className="h-4 w-4 accent-indigo-500"
 	                        />
 	                        <span>{col.label}</span>
@@ -857,40 +983,49 @@ const AttendanceSnapshot = () => {
 	              <table className={isDarkTable ? "w-full divide-y divide-neutral-800" : "w-full divide-y divide-gray-200"}>
 	                <thead className={isDarkTable ? "bg-neutral-950 sticky top-0 z-10" : "bg-gray-50 sticky top-0 z-10"}>
 	                  <tr>
-	                    {columnVisibility.employee && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Employee</th>
-	                    )}
-	                    {columnVisibility.teamLeader && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Team Leader</th>
-	                    )}
-	                    {columnVisibility.department && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Department</th>
-	                    )}
-	                    {columnVisibility.shift && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Shift</th>
-	                    )}
-	                    {columnVisibility.transportStatus && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Status</th>
-	                    )}
-	                    {columnVisibility.departmentStatus && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Status</th>
-	                    )}
-	                    {columnVisibility.transportArrival && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Arrival</th>
-	                    )}
-	                    {columnVisibility.departmentArrival && (
-	                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Arrival</th>
-	                    )}
+		                    {effectiveColumnVisibility.employee && (
+		                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Employee</th>
+		                    )}
+		                    {effectiveColumnVisibility.teamLeader && (
+		                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Team Leader</th>
+		                    )}
+		                    {effectiveColumnVisibility.department && (
+		                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Department</th>
+		                    )}
+			                    {effectiveColumnVisibility.shift && (
+			                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Shift</th>
+			                    )}
+			                    {effectiveColumnVisibility.rosterStatus && (
+			                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Roster Status</th>
+			                    )}
+			                    {effectiveColumnVisibility.transportStatus && (
+			                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Status</th>
+			                    )}
+			                    {effectiveColumnVisibility.departmentStatus && (
+			                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Status</th>
+			                    )}
+			                    {effectiveColumnVisibility.hrAttendance && (
+			                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Hr Attendance</th>
+			                    )}
+			                    {effectiveColumnVisibility.transportArrival && (
+			                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport Arrival</th>
+			                    )}
+		                    {effectiveColumnVisibility.departmentArrival && (
+		                      <th className={isDarkTable ? "px-6 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Dept Arrival</th>
+		                    )}
 	                  </tr>
 	                </thead>
 	                <tbody className={isDarkTable ? "divide-y divide-neutral-800" : "divide-y divide-gray-200"}>
-	                  {pagedEmployees.map((emp) => {
-	                      const attendance = getAttendanceForDate(emp, selectedDate);
-	                      
-	                      return (
+		                  {pagedEmployees.map((emp) => {
+		                      const attendance = getAttendanceForDate(emp, selectedDate);
+		                      const hrAttendance =
+		                        attendance?.hrAttendance || getHRAttendanceFromHours(attendance?.totalHours);
+		                      const rosterStatus = attendance?.status || "Not set";
+		                      
+		                      return (
 	                      <tr key={emp._id} className={isDarkTable ? "hover:bg-neutral-800/40" : "hover:bg-gray-50"}>
-	                          {columnVisibility.employee && (
-	                            <td className="px-6 py-4">
+		                          {effectiveColumnVisibility.employee && (
+		                            <td className="px-6 py-4">
 	                              <div>
 	                              <p className={isDarkTable ? "font-medium text-neutral-100" : "font-medium text-gray-900"}>{emp.name || "Unknown"}</p>
 	                              <p className={isDarkTable ? "text-xs text-neutral-400" : "text-xs text-gray-500"}>{emp.username || "-"}</p>
@@ -898,24 +1033,32 @@ const AttendanceSnapshot = () => {
 	                            </td>
 	                          )}
 
-	                          {columnVisibility.teamLeader && (
+		                          {effectiveColumnVisibility.teamLeader && (
 	                            <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-300" : "px-6 py-4 text-sm text-gray-600"}>
 	                              {emp.teamLeader || "-"}
 	                            </td>
 	                          )}
 
-	                          {columnVisibility.department && (
+		                          {effectiveColumnVisibility.department && (
 	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-300" : "px-6 py-4 text-sm text-gray-600"}>{emp.department || "N/A"}</td>
 	                          )}
 
-	                          {columnVisibility.shift && (
-	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-300" : "px-6 py-4 text-sm text-gray-600"}>
-	                            {formatShift(emp.shiftStartHour, emp.shiftEndHour)}
-	                            </td>
-	                          )}
+			                          {effectiveColumnVisibility.shift && (
+		                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-300" : "px-6 py-4 text-sm text-gray-600"}>
+		                            {formatShift(emp.shiftStartHour, emp.shiftEndHour)}
+		                            </td>
+		                          )}
 
-	                          {columnVisibility.transportStatus && (
-	                            <td className="px-6 py-4">
+			                          {effectiveColumnVisibility.rosterStatus && (
+		                            <td className="px-6 py-4">
+		                              <span className={`w-fit px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(rosterStatus)}`}>
+		                                {rosterStatus}
+		                              </span>
+		                            </td>
+		                          )}
+
+			                          {effectiveColumnVisibility.transportStatus && (
+		                            <td className="px-6 py-4">
 	                              <div className="flex flex-col gap-1">
 	                                <span className={`w-fit px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(attendance?.transportStatus)}`}>
 	                                  {attendance?.transportStatus || "Not set"}
@@ -929,30 +1072,39 @@ const AttendanceSnapshot = () => {
 	                            </td>
 	                          )}
 
-	                          {columnVisibility.departmentStatus && (
-	                            <td className="px-6 py-4">
-	                              <div className="flex flex-col gap-1">
+			                          {effectiveColumnVisibility.departmentStatus && (
+		                            <td className="px-6 py-4">
+		                              <div className="flex flex-col gap-1">
 	                                <span className={`w-fit px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(attendance?.departmentStatus)}`}>
 	                                  {attendance?.departmentStatus || "Not set"}
 	                                </span>
-	                                {attendance?.departmentArrivalTime && (
-	                                <span className={isDarkTable ? "text-xs text-neutral-400" : "text-xs text-gray-500"}>
-	                                    Arrival: {formatTimeForDisplay(attendance.departmentArrivalTime)}
-	                                  </span>
-	                                )}
-	                              </div>
-	                            </td>
-	                          )}
+		                              </div>
+		                            </td>
+		                          )}
 
-	                          {columnVisibility.transportArrival && (
-	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-200" : "px-6 py-4 text-sm text-gray-700"}>
+			                          {effectiveColumnVisibility.hrAttendance && (
+		                            <td className="px-6 py-4">
+		                              {hrAttendance ? (
+		                                <span className={`w-fit px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(hrAttendance)}`}>
+		                                  {hrAttendance}
+		                                </span>
+		                              ) : (
+		                                <span className={isDarkTable ? "text-xs text-neutral-500" : "text-xs text-gray-400"}>
+		                                  Not set
+		                                </span>
+		                              )}
+		                            </td>
+		                          )}
+
+			                          {effectiveColumnVisibility.transportArrival && (
+		                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-200" : "px-6 py-4 text-sm text-gray-700"}>
 	                              {attendance?.transportArrivalTime
 	                                ? formatTimeForDisplay(attendance.transportArrivalTime)
 	                                : "--:-- --"}
 	                            </td>
 	                          )}
 
-	                          {columnVisibility.departmentArrival && (
+		                          {effectiveColumnVisibility.departmentArrival && (
 	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-200" : "px-6 py-4 text-sm text-gray-700"}>
 	                              {attendance?.departmentArrivalTime
 	                                ? formatTimeForDisplay(attendance.departmentArrivalTime)
@@ -1009,13 +1161,208 @@ const AttendanceSnapshot = () => {
 	                >
 	                  <ChevronRight className="h-4 w-4" />
 	                </button>
+	            </div>
+	            </div>
+	          </div>
+	        )}
+	      </div>
+	      {canDownloadSnapshotImage && (
+	        <div
+	          ref={exportCaptureRef}
+	          style={{
+	            position: "fixed",
+	            left: "-10000px",
+	            top: 0,
+	            width: "1700px",
+	            background: "#f8fafc",
+	            padding: "24px",
+	            color: "#0f172a",
+	            zIndex: -1,
+	          }}
+	        >
+	          <div
+	            style={{
+	              borderRadius: "16px",
+	              overflow: "hidden",
+	              border: "1px solid #e2e8f0",
+	              boxShadow: "0 10px 40px rgba(15, 23, 42, 0.08)",
+	              background: "#ffffff",
+	            }}
+	          >
+	            <div
+	              style={{
+	                background: "linear-gradient(135deg, #0ea5e9 0%, #6366f1 60%, #a855f7 100%)",
+	                color: "#ffffff",
+	                padding: "20px 24px",
+	              }}
+	            >
+	              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
+	                <div>
+	                  <h2 style={{ margin: 0, fontSize: "30px", lineHeight: 1.15, fontWeight: 700 }}>Attendance Snapshot</h2>
+	                  <p style={{ margin: "8px 0 0", opacity: 0.95 }}>
+	                    Date: {formatDate(selectedDate)} | Department: {selectedDepartment === "all" ? "All" : selectedDepartment} | Team Leader: {selectedTeamLeader === "all" ? "All" : (selectedTeamLeader === TEAM_LEADER_NONE ? "Not assigned" : selectedTeamLeader)}
+	                  </p>
+	                </div>
+	                <div style={{ textAlign: "right", fontSize: "14px", opacity: 0.9 }}>
+	                  <div>{currentUser?.username || "User"}</div>
+	                  <div>{summary?.userDepartment || currentUser?.department || "-"}</div>
+	                </div>
 	              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
+	            </div>
+
+	            <div style={{ padding: "16px 24px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+	              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+	                <span style={{ padding: "6px 12px", borderRadius: "999px", background: "#ecfeff", border: "1px solid #a5f3fc", color: "#0e7490", fontWeight: 600 }}>
+	                  Employees: {filteredEmployees.length}
+	                </span>
+	                {!isEmployeeUser && Object.keys(hrSummaryCounts).length === 0 ? (
+	                  <span style={{ padding: "6px 12px", borderRadius: "999px", background: "#f3f4f6", border: "1px solid #d1d5db", color: "#6b7280", fontWeight: 600 }}>
+	                    Hr Attendance: No status
+	                  </span>
+	                ) : !isEmployeeUser ? (
+	                  Object.entries(hrSummaryCounts).map(([status, count]) => (
+	                    <span
+	                      key={status}
+	                      style={{
+	                        ...getStatusInlineStyle(status),
+	                        padding: "6px 12px",
+	                        borderRadius: "999px",
+	                        borderWidth: "1px",
+	                        borderStyle: "solid",
+	                        fontWeight: 700,
+	                      }}
+	                    >
+	                      {status}: {count}
+	                    </span>
+	                  ))
+	                ) : null}
+	              </div>
+	            </div>
+
+	            <div style={{ padding: "14px 20px 24px" }}>
+	              <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+	                <thead>
+	                  <tr>
+		                    {exportColumnDefs.map((col) => (
+		                      <th
+		                        key={col.key}
+		                        style={{
+	                          textAlign: "left",
+	                          padding: "12px 10px",
+	                          fontSize: "12px",
+	                          letterSpacing: "0.02em",
+	                          textTransform: "uppercase",
+	                          color: "#475569",
+	                          borderBottom: "1px solid #e2e8f0",
+	                          background: "#f8fafc",
+	                        }}
+	                      >
+		                        {col.label}
+		                      </th>
+		                    ))}
+		                  </tr>
+	                </thead>
+	                <tbody>
+	                  {filteredEmployees.map((emp, idx) => {
+	                    const attendance = getAttendanceForDate(emp, selectedDate);
+	                    const hrAttendance = attendance?.hrAttendance || getHRAttendanceFromHours(attendance?.totalHours);
+	                    const rosterStatus = attendance?.status || "Not set";
+	                    const transportStatus = attendance?.transportStatus || "Not set";
+	                    const departmentStatus = attendance?.departmentStatus || "Not set";
+	                    return (
+	                      <tr key={emp._id || `${emp.username || "emp"}-${idx}`} style={{ background: idx % 2 === 0 ? "#ffffff" : "#fcfcff" }}>
+                          {exportColumnDefs.map((col) => {
+                            if (col.key === "employee") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", fontWeight: 600 }}>
+                                  {emp.name || "Unknown"}
+                                </td>
+                              );
+                            }
+                            if (col.key === "teamLeader") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
+                                  {emp.teamLeader || "-"}
+                                </td>
+                              );
+                            }
+                            if (col.key === "department") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
+                                  {emp.department || "-"}
+                                </td>
+                              );
+                            }
+                            if (col.key === "shift") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
+                                  {formatShift(emp.shiftStartHour, emp.shiftEndHour)}
+                                </td>
+                              );
+                            }
+                            if (col.key === "rosterStatus") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9" }}>
+                                  <span style={{ ...getStatusInlineStyle(rosterStatus), border: `1px solid ${getStatusInlineStyle(rosterStatus).borderColor}`, borderRadius: "999px", padding: "5px 10px", lineHeight: 1.2, display: "inline-block", fontSize: "12px", fontWeight: 700 }}>
+                                    {rosterStatus}
+                                  </span>
+                                </td>
+                              );
+                            }
+                            if (col.key === "transportStatus") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9" }}>
+                                  <span style={{ ...getStatusInlineStyle(transportStatus), border: `1px solid ${getStatusInlineStyle(transportStatus).borderColor}`, borderRadius: "999px", padding: "5px 10px", lineHeight: 1.2, display: "inline-block", fontSize: "12px", fontWeight: 700 }}>
+                                    {transportStatus}
+                                  </span>
+                                </td>
+                              );
+                            }
+                            if (col.key === "departmentStatus") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9" }}>
+                                  <span style={{ ...getStatusInlineStyle(departmentStatus), border: `1px solid ${getStatusInlineStyle(departmentStatus).borderColor}`, borderRadius: "999px", padding: "5px 10px", lineHeight: 1.2, display: "inline-block", fontSize: "12px", fontWeight: 700 }}>
+                                    {departmentStatus}
+                                  </span>
+                                </td>
+                              );
+                            }
+                            if (col.key === "hrAttendance") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9" }}>
+                                  <span style={{ ...getStatusInlineStyle(hrAttendance || "Not set"), border: `1px solid ${getStatusInlineStyle(hrAttendance || "Not set").borderColor}`, borderRadius: "999px", padding: "5px 10px", lineHeight: 1.2, display: "inline-block", fontSize: "12px", fontWeight: 700 }}>
+                                    {hrAttendance || "Not set"}
+                                  </span>
+                                </td>
+                              );
+                            }
+                            if (col.key === "transportArrival") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
+                                  {attendance?.transportArrivalTime ? formatTimeForDisplay(attendance.transportArrivalTime) : "--:-- --"}
+                                </td>
+                              );
+                            }
+                            if (col.key === "departmentArrival") {
+                              return (
+                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
+                                  {attendance?.departmentArrivalTime ? formatTimeForDisplay(attendance.departmentArrivalTime) : "--:-- --"}
+                                </td>
+                              );
+                            }
+                            return null;
+                          })}
+		                      </tr>
+	                    );
+	                  })}
+	                </tbody>
+	              </table>
+	            </div>
+	          </div>
+	        </div>
+	      )}
+	    </div>
+	  );
 };
 
 export default AttendanceSnapshot;

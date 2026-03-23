@@ -685,9 +685,9 @@ import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar } from "react-icons/fi";
-import { Clock } from "lucide-react"; // Add this import
-import { Camera } from "lucide-react"; // Add this import for Attendance Snapshots
-import { ChevronDown } from "lucide-react"; // Add this import for dropdown
+import { Clock } from "lucide-react";  
+import { Camera } from "lucide-react";  
+import { ChevronDown } from "lucide-react";  
 import toast from "react-hot-toast";
 import { socket } from "../socket.js";
 
@@ -695,7 +695,7 @@ import { socket } from "../socket.js";
 // const API_URL = "https://crm-taskmanagement-api-7e5os.ondigitalocean.app/api/v1";
 //const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
-const AdminNavbar = () => {
+const AdminNavbar = ({ showOutlet = true }) => {
   const { user } = useSelector((state) => state.auth);
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -704,7 +704,7 @@ const AdminNavbar = () => {
   const [showDropdown, setShowDropdown] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showProfilePopup, setShowProfilePopup] = useState(false);
-  const [showAttendanceDropdown, setShowAttendanceDropdown] = useState(false); // New state for attendance dropdown
+  const [showAttendanceDropdown, setShowAttendanceDropdown] = useState(false); 
   const [username, setUsername] = useState(user?.username || "");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -713,12 +713,11 @@ const AdminNavbar = () => {
   const [unreadChatCount, setUnreadChatCount] = useState(0);
 
   const dropdownRef = useRef();
-  const attendanceDropdownRef = useRef(); // New ref for attendance dropdown
+  const attendanceDropdownRef = useRef(); 
   const titleResetTimerRef = useRef(null);
   const defaultTitleRef = useRef(document.title);
   const processedMessageIdsRef = useRef(new Set());
 
-  // 🔥 NEW: Attendance Update Permission
   const allowedAttendanceDepartments = ["Ops - Meta", "Transport"];
   
   const canAccessAttendanceUpdate =
@@ -1436,7 +1435,7 @@ const AdminNavbar = () => {
           </button>
         </div>
       )}
-      <Outlet />
+      {showOutlet ? <Outlet /> : null}
     </>
   );
 };

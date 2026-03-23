@@ -1068,7 +1068,24 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         shiftEndHour: '',
         dailyStatus: Array(7).fill('P')
     });
-    const [errors, setErrors] = useState({});
+	    const [errors, setErrors] = useState({});
+      const getIstDateKey = (value) => {
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        const parts = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+        }).formatToParts(date);
+        const year = parts.find((p) => p.type === "year")?.value;
+        const month = parts.find((p) => p.type === "month")?.value;
+        const day = parts.find((p) => p.type === "day")?.value;
+        return year && month && day ? `${year}-${month}-${day}` : null;
+      };
+      const getCurrentAccountType = () =>
+        String(bulkEditRoster?.data?.userPermissions?.accountType || "").toLowerCase();
+      const isEmployeeRosterEditor = () => getCurrentAccountType() === "employee";
 
     useEffect(() => {
         if (rosterId) {
@@ -1210,15 +1227,25 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         setCurrentPage((prev) => (prev > totalPages ? totalPages : prev));
     }, [editedWeeks, activeTab, appliedSearch, searchBy, bulkEditSearch, itemsPerPage]);
 
-    const handleEmployeeFieldChange = (weekIndex, employeeIndex, field, value) => {
-        const updatedWeeks = [...editedWeeks];
+	    const handleEmployeeFieldChange = (weekIndex, employeeIndex, field, value) => {
+	        const updatedWeeks = [...editedWeeks];
 
-        if (field.startsWith('dailyStatus[')) {
-            const dayIndex = parseInt(field.match(/\[(\d+)\]/)[1]);
-            updatedWeeks[weekIndex].employees[employeeIndex].dailyStatus[dayIndex].status = value;
-        } else {
-            updatedWeeks[weekIndex].employees[employeeIndex][field] = value;
-        }
+	        if (field.startsWith('dailyStatus[')) {
+	            const dayIndex = parseInt(field.match(/\[(\d+)\]/)[1]);
+              if (isEmployeeRosterEditor()) {
+                const weekStart = updatedWeeks?.[weekIndex]?.startDate;
+                const dayDate = new Date(weekStart);
+                dayDate.setDate(dayDate.getDate() + dayIndex);
+                const dayKey = getIstDateKey(dayDate);
+                const todayKey = getIstDateKey(new Date());
+                if (dayKey && todayKey && dayKey < todayKey) {
+                    return;
+                }
+              }
+	            updatedWeeks[weekIndex].employees[employeeIndex].dailyStatus[dayIndex].status = value;
+	        } else {
+	            updatedWeeks[weekIndex].employees[employeeIndex][field] = value;
+	        }
 
         // Update employeesByDepartment after change
         const week = updatedWeeks[weekIndex];
@@ -2190,22 +2217,28 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                     year: 'numeric'
                                                                 });
 
-                                                                return (
-                                                                    <div key={dayIndex} className="flex flex-col items-center rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1">
-                                                                        <span className="text-[10px] font-medium text-gray-700 leading-tight">{dayName}</span>
-                                                                        <span className="text-[10px] text-gray-500 mb-0.5 leading-tight">{dayDateLabel}</span>
-                                                                        <select
-                                                                            value={status.status}
-                                                                            onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, `dailyStatus[${dayIndex}]`, e.target.value)}
-                                                                            title={`${fullDateLabel} - ${status.status}`}
-                                                                            className={`w-8 h-8 border rounded text-center text-xs ${status.status === 'P' ? 'border-green-300 bg-green-50' :
-                                                                                status.status === 'WO' ? 'border-blue-300 bg-blue-50' :
-                                                                                    status.status === 'L' ? 'border-red-300 bg-red-50' :
-                                                                                        status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
-                                                                                            status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
-                                                                                                'border-gray-300 bg-gray-50'
-                                                                                }`}
-                                                                        >
+	                                                                return (
+	                                                                    <div key={dayIndex} className="flex flex-col items-center rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1">
+	                                                                        <span className="text-[10px] font-medium text-gray-700 leading-tight">{dayName}</span>
+	                                                                        <span className="text-[10px] text-gray-500 mb-0.5 leading-tight">{dayDateLabel}</span>
+                                                                        {(() => {
+                                                                            const dayKey = getIstDateKey(dayDate);
+                                                                            const todayKey = getIstDateKey(new Date());
+                                                                            const isPastDayLocked = isEmployeeRosterEditor() && Boolean(dayKey && todayKey && dayKey < todayKey);
+                                                                            return (
+	                                                                        <select
+	                                                                            value={status.status}
+	                                                                            onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, `dailyStatus[${dayIndex}]`, e.target.value)}
+	                                                                            title={`${fullDateLabel} - ${status.status}`}
+                                                                                disabled={isPastDayLocked}
+	                                                                            className={`w-8 h-8 border rounded text-center text-xs ${isPastDayLocked ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300' : ''} ${status.status === 'P' ? 'border-green-300 bg-green-50' :
+	                                                                                status.status === 'WO' ? 'border-blue-300 bg-blue-50' :
+	                                                                                    status.status === 'L' ? 'border-red-300 bg-red-50' :
+	                                                                                        status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
+	                                                                                            status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
+	                                                                                                'border-gray-300 bg-gray-50'
+	                                                                                }`}
+	                                                                        >
                                                                             <option value="P">P</option>
                                                                             <option value="WO">WO</option>
                                                                             <option value="L">L</option>
@@ -2214,12 +2247,14 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                             <option value="LWP">LWP</option>
                                                                             <option value="BL">BL</option>
                                                                             <option value="H">H</option>
-                                                                            <option value="HD">HD</option>
-                                                                            <option value="LWD">LWD</option>
-                                                                        </select>
-                                                                        <span className="text-xs mt-0.5">{getStatusIcon(status.status)}</span>
-                                                                    </div>
-                                                                );
+	                                                                            <option value="HD">HD</option>
+	                                                                            <option value="LWD">LWD</option>
+	                                                                        </select>
+                                                                            );
+                                                                        })()}
+	                                                                        <span className="text-xs mt-0.5">{getStatusIcon(status.status)}</span>
+	                                                                    </div>
+	                                                                );
                                                             })}
                                                         </div>
                                                     </td>
