@@ -4957,9 +4957,10 @@ export const rosterUploadFromExcel = async (req, res) => {
 
       if (existingRosterWithOverlap) {
         const overlappingWeeks = existingRosterWithOverlap.weeks.filter(w => {
+          if (!w) return false;
           const wStart = new Date(w.startDate);
           const wEnd = new Date(w.endDate);
-          const hasDepartment = w.employees.some(emp => emp.department === dept);
+          const hasDepartment = (w.employees || []).some(emp => emp && emp.department === dept);
           
           return hasDepartment && (wStart <= selectedEndDate && wEnd >= selectedStartDate);
         });
@@ -4974,12 +4975,15 @@ export const rosterUploadFromExcel = async (req, res) => {
     }
 
 	    if (overlappingWeeksByDept.length > 0) {
-	      // HR/SuperAdmin can re-upload an existing week by replacing the exact same date range.
+	      // HR/SuperAdmin can re-upload an existing week by merging departments for the exact same date range.
 	      if (isHrOrSuperAdmin) {
 	        const toDateKey = (value) => {
 	          const d = value instanceof Date ? value : new Date(value);
 	          if (Number.isNaN(d.getTime())) return "";
-	          return d.toISOString().slice(0, 10);
+	          const y = d.getFullYear();
+	          const m = String(d.getMonth() + 1).padStart(2, "0");
+	          const day = String(d.getDate()).padStart(2, "0");
+	          return `${y}-${m}-${day}`;
 	        };
 
 	        const startKey = toDateKey(selectedStartDate);
@@ -4993,17 +4997,28 @@ export const rosterUploadFromExcel = async (req, res) => {
 	          });
 
 	          if (matchIndex !== -1) {
-	            existingRoster.weeks[matchIndex].employees = employeesData;
+	            const normalizeDept = (value) => String(value || "").trim().toLowerCase();
+	            const uploadedDeptSet = new Set(
+	              employeesData.map((emp) => normalizeDept(emp?.department)).filter(Boolean)
+	            );
+
+	            const existingEmployees = (existingRoster.weeks[matchIndex].employees || []).filter((emp) => emp !== null);
+	            const preservedEmployees = existingEmployees.filter(
+	              (emp) => !uploadedDeptSet.has(normalizeDept(emp?.department))
+	            );
+
+	            // Replace only uploaded departments, keep other departments as-is.
+	            existingRoster.weeks[matchIndex].employees = [...preservedEmployees, ...employeesData];
 	            existingRoster.updatedBy = user._id;
 	            existingRoster.markModified("weeks");
 	            await existingRoster.save();
 
 	            return res.status(200).json({
 	              success: true,
-	              message: `Roster replaced successfully for ${startDate} to ${endDate}`,
+	              message: `Roster merged successfully for ${startDate} to ${endDate}`,
 	              data: {
 	                summary: {
-	                  totalEmployees: employeesData.length,
+	                  totalEmployees: existingRoster.weeks[matchIndex].employees.length,
 	                  weekNumber: existingRoster.weeks[matchIndex].weekNumber,
 	                  month: rosterMonth,
 	                  year: rosterYear,
