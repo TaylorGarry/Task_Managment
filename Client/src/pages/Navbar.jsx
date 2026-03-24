@@ -423,9 +423,10 @@
 
 
 
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { logoutUser } from "../features/slices/authSlice.js";
+import { fetchMyDelegations, selectMyDelegations } from "../features/slices/delegationSlice.js";
 import { useNavigate } from "react-router-dom";
 import { Menu, X, AlertCircle, Clock, Camera } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
@@ -444,11 +445,8 @@ const Navbar = () => {
     navigate("/login");
   };
   const isTransportDepartment = user?.department === "Transport";
-  const allowedAttendanceDepartments = ["Ops - Meta", "Transport", "Developer", "Marketing", "Ticketing", "Seo"];
-
   const canAccessAttendanceUpdate =
-    (user?.accountType === "employee" &&
-      allowedAttendanceDepartments.includes(user?.department)) ||
+    user?.accountType === "employee" ||
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
 
   const canAccessAttendanceSnapshot = true; 
@@ -464,6 +462,18 @@ const Navbar = () => {
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
 
   const isEmployee = user?.accountType === "employee";
+  const myDelegations = useSelector(selectMyDelegations);
+
+  useEffect(() => {
+    if (isEmployee) {
+      dispatch(fetchMyDelegations());
+    }
+  }, [dispatch, isEmployee]);
+
+  const hasActiveDelegationAsAssignee = useMemo(() => {
+    const list = Array.isArray(myDelegations) ? myDelegations : [];
+    return list.some((delegation) => delegation?.status === "active");
+  }, [myDelegations]);
 
   return (
     <>
@@ -529,6 +539,15 @@ const Navbar = () => {
                 >
                   <Clock className="w-4 h-4" />
                   Attendance Update
+                </button>
+              )}
+
+              {isEmployee && hasActiveDelegationAsAssignee && (
+                <button
+                  onClick={() => navigate("/delegated-actions")}
+                  className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 px-3 py-1.5 rounded-full text-cyan-700 hover:bg-cyan-100"
+                >
+                  Delegated Teams
                 </button>
               )}
 
@@ -616,6 +635,18 @@ const Navbar = () => {
                   className="mx-3 px-3 py-2 bg-indigo-50 text-indigo-700 rounded-full"
                 >
                   Attendance Update
+                </button>
+              )}
+
+              {isEmployee && hasActiveDelegationAsAssignee && (
+                <button
+                  onClick={() => {
+                    navigate("/delegated-actions");
+                    setIsMenuOpen(false);
+                  }}
+                  className="mx-3 px-3 py-2 bg-cyan-50 text-cyan-700 rounded-full"
+                >
+                  Delegated Teams
                 </button>
               )}
 

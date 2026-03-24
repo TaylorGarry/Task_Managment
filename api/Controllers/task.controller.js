@@ -1,10 +1,15 @@
 import Task from "../Modals/Task.modal.js";
 import User from "../Modals/User.modal.js";
 import TaskStatus from "../Modals/TaskStatus.modal.js";
+import Delegation from "../Modals/Delegation/delegation.modal.js";
 import XLSX from "xlsx-js-style";
 import Remark from "../Modals/Remark.modal.js";
 import Roster from "../Modals/Roster.modal.js"
 import { getEffectiveTaskDate } from "../utils/getEffectiveTaskDate.js";
+import {
+  getDelegationContextForDate,
+  canDelegatedAssigneeActForDelegator,
+} from "../utils/delegationAccess.js";
 
 
 // const getISTime = () => {
@@ -187,9 +192,34 @@ export const getTasks = async (req, res) => {
       return ist;
     };
 
+    const todayShiftDate = getShiftDate();
+    const start = startDate ? new Date(startDate) : new Date(todayShiftDate);
+    const end = endDate ? new Date(endDate) : new Date(todayShiftDate);
+    start.setHours(0, 0, 0, 0);
+    end.setHours(23, 59, 59, 999);
+
     const filter = {};
+    const userId = req.user.id.toString();
+    let delegatedDelegatorIds = [];
+
     if (req.user.accountType === "employee") {
-      filter.assignedTo = req.user.id;
+      const activeDelegations = await Delegation.find({
+        assignee: req.user.id,
+        status: "active",
+        startDate: { $lte: end },
+        endDate: { $gte: start },
+      })
+        .select("delegator")
+        .lean();
+
+      delegatedDelegatorIds = [...new Set(
+        activeDelegations
+          .map((delegation) => delegation.delegator?.toString())
+          .filter(Boolean)
+      )];
+
+      const employeeScopeIds = [userId, ...delegatedDelegatorIds];
+      filter.assignedTo = { $in: employeeScopeIds };
       if (shift) filter.shift = shift;
     } else {
       if (shift) filter.shift = shift;
@@ -202,12 +232,6 @@ export const getTasks = async (req, res) => {
       .lean();
 
     if (!tasks.length) return res.status(200).json([]);
-
-    const todayShiftDate = getShiftDate();
-    const start = startDate ? new Date(startDate) : new Date(todayShiftDate);
-    const end = endDate ? new Date(endDate) : new Date(todayShiftDate);
-    start.setHours(0, 0, 0, 0);
-    end.setHours(23, 59, 59, 999);
 
     const dateRange = [];
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
@@ -223,8 +247,9 @@ export const getTasks = async (req, res) => {
       .populate("employeeId", "username")
       .lean();
 
+    const actorUserIds = [userId, ...delegatedDelegatorIds];
     const startShiftTasks = await Task.find({
-      assignedTo: req.user.id,
+      assignedTo: { $in: actorUserIds },
       shift: "Start",
       department: { $in: [...new Set(tasks.map(t => t.department))] },
       title: { $in: [...new Set(tasks.map(t => t.title))] }
@@ -233,22 +258,27 @@ export const getTasks = async (req, res) => {
     const startTaskIds = startShiftTasks.map(t => t._id);
     const startShiftStatuses = startTaskIds.length > 0 ? await TaskStatus.find({
       taskId: { $in: startTaskIds },
-      employeeId: req.user.id,
+      employeeId: { $in: actorUserIds },
       date: { $gte: start, $lte: end }
     }).lean() : [];
 
     const statusMap = new Map();
     const startStatusMap = new Map();
     for (const status of startShiftStatuses) {
-      const key = `${status.taskId}_${status.date.toISOString().split('T')[0]}`;
+      const key = `${status.taskId}_${status.employeeId}_${status.date.toISOString().split('T')[0]}`;
       startStatusMap.set(key, status);
     }
 
     const startTaskLookup = new Map();
     for (const task of startShiftTasks) {
-      const key = `${task.title}_${task.department}`;
-      if (!startTaskLookup.has(key)) {
-        startTaskLookup.set(key, task);
+      for (const assignedId of task.assignedTo || []) {
+        const assignedIdString = assignedId?.toString();
+        if (!assignedIdString) continue;
+        if (!actorUserIds.includes(assignedIdString)) continue;
+        const key = `${task.title}_${task.department}_${assignedIdString}`;
+        if (!startTaskLookup.has(key)) {
+          startTaskLookup.set(key, task);
+        }
       }
     }
 
@@ -269,11 +299,17 @@ export const getTasks = async (req, res) => {
     }
 
     const enrichedTasks = [];
-    const userId = req.user.id.toString();
 
     for (const task of tasks) {
       const taskCreatedDate = new Date(task.createdAt);
       taskCreatedDate.setHours(0, 0, 0, 0);
+      const assignedIds = (task.assignedTo || []).map((emp) => emp?._id?.toString?.() || emp?.toString?.());
+      const delegatedActorId =
+        assignedIds.includes(userId)
+          ? userId
+          : delegatedDelegatorIds.find((delegatorId) => assignedIds.includes(delegatorId));
+      const actingForUserId = delegatedActorId || userId;
+      const isDelegatedTask = actingForUserId !== userId;
 
       for (const date of dateRange) {
         if (date < taskCreatedDate) continue;
@@ -301,7 +337,7 @@ export const getTasks = async (req, res) => {
             pendingEmployees.push({ _id: empId, username });
           }
 
-          if (empId.toString() === userId) employeeStatus = s.status;
+          if (empId.toString() === actingForUserId) employeeStatus = s.status;
         }
 
         const assignedWithoutStatus = task.assignedTo
@@ -315,11 +351,11 @@ export const getTasks = async (req, res) => {
         let blockReason = "";
 
         if (task.shift === "Mid" || task.shift === "End") {
-          const lookupKey = `${task.title}_${task.department}`;
+          const lookupKey = `${task.title}_${task.department}_${actingForUserId}`;
           const startTask = startTaskLookup.get(lookupKey);
           
           if (startTask) {
-            const startTaskKey = `${startTask._id}_${dateKey}`;
+            const startTaskKey = `${startTask._id}_${actingForUserId}_${dateKey}`;
             const startStatus = startStatusMap.get(startTaskKey);
             
             if (!startStatus || startStatus.status === "") {
@@ -336,7 +372,9 @@ export const getTasks = async (req, res) => {
           notDoneEmployees,
           date,
           canUpdate,
-          blockReason
+          blockReason,
+          actingForUserId: isDelegatedTask ? actingForUserId : null,
+          isDelegatedTask
         });
       }
     }
@@ -604,23 +642,15 @@ export const updateTaskStatus = async (req, res) => {
     }
 
     const { taskId } = req.params;
-    const { status } = req.body;
+    const { status, actingForUserId } = req.body;
 
     if (!["Done", "Not Done"].includes(status)) {
       return res.status(400).json({ message: "Invalid status value" });
     }
 
-    const [task, employee] = await Promise.all([
-      Task.findById(taskId).lean(),
-      User.findById(req.user.id).lean(),
-    ]);
-
-    if (!task || !employee) {
+    const task = await Task.findById(taskId).lean();
+    if (!task) {
       return res.status(404).json({ message: "Task or employee not found" });
-    }
-
-    if (!task.assignedTo.some((id) => id.toString() === req.user.id)) {
-      return res.status(403).json({ message: "You are not assigned to this task" });
     }
 
     const istTime = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
@@ -635,6 +665,41 @@ export const updateTaskStatus = async (req, res) => {
     };
 
     const effectiveDate = getEffectiveDate();
+    const delegationContext = await getDelegationContextForDate({
+      userId: req.user.id,
+      actionDate: effectiveDate,
+    });
+
+    if (delegationContext.asDelegator) {
+      return res.status(403).json({
+        message: "You cannot update task status during your active delegation period.",
+        isDelegated: true,
+      });
+    }
+
+    const targetEmployeeId = actingForUserId || req.user.id;
+    const isDelegatedActingForOther = String(targetEmployeeId) !== String(req.user.id);
+
+    if (isDelegatedActingForOther) {
+      const canActAsDelegator = canDelegatedAssigneeActForDelegator(
+        delegationContext.asAssignee,
+        targetEmployeeId
+      );
+      if (!canActAsDelegator) {
+        return res.status(403).json({
+          message: "You can only update status for the delegated team leader during active delegation dates.",
+        });
+      }
+    }
+
+    if (!task.assignedTo.some((id) => id.toString() === String(targetEmployeeId))) {
+      return res.status(403).json({ message: "You are not assigned to this task" });
+    }
+
+    const employee = await User.findById(targetEmployeeId).lean();
+    if (!employee) {
+      return res.status(404).json({ message: "Task or employee not found" });
+    }
     
     let taskDate = task.date ? new Date(task.date) : new Date(effectiveDate);
     taskDate.setHours(0, 0, 0, 0);
@@ -847,7 +912,7 @@ export const updateTaskStatus = async (req, res) => {
 
     let taskStatus = await TaskStatus.findOne({
       taskId,
-      employeeId: req.user.id,
+      employeeId: targetEmployeeId,
       date: effectiveDate
     });
 
@@ -858,7 +923,7 @@ export const updateTaskStatus = async (req, res) => {
     } else {
       taskStatus = await TaskStatus.create({
         taskId,
-        employeeId: req.user.id,
+        employeeId: targetEmployeeId,
         date: effectiveDate,
         status,
         updatedAt: new Date()
@@ -876,6 +941,7 @@ export const updateTaskStatus = async (req, res) => {
         username: taskStatus.employeeId.username,
         status: taskStatus.status,
         date: taskStatus.date,
+        actedBy: req.user.id,
       },
     });
 

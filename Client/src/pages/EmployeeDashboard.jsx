@@ -4,6 +4,7 @@ import { fetchTasks, fetchCoreTasks, updateTaskStatus, updateTaskStatusCoreTeam 
 import { fetchRemarks, addRemark, updateRemark } from "../features/slices/remarkSlice";
 import TaskCard from "./TaskCard";
 import Navbar from "./Navbar";
+import { useLocation } from "react-router-dom";
 import { Toaster, toast } from "react-hot-toast";
 import { MessageCircle } from "lucide-react";
 import { FiX, FiSend, FiEdit2, FiCheck, FiXCircle } from "react-icons/fi";
@@ -11,9 +12,11 @@ import { subscribeUserToPush } from "../utils/pushNotifications";
 
 const EmployeeDashboard = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
   const { tasks, loading, error } = useSelector((state) => state.tasks);
   const { remarks, loading: remarksLoading } = useSelector((state) => state.remarks);
   const user = JSON.parse(localStorage.getItem("user"));
+  const currentUserId = user?._id || user?.id;
   const isCoreTeam = user?.isCoreTeam;
   const employeeDepartment = user?.department || "";
 
@@ -28,6 +31,11 @@ const EmployeeDashboard = () => {
   const [newMessage, setNewMessage] = useState("");
   const [editingRemarkId, setEditingRemarkId] = useState(null);
   const [editingMessage, setEditingMessage] = useState("");
+  const delegatedFromUserId =
+    new URLSearchParams(location.search).get("delegatedFrom") || "";
+  const visibleTasks = delegatedFromUserId
+    ? tasks.filter((task) => String(task?.actingForUserId || "") === delegatedFromUserId)
+    : tasks;
 
   const shiftOptions = ["Start", "Mid", "End"];
   const departmentOptions = [employeeDepartment];
@@ -258,8 +266,13 @@ useEffect(() => {
           payload: updatedStatus,
         });
       } else {
+        const payload = { id: taskId, status };
+        if (task.actingForUserId && task.actingForUserId !== currentUserId) {
+          payload.actingForUserId = task.actingForUserId;
+        }
+
         updatedStatus = await dispatch(
-          updateTaskStatus({ id: taskId, status })
+          updateTaskStatus(payload)
         ).unwrap();
         dispatch({
           type: "tasks/updateTaskStatus/fulfilled",
@@ -379,8 +392,14 @@ useEffect(() => {
           </p>
         )}
 
+        {delegatedFromUserId && (
+          <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-cyan-800">
+            Showing only delegated tasks for selected team leader.
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {tasks.length === 0 && !loading ? (
+          {visibleTasks.length === 0 && !loading ? (
             <div className="col-span-full text-center py-12">
               <div className="mx-auto w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
                 <svg className="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -391,12 +410,12 @@ useEffect(() => {
               <p className="text-gray-500">Try adjusting your filters to see more results</p>
             </div>
           ) : (
-            tasks.map((task) => (
+            visibleTasks.map((task) => (
               <div key={task._id} className="relative">
                 <TaskCard
                   task={task}
                   onStatusChange={handleStatusChange}
-                  allTasks={tasks}
+                  allTasks={visibleTasks}
                 />
                 <button
                   onClick={() => openChat(task)}

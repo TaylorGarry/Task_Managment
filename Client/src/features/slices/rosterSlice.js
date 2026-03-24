@@ -127,8 +127,8 @@ const clearEmployeesForUpdatesCache = () => {
   console.log("Employees-for-updates cache cleared");
 };
 
-const getEmployeesForUpdatesCacheKey = ({ rosterId, weekNumber, date, page, limit, q, searchBy }) =>
-  `${rosterId}-${weekNumber}-${date}-p${page ?? "all"}-l${limit ?? "all"}-q${q ?? ""}-sb${searchBy ?? ""}`;
+const getEmployeesForUpdatesCacheKey = ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom }) =>
+  `${rosterId}-${weekNumber}-${date}-p${page ?? "all"}-l${limit ?? "all"}-q${q ?? ""}-sb${searchBy ?? ""}-df${delegatedFrom ?? ""}`;
 
 const getCachedEmployeesForUpdates = (cacheKey) => {
   const cached = cache.employeesForUpdates.dataByKey[cacheKey];
@@ -903,7 +903,7 @@ export const updateArrivalTime = createAsyncThunk(
 
 export const updateAttendance = createAsyncThunk(
   "roster/updateAttendance",
-  async ({ rosterId, weekNumber, employeeId, date, transportStatus, departmentStatus, arrivalTime }, thunkAPI) => {
+  async ({ rosterId, weekNumber, employeeId, date, transportStatus, departmentStatus, arrivalTime, delegatedFrom }, thunkAPI) => {
     try {
       const token = getToken();
       
@@ -926,6 +926,9 @@ export const updateAttendance = createAsyncThunk(
       
       if (arrivalTime !== undefined && arrivalTime !== '') {
         payload.arrivalTime = arrivalTime;
+      }
+      if (delegatedFrom !== undefined && delegatedFrom !== null && String(delegatedFrom).trim() !== "") {
+        payload.delegatedFrom = String(delegatedFrom).trim();
       }
       
       console.log("📦 Sending attendance update payload:", payload);
@@ -1058,7 +1061,7 @@ export const getPunchTimes = createAsyncThunk(
 
 export const bulkUpdatePunchTimes = createAsyncThunk(
   "roster/bulkUpdatePunchTimes",
-  async ({ rosterId, weekNumber, employeeIds, date, punchIn, punchOut }, thunkAPI) => {
+  async ({ rosterId, weekNumber, employeeIds, date, punchIn, punchOut, delegatedFrom }, thunkAPI) => {
     try {
       const token = getToken();
       
@@ -1075,6 +1078,9 @@ export const bulkUpdatePunchTimes = createAsyncThunk(
       
       if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
         payload.punchOut = punchOut;
+      }
+      if (delegatedFrom !== undefined && delegatedFrom !== null && String(delegatedFrom).trim() !== "") {
+        payload.delegatedFrom = String(delegatedFrom).trim();
       }
       
       console.log("⏰ Bulk updating punch times:", payload);
@@ -69549,7 +69555,7 @@ z3.createRoot(document.getElementById("root")).render(i.jsx(S.StrictMode, {
 
 export const updateAttendanceBulk = createAsyncThunk(
   "roster/updateAttendanceBulk",
-  async ({ rosterId, weekNumber, employeeIds, date, transportStatus, departmentStatus, arrivalTime }, thunkAPI) => {
+  async ({ rosterId, weekNumber, employeeIds, date, transportStatus, departmentStatus, arrivalTime, delegatedFrom }, thunkAPI) => {
     try {
       const token = getToken();
 
@@ -69570,6 +69576,9 @@ export const updateAttendanceBulk = createAsyncThunk(
 
       if (arrivalTime !== undefined && arrivalTime !== "") {
         payload.arrivalTime = arrivalTime;
+      }
+      if (delegatedFrom !== undefined && delegatedFrom !== null && String(delegatedFrom).trim() !== "") {
+        payload.delegatedFrom = String(delegatedFrom).trim();
       }
 
       const res = await axios.put(
@@ -69615,9 +69624,9 @@ export const updateAttendanceBulk = createAsyncThunk(
 
 export const getEmployeesForUpdates = createAsyncThunk(
   "roster/getEmployeesForUpdates",
-	  async ({ rosterId, weekNumber, date, page, limit, q, searchBy }, thunkAPI) => {
-	    try {
-	      const cacheKey = getEmployeesForUpdatesCacheKey({ rosterId, weekNumber, date, page, limit, q, searchBy });
+		  async ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom }, thunkAPI) => {
+		    try {
+		      const cacheKey = getEmployeesForUpdatesCacheKey({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom });
 	      const cached = getCachedEmployeesForUpdates(cacheKey);
 	      if (cached) {
 	        console.log("Returning cached employees-for-updates data");
@@ -69630,8 +69639,11 @@ export const getEmployeesForUpdates = createAsyncThunk(
 	      const params = new URLSearchParams();
 	      if (page !== undefined && page !== null) params.set("page", String(page));
 	      if (limit !== undefined && limit !== null) params.set("limit", String(limit));
-	      if (q !== undefined && q !== null && String(q).trim()) params.set("q", String(q).trim());
-	      if (searchBy !== undefined && searchBy !== null && String(searchBy).trim()) params.set("searchBy", String(searchBy).trim());
+		      if (q !== undefined && q !== null && String(q).trim()) params.set("q", String(q).trim());
+		      if (searchBy !== undefined && searchBy !== null && String(searchBy).trim()) params.set("searchBy", String(searchBy).trim());
+          if (delegatedFrom !== undefined && delegatedFrom !== null && String(delegatedFrom).trim()) {
+            params.set("delegatedFrom", String(delegatedFrom).trim());
+          }
 
 	      const query = params.toString();
 	      const url = `${API_URL}/updates/${rosterId}/${weekNumber}/${date}${query ? `?${query}` : ""}`;

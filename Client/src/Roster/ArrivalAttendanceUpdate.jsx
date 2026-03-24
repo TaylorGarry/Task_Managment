@@ -158,7 +158,7 @@ const getStatusColor = (status) => {
   return option?.color || "bg-gray-100 text-gray-800";
 };
 
-const ArrivalAttendanceUpdate = ({ rosterId }) => {
+const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const dispatch = useDispatch();
   const currentUser = getCurrentUser();
   const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
@@ -269,10 +269,11 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
-        searchBy
+        searchBy,
+        delegatedFrom: delegatedFromUserId,
       }));
     }
-  }, [dispatch, rosterId, selectedWeek, selectedDate, currentPage, pageSize, appliedSearch, searchBy]);
+  }, [dispatch, rosterId, selectedWeek, selectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
 
   // Process the response data
   useEffect(() => {
@@ -362,6 +363,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         limit: pageSize,
         q: appliedSearch,
         searchBy,
+        delegatedFrom: delegatedFromUserId,
       })
     );
   };
@@ -433,6 +435,7 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
       weekNumber: parseInt(selectedWeek),
       employeeIds: selectedEmployeeIds,
       date: selectedDate,
+      delegatedFrom: delegatedFromUserId || undefined,
     };
 
     if (canUpdateTransport && bulkUpdate.transportStatus) {
@@ -482,7 +485,8 @@ const ArrivalAttendanceUpdate = ({ rosterId }) => {
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
-        searchBy
+        searchBy,
+        delegatedFrom: delegatedFromUserId,
       }));
       
       setSelectedEmployeeIds([]);
