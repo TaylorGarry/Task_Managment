@@ -276,56 +276,48 @@ const toDateKeyLocal = (value) => {
 			        const h = Number(hours);
 			        const m = Number(minutes);
 			        if (Number.isNaN(h) || Number.isNaN(m)) return "--:-- --";
-			        const suffix = h >= 12 ? "PM" : "AM";
 			        const hour12 = h % 12 === 0 ? 12 : h % 12;
-			        return `${pad2(hour12)}:${pad2(m)} ${suffix}`;
+			        const suffix = h >= 12 ? "pm" : "am";
+			        return `${hour12}:${pad2(m)} ${suffix}`;
 			      };
 
-			      const getISTDateKeyFromDate = (dt) => {
-			        const parts = new Intl.DateTimeFormat("en-GB", {
+			      const formatDateToIST12h = (dt) =>
+			        new Intl.DateTimeFormat("en-US", {
 			          timeZone: IST_TIME_ZONE,
-			          year: "numeric",
-			          month: "2-digit",
-			          day: "2-digit",
-			        }).formatToParts(dt);
-			        const year = parts.find((p) => p.type === "year")?.value;
-			        const month = parts.find((p) => p.type === "month")?.value;
-			        const day = parts.find((p) => p.type === "day")?.value;
-			        if (!year || !month || !day) return null;
-			        return `${year}-${month}-${day}`;
-			      };
+			          hour: "numeric",
+			          minute: "2-digit",
+			          hour12: true,
+			        })
+			          .format(dt)
+			          .toLowerCase();
 
 			      if (typeof dateString === "string") {
-			        const timeOnly = dateString.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+			        const trimmed = dateString.trim();
+
+			        const timeOnly = trimmed.match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/);
 			        if (timeOnly) {
 			          return formatTimeOnlyTo12h(timeOnly[1], timeOnly[2]);
 			        }
-			        if (dateString.includes("T")) {
-			          const hasTz = /[zZ]$/.test(dateString) || /[+-]\d{2}:\d{2}$/.test(dateString);
-			          if (hasTz) {
-			            const dt = new Date(dateString);
+
+			        if (trimmed.includes("T")) {
+			          const hasTimeZone = /[zZ]$/.test(trimmed) || /[+-]\d{2}:\d{2}$/.test(trimmed);
+			          if (hasTimeZone) {
+			            const dt = new Date(trimmed);
 			            if (!Number.isNaN(dt.getTime())) {
-			              const expectedKey = selectedDate; // roster day key (treat as IST day)
-			              const actualKey = getISTDateKeyFromDate(dt);
-			              if (expectedKey && actualKey && expectedKey !== actualKey) {
-			                const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
-			                if (isoTime) {
-			                  return formatTimeOnlyTo12h(isoTime[1], isoTime[2]);
-			                }
-			              }
-			              return dt.toLocaleTimeString([], { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+			              return formatDateToIST12h(dt);
 			            }
 			          }
 
-			          const isoTime = dateString.match(/T(\d{2}):(\d{2})(?::(\d{2}))?/);
+			          const isoTime = trimmed.match(/T(\d{2}):(\d{2})(?::\d{2})?/);
 			          if (isoTime) {
 			            return formatTimeOnlyTo12h(isoTime[1], isoTime[2]);
 			          }
 			        }
 			      }
+
 			      const dt = new Date(dateString);
 			      if (Number.isNaN(dt.getTime())) return "--:-- --";
-			      return dt.toLocaleTimeString([], { timeZone: IST_TIME_ZONE, hour: "2-digit", minute: "2-digit" });
+			      return formatDateToIST12h(dt);
 			    } catch {
 			      return "--:-- --";
 			    }
@@ -1064,7 +1056,7 @@ const toDateKeyLocal = (value) => {
 	                                  {attendance?.transportStatus || "Not set"}
 	                                </span>
 	                                {attendance?.transportArrivalTime && (
-	                                <span className={isDarkTable ? "text-xs text-neutral-400" : "text-xs text-gray-500"}>
+	                                <span className={isDarkTable ? "text-xs text-green-300" : "text-xs text-green-600 font-medium"}>
 	                                    Arrival: {formatTimeForDisplay(attendance.transportArrivalTime)}
 	                                  </span>
 	                                )}
@@ -1097,7 +1089,7 @@ const toDateKeyLocal = (value) => {
 		                          )}
 
 			                          {effectiveColumnVisibility.transportArrival && (
-		                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-200" : "px-6 py-4 text-sm text-gray-700"}>
+	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-green-300 font-medium" : "px-6 py-4 text-sm text-green-600 font-medium"}>
 	                              {attendance?.transportArrivalTime
 	                                ? formatTimeForDisplay(attendance.transportArrivalTime)
 	                                : "--:-- --"}
@@ -1105,7 +1097,7 @@ const toDateKeyLocal = (value) => {
 	                          )}
 
 		                          {effectiveColumnVisibility.departmentArrival && (
-	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-neutral-200" : "px-6 py-4 text-sm text-gray-700"}>
+	                          <td className={isDarkTable ? "px-6 py-4 text-sm text-green-300 font-medium" : "px-6 py-4 text-sm text-green-600 font-medium"}>
 	                              {attendance?.departmentArrivalTime
 	                                ? formatTimeForDisplay(attendance.departmentArrivalTime)
 	                                : "--:-- --"}
@@ -1338,16 +1330,16 @@ const toDateKeyLocal = (value) => {
                             }
                             if (col.key === "transportArrival") {
                               return (
-                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
-                                  {attendance?.transportArrivalTime ? formatTimeForDisplay(attendance.transportArrivalTime) : "--:-- --"}
-                                </td>
+	                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#16a34a", fontWeight: 600 }}>
+	                                  {attendance?.transportArrivalTime ? formatTimeForDisplay(attendance.transportArrivalTime) : "--:-- --"}
+	                                </td>
                               );
                             }
                             if (col.key === "departmentArrival") {
                               return (
-                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#475569" }}>
-                                  {attendance?.departmentArrivalTime ? formatTimeForDisplay(attendance.departmentArrivalTime) : "--:-- --"}
-                                </td>
+	                                <td key={col.key} style={{ padding: "10px", borderBottom: "1px solid #f1f5f9", color: "#16a34a", fontWeight: 600 }}>
+	                                  {attendance?.departmentArrivalTime ? formatTimeForDisplay(attendance.departmentArrivalTime) : "--:-- --"}
+	                                </td>
                               );
                             }
                             return null;
