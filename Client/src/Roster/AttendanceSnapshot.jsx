@@ -1055,11 +1055,6 @@ const toDateKeyLocal = (value) => {
 	                                <span className={`w-fit px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(attendance?.transportStatus)}`}>
 	                                  {attendance?.transportStatus || "Not set"}
 	                                </span>
-	                                {attendance?.transportArrivalTime && (
-	                                <span className={isDarkTable ? "text-xs text-green-300" : "text-xs text-green-600 font-medium"}>
-	                                    Arrival: {formatTimeForDisplay(attendance.transportArrivalTime)}
-	                                  </span>
-	                                )}
 	                              </div>
 	                            </td>
 	                          )}
