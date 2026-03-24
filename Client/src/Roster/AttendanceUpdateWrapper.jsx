@@ -246,16 +246,17 @@
 
 import React, { useState, useEffect } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { fetchAllRosters } from "../features/slices/rosterSlice.js";
 import ArrivalAttendanceUpdate from "./ArrivalAttendanceUpdate.jsx";
 import Navbar from "../pages/Navbar.jsx";
 import AdminNavbar from "../components/AdminNavbar.jsx";
 import { Calendar, AlertCircle, Clock } from "lucide-react";
 
-const AttendanceUpdateWrapper = () => {
+const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const location = useLocation();
   const { rosterId } = useParams();
   const { allRosters, loading } = useSelector((state) => state.roster);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
@@ -270,9 +271,10 @@ const AttendanceUpdateWrapper = () => {
   };
   const currentUser = getCurrentUser();
   const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
+  const delegatedFromUserId = new URLSearchParams(location.search).get("delegatedFrom") || "";
 
-	  useEffect(() => {
-	    dispatch(fetchAllRosters({
+		  useEffect(() => {
+		    dispatch(fetchAllRosters({
 	      month: selectedMonth,
 	      year: selectedYear,
       page: 1,
@@ -283,11 +285,36 @@ const AttendanceUpdateWrapper = () => {
 	  const rosters = allRosters?.data || [];
 	  
 	
-	  if (rosterId) {
-	    // ArrivalAttendanceUpdate already renders the correct navbar + full-page layout.
-	    // Rendering another Navbar/AdminNavbar here caused duplicate fixed headers and broke SPA navigation.
-	    return <ArrivalAttendanceUpdate rosterId={rosterId} />;
-	  }
+		  if (rosterId) {
+		    // ArrivalAttendanceUpdate already renders the correct navbar + full-page layout.
+		    // Rendering another Navbar/AdminNavbar here caused duplicate fixed headers and broke SPA navigation.
+		    return (
+          <ArrivalAttendanceUpdate
+            rosterId={rosterId}
+            delegatedFromUserId={delegatedMode ? delegatedFromUserId : ""}
+          />
+        );
+		  }
+
+  if (delegatedMode && !delegatedFromUserId) {
+    return (
+      <div className="min-h-screen bg-gray-100">
+        <Navbar />
+        <div className="container mx-auto px-4 py-10">
+          <div className="bg-white rounded-lg shadow p-8 text-center">
+            <h2 className="text-xl font-semibold text-gray-900">No delegated team selected</h2>
+            <p className="text-gray-600 mt-2">Please open this from the Delegated Teams page.</p>
+            <button
+              onClick={() => navigate("/delegated-actions")}
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            >
+              Go to Delegated Teams
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -299,10 +326,12 @@ const AttendanceUpdateWrapper = () => {
             <div>
               <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
                 <Clock className="w-6 h-6 text-indigo-600" />
-                Attendance & Arrival Updates
+                {delegatedMode ? "Delegated Attendance & Arrival Updates" : "Attendance & Arrival Updates"}
               </h1>
               <p className="text-gray-600 mt-1">
-                Select a roster to update employee attendance and arrival times
+                {delegatedMode
+                  ? "Select a roster to update delegated team attendance and arrival times"
+                  : "Select a roster to update employee attendance and arrival times"}
               </p>
             </div>
             
@@ -386,7 +415,13 @@ const AttendanceUpdateWrapper = () => {
                 return (
                   <div
                     key={roster._id}
-                    onClick={() => navigate(`/attendance-update/${roster._id}`)}
+                    onClick={() => {
+                      const basePath = delegatedMode ? "/delegated-attendance" : "/attendance-update";
+                      const query = delegatedMode && delegatedFromUserId
+                        ? `?delegatedFrom=${encodeURIComponent(delegatedFromUserId)}`
+                        : "";
+                      navigate(`${basePath}/${roster._id}${query}`);
+                    }}
                     className="border rounded-lg p-5 hover:shadow-lg cursor-pointer transition-all hover:border-indigo-300 bg-white"
                   >
                     <div className="flex items-start justify-between">

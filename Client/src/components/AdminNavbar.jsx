@@ -729,6 +729,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const canAccessAttendanceSnapshots = 
     user?.accountType === "employee" || 
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
+  const canAccessDelegation = ["superAdmin", "HR"].includes(user?.accountType);
 
   // Check if user is Ops-Meta employee
   const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
@@ -1041,6 +1042,20 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 </div>
               )}
 
+             {canAccessDelegation && (
+  <Link
+    to="/admin/delegations"
+    className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer ${
+      location.pathname === "/admin/delegations"
+        ? "bg-cyan-100 text-cyan-800 border border-cyan-200"
+        : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200"
+    }`}
+  >
+    <FiUsers className="w-4 h-4" />
+    Delegation
+  </Link>
+)}
+
               {/* 🔥 REMOVED: Individual Attendance Snapshots and Upload Roster buttons from here */}
 
               {isOpsMeta && (
@@ -1219,6 +1234,17 @@ const AdminNavbar = ({ showOutlet = true }) => {
                   )}
                 </div>
               )}
+
+             {canAccessDelegation && (
+  <Link
+    to="/admin/delegations"
+    className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 px-3 py-2 rounded-xl text-cyan-700 font-medium hover:bg-cyan-100 transition-all w-full text-left"
+    onClick={() => setShowMobileMenu(false)}
+  >
+    <FiUsers className="w-4 h-4" />
+    Delegation
+  </Link>
+)}
 
               {/* 🔥 REMOVED: Individual Attendance Snapshots and Upload Roster buttons from mobile menu */}
 

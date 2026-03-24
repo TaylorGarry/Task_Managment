@@ -400,9 +400,6 @@
 // export default App;
 
 
-
-
-
 import React from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
@@ -428,9 +425,10 @@ import ArrivalAttendanceUpdate from "./Roster/ArrivalAttendanceUpdate.jsx";
 import AttendanceUpdateWrapper from "./Roster/AttendanceUpdateWrapper.jsx";
 import SuperAdminTransportView from "./Roster/SuperAdminTransportView.jsx";
 import AttendanceSnapshot from "./Roster/AttendanceSnapshot.jsx";
+import DelegationPage from "./pages/DelegationPage.jsx";
+import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
 
 const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
-
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
@@ -452,32 +450,26 @@ const OpsMetaRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Allow employee users from Ops - Meta, Marketing, and CS
   const isEligible =
     user.accountType === "employee" &&
     ALLOWED_ROSTER_DEPARTMENTS.includes(user.department);
 
   if (!isEligible) {
-    // Everyone else goes to their respective dashboards
     if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
       return <Navigate to="/admin/admintask" replace />;
     }
-    // Even other employees from different departments go to regular dashboard
     return <Navigate to="/dashboard" replace />;
   }
 
   return children;
 };
 
-// ADD THIS: Route for Employee Defaulters (only for employees)
 const EmployeeOnlyRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Only employees can access this route
   if (user.accountType !== "employee") {
-    // Admins/HR/superAdmin go to admin panel
     if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
       return <Navigate to="/admin/admintask" replace />;
     }
@@ -486,19 +478,17 @@ const EmployeeOnlyRoute = ({ children }) => {
 
   return children;
 };
-// Route for roster Excel Upload (allowed departments + admin roles)
+
 const OpsMetaUploadRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Check if user can upload (allowed department employees, admin, HR, superAdmin)
   const canUploadExcel = 
     (user.accountType === "employee" && ALLOWED_ROSTER_DEPARTMENTS.includes(user.department)) ||
     ["admin", "superAdmin", "HR"].includes(user.accountType);
 
   if (!canUploadExcel) {
-    // Redirect based on user type
     if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
       return <Navigate to="/admin/admintask" replace />;
     }
@@ -513,10 +503,8 @@ const AttendanceUpdateRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-	  const isAllowedEmployee = user.accountType === "employee";
-
-  const isAdmin =
-    ["admin", "superAdmin", "HR"].includes(user.accountType);
+  const isAllowedEmployee = user.accountType === "employee";
+  const isAdmin = ["admin", "superAdmin", "HR"].includes(user.accountType);
 
   if (!isAllowedEmployee && !isAdmin) {
     return <Navigate to="/dashboard" replace />;
@@ -525,7 +513,6 @@ const AttendanceUpdateRoute = ({ children }) => {
   return children;
 };
 
-// ✅ NEW: Route for Attendance Snapshot 
 const AttendanceSnapshotRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
   if (!user) return <Navigate to="/login" replace />;
@@ -549,32 +536,47 @@ function App() {
             </ProtectedRoute>
           }
         />
-       <Route
-  path="/attendance-update"
-  element={
-    <AttendanceUpdateRoute>
-      <AttendanceUpdateWrapper />
-    </AttendanceUpdateRoute>
-  }
-/>
-<Route
-  path="/attendance-update/:rosterId"
-  element={
-    <AttendanceUpdateRoute>
-      <AttendanceUpdateWrapper />  {/* Use wrapper for both */}
-    </AttendanceUpdateRoute>
-  }
-/>
-<Route
-  path="/superadmin/transport"
-  element={
-    <ProtectedRoute adminOnly={true}>
-      <SuperAdminTransportView />
-    </ProtectedRoute>
-  }
-/>
+        <Route
+          path="/attendance-update"
+          element={
+            <AttendanceUpdateRoute>
+              <AttendanceUpdateWrapper />
+            </AttendanceUpdateRoute>
+          }
+        />
+        <Route
+          path="/attendance-update/:rosterId"
+          element={
+            <AttendanceUpdateRoute>
+              <AttendanceUpdateWrapper />
+            </AttendanceUpdateRoute>
+          }
+        />
+        <Route
+          path="/delegated-attendance"
+          element={
+            <EmployeeOnlyRoute>
+              <AttendanceUpdateWrapper delegatedMode={true} />
+            </EmployeeOnlyRoute>
+          }
+        />
+        <Route
+          path="/delegated-attendance/:rosterId"
+          element={
+            <EmployeeOnlyRoute>
+              <AttendanceUpdateWrapper delegatedMode={true} />
+            </EmployeeOnlyRoute>
+          }
+        />
+        <Route
+          path="/superadmin/transport"
+          element={
+            <ProtectedRoute adminOnly={true}>
+              <SuperAdminTransportView />
+            </ProtectedRoute>
+          }
+        />
 
-        {/* ✅ NEW: Attendance Snapshot Route - */}
         <Route
           path="/attendance-snapshot"
           element={
@@ -586,7 +588,6 @@ function App() {
 
         <Route path="/login" element={<Login />} />
 
-        {/* ADD THIS ROUTE for Excel Upload */}
         <Route
           path="/upload-roster"
           element={
@@ -603,7 +604,14 @@ function App() {
             </EmployeeOnlyRoute>
           }
         />
-        {/* Ops-Meta Current Week Roster */}
+        <Route
+          path="/delegated-actions"
+          element={
+            <EmployeeOnlyRoute>
+              <DelegatedActionsPage />
+            </EmployeeOnlyRoute>
+          }
+        />
         <Route
           path="/ops-meta-roster"
           element={
@@ -613,6 +621,7 @@ function App() {
           }
         />
 
+        {/* ========== MAIN ADMIN ROUTE ========== */}
         <Route
           path="/admin"
           element={
@@ -630,8 +639,17 @@ function App() {
           <Route path="admintask" element={<AdminTask />} />
           <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
           <Route path="chat" element={<ChatUI />} />
-          <Route index element={<Navigate to="tasks" replace />} />
           
+          {/* ✅ MOVED: Delegation route inside admin parent */}
+          <Route 
+            path="delegations" 
+            element={
+              <DelegationPage />
+            } 
+          />
+          <Route path="delegation" element={<Navigate to="delegations" replace />} />
+          
+          <Route index element={<Navigate to="tasks" replace />} />
         </Route>
 
         <Route

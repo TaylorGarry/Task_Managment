@@ -1,6 +1,36 @@
 import XLSX from "xlsx-js-style";
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
+import Delegation from "../Modals/Delegation/delegation.modal.js";
+import {
+  getDelegationContextForDate,
+  canDelegatedAssigneeManageEmployee,
+} from "../utils/delegationAccess.js";
+
+const getDelegatedTeamLeaderNames = async ({ assigneeId, actionDate }) => {
+  const baseDate = new Date(actionDate);
+  if (Number.isNaN(baseDate.getTime())) return new Set();
+  const startOfDay = new Date(baseDate);
+  startOfDay.setHours(0, 0, 0, 0);
+  const endOfDay = new Date(baseDate);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  const activeDelegations = await Delegation.find({
+    assignee: assigneeId,
+    status: "active",
+    startDate: { $lte: endOfDay },
+    endDate: { $gte: startOfDay },
+  })
+    .populate("delegator", "username")
+    .select("delegator")
+    .lean();
+
+  return new Set(
+    activeDelegations
+      .map((delegation) => String(delegation?.delegator?.username || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+};
 
 // export const addRosterWeek = async (req, res) => {
 //   try {
@@ -6276,9 +6306,31 @@ export const updateArrivalTime = async (req, res) => {
     }
 
     const employee = week.employees.id(employeeId);
+    const delegationContext = await getDelegationContextForDate({
+      userId: user._id,
+      actionDate: date,
+    });
+
+    if (delegationContext.asDelegator) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot update attendance during your active delegation period.",
+        isDelegated: true,
+      });
+    }
+
+    const hasDelegatedDepartmentAccess = canDelegatedAssigneeManageEmployee(
+      delegationContext.asAssignee,
+      employee.userId
+    );
 
     // Team leader validation
-    if (user.accountType !== "superAdmin" && user.accountType !== "HR" && user.department !== "Transport") {
+    if (
+      user.accountType !== "superAdmin" &&
+      user.accountType !== "HR" &&
+      user.department !== "Transport" &&
+      !hasDelegatedDepartmentAccess
+    ) {
       if (employee.teamLeader !== user.username) {
         return res.status(403).json({
           success: false,
@@ -6349,7 +6401,12 @@ export const updateArrivalTime = async (req, res) => {
     } else {
       if (user.department === "Transport") {
         oldValues.transportArrivalTime = daily.transportArrivalTime;
-      } else if (user.department === employee.department || user.accountType === "superAdmin" || user.accountType === "HR") {
+      } else if (
+        user.department === employee.department ||
+        user.accountType === "superAdmin" ||
+        user.accountType === "HR" ||
+        hasDelegatedDepartmentAccess
+      ) {
         oldValues.departmentArrivalTime = daily.departmentArrivalTime;
       }
     }
@@ -6387,7 +6444,7 @@ export const updateArrivalTime = async (req, res) => {
     }
     
     // 👥 DEPARTMENT UPDATE
-    else if (user.department === employee.department) {
+    else if (user.department === employee.department || hasDelegatedDepartmentAccess) {
       daily.departmentArrivalTime = newArrival;
       daily.departmentUpdatedBy = user._id;
       daily.departmentUpdatedAt = new Date();
@@ -6667,7 +6724,8 @@ export const updateAttendance = async (req, res) => {
       date, 
       transportStatus, 
       departmentStatus, 
-      arrivalTime 
+      arrivalTime,
+      delegatedFrom,
     } = req.body;
     
     const user = req.user; 
@@ -6736,6 +6794,64 @@ export const updateAttendance = async (req, res) => {
 	    }
 
     const employee = week.employees.id(employeeId);
+    const delegationContext = await getDelegationContextForDate({
+      userId: user._id,
+      actionDate: date,
+    });
+
+    if (delegationContext.asDelegator) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot update attendance during your active delegation period.",
+        isDelegated: true,
+      });
+    }
+
+    let delegatedTeamLeaderName = "";
+    const delegatedTeamLeaderNames = await getDelegatedTeamLeaderNames({
+      assigneeId: user._id,
+      actionDate: date,
+    });
+    let specificDelegation = null;
+    if (delegatedFrom) {
+      const actionDate = new Date(date);
+      actionDate.setHours(0, 0, 0, 0);
+      const actionDayEnd = new Date(actionDate);
+      actionDayEnd.setHours(23, 59, 59, 999);
+
+      specificDelegation = await Delegation.findOne({
+        assignee: user._id,
+        delegator: delegatedFrom,
+        status: "active",
+        startDate: { $lte: actionDayEnd },
+        endDate: { $gte: actionDate },
+      })
+        .populate("delegator", "username")
+        .lean();
+
+      if (!specificDelegation) {
+        return res.status(403).json({
+          success: false,
+          message: "No active delegation found for selected team leader and date.",
+        });
+      }
+
+      delegatedTeamLeaderName = String(specificDelegation?.delegator?.username || "")
+        .trim()
+        .toLowerCase();
+    }
+
+    const baseDelegationForEmployee = specificDelegation || delegationContext.asAssignee;
+    const hasDelegatedDepartmentAccessById = canDelegatedAssigneeManageEmployee(
+      baseDelegationForEmployee,
+      employee.userId
+    );
+    const hasDelegatedDepartmentAccessByTeamLeader =
+      (delegatedTeamLeaderName &&
+        String(employee.teamLeader || "").trim().toLowerCase() === delegatedTeamLeaderName) ||
+      delegatedTeamLeaderNames.has(String(employee.teamLeader || "").trim().toLowerCase());
+    const hasDelegatedDepartmentAccess =
+      hasDelegatedDepartmentAccessById || hasDelegatedDepartmentAccessByTeamLeader;
 	    if (user.accountType === "superAdmin" || user.accountType === "HR") {
 	      console.log("Admin access granted");
 	    } 
@@ -6745,16 +6861,20 @@ export const updateAttendance = async (req, res) => {
     // Department users (including team leaders)
     else {
       // Check if this user is allowed to update this employee
-      const isTeamLeader = employee.teamLeader === user.username;
-      const isSameDepartment = employee.department === user.department;
-      
-      // Allow if they are the team leader OR in the same department
-      if (!isTeamLeader && !isSameDepartment) {
-        return res.status(403).json({
-          success: false,
-          message: "You can only update employees in your department or your own team members"
-        });
-      }
+      const normalizedEmployeeTeamLeader = String(employee.teamLeader || "").trim().toLowerCase();
+      const normalizedUsername = String(user.username || "").trim().toLowerCase();
+      const normalizedEmployeeDepartment = String(employee.department || "").trim().toLowerCase();
+      const normalizedUserDepartment = String(user.department || "").trim().toLowerCase();
+      const isTeamLeader = normalizedEmployeeTeamLeader === normalizedUsername;
+      const isSameDepartment = normalizedEmployeeDepartment === normalizedUserDepartment;
+	      
+	      // Allow if they are the team leader OR in the same department
+	      if (!isTeamLeader && !isSameDepartment && !hasDelegatedDepartmentAccess) {
+	        return res.status(403).json({
+	          success: false,
+	          message: "You can only update employees in your department or your own team members"
+	        });
+	      }
       
       console.log(`Department user access granted. Team Leader: ${isTeamLeader}, Same Dept: ${isSameDepartment}`);
     }
@@ -6890,7 +7010,8 @@ export const updateAttendance = async (req, res) => {
 	        user.accountType === "superAdmin" || 
 	        user.accountType === "HR" ||
 	        user.department === employee.department ||
-	        employee.teamLeader === user.username;
+	        employee.teamLeader === user.username ||
+          hasDelegatedDepartmentAccess;
       
       if (canUpdateDepartment) {
         if (daily.departmentStatus !== departmentStatus) {
@@ -6954,7 +7075,8 @@ export const updateAttendance = async (req, res) => {
 	        user.accountType === "superAdmin" || 
 	        user.accountType === "HR" ||
 	        user.department === employee.department ||
-	        employee.teamLeader === user.username;
+	        employee.teamLeader === user.username ||
+          hasDelegatedDepartmentAccess;
       
       if (canUpdateDepartmentArrival) {
         if (!daily.departmentArrivalTime || daily.departmentArrivalTime.getTime() !== newArrival.getTime()) {
@@ -7121,7 +7243,8 @@ export const updateAttendanceBulk = async (req, res) => {
       date,
       transportStatus,
       departmentStatus,
-      arrivalTime
+      arrivalTime,
+      delegatedFrom,
     } = req.body;
 
     const user = req.user;
@@ -7217,8 +7340,8 @@ export const updateAttendanceBulk = async (req, res) => {
     }
 
     // 🔥 FIX: Convert arrivalTime from IST to UTC for storage
-    let newArrival = null;
-    if (arrivalTime) {
+	    let newArrival = null;
+	    if (arrivalTime) {
       const [hours, minutes] = arrivalTime.split(":").map(Number);
       
       // Convert IST to UTC (subtract 5 hours 30 minutes)
@@ -7245,34 +7368,95 @@ export const updateAttendanceBulk = async (req, res) => {
           message: "Invalid arrival time"
         });
       }
+	    }
+
+    const delegationContext = await getDelegationContextForDate({
+      userId: user._id,
+      actionDate: date,
+    });
+
+    if (delegationContext.asDelegator) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot update attendance during your active delegation period.",
+        isDelegated: true,
+      });
     }
 
-    const results = [];
-    const failed = [];
+    let specificDelegation = null;
+    let delegatedTeamLeaderName = "";
+    const delegatedTeamLeaderNames = await getDelegatedTeamLeaderNames({
+      assigneeId: user._id,
+      actionDate: date,
+    });
+    let specificDelegatedEmployeeIds = null;
+    if (delegatedFrom) {
+      specificDelegation = await Delegation.findOne({
+        assignee: user._id,
+        delegator: delegatedFrom,
+        status: "active",
+        startDate: { $lte: selectedDayEnd },
+        endDate: { $gte: selectedDate },
+      })
+        .populate("delegator", "username")
+        .lean();
+
+      if (!specificDelegation) {
+        return res.status(403).json({
+          success: false,
+          message: "No active delegation found for selected team leader and date.",
+        });
+      }
+
+      delegatedTeamLeaderName = String(specificDelegation?.delegator?.username || "")
+        .trim()
+        .toLowerCase();
+      specificDelegatedEmployeeIds = new Set(
+        (specificDelegation?.affectedEmployees || []).map((id) => String(id))
+      );
+    }
+
+	    const results = [];
+	    const failed = [];
 
     for (const employeeId of employeeIds) {
       try {
         const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
-        const employee = matchedWeek?.employees?.id(employeeId);
-        if (!employee) {
-          failed.push({ employeeId, message: "Employee not found" });
-          continue;
-        }
+	        const employee = matchedWeek?.employees?.id(employeeId);
+	        if (!employee) {
+	          failed.push({ employeeId, message: "Employee not found" });
+	          continue;
+	        }
 
-        // Base access check (same as single update)
-        if (user.accountType === "superAdmin" || user.accountType === "HR") {
-          // ok
-        } else if (user.department === "Transport") {
-          // ok (transport updates only; field-specific permission checks below)
-        } else {
-          const isTeamLeader = employee.teamLeader === user.username;
-          const isSameDepartment = employee.department === user.department;
-          if (!isTeamLeader && !isSameDepartment) {
-            failed.push({
-              employeeId,
-              message: "You can only update employees in your department or your own team members"
-            });
-            continue;
+          const baseDelegationForEmployee = specificDelegation || delegationContext.asAssignee;
+          const hasDelegatedDepartmentAccessById = specificDelegatedEmployeeIds
+            ? employee.userId && specificDelegatedEmployeeIds.has(String(employee.userId))
+            : canDelegatedAssigneeManageEmployee(baseDelegationForEmployee, employee.userId);
+          const hasDelegatedDepartmentAccessByTeamLeader =
+            (delegatedTeamLeaderName &&
+              String(employee.teamLeader || "").trim().toLowerCase() === delegatedTeamLeaderName) ||
+            delegatedTeamLeaderNames.has(String(employee.teamLeader || "").trim().toLowerCase());
+          const hasDelegatedDepartmentAccess =
+            hasDelegatedDepartmentAccessById || hasDelegatedDepartmentAccessByTeamLeader;
+
+	        // Base access check (same as single update)
+	        if (user.accountType === "superAdmin" || user.accountType === "HR") {
+	          // ok
+	        } else if (user.department === "Transport") {
+	          // ok (transport updates only; field-specific permission checks below)
+	        } else {
+          const normalizedEmployeeTeamLeader = String(employee.teamLeader || "").trim().toLowerCase();
+          const normalizedUsername = String(user.username || "").trim().toLowerCase();
+          const normalizedEmployeeDepartment = String(employee.department || "").trim().toLowerCase();
+          const normalizedUserDepartment = String(user.department || "").trim().toLowerCase();
+          const isTeamLeader = normalizedEmployeeTeamLeader === normalizedUsername;
+          const isSameDepartment = normalizedEmployeeDepartment === normalizedUserDepartment;
+	          if (!isTeamLeader && !isSameDepartment && !hasDelegatedDepartmentAccess) {
+	            failed.push({
+	              employeeId,
+	              message: "You can only update employees in your department or your own team members"
+	            });
+	            continue;
           }
         }
 
@@ -7350,12 +7534,13 @@ export const updateAttendanceBulk = async (req, res) => {
           }
         }
 
-        if (departmentStatus) {
-          const canUpdateDepartmentStatus =
-            user.accountType === "superAdmin" ||
-            user.accountType === "HR" ||
-            user.department === employee.department ||
-            employee.teamLeader === user.username;
+	        if (departmentStatus) {
+	          const canUpdateDepartmentStatus =
+	            user.accountType === "superAdmin" ||
+	            user.accountType === "HR" ||
+	            user.department === employee.department ||
+	            employee.teamLeader === user.username ||
+              hasDelegatedDepartmentAccess;
 
           if (!canUpdateDepartmentStatus) {
             failed.push({ employeeId, message: "You don't have permission to update department status for this employee" });
@@ -7378,11 +7563,12 @@ export const updateAttendanceBulk = async (req, res) => {
           const canUpdateTransportArrival =
             user.department === "Transport" || user.accountType === "superAdmin" || user.accountType === "HR";
 
-          const canUpdateDepartmentArrival =
-            user.accountType === "superAdmin" ||
-            user.accountType === "HR" ||
-            user.department === employee.department ||
-            employee.teamLeader === user.username;
+	          const canUpdateDepartmentArrival =
+	            user.accountType === "superAdmin" ||
+	            user.accountType === "HR" ||
+	            user.department === employee.department ||
+	            employee.teamLeader === user.username ||
+              hasDelegatedDepartmentAccess;
 
           if (!canUpdateTransportArrival && !canUpdateDepartmentArrival) {
             failed.push({ employeeId, message: "You don't have permission to update arrival time for this employee" });
@@ -7663,6 +7849,7 @@ export const updateAttendanceBulk = async (req, res) => {
 export const getFilteredRosterForUpdates = async (req, res) => {
   try {
     const { rosterId, weekNumber, date } = req.params;
+    const delegatedFrom = typeof req.query?.delegatedFrom === "string" ? req.query.delegatedFrom.trim() : "";
     const user = req.user;
     const rawPage = req.query?.page;
     const rawLimit = req.query?.limit;
@@ -7745,7 +7932,25 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 
     console.log(`Found week ${weekNumber} with ${selectedWeekEmployeesUnique.length} employees`);
 
+    const delegationContext = await getDelegationContextForDate({
+      userId: user._id,
+      actionDate: date,
+    });
+
+    if (delegationContext.asDelegator) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot update attendance during your active delegation period.",
+        isDelegated: true,
+      });
+    }
+
+    const delegatedEmployeeUserIds = new Set(
+      (delegationContext.asAssignee?.affectedEmployees || []).map((id) => String(id))
+    );
+
     let filteredEmployees = [];
+    let selectedTeamLeaderLabel = user.username;
 
     // 👑 SUPERADMIN - sees all employees (filter out nulls)
     if (user.accountType === "superAdmin" || user.accountType === "HR") {
@@ -7759,15 +7964,58 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       console.log(`🚌 Transport: Found ${filteredEmployees.length} employees`);
     }
     
-    // 👥 TEAM LEADERS - see only their team
+    // 👥 TEAM LEADERS - see only their team (or delegated team in delegated mode)
     else if (user.accountType === "employee") {
       console.log(`👥 Team Leader check: ${user.username}`);
-      
-      filteredEmployees = selectedWeekEmployeesUnique.filter(emp => {
-        if (!emp) return false;
-        return emp.teamLeader === user.username;
-      });
-      
+
+      if (delegatedFrom) {
+        const actionDate = new Date(date);
+        actionDate.setHours(0, 0, 0, 0);
+        const actionDayEnd = new Date(actionDate);
+        actionDayEnd.setHours(23, 59, 59, 999);
+
+        const specificDelegation = await Delegation.findOne({
+          assignee: user._id,
+          delegator: delegatedFrom,
+          status: "active",
+          startDate: { $lte: actionDayEnd },
+          endDate: { $gte: actionDate },
+        })
+          .populate("delegator", "username")
+          .lean();
+
+        if (!specificDelegation) {
+          return res.status(403).json({
+            success: false,
+            message: "No active delegation found for selected team leader and date.",
+          });
+        }
+
+        const delegatedTeamLeaderName = String(specificDelegation?.delegator?.username || "")
+          .trim()
+          .toLowerCase();
+        selectedTeamLeaderLabel = specificDelegation?.delegator?.username || user.username;
+        const specificDelegatedEmployeeIds = new Set(
+          (specificDelegation?.affectedEmployees || []).map((id) => String(id))
+        );
+
+        filteredEmployees = selectedWeekEmployeesUnique.filter((emp) => {
+          if (!emp) return false;
+          const isDelegatedEmployee = emp.userId && specificDelegatedEmployeeIds.has(String(emp.userId));
+          const matchesDelegatedTeamLeader =
+            delegatedTeamLeaderName &&
+            String(emp.teamLeader || "").trim().toLowerCase() === delegatedTeamLeaderName;
+          return isDelegatedEmployee || matchesDelegatedTeamLeader;
+        });
+      } else {
+        filteredEmployees = selectedWeekEmployeesUnique.filter((emp) => {
+          if (!emp) return false;
+          const isOwnTeamLeader = emp.teamLeader === user.username;
+          const isDelegatedEmployee = emp.userId && delegatedEmployeeUserIds.has(String(emp.userId));
+          return isOwnTeamLeader || isDelegatedEmployee;
+        });
+      }
+
       console.log(`👥 Team Leader ${user.username}: Found ${filteredEmployees.length} employees`);
     }
     
@@ -7926,7 +8174,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 	      success: true,
 	      message: resolvedByDate
 	        ? `Employees for updates (resolved week by date: ${date})`
-	        : `Employees for updates (Team Leader: ${user.username})`,
+	        : `Employees for updates (Team Leader: ${selectedTeamLeaderLabel})`,
 		      data: {
 		        rosterId: roster._id,
 		        requestedDate: date,
@@ -7951,7 +8199,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 	        weeks: weeksForDropdown,
 	        summary: {
 	          totalEmployees: totalEmployees,
-	          teamLeader: user.username,
+	          teamLeader: selectedTeamLeaderLabel,
 	          departments: departments,
 	          currentUser: user.username,
 	          userDepartment: user.department,

@@ -35,3 +35,18 @@ export const authMiddleware = async (req, res, next) => {
     return res.status(403).json({ message: "Invalid or expired token" });
   }
 };
+
+export const checkRole = (allowedRoles = []) => {
+  return (req, res, next) => {
+    const userRole = req.user?.accountType;
+    if (!userRole) {
+      return res.status(401).json({ message: "Unauthorized: User role not found" });
+    }
+
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({ message: "Forbidden: You do not have access to this resource" });
+    }
+
+    next();
+  };
+};

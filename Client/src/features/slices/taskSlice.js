@@ -996,13 +996,13 @@ export const fetchDefaulters = createAsyncThunk(
       
       const token = getToken();
 
-      const query = new URLSearchParams({
-        startDate: filters.startDate || "",
-        endDate: filters.endDate || "",
-        shift: filters.shift || "",
-        department: filters.department || "",
-        employeeId: filters.employee || "",
-      }).toString();
+      const params = new URLSearchParams();
+      if (filters.startDate) params.set("startDate", filters.startDate);
+      if (filters.endDate) params.set("endDate", filters.endDate);
+      if (filters.shift) params.set("shift", filters.shift);
+      if (filters.department) params.set("department", filters.department);
+      if (filters.employee) params.set("employeeId", filters.employee);
+      const query = params.toString();
 
       const res = await axios.get(`${API_URL}/defaulter?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -1068,12 +1068,12 @@ export const fetchDefaultList = createAsyncThunk(
 );
 export const updateTaskStatus = createAsyncThunk(
   "tasks/updateTaskStatus",
-  async ({ id, status }, thunkAPI) => {
+  async ({ id, status, actingForUserId }, thunkAPI) => {
     try {
       const token = getToken();
       const res = await axios.put(
         `${API_URL}/status/${id}`,
-        { status },
+        { status, actingForUserId },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
