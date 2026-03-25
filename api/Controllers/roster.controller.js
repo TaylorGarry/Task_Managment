@@ -4220,18 +4220,13 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
               daily = employee.dailyStatus[employee.dailyStatus.length - 1];
             }
 
-            const incomingStatus =
-              newDay?.departmentStatus ||
-              newDay?.transportStatus ||
-              newDay?.status;
-
+            // Bulk roster edit should only affect roster daily `status`.
+            // It must not overwrite attendance statuses (`departmentStatus`/`transportStatus`)
+            // unless those fields are explicitly part of an attendance API.
+            const incomingStatus = newDay?.status;
             if (incomingStatus === undefined) return;
 
-            const previousStatus =
-              daily?.status ||
-              daily?.departmentStatus ||
-              daily?.transportStatus ||
-              "";
+            const previousStatus = daily?.status || "";
 
             if (previousStatus !== incomingStatus) {
               changes.push({
@@ -4240,14 +4235,7 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
                 newValue: incomingStatus,
               });
 
-              // Write to schema-backed fields so it persists.
               daily.status = incomingStatus;
-              daily.departmentStatus = incomingStatus;
-              daily.transportStatus = incomingStatus;
-              daily.departmentStatusUpdatedBy = user._id;
-              daily.departmentStatusUpdatedAt = new Date();
-              daily.transportStatusUpdatedBy = user._id;
-              daily.transportStatusUpdatedAt = new Date();
             }
           });
 
@@ -7276,6 +7264,15 @@ export const updateAttendanceBulk = async (req, res) => {
       return res.status(400).json({
         success: false,
         message: `Invalid department status. Must be one of: ${validStatuses.join(", ")}`
+      });
+    }
+
+    // Department users must provide arrival time when marking department status as Present.
+    const isDepartmentUser = user?.accountType === "employee" && user?.department !== "Transport";
+    if (isDepartmentUser && departmentStatus === "P" && !arrivalTime) {
+      return res.status(400).json({
+        success: false,
+        message: "Arrival time is required when Department Status is P."
       });
     }
 
