@@ -427,6 +427,7 @@ import SuperAdminTransportView from "./Roster/SuperAdminTransportView.jsx";
 import AttendanceSnapshot from "./Roster/AttendanceSnapshot.jsx";
 import DelegationPage from "./pages/DelegationPage.jsx";
 import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
+import LeaveManagement from "./pages/LeaveManagement.jsx";
 
 const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
 
@@ -522,12 +523,27 @@ const AttendanceSnapshotRoute = ({ children }) => {
 function App() {
   const { user } = useSelector((state) => state.auth);
   const location = useLocation();
+  const isAdminLeavePath = location.pathname === "/admin/leave-management";
+
+  if (isAdminLeavePath) {
+    return (
+      <div className="theme-crm">
+        <ToastContainer position="top-right" autoClose={3000} />
+        <ProtectedRoute adminOnly={true}>
+          <>
+            <AdminNavbar showOutlet={false} />
+            <LeaveManagement embeddedAdmin={true} />
+          </>
+        </ProtectedRoute>
+      </div>
+    );
+  }
 
   return (
-    <>
+    <div className="theme-crm">
       <ToastContainer position="top-right" autoClose={3000} />
 
-      <Routes location={location} key={`${location.pathname}${location.search}${location.hash}`}>
+      <Routes>
         <Route
           path="/signup"
           element={
@@ -636,9 +652,9 @@ function App() {
           <Route path="manage-employee" element={<ManageEmployee />} />
           <Route path="adminDashboard" element={<AdminDashboard />} />
           <Route path="roster" element={<RosterForm />} />
-          <Route path="admintask" element={<AdminTask />} />
-          <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
-          <Route path="chat" element={<ChatUI />} />
+	          <Route path="admintask" element={<AdminTask />} />
+	          <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
+	          <Route path="chat" element={<ChatUI />} />
           
           {/* ✅ MOVED: Delegation route inside admin parent */}
           <Route 
@@ -650,16 +666,23 @@ function App() {
           <Route path="delegation" element={<Navigate to="delegations" replace />} />
           
           <Route index element={<Navigate to="tasks" replace />} />
-        </Route>
-
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <EmployeeDashboard />
-            </ProtectedRoute>
-          }
-        />
+	        </Route>
+		        <Route
+		          path="/dashboard"
+		          element={
+		            <ProtectedRoute>
+		              <EmployeeDashboard />
+	            </ProtectedRoute>
+	          }
+	        />
+	        <Route
+	          path="/leave-management"
+	          element={
+	            <ProtectedRoute>
+	              <LeaveManagement />
+	            </ProtectedRoute>
+	          }
+	        />
 
         <Route
           path="/AllTasks"
@@ -682,7 +705,7 @@ function App() {
           }
         />
       </Routes>
-    </>
+    </div>
   );
 }
 

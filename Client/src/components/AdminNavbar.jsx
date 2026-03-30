@@ -1042,9 +1042,9 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 </div>
               )}
 
-             {canAccessDelegation && (
-  <Link
-    to="/admin/delegations"
+	             {canAccessDelegation && (
+	  <Link
+	    to="/admin/delegations"
     className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer ${
       location.pathname === "/admin/delegations"
         ? "bg-cyan-100 text-cyan-800 border border-cyan-200"
@@ -1053,8 +1053,18 @@ const AdminNavbar = ({ showOutlet = true }) => {
   >
     <FiUsers className="w-4 h-4" />
     Delegation
-  </Link>
-)}
+	  </Link>
+	)}
+	              <Link
+	                to="/admin/leave-management"
+	                className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer border ${
+	                  location.pathname === "/admin/leave-management"
+	                    ? "bg-sky-100 text-sky-800 border-sky-200"
+	                    : "border-sky-200 text-sky-700 hover:text-sky-800 hover:bg-sky-50"
+	                }`}
+	              >
+	                Leave
+	              </Link>
 
               {/* 🔥 REMOVED: Individual Attendance Snapshots and Upload Roster buttons from here */}
 
@@ -1235,16 +1245,25 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 </div>
               )}
 
-             {canAccessDelegation && (
-  <Link
-    to="/admin/delegations"
+	             {canAccessDelegation && (
+	  <Link
+	    to="/admin/delegations"
     className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 px-3 py-2 rounded-xl text-cyan-700 font-medium hover:bg-cyan-100 transition-all w-full text-left"
     onClick={() => setShowMobileMenu(false)}
   >
     <FiUsers className="w-4 h-4" />
     Delegation
-  </Link>
-)}
+	  </Link>
+	)}
+	              <button
+	                onClick={() => {
+	                  navigate("/admin/leave-management");
+	                  setShowMobileMenu(false);
+	                }}
+	                className="flex items-center gap-2 bg-sky-50 border border-sky-200 px-3 py-2 rounded-xl text-sky-700 font-medium hover:bg-sky-100 transition-all w-full text-left"
+	              >
+	                Leave Management
+	              </button>
 
               {/* 🔥 REMOVED: Individual Attendance Snapshots and Upload Roster buttons from mobile menu */}
 

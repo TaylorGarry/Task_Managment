@@ -6294,6 +6294,15 @@ export const updateArrivalTime = async (req, res) => {
     }
 
     const employee = week.employees.id(employeeId);
+    const isEmployeeUpdatingSelf =
+      (String(employee?.userId || "") === String(user._id) ||
+        String(employee?.name || "").trim().toLowerCase() === String(user?.username || "").trim().toLowerCase());
+    if (isEmployeeUpdatingSelf) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot edit your own attendance.",
+      });
+    }
     const delegationContext = await getDelegationContextForDate({
       userId: user._id,
       actionDate: date,
@@ -6782,6 +6791,15 @@ export const updateAttendance = async (req, res) => {
 	    }
 
     const employee = week.employees.id(employeeId);
+    const isEmployeeUpdatingSelf =
+      (String(employee?.userId || "") === String(user._id) ||
+        String(employee?.name || "").trim().toLowerCase() === String(user?.username || "").trim().toLowerCase());
+    if (isEmployeeUpdatingSelf) {
+      return res.status(403).json({
+        success: false,
+        message: "You cannot edit your own attendance.",
+      });
+    }
     const delegationContext = await getDelegationContextForDate({
       userId: user._id,
       actionDate: date,
@@ -6976,7 +6994,16 @@ export const updateAttendance = async (req, res) => {
 
     // 🔥 UPDATE TRANSPORT STATUS
 	    // Transport can update transportStatus, HR/SuperAdmin can update both
-	    if (transportStatus && (user.department === "Transport" || user.accountType === "superAdmin" || user.accountType === "HR")) {
+	    if (transportStatus) {
+      const canUpdateTransportStatus =
+        user.department === "Transport" || user.accountType === "superAdmin" || user.accountType === "HR";
+      if (!canUpdateTransportStatus) {
+        return res.status(403).json({
+          success: false,
+          message: "You don't have permission to update transport status for this employee"
+        });
+      }
+
 	      if (daily.transportStatus !== transportStatus) {
 	        changes.push({
 	          field: `transportStatus (${date})`,
@@ -7416,14 +7443,25 @@ export const updateAttendanceBulk = async (req, res) => {
 	    const results = [];
 	    const failed = [];
 
-    for (const employeeId of employeeIds) {
-      try {
-        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
-	        const employee = matchedWeek?.employees?.id(employeeId);
-	        if (!employee) {
-	          failed.push({ employeeId, message: "Employee not found" });
-	          continue;
-	        }
+	    for (const employeeId of employeeIds) {
+	      try {
+	        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
+		        const employee = matchedWeek?.employees?.id(employeeId);
+		        if (!employee) {
+		          failed.push({ employeeId, message: "Employee not found" });
+		          continue;
+		        }
+
+          const isEmployeeUpdatingSelf =
+            (String(employee?.userId || "") === String(user._id) ||
+              String(employee?.name || "").trim().toLowerCase() === String(user?.username || "").trim().toLowerCase());
+          if (isEmployeeUpdatingSelf) {
+            failed.push({
+              employeeId,
+              message: "You cannot edit your own attendance.",
+            });
+            continue;
+          }
 
           const baseDelegationForEmployee = specificDelegation || delegationContext.asAssignee;
           const hasDelegatedDepartmentAccessById = specificDelegatedEmployeeIds
@@ -7948,6 +7986,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 
     let filteredEmployees = [];
     let selectedTeamLeaderLabel = user.username;
+    let managedTeamCount = 0;
 
     // 👑 SUPERADMIN - sees all employees (filter out nulls)
     if (user.accountType === "superAdmin" || user.accountType === "HR") {
@@ -7962,8 +8001,22 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     }
     
     // 👥 TEAM LEADERS - see only their team (or delegated team in delegated mode)
-    else if (user.accountType === "employee") {
+    else if (user.accountType === "employee" || Boolean(user.isTeamLeader)) {
       console.log(`👥 Team Leader check: ${user.username}`);
+      const normalizedUsername = String(user.username || "").trim().toLowerCase();
+      const isSelfEmployee = (emp) => {
+        if (!emp) return false;
+        const sameUserId = emp.userId && String(emp.userId) === String(user._id);
+        const sameNameAsUsername =
+          String(emp.name || "").trim().toLowerCase() === normalizedUsername;
+        return sameUserId || sameNameAsUsername;
+      };
+
+      const managedEmployees = selectedWeekEmployeesUnique.filter((emp) => {
+        if (!emp) return false;
+        return String(emp.teamLeader || "").trim().toLowerCase() === normalizedUsername;
+      });
+      managedTeamCount = managedEmployees.filter((emp) => !isSelfEmployee(emp)).length;
 
       if (delegatedFrom) {
         const actionDate = new Date(date);
@@ -8004,12 +8057,18 @@ export const getFilteredRosterForUpdates = async (req, res) => {
             String(emp.teamLeader || "").trim().toLowerCase() === delegatedTeamLeaderName;
           return isDelegatedEmployee || matchesDelegatedTeamLeader;
         });
-      } else {
+      } else if (managedTeamCount > 0 || delegatedEmployeeUserIds.size > 0) {
         filteredEmployees = selectedWeekEmployeesUnique.filter((emp) => {
           if (!emp) return false;
-          const isOwnTeamLeader = emp.teamLeader === user.username;
-          const isDelegatedEmployee = emp.userId && delegatedEmployeeUserIds.has(String(emp.userId));
-          return isOwnTeamLeader || isDelegatedEmployee;
+          const isOwnTeamLeader =
+            String(emp.teamLeader || "").trim().toLowerCase() === normalizedUsername;
+          const isDelegatedEmployee =
+            emp.userId && delegatedEmployeeUserIds.has(String(emp.userId));
+          return isOwnTeamLeader || isDelegatedEmployee || isSelfEmployee(emp);
+        });
+      } else {
+        filteredEmployees = selectedWeekEmployeesUnique.filter((emp) => {
+          return isSelfEmployee(emp);
         });
       }
 
@@ -8194,17 +8253,19 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 	          returnedEmployees: formattedRosterEntries.length
 	        },
 	        weeks: weeksForDropdown,
-	        summary: {
-	          totalEmployees: totalEmployees,
-	          teamLeader: selectedTeamLeaderLabel,
-	          departments: departments,
-	          currentUser: user.username,
-	          userDepartment: user.department,
-	          teamSize: totalEmployees,
-	          hasTeam: totalEmployees > 0
-	        }
-      }
-    };
+		        summary: {
+		          totalEmployees: totalEmployees,
+		          teamLeader: selectedTeamLeaderLabel,
+		          departments: departments,
+		          currentUser: user.username,
+		          userDepartment: user.department,
+		          teamSize: totalEmployees,
+		          hasTeam: totalEmployees > 0,
+              managedTeamCount,
+              hasManagedTeam: managedTeamCount > 0
+		        }
+	      }
+	    };
     console.log("📤 Sending response with", formattedRosterEntries.length, "employees");
     if (formattedRosterEntries.length > 0) {
       console.log("📤 Sample employee dailyStatus:", formattedRosterEntries[0].dailyStatus[0]);
@@ -8455,21 +8516,40 @@ export const getDepartmentWiseAttendance = async (req, res) => {
     
     // 👥 DEPARTMENT USERS - see only their department
     else {
+      const normalizedUsername = String(user.username || "").trim().toLowerCase();
+      const normalizedUserId = String(user._id || user.id || "").trim();
+
       // Pehle sirf apne department ke employees filter karo
       filteredEmployees = (week.employees || []).filter(emp => {
         if (!emp) return false;
         return emp.department === user.department;
       });
-      
-      // Check if user is team leader - then filter by team
-      const isTeamLeader = filteredEmployees.some(emp => emp.teamLeader === user.username);
-      if (isTeamLeader) {
-        filteredEmployees = filteredEmployees.filter(emp => 
-          emp.teamLeader === user.username || emp.username === user.username
+
+      const isSelfEmployee = (emp) => {
+        if (!emp) return false;
+        const empUserId = String(emp.userId || emp.userID || "").trim();
+        const empUsername = String(emp.username || "").trim().toLowerCase();
+        const empName = String(emp.name || "").trim().toLowerCase();
+        return Boolean(
+          (normalizedUserId && empUserId && empUserId === normalizedUserId) ||
+          (normalizedUsername && empUsername && empUsername === normalizedUsername) ||
+          (normalizedUsername && empName && empName === normalizedUsername)
         );
-        console.log(`👥 Team Leader ${user.username}: Showing only team members`);
+      };
+
+      // Check if user is team leader - then filter by team
+      const isTeamLeader = filteredEmployees.some(
+        (emp) => String(emp.teamLeader || "").trim().toLowerCase() === normalizedUsername
+      );
+      if (isTeamLeader) {
+        filteredEmployees = filteredEmployees.filter(
+          (emp) =>
+            String(emp.teamLeader || "").trim().toLowerCase() === normalizedUsername ||
+            isSelfEmployee(emp)
+        );
+        console.log(`Team Leader ${user.username}: Showing only team members`);
       } else {
-        console.log(`👥 Department User ${user.department}: Showing all department employees`);
+        console.log(`Department User ${user.department}: Showing all department employees`);
       }
     }
 

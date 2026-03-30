@@ -552,15 +552,22 @@ const Navbar = () => {
               )}
 
               {/* ✅ NEW: Attendance Snapshot Button - */}
-              {canAccessAttendanceSnapshot && (
-                <button
-                  onClick={() => navigate("/attendance-snapshot")}
-                  className="flex items-center gap-2 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-full text-purple-700 hover:bg-purple-100"
-                >
-                  <Camera className="w-4 h-4" />
-                  Attendance Snapshot
-                </button>
-              )}
+	              {canAccessAttendanceSnapshot && (
+	                <button
+	                  onClick={() => navigate("/attendance-snapshot")}
+	                  className="flex items-center gap-2 bg-purple-50 border border-purple-200 px-3 py-1.5 rounded-full text-purple-700 hover:bg-purple-100"
+	                >
+	                  <Camera className="w-4 h-4" />
+	                  Attendance Snapshot
+	                </button>
+	              )}
+	              <button
+	                onClick={() => navigate("/leave-management")}
+	                className="flex items-center gap-2 bg-sky-50 border border-sky-200 px-3 py-1.5 rounded-full text-sky-700 hover:bg-sky-100"
+	              >
+	                <Clock className="w-4 h-4" />
+	                Leave Management
+	              </button>
 
               {/* Profile */}
               <div className="relative">
@@ -651,17 +658,26 @@ const Navbar = () => {
               )}
 
               {/* Attendance Snapshot Button - */}
-              {canAccessAttendanceSnapshot && (
-                <button
-                  onClick={() => {
-                    navigate("/attendance-snapshot");
-                    setIsMenuOpen(false);
-                  }}
-                  className="mx-3 px-3 py-2 bg-purple-50 text-purple-700 rounded-full"
-                >
-                  Attendance Snapshot
-                </button>
-              )}
+	              {canAccessAttendanceSnapshot && (
+	                <button
+	                  onClick={() => {
+	                    navigate("/attendance-snapshot");
+	                    setIsMenuOpen(false);
+	                  }}
+	                  className="mx-3 px-3 py-2 bg-purple-50 text-purple-700 rounded-full"
+	                >
+	                  Attendance Snapshot
+	                </button>
+	              )}
+	              <button
+	                onClick={() => {
+	                  navigate("/leave-management");
+	                  setIsMenuOpen(false);
+	                }}
+	                className="mx-3 px-3 py-2 bg-sky-50 text-sky-700 rounded-full"
+	              >
+	                Leave Management
+	              </button>
 
               <button
                 onClick={() => {

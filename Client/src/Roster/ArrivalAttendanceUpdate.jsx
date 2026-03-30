@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useLocation } from "react-router-dom";
 import {
   updateArrivalTime,
   updateAttendance,
@@ -46,6 +47,31 @@ const toLocalDateKey = (value) => {
   if (!value) return null;
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
   return getLocalDateKey(new Date(value));
+};
+
+const toUtcDateKey = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toISOString().slice(0, 10);
+};
+
+const toIstDateKey = (value) => {
+  if (!value) return null;
+  if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : null;
 };
  
 const isValidTimeFormat = (time) => {
@@ -160,14 +186,13 @@ const getStatusColor = (status) => {
 
 const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const dispatch = useDispatch();
+  const location = useLocation();
   const currentUser = getCurrentUser();
   const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
   const { updateEmployeesData, loading } = useSelector((state) => state.roster);
   
-  // Use ref to track if initial fetch has been done
   const initialFetchDone = useRef(false);
   
-  // State
   const [selectedDate, setSelectedDate] = useState(() => getLocalDateKey());
   const [selectedWeek, setSelectedWeek] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
@@ -192,12 +217,11 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [punchTimeErrors, setPunchTimeErrors] = useState({});
 
-  // If no rosterId is provided, show message
   if (!rosterId) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div className="bg-gray-100 overflow-x-hidden">
         {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
-        <div className="container mx-auto px-4 py-8">
+        <div className="container mx-auto w-full max-w-full px-4 py-8">
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
             <h3 className="text-xl font-medium text-gray-900">No Roster Selected</h3>
@@ -216,7 +240,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     );
   }
 
-  // Determine view type based on user
   useEffect(() => {
     if (currentUser) {
       setViewType({
@@ -225,12 +248,20 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         isTransport: currentUser.department === "Transport",
         isEmployee: currentUser.accountType === "employee",
         username: currentUser.username,
-        department: currentUser.department
+        department: currentUser.department,
+        designation: currentUser.designation
       });
     }
   }, [currentUser]);
 
-  // Initial fetch when component mounts
+  useEffect(() => {
+    initialFetchDone.current = false;
+    setSelectedWeek("");
+    setCurrentPage(1);
+    setUpdates({});
+    setSelectedEmployeeIds([]);
+  }, [rosterId, delegatedFromUserId]);
+
   useEffect(() => {
     if (rosterId && !initialFetchDone.current) {
       setSelectedWeek("1");
@@ -238,30 +269,9 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     }
   }, [rosterId]);
 
-  // Fetch employees when rosterId, week, or date changes
   useEffect(() => {
     if (rosterId && selectedWeek && selectedDate) {
       const weekNumber = parseInt(selectedWeek);
-      const currentData = updateEmployeesData?.data;
-      const currentPagination = currentData?.pagination;
-      const currentLimit =
-        currentPagination?.limit ?? currentPagination?.pageSize ?? currentPagination?.perPage;
-      const currentDateKeyRaw = currentData?.requestedDate ?? currentData?.date ?? null;
-      const currentDateKey = currentDateKeyRaw ? toLocalDateKey(currentDateKeyRaw) : null;
-      const requestedDateKey = toLocalDateKey(selectedDate);
-
-      const isSameRequest =
-        currentData &&
-        String(currentData.rosterId) === String(rosterId) &&
-        String(currentData.weekNumber) === String(weekNumber) &&
-        (!currentDateKey || currentDateKey === requestedDateKey) &&
-        String(currentData.q || "") === String(appliedSearch || "") &&
-        String(currentData.searchBy || "all") === String(searchBy || "all") &&
-        (currentPagination?.page == null || Number(currentPagination.page) === Number(currentPage)) &&
-        (currentLimit == null || Number(currentLimit) === Number(pageSize));
-
-      if (isSameRequest) return;
-
       dispatch(getEmployeesForUpdates({
         rosterId,
         weekNumber,
@@ -275,7 +285,22 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     }
   }, [dispatch, rosterId, selectedWeek, selectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
 
-  // Process the response data
+  useEffect(() => {
+    if (!rosterId || !selectedWeek || !selectedDate) return;
+    if (!location.pathname.includes("/attendance-update")) return;
+
+    dispatch(getEmployeesForUpdates({
+      rosterId,
+      weekNumber: parseInt(selectedWeek),
+      date: selectedDate,
+      page: currentPage,
+      limit: pageSize,
+      q: appliedSearch,
+      searchBy,
+      delegatedFrom: delegatedFromUserId,
+    }));
+  }, [location.key]); // Re-entering this route should refetch without manual refresh
+
   useEffect(() => {
     if (updateEmployeesData?.data) {
       const responseData = updateEmployeesData.data;
@@ -332,7 +357,13 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
   useEffect(() => {
     const currentIds = new Set(rosterEntries.map((e) => String(e._id)));
-    setSelectedEmployeeIds((prev) => prev.filter((id) => currentIds.has(String(id))));
+    setSelectedEmployeeIds((prev) =>
+      prev.filter((id) => {
+        if (!currentIds.has(String(id))) return false;
+        const row = rosterEntries.find((emp) => String(emp._id) === String(id));
+        return row ? !isOwnRosterRow(row) : false;
+      })
+    );
   }, [rosterEntries]);
 
   const clearEmployeeUpdateField = (employeeId, field) => {
@@ -373,28 +404,46 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       return null;
     }
 
-    // Parse the selected date in IST timezone
-    const selectedDateStr = selectedDate; // This is in YYYY-MM-DD format from the input
-    const selectedDateObj = new Date(selectedDateStr + 'T00:00:00+05:30'); // Force IST midnight
-    
-    const match = employee.dailyStatus.find(d => {
+    const selectedDateKey = toLocalDateKey(selectedDate) || toUtcDateKey(selectedDate) || toIstDateKey(selectedDate);
+    if (!selectedDateKey) return null;
+
+    const matches = employee.dailyStatus.filter((d) => {
       if (!d?.date) return false;
-      
-      // Parse the stored date in IST timezone
-      const dDateStr = new Date(d.date).toISOString().split('T')[0];
-      return dDateStr === selectedDateStr;
+      const localKey = toLocalDateKey(d.date);
+      const utcKey = toUtcDateKey(d.date);
+      const istKey = toIstDateKey(d.date);
+      return (
+        localKey === selectedDateKey ||
+        utcKey === selectedDateKey ||
+        istKey === selectedDateKey
+      );
     });
-    
-    return match;
+
+    if (!matches.length) return null;
+
+    const scored = matches.map((d) => ({
+      item: d,
+      score: [d?.status, d?.departmentStatus, d?.transportStatus].filter((v) => Boolean(v)).length
+    }));
+    scored.sort((a, b) => b.score - a.score);
+    return scored[0].item;
   };
 
   const isDarkTable = tableTheme === "dark";
 
-  const canUpdateTransport = (viewType.isTransport || viewType.isSuperAdmin || viewType.isHR) && weekInfo?.canEdit !== false;
-  const canUpdateDepartment = (!viewType.isTransport) && (viewType.isSuperAdmin || viewType.isHR || viewType.isEmployee) && weekInfo?.canEdit !== false;
-  // HR and SuperAdmin can update punch times
-  const canUpdatePunchTimes = (viewType.isHR || viewType.isSuperAdmin) && weekInfo?.canEdit !== false;
   const isEmployeeUser = viewType.isEmployee === true;
+  const managedTeamCount = Number(updateEmployeesData?.data?.summary?.managedTeamCount || 0);
+  const hasManagedTeam = managedTeamCount > 0;
+  const canTeamLeaderManageTeam = hasManagedTeam;
+  const canUpdateTransport =
+    (viewType.isSuperAdmin || viewType.isHR || (!isEmployeeUser && viewType.isTransport)) &&
+    weekInfo?.canEdit !== false;
+  const canUpdateDepartment =
+    (viewType.isSuperAdmin || viewType.isHR || canTeamLeaderManageTeam) &&
+    weekInfo?.canEdit !== false;
+  const canUpdatePunchTimes = (viewType.isHR || viewType.isSuperAdmin) && weekInfo?.canEdit !== false;
+  const isEmployeeReadOnly = isEmployeeUser && !hasManagedTeam;
+  const canBulkUpdate = canUpdateTransport || canUpdateDepartment || canUpdatePunchTimes;
   const isEmployeeTransportUser = isEmployeeUser && viewType.department === "Transport";
   const isEmployeeNonTransportUser = isEmployeeUser && viewType.department !== "Transport";
   const canViewPunchColumns = !isEmployeeUser;
@@ -404,14 +453,39 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const canViewTransportArrival = !isEmployeeNonTransportUser;
   const canViewDepartmentStatus = !isEmployeeTransportUser;
   const canViewDepartmentArrival = !isEmployeeTransportUser;
+  const isOwnRosterRow = (employee) => {
+    if (!employee) return false;
+    const currentUserId = String(currentUser?._id || currentUser?.id || "").trim();
+    const sameUserId =
+      currentUserId &&
+      employee.userId &&
+      String(employee.userId).trim() === currentUserId;
+    const currentUsername = String(currentUser?.username || "").trim().toLowerCase();
+    const employeeUsername = String(employee.username || "").trim().toLowerCase();
+    const sameName =
+      currentUsername &&
+      String(employee.name || "").trim().toLowerCase() === currentUsername;
+    const sameUsername = currentUsername && employeeUsername === currentUsername;
+    return Boolean(sameUserId || sameName || sameUsername);
+  };
+  const selectableEntries = rosterEntries.filter((employee) => !isOwnRosterRow(employee));
 
-  const isAllSelected = rosterEntries.length > 0 && selectedEmployeeIds.length === rosterEntries.length;
+  const isAllSelected =
+    selectableEntries.length > 0 &&
+    selectedEmployeeIds.length > 0 &&
+    selectedEmployeeIds.length === selectableEntries.length;
+  const selectedEditableCount = selectedEmployeeIds.filter((id) => {
+    const row = rosterEntries.find((emp) => String(emp._id) === String(id));
+    return row && !isOwnRosterRow(row);
+  }).length;
 
   const handleToggleSelectAll = (checked) => {
-    setSelectedEmployeeIds(checked ? rosterEntries.map((e) => e._id) : []);
+    if (!canBulkUpdate) return;
+    setSelectedEmployeeIds(checked ? selectableEntries.map((e) => e._id) : []);
   };
 
   const handleToggleSelectOne = (employeeId, checked) => {
+    if (!canBulkUpdate) return;
     setSelectedEmployeeIds((prev) => {
       const id = String(employeeId);
       if (checked) return Array.from(new Set([...prev.map(String), id]));
@@ -420,12 +494,21 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   };
 
   const handleApplyBulkUpdate = async () => {
+    if (!canBulkUpdate) {
+      toast.error("Read-only view for your role.");
+      return;
+    }
     if (!selectedWeek || !selectedDate) {
       toast.error("Please select week and date first.");
       return;
     }
 
-    if (selectedEmployeeIds.length === 0) {
+    const filteredEmployeeIds = selectedEmployeeIds.filter((id) => {
+      const row = rosterEntries.find((emp) => String(emp._id) === String(id));
+      return row && !isOwnRosterRow(row);
+    });
+
+    if (filteredEmployeeIds.length === 0) {
       toast.error("Please select at least one employee.");
       return;
     }
@@ -433,7 +516,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     const payload = {
       rosterId,
       weekNumber: parseInt(selectedWeek),
-      employeeIds: selectedEmployeeIds,
+      employeeIds: filteredEmployeeIds,
       date: selectedDate,
       delegatedFrom: delegatedFromUserId || undefined,
     };
@@ -457,6 +540,11 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
     if (!payload.transportStatus && !payload.departmentStatus && !payload.arrivalTime && !payload.punchIn && !payload.punchOut) {
       toast.error("Select at least one bulk update value (status, arrival time, or punch times).");
+      return;
+    }
+
+    if (isEmployeeNonTransportUser && payload.departmentStatus === "P" && !payload.arrivalTime) {
+      toast.error("Department arrival time is required when Department Status is P.");
       return;
     }
 
@@ -498,7 +586,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         punchOut: ""
       });
     } catch {
-      // thunk toasts on failure
     } finally {
       setBulkUpdating(false);
     }
@@ -516,10 +603,10 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="bg-gray-100 overflow-x-hidden">
       {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto w-full max-w-full px-4 py-8">
         {/* Header */}
         <div className="mb-6 bg-white rounded-lg shadow p-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -532,7 +619,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               </p>
             </div>
             
-            {/* User Role Badge */}
             <div className={`px-4 py-2 rounded-lg ${
               viewType.isSuperAdmin ? "bg-purple-100 text-purple-800" :
               viewType.isHR ? "bg-amber-100 text-amber-800" :
@@ -549,7 +635,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             </div>
           </div>
 
-          {/* Week Info Banner */}
           {weekInfo && (
             <div className={`mt-4 p-3 rounded-lg ${
               weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
@@ -561,7 +646,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             </div>
           )}
 
-          {/* Filters */}
           <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -650,6 +734,11 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               <p className="text-sm text-gray-600 mt-1">
                 <span className="font-semibold">Team Leader:</span> {currentUser.username}
               </p>
+              {isEmployeeReadOnly && (
+                <p className="text-xs text-amber-700 mt-1">
+                  Read-only: You can only view your own roster and attendance.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -669,8 +758,13 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             <div className="bg-white rounded-lg shadow p-4">
               <div className="flex flex-wrap items-end gap-4">
                 <div className="text-sm text-gray-700">
-                  <span className="font-semibold">Selected:</span> {selectedEmployeeIds.length}
+                  <span className="font-semibold">Selected:</span> {selectedEditableCount}
                 </div>
+                {!canBulkUpdate && (
+                  <div className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                    View only mode
+                  </div>
+                )}
 
                 {canUpdatePunchTimes && (
                   <>
@@ -766,52 +860,59 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       </span>
                     )}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedEmployeeIds([]);
-                      setBulkUpdate({ 
-                        transportStatus: "", 
-                        departmentStatus: "", 
-                        arrivalTime: "",
-                        punchIn: "",
-                        punchOut: ""
-                      });
-                    }}
-                    className="px-3 py-2 text-sm rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
-                    disabled={bulkUpdating}
-                  >
-                    Clear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleApplyBulkUpdate}
-                    className="px-4 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={bulkUpdating || selectedEmployeeIds.length === 0}
-                  >
-                    Apply to Selected
-                  </button>
+                  {canBulkUpdate && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedEmployeeIds([]);
+                          setBulkUpdate({
+                            transportStatus: "",
+                            departmentStatus: "",
+                            arrivalTime: "",
+                            punchIn: "",
+                            punchOut: ""
+                          });
+                        }}
+                        className="px-3 py-2 text-sm rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                        disabled={bulkUpdating}
+                      >
+                        Clear
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleApplyBulkUpdate}
+                        className="px-4 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        disabled={bulkUpdating || selectedEditableCount === 0}
+                      >
+                        Apply to Selected
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             </div>
 
             <div className={
               isDarkTable
-                ? "rounded-lg shadow border border-neutral-800 bg-neutral-900 text-neutral-100 overflow-auto max-h-[70vh]"
-                : "rounded-lg shadow border border-gray-200 bg-white text-gray-900 overflow-auto max-h-[70vh]"
+                ? "w-full max-w-full rounded-lg shadow border border-neutral-800 bg-neutral-900 text-neutral-100 overflow-x-auto overflow-y-auto max-h-[70vh]"
+                : "w-full max-w-full rounded-lg shadow border border-gray-200 bg-white text-gray-900 overflow-x-auto overflow-y-auto max-h-[70vh]"
             }>
               <table className={isDarkTable ? "min-w-full divide-y divide-neutral-800" : "min-w-full divide-y divide-gray-200"}>
                 <thead className={isDarkTable ? "bg-neutral-950 sticky top-0 z-10" : "bg-gray-50 sticky top-0 z-10"}>
                   <tr>
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>
-                      <input
-                        type="checkbox"
-                        checked={isAllSelected}
-                        onChange={(e) => handleToggleSelectAll(e.target.checked)}
-                        aria-label="Select all employees"
-                        className="h-4 w-4 accent-indigo-500"
-                      />
-                    </th>
+                    {canBulkUpdate && (
+                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>
+                        <input
+                          type="checkbox"
+                          checked={isAllSelected}
+                          onChange={(e) => handleToggleSelectAll(e.target.checked)}
+                          aria-label="Select all employees"
+                          className="h-4 w-4 accent-indigo-500"
+                          disabled={selectableEntries.length === 0}
+                        />
+                      </th>
+                    )}
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Employee</th>
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Department</th>
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport</th>
@@ -819,7 +920,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Team Leader</th>
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Shift</th>
                     
-                    {/* Punch In/Out Column Headers */}
                     {canViewPunchColumns && (
                       <>
                         <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Punch In</th>
@@ -830,7 +930,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Total Hours</th>
                     )}
                     
-                    {/* HR Attendance Column - Auto-calculated from punch hours */}
                     {canViewHrAttendance && (
                       <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>
                         HR Attendance
@@ -861,6 +960,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   {rosterEntries.map((employee) => {
                     const todayStatus = getTodayStatus(employee);
                     const isSelected = selectedEmployeeIds.some((id) => String(id) === String(employee._id));
+                    const isOwnRow = isOwnRosterRow(employee);
                     
                     const totalHours = todayStatus?.totalHours;
                     
@@ -875,15 +975,19 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                         key={employee._id}
                         className={`${isDarkTable ? "hover:bg-neutral-800/40" : "hover:bg-gray-50"} ${isSelected ? (isDarkTable ? "bg-indigo-500/10" : "bg-indigo-50") : ""}`}
                       >
-                        <td className="px-4 py-3">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={(e) => handleToggleSelectOne(employee._id, e.target.checked)}
-                            aria-label={`Select ${employee.name}`}
-                            className="h-4 w-4 accent-indigo-500"
-                          />
-                        </td>
+                        {canBulkUpdate && (
+                          <td className="px-4 py-3">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => handleToggleSelectOne(employee._id, e.target.checked)}
+                              aria-label={`Select ${employee.name}`}
+                              className="h-4 w-4 accent-indigo-500"
+                              disabled={isOwnRow}
+                              title={isOwnRow ? "You cannot edit your own attendance" : ""}
+                            />
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className={isDarkTable ? "font-medium text-neutral-100" : "font-medium text-gray-900"}>{employee.name}</div>
                         </td>
@@ -1114,6 +1218,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     </div>
   );
 };
+
 
 export default ArrivalAttendanceUpdate;
 
