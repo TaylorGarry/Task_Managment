@@ -1,8 +1,8 @@
-// store/slices/delegationSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+// const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 const API_URL = `${API_BASE_URL}/delegations`;
 
 const getToken = () => {
@@ -20,10 +20,6 @@ const getAuthConfig = () => {
 };
 
 const ensureArray = (value) => (Array.isArray(value) ? value : []);
-
-// ==================== Async Thunks ====================
-
-// Create a new delegation
 export const createDelegation = createAsyncThunk(
   'delegation/create',
   async (delegationData, { rejectWithValue }) => {

@@ -379,6 +379,7 @@ import chatRoutes from "./routes/chat.routes.js";
 import messageRoutes from "./routes/message.routes.js";
 import pushRoutes from "./routes/push.routes.js";
 import delegationRoutes from "./routes/delegation.routes.js";  // ← ADD THIS
+import leaveRoutes from "./routes/leave.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 
 dotenv.config();
@@ -475,10 +476,18 @@ app.use((req, res, next) => {
 
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
-    req.socket.remoteAddress;
+    req.socket?.remoteAddress ||
+    req.ip ||
+    "";
 
-  clientIp = clientIp.replace("::ffff:", "").toLowerCase();
+  clientIp = String(clientIp || "").replace("::ffff:", "").toLowerCase();
   if (clientIp.includes("%")) clientIp = clientIp.split("%")[0];
+  if (!clientIp) {
+    return res.status(403).json({
+      success: false,
+      message: "Access denied: Unable to detect client IP",
+    });
+  }
 
   if (req.user?.accountType === "admin" || req.user?.accountType === "superAdmin") return next();
 
@@ -628,6 +637,7 @@ app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/v1/push", pushRoutes);
 app.use("/api/v1/delegations", delegationRoutes);  // ← ADD THIS LINE
+app.use("/api/v1/leaves", leaveRoutes);
 
 
 app.get("/", (req, res) => {

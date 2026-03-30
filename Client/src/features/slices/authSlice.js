@@ -2,9 +2,13 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 
-// const API_URL = "http://localhost:4000/api/v1";
+const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const EMPLOYEE_SEARCH_THROTTLE_MS = 1200;
+
+const normalizeEmployeeSearch = (value = "") =>
+  String(value || "").trim().toLowerCase();
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -25,7 +29,7 @@ export const loginUser = createAsyncThunk(
       return { ...res.data.user, token: res.data.token };
     } catch (err) {
       return thunkAPI.rejectWithValue(
-        err.response?.data?.message || err.message
+        err.response?.data?.message || err.response?.data?.error || err.message
       );
     }
   }
@@ -46,7 +50,7 @@ export const signupUser = createAsyncThunk(
       return { user: res.data.user, createdByAdmin: true };
     } catch (err) {
       return thunkAPI.rejectWithValue(
-        err.response?.data?.message || err.message
+        err.response?.data?.message || err.response?.data?.error || err.message
       );
     }
   }
@@ -79,11 +83,14 @@ export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
 
 export const fetchEmployees = createAsyncThunk(
   "auth/fetchEmployees",
-  async (_, thunkAPI) => {
+  async ({ search = "", force = false } = {}, thunkAPI) => {
     const state = thunkAPI.getState();
+    const normalizedSearch = normalizeEmployeeSearch(search);
+    const now = Date.now();
 
-    if (state.auth.employeesLoaded) {
-      return state.auth.employees;
+    const cached = state.auth.employeeSearchCache?.[normalizedSearch];
+    if (!force && cached && now - cached.fetchedAt < EMPLOYEE_SEARCH_THROTTLE_MS) {
+      return cached.data;
     }
 
     try {
@@ -91,10 +98,150 @@ export const fetchEmployees = createAsyncThunk(
       if (!token) throw new Error("No token found");
 
       const res = await axios.get(`${API_URL}/employees`, {
+        params: normalizedSearch ? { name: search.trim() } : undefined,
         headers: { Authorization: `Bearer ${token}` },
       });
 
       return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
+export const fetchReportingManagers = createAsyncThunk(
+  "auth/fetchReportingManagers",
+  async (department = "Ops - Meta", thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.get(`${API_URL}/employees/managers`, {
+        params: { department },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
+export const fetchEmployeeDashboardSummary = createAsyncThunk(
+  "auth/fetchEmployeeDashboardSummary",
+  async (_, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.get(`${API_URL}/employee/dashboard-summary`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
+export const acceptPolicyAgreement = createAsyncThunk(
+  "auth/acceptPolicyAgreement",
+  async ({ version = "v1" } = {}, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.post(
+        `${API_URL}/employee/policy-accept`,
+        { version },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
+export const signPolicyDocument = createAsyncThunk(
+  "auth/signPolicyDocument",
+  async ({ documentUrl, signatureDataUrl, version = "v1" }, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.post(
+        `${API_URL}/employee/policy-sign`,
+        { documentUrl, signatureDataUrl, version },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  },
+  {
+    condition: ({ search = "", force = false } = {}, { getState }) => {
+      if (force) return true;
+      const state = getState().auth;
+      const normalizedSearch = normalizeEmployeeSearch(search);
+      if (state.loading && state.loadingEmployeesQuery === normalizedSearch) {
+        return false;
+      }
+      return true;
+    },
+  }
+);
+
+export const hrSignPolicyDocument = createAsyncThunk(
+  "auth/hrSignPolicyDocument",
+  async ({ userId, documentUrl, signatureDataUrl, party = "hr" }, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.post(
+        `${API_URL}/employee/${userId}/policy-sign-hr`,
+        { documentUrl, signatureDataUrl, party },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
+export const uploadEmployeeAsset = createAsyncThunk(
+  "auth/uploadEmployeeAsset",
+  async ({ file, assetType = "document" }, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("assetType", assetType);
+
+      const res = await axios.post(`${API_URL}/employee/upload-asset`, formData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "multipart/form-data",
+        },
+      });
+      return res.data.asset;
     } catch (err) {
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || err.message
@@ -192,6 +339,41 @@ export const resetUserPassword = createAsyncThunk(
   }
 );
 
+export const deleteEmployeeByAdmin = createAsyncThunk(
+  "auth/deleteEmployeeByAdmin",
+  async ({ userId }, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No admin token found");
+
+      const res = await axios.delete(`${API_URL}/employees/${userId}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      return {
+        userId,
+        message: res.data?.message || "Employee deleted successfully",
+      };
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+  ,
+  {
+    condition: ({ search = "", force = false } = {}, { getState }) => {
+      if (force) return true;
+      const state = getState().auth;
+      const normalizedSearch = normalizeEmployeeSearch(search);
+      if (state.loading && state.loadingEmployeesQuery === normalizedSearch) {
+        return false;
+      }
+      return true;
+    },
+  }
+);
+
 const authSlice = createSlice({
   name: "auth",
   initialState: {
@@ -200,11 +382,15 @@ const authSlice = createSlice({
     // employee caching
     employees: [],
     employeesLoaded: false,
+    employeeSearchCache: {},
+    loadingEmployeesQuery: "",
 
     loading: false,
     error: null,
     status: null,
     message: null,
+    reportingManagers: [],
+    employeeDashboardSummary: null,
     
     passwordResetSuccess: false,
     passwordResetMessage: null,
@@ -237,6 +423,8 @@ const authSlice = createSlice({
 
         state.employees = [];
         state.employeesLoaded = false;
+        state.employeeSearchCache = {};
+        state.loadingEmployeesQuery = "";
       })
       .addCase(loginUser.rejected, (state, action) => {
         state.loading = false;
@@ -273,19 +461,106 @@ const authSlice = createSlice({
         state.user = null;
         state.employees = [];
         state.employeesLoaded = false;
+        state.employeeSearchCache = {};
+        state.loadingEmployeesQuery = "";
       })
 
-      .addCase(fetchEmployees.pending, (state) => {
+      .addCase(fetchEmployees.pending, (state, action) => {
         state.loading = true;
         state.error = null;
+        state.loadingEmployeesQuery = normalizeEmployeeSearch(action.meta?.arg?.search || "");
       })
       .addCase(fetchEmployees.fulfilled, (state, action) => {
         state.loading = false;
-        state.employees = action.payload;
-        state.employeesLoaded = true; 
+        const query = normalizeEmployeeSearch(action.meta?.arg?.search || "");
+        state.employeeSearchCache[query] = {
+          data: action.payload,
+          fetchedAt: Date.now(),
+        };
+        state.loadingEmployeesQuery = "";
+        if (!query) {
+          state.employees = action.payload;
+          state.employeesLoaded = true;
+        }
       })
       .addCase(fetchEmployees.rejected, (state, action) => {
         state.loading = false;
+        state.error = action.payload;
+        state.loadingEmployeesQuery = "";
+      })
+      .addCase(fetchReportingManagers.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(fetchReportingManagers.fulfilled, (state, action) => {
+        state.reportingManagers = action.payload || [];
+      })
+      .addCase(fetchReportingManagers.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      .addCase(fetchEmployeeDashboardSummary.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(fetchEmployeeDashboardSummary.fulfilled, (state, action) => {
+        state.employeeDashboardSummary = action.payload;
+      })
+      .addCase(fetchEmployeeDashboardSummary.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      .addCase(acceptPolicyAgreement.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(acceptPolicyAgreement.fulfilled, (state, action) => {
+        const payload = action.payload || {};
+        if (state.user) {
+          state.user.policyAgreement = payload.policyAgreement || state.user.policyAgreement;
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
+        if (state.employeeDashboardSummary?.profile) {
+          state.employeeDashboardSummary.profile.policyAgreement = payload.policyAgreement;
+        }
+      })
+      .addCase(acceptPolicyAgreement.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      .addCase(signPolicyDocument.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(signPolicyDocument.fulfilled, (state, action) => {
+        const payload = action.payload || {};
+        if (state.user) {
+          state.user.policyAgreement = payload.policyAgreement || state.user.policyAgreement;
+          if (payload.policySignatures) {
+            state.user.policySignatures = payload.policySignatures;
+          }
+          localStorage.setItem("user", JSON.stringify(state.user));
+        }
+        if (state.employeeDashboardSummary?.profile) {
+          state.employeeDashboardSummary.profile.policyAgreement = payload.policyAgreement;
+          if (payload.policySignatures) {
+            state.employeeDashboardSummary.profile.policySignatures = payload.policySignatures;
+          }
+        }
+      })
+      .addCase(signPolicyDocument.rejected, (state, action) => {
+        state.error = action.payload;
+      })
+      .addCase(hrSignPolicyDocument.pending, (state) => {
+        state.error = null;
+      })
+      .addCase(hrSignPolicyDocument.fulfilled, (state, action) => {
+        const payload = action.payload || {};
+        const targetId = String(payload.userId || "");
+        if (targetId && Array.isArray(state.employees)) {
+          const idx = state.employees.findIndex((u) => String(u._id) === targetId);
+          if (idx >= 0) {
+            state.employees[idx] = {
+              ...state.employees[idx],
+              policySignatures: payload.policySignatures || state.employees[idx].policySignatures || [],
+            };
+          }
+        }
+      })
+      .addCase(hrSignPolicyDocument.rejected, (state, action) => {
         state.error = action.payload;
       })
 
@@ -354,6 +629,22 @@ const authSlice = createSlice({
         state.loading = false;
         state.error = action.payload;
         state.passwordResetSuccess = false;
+      })
+      .addCase(deleteEmployeeByAdmin.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(deleteEmployeeByAdmin.fulfilled, (state, action) => {
+        state.loading = false;
+        const { userId, message } = action.payload || {};
+        if (userId) {
+          state.employees = state.employees.filter((u) => String(u._id) !== String(userId));
+        }
+        state.message = message;
+      })
+      .addCase(deleteEmployeeByAdmin.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

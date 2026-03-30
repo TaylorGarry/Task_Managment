@@ -1058,17 +1058,41 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const [searchBy, setSearchBy] = useState('all'); // all | name | department | teamLeader
     const [searchInput, setSearchInput] = useState('');
     const [appliedSearch, setAppliedSearch] = useState('');
-    const [newEmployee, setNewEmployee] = useState({
-        name: '',
-        department: '',
-        transport: '',
+	    const [newEmployee, setNewEmployee] = useState({
+	        name: '',
+	        department: '',
+	        transport: '',
         cabRoute: '',
         teamLeader: '',
         shiftStartHour: '',
         shiftEndHour: '',
         dailyStatus: Array(7).fill('P')
-    });
-	    const [errors, setErrors] = useState({});
+	    });
+		    const [errors, setErrors] = useState({});
+      const DATE_ONLY_REGEX = /^\d{4}-\d{2}-\d{2}/;
+      const pad2 = (value) => String(value).padStart(2, '0');
+      const getDateKey = (value) => {
+        if (!value) return null;
+        if (typeof value === 'string' && DATE_ONLY_REGEX.test(value)) return value.slice(0, 10);
+        const date = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(date.getTime())) return null;
+        return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+      };
+      const dateFromKeyUTC = (dateKey) => {
+        const [year, month, day] = String(dateKey).split('-').map(Number);
+        return new Date(Date.UTC(year, month - 1, day));
+      };
+      const addDaysToDateKeyUTC = (dateKey, days) => {
+        const date = dateFromKeyUTC(dateKey);
+        date.setUTCDate(date.getUTCDate() + days);
+        return `${date.getUTCFullYear()}-${pad2(date.getUTCMonth() + 1)}-${pad2(date.getUTCDate())}`;
+      };
+      const getUTCISOStringFromDateKey = (dateKey) => `${dateKey}T00:00:00.000Z`;
+      const getDateRangeDurationDaysUTC = (startDateKey, endDateKey) => {
+        const start = dateFromKeyUTC(startDateKey);
+        const end = dateFromKeyUTC(endDateKey);
+        return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+      };
       const getIstDateKey = (value) => {
         const date = value instanceof Date ? value : new Date(value);
         if (Number.isNaN(date.getTime())) return null;
@@ -1097,20 +1121,57 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         };
     }, [rosterId, dispatch]);
 
-    useEffect(() => {
-        if (bulkEditRoster?.data?.weeks) {
-            // Deep clone the weeks data
-            const weeksCopy = JSON.parse(JSON.stringify(bulkEditRoster.data.weeks));
+	    useEffect(() => {
+	        if (bulkEditRoster?.data?.weeks) {
+	            // Deep clone the weeks data
+	            const weeksCopy = JSON.parse(JSON.stringify(bulkEditRoster.data.weeks));
 
-            // Ensure department field exists and add employeesByDepartment if not present
-            weeksCopy.forEach(week => {
-                week.employees = week.employees.map(emp => ({
-                    ...emp,
-                    department: emp.department || 'General'
-                }));
+	            // Ensure department field exists and add employeesByDepartment if not present
+	            weeksCopy.forEach(week => {
+                const weekStartKey = getDateKey(week.startDate);
+                const weekEndKey = getDateKey(week.endDate);
+                const daysInWeek =
+                    weekStartKey && weekEndKey ? getDateRangeDurationDaysUTC(weekStartKey, weekEndKey) : 0;
 
-                // Create employeesByDepartment if not present from backend
-                if (!week.employeesByDepartment) {
+	                week.employees = week.employees.map(emp => {
+                    const byUtcKey = new Map();
+                    const byIstKey = new Map();
+                    (emp.dailyStatus || []).forEach((d) => {
+                        const utcKey = getDateKey(d?.date);
+                        const istKey = getIstDateKey(d?.date);
+                        if (utcKey && !byUtcKey.has(utcKey)) byUtcKey.set(utcKey, d);
+                        if (istKey && !byIstKey.has(istKey)) byIstKey.set(istKey, d);
+                    });
+
+                    const normalizedDailyStatus =
+                        daysInWeek > 0
+                            ? Array.from({ length: daysInWeek }, (_, idx) => {
+                                  const dateKey = addDaysToDateKeyUTC(weekStartKey, idx);
+                                  const matched = byUtcKey.get(dateKey) || byIstKey.get(dateKey) || emp.dailyStatus?.[idx];
+                                  return {
+                                      ...(matched || {}),
+                                      date: getUTCISOStringFromDateKey(dateKey),
+                                      status:
+                                          matched?.status ||
+                                          matched?.departmentStatus ||
+                                          matched?.transportStatus ||
+                                          'P'
+                                  };
+                              })
+                            : (emp.dailyStatus || []).map((d) => ({
+                                  ...d,
+                                  status: d?.status || d?.departmentStatus || d?.transportStatus || 'P'
+                              }));
+
+                    return {
+                        ...emp,
+                        department: emp.department || 'General',
+                        dailyStatus: normalizedDailyStatus
+                    };
+                });
+
+	                // Create employeesByDepartment if not present from backend
+	                if (!week.employeesByDepartment) {
                     week.employeesByDepartment = week.employees.reduce((acc, emp) => {
                         const dept = emp.department || 'General';
                         if (!acc[dept]) acc[dept] = [];
@@ -1201,12 +1262,11 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         return (employees || []).filter((emp) => {
             const id = emp?._id != null ? String(emp._id) : '';
             const isNew = id.startsWith('new-');
+            const localMatch = localEmployeeMatches(emp, queryLower, searchBy);
 
-            if (isNew) return localEmployeeMatches(emp, queryLower, searchBy);
-            if (matchedIds) return matchedIds.has(id);
-
-            // No server results yet for this search: keep list stable until response arrives.
-            return true;
+            if (isNew) return localMatch;
+            if (matchedIds) return matchedIds.has(id) || localMatch;
+            return localMatch;
         });
     };
 
@@ -1232,15 +1292,19 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
 	        if (field.startsWith('dailyStatus[')) {
 	            const dayIndex = parseInt(field.match(/\[(\d+)\]/)[1]);
-              if (isEmployeeRosterEditor()) {
-                const weekStart = updatedWeeks?.[weekIndex]?.startDate;
-                const dayDate = new Date(weekStart);
-                dayDate.setDate(dayDate.getDate() + dayIndex);
-                const dayKey = getIstDateKey(dayDate);
-                const todayKey = getIstDateKey(new Date());
-                if (dayKey && todayKey && dayKey < todayKey) {
-                    return;
+	          if (isEmployeeRosterEditor()) {
+                const existingDayDate =
+                    updatedWeeks?.[weekIndex]?.employees?.[employeeIndex]?.dailyStatus?.[dayIndex]?.date;
+	            const weekStart = updatedWeeks?.[weekIndex]?.startDate;
+	            const dayDate = existingDayDate ? new Date(existingDayDate) : new Date(weekStart);
+                if (!existingDayDate) {
+	                dayDate.setDate(dayDate.getDate() + dayIndex);
                 }
+	            const dayKey = getIstDateKey(dayDate);
+	            const todayKey = getIstDateKey(new Date());
+	            if (dayKey && todayKey && dayKey < todayKey) {
+	                return;
+	            }
               }
 	            updatedWeeks[weekIndex].employees[employeeIndex].dailyStatus[dayIndex].status = value;
 	        } else {
@@ -1832,21 +1896,6 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 ) : null}
                             </div>
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                            {bulkEditSearchLoading ? (
-                                <span className="text-slate-500">Searching...</span>
-                            ) : null}
-                            {appliedSearch ? (
-                                <span className="text-slate-600">
-                                    Showing results for: <span className="font-medium">{appliedSearch}</span>
-                                </span>
-                            ) : (
-                                <span className="text-slate-500">Search is optional.</span>
-                            )}
-                            {bulkEditSearchError ? (
-                                <span className="text-rose-600">{bulkEditSearchError}</span>
-                            ) : null}
-                        </div>
                     </div>
                 </div>
 
@@ -2200,22 +2249,33 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                         </div>
                                                     </td>
 
-                                                    <td className="p-2">
-                                                        <div className="flex gap-1 justify-center min-w-max">
-                                                            {employee.dailyStatus.slice(0, daysInWeek).map((status, dayIndex) => {
-                                                                const dayDate = new Date(weekStartDate);
-                                                                dayDate.setDate(weekStartDate.getDate() + dayIndex);
-                                                                const dayName = dayDate.toLocaleDateString('en-US', { weekday: 'short' });
-                                                                const dayDateLabel = dayDate.toLocaleDateString('en-US', {
-                                                                    day: '2-digit',
-                                                                    month: 'short'
+	                                                    <td className="p-2">
+	                                                        <div className="flex gap-1 justify-center min-w-max">
+	                                                            {employee.dailyStatus.slice(0, daysInWeek).map((status, dayIndex) => {
+                                                                const statusDate = status?.date ? new Date(status.date) : null;
+	                                                                const dayDate = statusDate && !Number.isNaN(statusDate.getTime())
+                                                                    ? statusDate
+                                                                    : (() => {
+                                                                        const fallback = new Date(weekStartDate);
+                                                                        fallback.setDate(weekStartDate.getDate() + dayIndex);
+                                                                        return fallback;
+                                                                    })();
+	                                                                const dayName = dayDate.toLocaleDateString('en-US', {
+                                                                    timeZone: 'Asia/Kolkata',
+                                                                    weekday: 'short'
                                                                 });
-                                                                const fullDateLabel = dayDate.toLocaleDateString('en-US', {
-                                                                    weekday: 'long',
-                                                                    day: 'numeric',
-                                                                    month: 'long',
-                                                                    year: 'numeric'
-                                                                });
+	                                                                const dayDateLabel = dayDate.toLocaleDateString('en-US', {
+                                                                    timeZone: 'Asia/Kolkata',
+	                                                                    day: '2-digit',
+	                                                                    month: 'short'
+	                                                                });
+	                                                                const fullDateLabel = dayDate.toLocaleDateString('en-US', {
+                                                                    timeZone: 'Asia/Kolkata',
+	                                                                    weekday: 'long',
+	                                                                    day: 'numeric',
+	                                                                    month: 'long',
+	                                                                    year: 'numeric'
+	                                                                });
 
 	                                                                return (
 	                                                                    <div key={dayIndex} className="flex flex-col items-center rounded-lg border border-slate-200 bg-slate-50 px-1.5 py-1">

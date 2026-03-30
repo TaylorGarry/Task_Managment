@@ -6,6 +6,7 @@ import rosterReducer from "./slices/rosterSlice.js";
 import chatReducer from "./slices/chatSlice.js";
 import messageReducer from "./slices/messageSlice.js";
 import delegationReducer from "./slices/delegationSlice.js";
+import leaveReducer from "./slices/leaveSlice.js";
 const store = configureStore({
   reducer: {
     auth: authReducer,
@@ -15,6 +16,7 @@ const store = configureStore({
     chat: chatReducer,
     message: messageReducer,
     delegation: delegationReducer,
+    leave: leaveReducer,
   },
 });
 

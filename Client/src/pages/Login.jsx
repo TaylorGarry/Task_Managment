@@ -16,7 +16,11 @@ const Login = () => {
   const onSubmit = async (data) => {
     if (loading) return;
     try {
-      const resultAction = await dispatch(loginUser(data));
+      const payload = {
+        identifier: data.identifier,
+        password: data.password,
+      };
+      const resultAction = await dispatch(loginUser(payload));
       if (loginUser.fulfilled.match(resultAction)) {
         toast.success("Login successful!");
         const user = resultAction.payload;
@@ -53,17 +57,17 @@ const Login = () => {
           <div className="bg-white p-8 md:p-10">
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Login</p>
             <h2 className="mt-2 text-2xl font-bold text-slate-900">Sign In</h2>
-            <p className="mt-2 text-sm text-slate-500">
-              Enter username and password to continue.
-            </p>
+              <p className="mt-2 text-sm text-slate-500">
+              Enter login ID and password to continue.
+              </p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-7 space-y-5">
               <div>
-                <label className="text-sm font-medium text-slate-700">Username</label>
+                <label className="text-sm font-medium text-slate-700">Login ID</label>
                 <input
                   type="text"
-                  placeholder="Enter your username"
-                  {...register("username", { required: true })}
+                  placeholder="Username / Emp ID / Real Name / Pseudo Name"
+                  {...register("identifier", { required: true })}
                   className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-blue-500 focus:bg-white"
                 />
               </div>
