@@ -1,7 +1,8 @@
 import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import axios from "axios";
 
-const API_URL = "http://localhost:4000/api/v1/leaves";
+// const API_URL = "http://localhost:4000/api/v1/leaves";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/leaves";
 
 const getToken = (state) => state.auth?.user?.token;
 

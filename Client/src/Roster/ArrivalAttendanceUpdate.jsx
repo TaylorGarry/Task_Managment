@@ -189,7 +189,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const location = useLocation();
   const currentUser = getCurrentUser();
   const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
-  const { updateEmployeesData, loading } = useSelector((state) => state.roster);
+  const { updateEmployeesData, loading, error } = useSelector((state) => state.roster);
   
   const initialFetchDone = useRef(false);
   
@@ -300,6 +300,25 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       delegatedFrom: delegatedFromUserId,
     }));
   }, [location.key]); // Re-entering this route should refetch without manual refresh
+
+  useEffect(() => {
+    if (!error) return;
+    const message = String(error);
+    const match = message.match(/Available weeks:\s*([0-9,\s]+)/i);
+    if (!match?.[1]) return;
+
+    const availableWeekNumbers = match[1]
+      .split(",")
+      .map((w) => Number.parseInt(String(w).trim(), 10))
+      .filter((n) => Number.isFinite(n));
+    if (!availableWeekNumbers.length) return;
+
+    const fallbackWeek = String(availableWeekNumbers[0]);
+    if (String(selectedWeek) !== fallbackWeek) {
+      setSelectedWeek(fallbackWeek);
+      setCurrentPage(1);
+    }
+  }, [error, selectedWeek]);
 
   useEffect(() => {
     if (updateEmployeesData?.data) {

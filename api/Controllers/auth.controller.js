@@ -375,6 +375,25 @@ const uploadPdfBuffer = async (buffer, publicIdPrefix = "signed_policy") => {
   };
 };
 
+const getPolicyDocumentBaseUrls = () => {
+  const envBases = [
+    process.env.POLICY_DOC_BASE_URL,
+    process.env.CLIENT_BASE_URL,
+    process.env.FRONTEND_URL,
+    process.env.APP_BASE_URL,
+  ]
+    .map((v) => String(v || "").trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+
+  const defaults = [
+    "https://crm.fdbs.in",
+    "https://crm.terranovasolutions.in",
+    "http://localhost:5173",
+  ];
+
+  return [...new Set([...envBases, ...defaults])];
+};
+
 const loadDocumentBytes = async (documentUrl = "") => {
   const normalized = String(documentUrl || "").trim();
   if (!normalized) throw new Error("Missing document URL");
@@ -387,8 +406,34 @@ const loadDocumentBytes = async (documentUrl = "") => {
 
   const decodedPath = normalizePolicyKey(normalized);
   const relativePath = decodedPath.startsWith("/") ? decodedPath.slice(1) : decodedPath;
-  const localPath = path.resolve(__dirname, "../../Client/public", relativePath);
-  return fs.readFile(localPath);
+  const localCandidates = [
+    path.resolve(__dirname, "../../Client/public", relativePath),
+    path.resolve(process.cwd(), "Client/public", relativePath),
+    path.resolve(process.cwd(), "public", relativePath),
+  ];
+
+  for (const candidate of localCandidates) {
+    try {
+      return await fs.readFile(candidate);
+    } catch (err) {
+      if (err?.code !== "ENOENT") throw err;
+    }
+  }
+
+  if (decodedPath.startsWith("/")) {
+    for (const base of getPolicyDocumentBaseUrls()) {
+      try {
+        const remoteUrl = `${base}${decodedPath}`;
+        const response = await fetch(remoteUrl);
+        if (!response.ok) continue;
+        return Buffer.from(await response.arrayBuffer());
+      } catch {
+        // Try next base URL
+      }
+    }
+  }
+
+  throw new Error(`Policy file not found for path: ${decodedPath}`);
 };
 
 const loadImageBytes = async (imageUrl = "") => {
