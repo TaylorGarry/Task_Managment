@@ -244,7 +244,7 @@
 // export default AttendanceUpdateWrapper;
 
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { fetchAllRosters } from "../features/slices/rosterSlice.js";
@@ -258,9 +258,10 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { rosterId } = useParams();
-  const { allRosters, loading } = useSelector((state) => state.roster);
+  const { allRosters, loading, rosterDetailLoading } = useSelector((state) => state.roster);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const didAutoFallbackRef = useRef(false);
 
   const getCurrentUser = () => {
     try {
@@ -282,6 +283,53 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
     }));
   }, [dispatch, selectedMonth, selectedYear]);
 
+  useEffect(() => {
+    if (didAutoFallbackRef.current) return;
+    if (rosterDetailLoading) return;
+    if (delegatedMode) return;
+
+    const rows = Array.isArray(allRosters?.data) ? allRosters.data : null;
+    if (!rows) return;
+
+    if (rows.length > 0) {
+      didAutoFallbackRef.current = true;
+      return;
+    }
+
+    const current = new Date();
+    const isDefaultCurrentMonthSelection =
+      Number(selectedMonth) === current.getMonth() + 1 &&
+      Number(selectedYear) === current.getFullYear();
+
+    if (!isDefaultCurrentMonthSelection) {
+      didAutoFallbackRef.current = true;
+      return;
+    }
+
+    didAutoFallbackRef.current = true;
+    dispatch(
+      fetchAllRosters({
+        page: 1,
+        limit: 50,
+      })
+    )
+      .unwrap()
+      .then((resp) => {
+        const all = Array.isArray(resp?.data) ? resp.data : [];
+        if (!all.length) return;
+        const latest = all[0];
+        const nextMonth = Number.parseInt(latest?.month, 10);
+        const nextYear = Number.parseInt(latest?.year, 10);
+        if (Number.isFinite(nextMonth) && nextMonth >= 1 && nextMonth <= 12) {
+          setSelectedMonth(nextMonth);
+        }
+        if (Number.isFinite(nextYear) && nextYear > 0) {
+          setSelectedYear(nextYear);
+        }
+      })
+      .catch(() => {});
+  }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, delegatedMode]);
+
 	  const rosters = allRosters?.data || [];
 	  
 	
@@ -298,7 +346,7 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
 
   if (delegatedMode && !delegatedFromUserId) {
     return (
-      <div className="min-h-screen bg-gray-100">
+      <div className="min-h-[calc(100vh-64px)] bg-gray-100">
         <Navbar />
         <div className="container mx-auto px-4 py-10">
           <div className="bg-white rounded-lg shadow p-8 text-center">
@@ -317,26 +365,26 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-[calc(100vh-64px)] bg-gray-100">
       {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
       
-      <div className="container mx-auto px-2 ">
-        <div className="bg-white rounded-lg shadow p-6 mb-6">
+      <div className="container mx-auto px-2 pt-18 pb-2">
+        <div className="bg-white/95 rounded-2xl shadow-sm border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
                 <Clock className="w-6 h-6 text-indigo-600" />
                 {delegatedMode ? "Delegated Attendance & Arrival Updates" : "Attendance & Arrival Updates"}
               </h1>
-              <p className="text-gray-600 mt-1">
+              <p className="text-slate-600 mt-1">
                 {delegatedMode
                   ? "Select a roster to update delegated team attendance and arrival times"
                   : "Select a roster to update employee attendance and arrival times"}
               </p>
             </div>
             
-            <div className="bg-indigo-50 px-4 py-2 rounded-lg">
-              <p className="text-sm text-indigo-800">
+            <div className="bg-gradient-to-r from-indigo-50 to-sky-50 px-4 py-2 rounded-xl border border-indigo-100">
+              <p className="text-sm text-indigo-900">
                 <span className="font-semibold">{currentUser?.username}</span> 
                 <span className="mx-2">•</span>
                 {currentUser?.department}
@@ -397,13 +445,13 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
           </div>
 
           {/* Rosters List */}
-          {loading ? (
+          {(loading || rosterDetailLoading) ? (
             <div className="text-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading rosters...</p>
             </div>
           ) : rosters.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+	            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {rosters.map((roster) => {
                 // Calculate total employees across all weeks
                 const totalEmployees = roster.weeks?.reduce((sum, week) => 
@@ -413,7 +461,7 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
                 const firstWeekNumber = roster.weeks?.[0]?.weekNumber || 1;
                 
                 return (
-                  <div
+	                  <article
                     key={roster._id}
                     onClick={() => {
                       const basePath = delegatedMode ? "/delegated-attendance" : "/attendance-update";
@@ -422,45 +470,46 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
                         : "";
                       navigate(`${basePath}/${roster._id}${query}`);
                     }}
-                    className="border rounded-lg p-5 hover:shadow-lg cursor-pointer transition-all hover:border-indigo-300 bg-white"
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 text-indigo-600 mb-2">
-                          <Calendar className="w-4 h-4" />
-                          <span className="text-sm font-medium">
-                            Week {firstWeekNumber}
-                          </span>
-                        </div>
-	                        <h3 className="font-semibold text-gray-800">
-	                          {new Date(roster.rosterStartDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(roster.rosterEndDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
-	                        </h3>
-                        <p className="text-sm text-gray-500 mt-1">
-                          {new Date(2000, roster.month-1, 1).toLocaleString('default', { month: 'long' })} {roster.year}
-                        </p>
-                        <div className="mt-3 flex items-center gap-3 text-sm">
-                          <span className="bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
-                            {roster.totalWeeks || 0} week{roster.totalWeeks !== 1 ? 's' : ''}
-                          </span>
-                          <span className="bg-green-50 text-green-700 px-2 py-1 rounded-full">
-                            {totalEmployees} employee{totalEmployees !== 1 ? 's' : ''}
-                          </span>
-                        </div>
+	                    className="group relative overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/20 to-sky-50/20 p-5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300"
+	                  >
+	                    <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 to-sky-500 opacity-75"></div>
+	                    <div className="flex items-start justify-between">
+	                      <div className="flex-1">
+	                        <div className="flex items-center gap-2 text-indigo-700 mb-2">
+	                          <Calendar className="w-4 h-4" />
+	                          <span className="text-base font-semibold">
+	                            Week {firstWeekNumber}
+	                          </span>
+	                        </div>
+		                        <h3 className="font-bold text-slate-800 tracking-tight">
+		                          {new Date(roster.rosterStartDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(roster.rosterEndDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+		                        </h3>
+	                        <p className="text-sm text-slate-500 mt-1">
+	                          {new Date(2000, roster.month-1, 1).toLocaleString('default', { month: 'long' })} {roster.year}
+	                        </p>
+	                        <div className="mt-3 flex items-center gap-3 text-sm">
+	                          <span className="bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-full font-medium">
+	                            {roster.totalWeeks || 0} week{roster.totalWeeks !== 1 ? 's' : ''}
+	                          </span>
+	                          <span className="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full font-medium">
+	                            {totalEmployees} employee{totalEmployees !== 1 ? 's' : ''}
+	                          </span>
+	                        </div>
                         
                         {/* Show team leaders if any */}
                         {roster.weeks?.[0]?.employees && (
-                          <div className="mt-2 text-xs text-gray-400">
-                            Team: {[...new Set(roster.weeks[0].employees.map(e => e.teamLeader).filter(Boolean))].join(', ')}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+	                          <div className="mt-3 text-xs text-slate-500 leading-relaxed">
+	                            Team: {[...new Set(roster.weeks[0].employees.map(e => e.teamLeader).filter(Boolean))].join(', ')}
+	                          </div>
+	                        )}
+	                      </div>
+	                    </div>
+	                  </article>
                 );
               })}
             </div>
           ) : (
-            <div className="text-center py-16 bg-gray-50 rounded-lg">
+	            <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-200">
               <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900">No rosters found</h3>
               <p className="text-gray-500 mt-2 max-w-md mx-auto">

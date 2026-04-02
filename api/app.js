@@ -444,8 +444,6 @@ const allowedIPs = [
   "::1",
 ];
 
-app.use(express.json());
-
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -774,6 +772,14 @@ app.use((err, req, res, next) => {
       success: false,
       message: "File upload error",
       error: err.message
+    });
+  }
+
+  if (err.type === "entity.too.large" || err.status === 413) {
+    return res.status(413).json({
+      success: false,
+      message: "Request payload is too large",
+      error: process.env.NODE_ENV === "production" ? "Payload too large" : err.message,
     });
   }
   

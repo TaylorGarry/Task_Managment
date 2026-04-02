@@ -962,7 +962,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
               style={{ fontFamily: "'Playfair Display', serif" }}
               onClick={() => navigate("/admin/tasks")}
             >
-              Task Management
+              FDBS
             </h1>
             <div className="hidden md:flex items-center gap-2 lg:gap-3 min-w-0" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
               <Link 
