@@ -2051,7 +2051,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                             <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">{editedWeeks.length} week(s)</span>
                             <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">{editedWeeks.reduce((sum, week) => sum + week.employees.length, 0)} employees</span>
                             <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full border border-blue-200">SuperAdmin: Edit All Weeks</span>
-                            <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">HR: Edit Current/Future Only</span>
+                            <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">HR: Edit All Weeks</span>
                         </div>
                     </div>
 
@@ -2126,7 +2126,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                             else if (isCurrentWeek) timelineStatus = 'current';
 
                             const isEditable = userPermissions?.accountType === 'superAdmin' ||
-                                (userPermissions?.accountType === 'HR' && !hasWeekEnded);
+                                userPermissions?.accountType === 'HR';
 
                             return (
                                 <button
@@ -2138,7 +2138,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                             ? 'border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100'
                                             : 'border-slate-200 text-slate-600 bg-white hover:text-slate-800 hover:bg-slate-50'
                                         } ${!isEditable ? 'cursor-not-allowed opacity-60' : ''}`}
-                                    title={!isEditable ? 'Week has ended. Only Super Admin can edit past weeks.' : ''}
+                                    title={!isEditable ? 'You do not have edit access for this week.' : ''}
                                 >
                                     <span className="mr-2 text-sm">
                                         {timelineStatus === 'past' && '📅'}
