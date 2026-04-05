@@ -698,7 +698,7 @@ export const updateRoster = async (req, res) => {
       };
 
 	    const accountType = String(user?.accountType || "").toLowerCase();
-      const canEditAnyWeek = accountType === "superAdmin" || accountType === "Hr";
+	      const canEditAnyWeek = accountType === "superadmin" || accountType === "hr";
 	    
 	    // Past week edits: only HR + SuperAdmin
 	    if (currentDate > weekEndDate && !canEditAnyWeek) {
@@ -3908,22 +3908,11 @@ export const getRosterForBulkEdit = async (req, res) => {
       const isCurrentWeek = weekStartDate <= currentDate && weekEndDate >= currentDate;
       const isUpcomingWeek = weekStartDate > currentDate;
       
-      if (userAccountType === 'superAdmin') {
-        isEditable = true;
-        canAddEmployees = true;  
-        requiresSuperAdmin = hasWeekEnded;
-      } else if (userAccountType === 'HR') {
-        if (hasWeekEnded) {
-          isEditable = false;
-          canAddEmployees = false;
-          requiresSuperAdmin = true;
-          editRestrictionReason = 'Week has ended. Only Super Admin can edit past weeks.';
-        } else if (isCurrentWeek || isUpcomingWeek) {
-          isEditable = true;
-          canAddEmployees = true;  
-          requiresSuperAdmin = false;
-        }
-      }
+	      if (userAccountType === 'superAdmin' || userAccountType === 'HR') {
+	        isEditable = true;
+	        canAddEmployees = true;  
+	        requiresSuperAdmin = false;
+	      }
       
       // FIX 2: Filter out null employees again and safely process
       const validWeekEmployees = (week.employees || []).filter(emp => emp !== null);
@@ -4018,8 +4007,8 @@ export const getRosterForBulkEdit = async (req, res) => {
         },
         userPermissions: {
           accountType: userAccountType,
-          canEditAllWeeks: userAccountType === 'superAdmin',
-          canAddEmployeesToPastWeeks: userAccountType === 'superAdmin',
+	          canEditAllWeeks: userAccountType === 'superAdmin' || userAccountType === 'HR',
+	          canAddEmployeesToPastWeeks: userAccountType === 'superAdmin' || userAccountType === 'HR',
           restrictedWeeks: weeksWithEditability.filter(w => !w.isEditable).length
         }
       }
@@ -8431,19 +8420,38 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       }))
       .sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber));
 
-    // Calculate today's date for comparison
-    const currentDate = new Date();
-    currentDate.setHours(0, 0, 0, 0);
-    
-    const weekStartDate = new Date(
-      Math.min(...selectedWeekGroup.map((w) => new Date(w.startDate).getTime()))
-    );
-    const weekEndDate = new Date(
-      Math.max(...selectedWeekGroup.map((w) => new Date(w.endDate).getTime()))
-    );
-    
-    weekStartDate.setHours(0, 0, 0, 0);
-    weekEndDate.setHours(23, 59, 59, 999);
+    const toIstDateKey = (value) => {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(date);
+      const year = parts.find((p) => p.type === "year")?.value;
+      const month = parts.find((p) => p.type === "month")?.value;
+      const day = parts.find((p) => p.type === "day")?.value;
+      return year && month && day ? `${year}-${month}-${day}` : null;
+    };
+
+    const currentDateKey = toIstDateKey(new Date());
+    const weekStartKey = (selectedWeekGroup || [])
+      .map((w) => toIstDateKey(w?.startDate))
+      .filter(Boolean)
+      .sort()[0];
+    const weekEndKeyCandidates = (selectedWeekGroup || [])
+      .map((w) => toIstDateKey(w?.endDate))
+      .filter(Boolean)
+      .sort();
+    const weekEndKey = weekEndKeyCandidates[weekEndKeyCandidates.length - 1];
+
+    if (!weekStartKey || !weekEndKey || !currentDateKey) {
+      return res.status(500).json({
+        success: false,
+        message: "Failed to resolve week date range"
+      });
+    }
     
     let canEdit = false;
     let editMessage = "";
@@ -8452,10 +8460,10 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     if (isAdmin) {
       canEdit = true;
       editMessage = "HR/Super Admin can edit any week";
-    } else if (currentDate < weekStartDate) {
+    } else if (currentDateKey < weekStartKey) {
       canEdit = false;
       editMessage = "Cannot edit before the week starts";
-    } else if (currentDate > weekEndDate) {
+    } else if (currentDateKey > weekEndKey) {
       canEdit = false;
       editMessage = "Cannot edit after the week has ended";
     } else {
@@ -8471,17 +8479,17 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 	      message: resolvedByDate
 	        ? `Employees for updates (resolved week by date: ${date})`
 	        : `Employees for updates (Team Leader: ${selectedTeamLeaderLabel})`,
-		      data: {
-		        rosterId: roster._id,
-		        requestedDate: date,
-		        q,
-		        searchBy,
-			        weekNumber: Number.parseInt(selectedWeekGroup[0].weekNumber, 10),
-			        startDate: weekStartDate,
-			        endDate: weekEndDate,
-		        currentDate: currentDate,
-		        canEdit: canEdit,
-	        editMessage: editMessage,
+			      data: {
+			        rosterId: roster._id,
+			        requestedDate: date,
+			        q,
+			        searchBy,
+				        weekNumber: Number.parseInt(selectedWeekGroup[0].weekNumber, 10),
+				        startDate: weekStartKey,
+				        endDate: weekEndKey,
+			        currentDate: currentDateKey,
+			        canEdit: canEdit,
+		        editMessage: editMessage,
 	        rosterEntries: formattedRosterEntries,
 	        pagination: {
 	          page,

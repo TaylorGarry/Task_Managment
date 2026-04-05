@@ -219,6 +219,19 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const [punchTimeErrors, setPunchTimeErrors] = useState({});
   const exportCaptureRef = useRef(null);
   const [isDownloadingDelegatedSnapshot, setIsDownloadingDelegatedSnapshot] = useState(false);
+  const selectedWeekMeta = availableWeeks.find(
+    (week) => String(week?.weekNumber) === String(selectedWeek)
+  );
+  const selectedWeekStartKey = toIstDateKey(selectedWeekMeta?.startDate || weekInfo?.startDate);
+  const selectedWeekEndKey = toIstDateKey(selectedWeekMeta?.endDate || weekInfo?.endDate);
+  const effectiveSelectedDate =
+    selectedWeekStartKey && selectedWeekEndKey
+      ? (!selectedDate || selectedDate < selectedWeekStartKey
+          ? selectedWeekStartKey
+          : selectedDate > selectedWeekEndKey
+            ? selectedWeekEndKey
+            : selectedDate)
+      : selectedDate;
 
   if (!rosterId) {
     return (
@@ -273,12 +286,12 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   }, [rosterId]);
 
   useEffect(() => {
-    if (rosterId && selectedWeek && selectedDate) {
+    if (rosterId && selectedWeek && effectiveSelectedDate) {
       const weekNumber = parseInt(selectedWeek);
       dispatch(getEmployeesForUpdates({
         rosterId,
         weekNumber,
-        date: selectedDate,
+        date: effectiveSelectedDate,
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
@@ -286,23 +299,23 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         delegatedFrom: delegatedFromUserId,
       }));
     }
-  }, [dispatch, rosterId, selectedWeek, selectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
+  }, [dispatch, rosterId, selectedWeek, effectiveSelectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
 
   useEffect(() => {
-    if (!rosterId || !selectedWeek || !selectedDate) return;
+    if (!rosterId || !selectedWeek || !effectiveSelectedDate) return;
     if (!location.pathname.includes("/attendance-update")) return;
 
     dispatch(getEmployeesForUpdates({
       rosterId,
       weekNumber: parseInt(selectedWeek),
-      date: selectedDate,
+      date: effectiveSelectedDate,
       page: currentPage,
       limit: pageSize,
       q: appliedSearch,
       searchBy,
       delegatedFrom: delegatedFromUserId,
     }));
-  }, [location.key]); // Re-entering this route should refetch without manual refresh
+  }, [location.key, rosterId, selectedWeek, effectiveSelectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId, dispatch]); // Re-entering this route should refetch without manual refresh
 
   useEffect(() => {
     if (!error) return;
@@ -347,6 +360,20 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       }
     }
   }, [updateEmployeesData]);
+
+  useEffect(() => {
+    if (!selectedWeekStartKey || !selectedWeekEndKey) return;
+    if (!selectedDate || selectedDate < selectedWeekStartKey || selectedDate > selectedWeekEndKey) {
+      setSelectedDate(selectedWeekStartKey);
+      setCurrentPage(1);
+    }
+  }, [selectedDate, selectedWeekStartKey, selectedWeekEndKey]);
+
+  useEffect(() => {
+    if (!selectedWeekStartKey) return;
+    setSelectedDate(selectedWeekStartKey);
+    setCurrentPage(1);
+  }, [selectedWeek, selectedWeekStartKey]);
 
   const rosterEntries = updateEmployeesData?.data?.rosterEntries || [];
   const pagination = updateEmployeesData?.data?.pagination;
@@ -406,12 +433,12 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   };
 
   const refetchEmployees = () => {
-    if (!rosterId || !selectedWeek || !selectedDate) return;
+    if (!rosterId || !selectedWeek || !effectiveSelectedDate) return;
     dispatch(
       getEmployeesForUpdates({
         rosterId,
         weekNumber: parseInt(selectedWeek),
-        date: selectedDate,
+        date: effectiveSelectedDate,
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
@@ -531,7 +558,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       toast.error("Read-only view for your role.");
       return;
     }
-    if (!selectedWeek || !selectedDate) {
+    if (!selectedWeek || !effectiveSelectedDate) {
       toast.error("Please select week and date first.");
       return;
     }
@@ -550,7 +577,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       rosterId,
       weekNumber: parseInt(selectedWeek),
       employeeIds: filteredEmployeeIds,
-      date: selectedDate,
+      date: effectiveSelectedDate,
       delegatedFrom: delegatedFromUserId || undefined,
     };
 
@@ -750,7 +777,9 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               </label>
               <input
                 type="date"
-                value={selectedDate}
+                value={effectiveSelectedDate}
+                min={selectedWeekStartKey || undefined}
+                max={selectedWeekEndKey || undefined}
                 onChange={(e) => {
                   setSelectedDate(e.target.value);
                   setCurrentPage(1);
