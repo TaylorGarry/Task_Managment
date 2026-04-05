@@ -998,7 +998,7 @@ const ChatUI = () => {
   }, [showMessageMenu]);
 
   return (
-    <div className="w-full h-[calc(100vh-50px)] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mt-12 md:mt-10 mb-2 overflow-hidden">
+    <div className="w-full h-[calc(100vh-50px)] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col md:flex-row p-2 sm:p-4 md:p-6 mb-2 overflow-hidden">
       {liveNotifications.length > 0 && (
         <div className="fixed right-4 top-16 z-[70] flex flex-col gap-3 w-[calc(100%-2rem)] sm:w-[26rem]">
           {liveNotifications.map((notif) => (

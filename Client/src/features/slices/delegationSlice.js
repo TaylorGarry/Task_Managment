@@ -1,8 +1,7 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-// const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-const API_BASE_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
 const API_URL = `${API_BASE_URL}/delegations`;
 
 const getToken = () => {
@@ -100,9 +99,10 @@ export const fetchDelegationHistory = createAsyncThunk(
 // Get all team leaders (for dropdown)
 export const fetchTeamLeaders = createAsyncThunk(
   'delegation/fetchTeamLeaders',
-  async (_, { rejectWithValue }) => {
+  async (date = null, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_URL}/team-leaders`, getAuthConfig());
+      const query = date ? `?date=${encodeURIComponent(date)}` : "";
+      const response = await axios.get(`${API_URL}/team-leaders${query}`, getAuthConfig());
       return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message);
@@ -113,9 +113,10 @@ export const fetchTeamLeaders = createAsyncThunk(
 // Get team members for a specific team leader
 export const fetchTeamMembers = createAsyncThunk(
   'delegation/fetchTeamMembers',
-  async (teamLeaderId, { rejectWithValue }) => {
+  async ({ teamLeaderId, date = null }, { rejectWithValue }) => {
     try {
-      const response = await axios.get(`${API_URL}/team-leaders/${teamLeaderId}/members`, getAuthConfig());
+      const query = date ? `?date=${encodeURIComponent(date)}` : "";
+      const response = await axios.get(`${API_URL}/team-leaders/${teamLeaderId}/members${query}`, getAuthConfig());
       return response.data.data;
     } catch (error) {
       return rejectWithValue(error.response?.data?.message || error.message);

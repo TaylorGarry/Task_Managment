@@ -663,7 +663,7 @@ export const exportSavedRoster = createAsyncThunk(
 );
 export const exportAttendanceSnapshot = createAsyncThunk(
   "roster/exportAttendanceSnapshot",
-  async ({ startDate, endDate, department = "" }, thunkAPI) => {
+  async ({ startDate, endDate, department = "", delegatedFrom = "" }, thunkAPI) => {
     try {
       const token = getToken();
 
@@ -671,6 +671,7 @@ export const exportAttendanceSnapshot = createAsyncThunk(
         startDate,
         endDate,
         ...(department ? { department } : {}),
+        ...(delegatedFrom ? { delegatedFrom } : {}),
       }).toString();
 
       const response = await fetch(`${API_URL}/export-attendance-snapshot?${query}`, {

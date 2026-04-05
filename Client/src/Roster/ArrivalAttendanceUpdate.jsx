@@ -13,6 +13,7 @@ import Navbar from "../pages/Navbar.jsx";
 import AdminNavbar from "../components/AdminNavbar.jsx";
 import { Clock, CheckCircle, AlertCircle, Truck, Users, ChevronLeft, ChevronRight, Sun, Moon, Coffee } from "lucide-react";
 import { toast } from "react-toastify";
+import html2canvas from "html2canvas";
 
 // 🔹 Get current user safely
 const getCurrentUser = () => {
@@ -188,7 +189,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const dispatch = useDispatch();
   const location = useLocation();
   const currentUser = getCurrentUser();
-  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
+  const isAdminNavbarUser = ["superAdmin", "HR"].includes(currentUser?.accountType);
   const { updateEmployeesData, loading, error } = useSelector((state) => state.roster);
   
   const initialFetchDone = useRef(false);
@@ -216,11 +217,13 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   });
   const [bulkUpdating, setBulkUpdating] = useState(false);
   const [punchTimeErrors, setPunchTimeErrors] = useState({});
+  const exportCaptureRef = useRef(null);
+  const [isDownloadingDelegatedSnapshot, setIsDownloadingDelegatedSnapshot] = useState(false);
 
   if (!rosterId) {
     return (
       <div className="bg-gray-100 overflow-x-hidden">
-        {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
+        {isAdminNavbarUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
         <div className="container mx-auto w-full max-w-full px-4 py-8">
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
@@ -472,6 +475,17 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const canViewTransportArrival = !isEmployeeNonTransportUser;
   const canViewDepartmentStatus = !isEmployeeTransportUser;
   const canViewDepartmentArrival = !isEmployeeTransportUser;
+  const exportColumnDefs = [
+    { key: "employee", label: "Employee" },
+    { key: "teamLeader", label: "Team Leader" },
+    { key: "department", label: "Department" },
+    { key: "shift", label: "Shift" },
+    { key: "rosterStatus", label: "Roster Status" },
+    ...(canViewTransportStatus ? [{ key: "transportStatus", label: "Transport Status" }] : []),
+    ...(canViewDepartmentStatus ? [{ key: "departmentStatus", label: "Dept Status" }] : []),
+    ...(canViewTransportArrival ? [{ key: "transportArrival", label: "Transport Arrival" }] : []),
+    ...(canViewDepartmentArrival ? [{ key: "departmentArrival", label: "Dept Arrival" }] : []),
+  ];
   const isOwnRosterRow = (employee) => {
     if (!employee) return false;
     const currentUserId = String(currentUser?._id || currentUser?.id || "").trim();
@@ -610,6 +624,37 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     }
   };
 
+  const handleDownloadDelegatedSnapshotImage = async () => {
+    if (!delegatedFromUserId || !exportCaptureRef.current || isDownloadingDelegatedSnapshot) return;
+    setIsDownloadingDelegatedSnapshot(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const node = exportCaptureRef.current;
+      const canvas = await html2canvas(node, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+        windowWidth: node.scrollWidth,
+        windowHeight: node.scrollHeight,
+        scrollX: 0,
+        scrollY: 0,
+      });
+      const dateKey = selectedDate || getLocalDateKey();
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `delegated_attendance_snapshot_${dateKey}.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success("Delegated attendance snapshot downloaded");
+    } catch (err) {
+      console.error("Delegated snapshot capture failed:", err);
+      toast.error("Failed to generate delegated snapshot image");
+    } finally {
+      setIsDownloadingDelegatedSnapshot(false);
+    }
+  };
+
   if (!currentUser) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -623,9 +668,9 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
   return (
     <div className="bg-gray-100 overflow-x-hidden">
-      {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
+      {isAdminNavbarUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
 
-      <div className="container mx-auto w-full max-w-full px-4 py-8">
+	      <div className="container mx-auto w-full max-w-full px-4 py-8">
         {/* Header */}
         <div className="mb-6 bg-white rounded-lg shadow p-6">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -652,9 +697,21 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 {viewType.isEmployee && !viewType.isTransport && `${currentUser.department}`}
               </span>
             </div>
-          </div>
+	          </div>
+	          {delegatedFromUserId && (
+	            <div className="mt-3 flex justify-end">
+	              <button
+	                type="button"
+	                onClick={handleDownloadDelegatedSnapshotImage}
+	                disabled={isDownloadingDelegatedSnapshot}
+	                className="px-4 py-2 text-sm rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+	              >
+	                {isDownloadingDelegatedSnapshot ? "Generating Snapshot..." : "Export Delegated Snapshot Image"}
+	              </button>
+	            </div>
+	          )}
 
-          {weekInfo && (
+	          {weekInfo && (
             <div className={`mt-4 p-3 rounded-lg ${
               weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
             }`}>
@@ -1210,8 +1267,123 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
           </div>
         )}
 
-        {/* Legend */}
-        <div className="mt-6 bg-white rounded-lg shadow p-4">
+	        {delegatedFromUserId && (
+	          <div
+	            ref={exportCaptureRef}
+	            style={{
+	              position: "fixed",
+	              left: "-10000px",
+	              top: 0,
+	              width: "1700px",
+	              background: "#f8fafc",
+	              padding: "24px",
+	              color: "#0f172a",
+	              zIndex: -1,
+	            }}
+	          >
+	            <div
+	              style={{
+	                borderRadius: "16px",
+	                overflow: "hidden",
+	                border: "1px solid #e2e8f0",
+	                boxShadow: "0 10px 40px rgba(15, 23, 42, 0.08)",
+	                background: "#ffffff",
+	              }}
+	            >
+	              <div
+	                style={{
+	                  background: "linear-gradient(135deg, #0ea5e9 0%, #6366f1 60%, #a855f7 100%)",
+	                  color: "#ffffff",
+	                  padding: "20px 24px",
+	                }}
+	              >
+	                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px" }}>
+	                  <div>
+	                    <h2 style={{ margin: 0, fontSize: "30px", lineHeight: 1.15, fontWeight: 700 }}>Attendance Snapshot</h2>
+	                    <p style={{ margin: "8px 0 0", opacity: 0.95 }}>
+	                      Date: {selectedDate || "-"} | Week: {selectedWeek || "-"} | Team Mode: Delegated
+	                    </p>
+	                  </div>
+	                  <div style={{ textAlign: "right", fontSize: "14px", opacity: 0.9 }}>
+	                    <div>{currentUser?.username || "User"}</div>
+	                    <div>{currentUser?.department || "-"}</div>
+	                  </div>
+	                </div>
+	              </div>
+
+	              <div style={{ padding: "16px 24px", background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+	                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+	                  <span style={{ padding: "6px 12px", borderRadius: "999px", background: "#ecfeff", border: "1px solid #a5f3fc", color: "#0e7490", fontWeight: 600 }}>
+	                    Employees: {rosterEntries.length}
+	                  </span>
+	                </div>
+	              </div>
+
+	              <div style={{ padding: "14px 20px 24px" }}>
+	                <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+	                  <thead>
+	                    <tr>
+	                      {exportColumnDefs.map((col) => (
+	                        <th
+	                          key={col.key}
+	                          style={{
+	                            textAlign: "left",
+	                            padding: "12px 10px",
+	                            fontSize: "12px",
+	                            letterSpacing: "0.02em",
+	                            textTransform: "uppercase",
+	                            color: "#475569",
+	                            borderBottom: "1px solid #e2e8f0",
+	                            background: "#f8fafc",
+	                          }}
+	                        >
+	                          {col.label}
+	                        </th>
+	                      ))}
+	                    </tr>
+	                  </thead>
+	                  <tbody>
+	                    {rosterEntries.map((emp, idx) => {
+	                      const attendance = getTodayStatus(emp);
+	                      const values = {
+	                        employee: emp?.name || "-",
+	                        teamLeader: emp?.teamLeader || "-",
+	                        department: emp?.department || "-",
+	                        shift: formatShift(emp?.shiftStartHour, emp?.shiftEndHour),
+	                        rosterStatus: attendance?.status || "Not set",
+	                        transportStatus: attendance?.transportStatus || "Not set",
+	                        departmentStatus: attendance?.departmentStatus || "Not set",
+	                        transportArrival: attendance?.transportArrivalTime ? formatTimeForDisplay(attendance.transportArrivalTime) : "--:-- --",
+	                        departmentArrival: attendance?.departmentArrivalTime ? formatTimeForDisplay(attendance.departmentArrivalTime) : "--:-- --",
+	                      };
+	                      return (
+	                        <tr key={emp._id || `${emp.username || "emp"}-${idx}`} style={{ background: idx % 2 === 0 ? "#ffffff" : "#fcfcff" }}>
+	                          {exportColumnDefs.map((col) => (
+	                            <td
+	                              key={col.key}
+	                              style={{
+	                                padding: "10px",
+	                                borderBottom: "1px solid #f1f5f9",
+	                                fontWeight: col.key === "employee" ? 600 : 400,
+	                                color: "#0f172a",
+	                                fontSize: "13px",
+	                              }}
+	                            >
+	                              {values[col.key] ?? "-"}
+	                            </td>
+	                          ))}
+	                        </tr>
+	                      );
+	                    })}
+	                  </tbody>
+	                </table>
+	              </div>
+	            </div>
+	          </div>
+	        )}
+
+	        {/* Legend */}
+	        <div className="mt-6 bg-white rounded-lg shadow p-4">
           <h3 className="text-sm font-semibold text-gray-700 mb-3">Status Legend</h3>
           <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
             {STATUS_OPTIONS.map(option => (

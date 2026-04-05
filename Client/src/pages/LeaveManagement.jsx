@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { CalendarDays, CheckCircle2, Clock3, Search, ShieldCheck, UserRound, XCircle } from "lucide-react";
 import { toast } from "react-toastify";
 import Navbar from "./Navbar.jsx";
+import StyledDatePicker from "../components/StyledDatePicker.jsx";
 import {
   applyLeave,
   clearLeaveMessage,
@@ -98,19 +99,8 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
     }
   }, [dispatch, error, message]);
 
-  const summaryAvailable = mySummary?.balance?.available || {};
   const summaryStats = mySummary?.stats || {};
   const config = mySummary?.config || adminDashboard?.config || {};
-
-  const employeeCards = useMemo(
-    () => [
-      { key: "EL", label: "Earned Leave", value: summaryAvailable.EL ?? 0, tone: "from-indigo-500 to-blue-500" },
-      { key: "CL", label: "Casual Leave", value: summaryAvailable.CL ?? 0, tone: "from-emerald-500 to-teal-500" },
-      { key: "ML", label: "Medical Leave", value: summaryAvailable.ML ?? 0, tone: "from-orange-500 to-amber-500" },
-      { key: "LWP", label: "LWP Used", value: mySummary?.balance?.used?.LWP ?? 0, tone: "from-rose-500 to-pink-500" },
-    ],
-    [mySummary, summaryAvailable]
-  );
 
   const handleApply = async (e) => {
     e.preventDefault();
@@ -150,22 +140,12 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   const renderEmployeeView = () => (
     <div className="min-h-screen crm-page">
       {!embeddedAdmin ? <Navbar /> : null}
-      <div className={`${!embeddedAdmin ? "pt-[96px]" : "pt-6"} px-4 md:px-6 pb-10`}>
+      <div className={`${!embeddedAdmin ? "pt-0" : "pt-0"} px-4 md:px-6 pb-10`}>
         <div className="max-w-[1300px] mx-auto space-y-6">
           {/* <div className="rounded-3xl bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 p-6 text-white shadow-lg">
             <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Leave Management Dashboard</h1>
             <p className="text-blue-100 mt-1">Welcome back, {user?.realName || user?.username}</p>
           </div> */}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {employeeCards.map((card) => (
-              <div key={card.key} className="crm-card p-4">
-                <div className={`h-1.5 rounded-full bg-gradient-to-r ${card.tone}`} />
-                <p className="text-xs font-medium crm-muted mt-3 uppercase tracking-wide">{card.label}</p>
-                <p className="text-3xl font-semibold mt-1">{card.value}</p>
-              </div>
-            ))}
-          </div>
 
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <form onSubmit={handleApply} className="xl:col-span-2 crm-card p-5">
@@ -189,12 +169,13 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                 </div>
                 <div>
                   <label className="text-xs font-semibold crm-muted">Start Date</label>
-                  <input
-                    type="date"
-                    value={leaveForm.startDate}
-                    onChange={(e) => setLeaveForm((p) => ({ ...p, startDate: e.target.value }))}
-                    className="mt-1 crm-input"
-                  />
+                  <div className="mt-1">
+                    <StyledDatePicker
+                      value={leaveForm.startDate}
+                      onChange={(value) => setLeaveForm((p) => ({ ...p, startDate: value }))}
+                      placeholder="Select start date"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold crm-muted">Start Session</label>
@@ -210,12 +191,13 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                 </div>
                 <div>
                   <label className="text-xs font-semibold crm-muted">End Date</label>
-                  <input
-                    type="date"
-                    value={leaveForm.endDate}
-                    onChange={(e) => setLeaveForm((p) => ({ ...p, endDate: e.target.value }))}
-                    className="mt-1 crm-input"
-                  />
+                  <div className="mt-1">
+                    <StyledDatePicker
+                      value={leaveForm.endDate}
+                      onChange={(value) => setLeaveForm((p) => ({ ...p, endDate: value }))}
+                      placeholder="Select end date"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="text-xs font-semibold crm-muted">End Session</label>

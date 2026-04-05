@@ -14,6 +14,7 @@ import {
   signPolicyDocumentByEmployee,
   signPolicyDocumentByHR,
   deleteEmployeeByAdmin,
+  exportEmployeeDetailsExcel,
 } from "../Controllers/auth.controller.js";
 import { authMiddleware } from "../Middlewares/auth.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
@@ -24,6 +25,7 @@ router.post("/signup",authMiddleware, signup);
 router.post("/login", login);
 router.post("/logout", logout);
 router.get("/employees", authMiddleware, getAllEmployees);
+router.get("/employees/export", authMiddleware, exportEmployeeDetailsExcel);
 router.get("/employees/managers", authMiddleware, getReportingManagers);
 router.post("/update-profile", authMiddleware, updateProfile);
 router.post("/createcoreUser", authMiddleware, createCoreTeamUser);

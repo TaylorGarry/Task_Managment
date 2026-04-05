@@ -9,10 +9,19 @@ import {
   getTeamMembersForTeamLeader,
   getMyDelegations  // ← Import this
 } from "../Controllers/delegation.controller.js";
-import { authMiddleware, checkRole } from "../Middlewares/auth.middleware.js";
+import { authMiddleware } from "../Middlewares/auth.middleware.js";
 import Delegation from "../Modals/Delegation/delegation.modal.js";
 
 const router = express.Router();
+const canManageDelegation = (req, res, next) => {
+  const accountType = String(req.user?.accountType || "").trim();
+  const department = String(req.user?.department || "").trim().toLowerCase();
+  const isHrOrSuperAdmin = accountType === "HR" || accountType === "superAdmin";
+  const isOpsMetaEmployee = accountType === "employee" && department === "ops - meta";
+
+  if (isHrOrSuperAdmin || isOpsMetaEmployee) return next();
+  return res.status(403).json({ message: "Forbidden: You do not have access to delegation management" });
+};
 const getUtcDayRange = (base = new Date()) => {
   const startOfDayUtc = new Date(
     Date.UTC(base.getUTCFullYear(), base.getUTCMonth(), base.getUTCDate(), 0, 0, 0, 0)
@@ -26,14 +35,14 @@ const getUtcDayRange = (base = new Date()) => {
 router.use(authMiddleware);
 
 // ============ HR and SuperAdmin only routes ============
-router.post("/", checkRole(["HR", "superAdmin"]), createDelegation);
-router.get("/active", checkRole(["HR", "superAdmin"]), getActiveDelegations);
-router.put("/:id/end", checkRole(["HR", "superAdmin"]), endDelegationEarly);
-router.get("/history/:delegatorId", checkRole(["HR", "superAdmin"]), getDelegationHistory);
+router.post("/", canManageDelegation, createDelegation);
+router.get("/active", canManageDelegation, getActiveDelegations);
+router.put("/:id/end", canManageDelegation, endDelegationEarly);
+router.get("/history/:delegatorId", canManageDelegation, getDelegationHistory);
 
 // Helper routes (accessible by HR/SuperAdmin)
-router.get("/team-leaders", checkRole(["HR", "superAdmin"]), getAllTeamLeadersForDropdown);
-router.get("/team-leaders/:teamLeaderId/members", checkRole(["HR", "superAdmin"]), getTeamMembersForTeamLeader);
+router.get("/team-leaders", canManageDelegation, getAllTeamLeadersForDropdown);
+router.get("/team-leaders/:teamLeaderId/members", canManageDelegation, getTeamMembersForTeamLeader);
 
 // ============ Routes accessible by all authenticated users ============
 // Get delegation where current user is assignee (for assignee dashboard)

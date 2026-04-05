@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { 
   getOpsMetaCurrentWeekRoster, 
@@ -8,6 +8,7 @@ import {
 } from '../features/slices/rosterSlice.js';
 import { toast } from 'react-toastify';
 import Navbar from '../pages/Navbar.jsx';
+import html2canvas from "html2canvas";
 
 const OpsRoster = () => {
   const dispatch = useDispatch();
@@ -27,6 +28,8 @@ const OpsRoster = () => {
   const [openEditModal, setOpenEditModal] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [isDownloadingSnapshot, setIsDownloadingSnapshot] = useState(false);
+  const exportCaptureRef = useRef(null);
   
   // Pagination state
   const [page, setPage] = useState(0);
@@ -108,6 +111,20 @@ const OpsRoster = () => {
       'LWD': 'bg-amber-100 text-amber-800 border-amber-200'
     };
     return colors[status] || 'bg-gray-100 text-gray-800 border-gray-200';
+  }, []);
+  const getSnapshotStatusInlineStyle = useCallback((status) => {
+    const palette = {
+      P: { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#86efac" },
+      WO: { backgroundColor: "#fef3c7", color: "#92400e", borderColor: "#fcd34d" },
+      L: { backgroundColor: "#dbeafe", color: "#1e40af", borderColor: "#93c5fd" },
+      NCNS: { backgroundColor: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" },
+      UL: { backgroundColor: "#f3f4f6", color: "#374151", borderColor: "#d1d5db" },
+      LWP: { backgroundColor: "#ede9fe", color: "#6d28d9", borderColor: "#c4b5fd" },
+      BL: { backgroundColor: "#e5e7eb", color: "#1f2937", borderColor: "#9ca3af" },
+      H: { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#86efac" },
+      LWD: { backgroundColor: "#ffedd5", color: "#9a3412", borderColor: "#fdba74" },
+    };
+    return palette[status] || { backgroundColor: "#f3f4f6", color: "#6b7280", borderColor: "#d1d5db" };
   }, []);
 
   // Handle refresh with debounce
@@ -239,6 +256,13 @@ const OpsRoster = () => {
     
     return filtered;
   }, [opsMetaRoster, searchQuery, departmentFilter, sortField, sortDirection]);
+  const isEmployeeTeamLeaderView = useMemo(() => {
+    const normalizedUser = String(currentUser?.username || "").trim().toLowerCase();
+    const normalizedSummaryTl = String(opsMetaRoster?.data?.summary?.teamLeader || "").trim().toLowerCase();
+    return Boolean(isEmployeeEditor && normalizedUser && normalizedSummaryTl && normalizedUser === normalizedSummaryTl);
+  }, [currentUser?.username, isEmployeeEditor, opsMetaRoster?.data?.summary?.teamLeader]);
+
+  const canDownloadSnapshot = isEmployeeTeamLeaderView && filteredEntries.length > 0;
   const departments = useMemo(() => {
     if (!opsMetaRoster?.data?.rosterEntries) return [];
     return [...new Set(opsMetaRoster.data.rosterEntries.map(e => e.department))].sort();
@@ -265,6 +289,33 @@ const OpsRoster = () => {
       setSortDirection('asc');
     }
   };
+
+  const handleDownloadRosterSnapshot = useCallback(async () => {
+    if (!canDownloadSnapshot || !exportCaptureRef.current || isDownloadingSnapshot) return;
+    setIsDownloadingSnapshot(true);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      const node = exportCaptureRef.current;
+      const canvas = await html2canvas(node, {
+        scale: Math.max(3, Math.min(4, (window.devicePixelRatio || 1) * 2)),
+        useCORS: true,
+        backgroundColor: "#f8fafc",
+        windowWidth: node.scrollWidth,
+        windowHeight: node.scrollHeight,
+      });
+      const dateKey = toIstDateKey(new Date()) || "today";
+      const snapshotWeek = opsMetaRoster?.data?.weekNumber || "current";
+      const link = document.createElement("a");
+      link.href = canvas.toDataURL("image/png");
+      link.download = `ops-meta-team-roster-week-${snapshotWeek}-${dateKey}.png`;
+      link.click();
+      toast.success("Roster snapshot downloaded");
+    } catch (err) {
+      toast.error("Failed to download roster snapshot");
+    } finally {
+      setIsDownloadingSnapshot(false);
+    }
+  }, [canDownloadSnapshot, isDownloadingSnapshot, toIstDateKey, opsMetaRoster?.data?.weekNumber]);
 
   if (opsMetaLoading && !opsMetaRoster) {
     return (
@@ -375,8 +426,8 @@ const OpsRoster = () => {
               </div>
             </div>
           </div>
-          <div className="mt-4 flex flex-col sm:flex-row gap-3">
-            <div className="flex-1">
+	          <div className="mt-4 flex flex-col sm:flex-row gap-3">
+	            <div className="flex-1">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -389,12 +440,30 @@ const OpsRoster = () => {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="block w-1/2 pl-10 pr-3 py-2 text-gray-500 text-lg font-bold border border-[#EAEAEA] rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                />
+	                />
+	              </div>
+	            </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleRefresh}
+                  disabled={refreshing}
+                  className="bg-blue-50 text-blue-700 border border-blue-200 px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-100 disabled:opacity-50"
+                >
+                  {refreshing ? "Refreshing..." : "Refresh"}
+                </button>
+                {canDownloadSnapshot && (
+                  <button
+                    onClick={handleDownloadRosterSnapshot}
+                    disabled={isDownloadingSnapshot}
+                    className="bg-fuchsia-50 text-fuchsia-700 border border-fuchsia-200 px-4 py-2 rounded-md text-sm font-medium hover:bg-fuchsia-100 disabled:opacity-50"
+                  >
+                    {isDownloadingSnapshot ? "Generating..." : "Download Snapshot"}
+                  </button>
+                )}
               </div>
-            </div>
-          </div>
-        </div>
-      </div>
+	          </div>
+	        </div>
+	      </div>
 
       <div className="max-w-7xl mx-auto p-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -621,10 +690,105 @@ const OpsRoster = () => {
               </div>
             </div>
           )}
-        </div>
-      </div>
+	        </div>
+	      </div>
 
-      {openDetails && selectedEmployee && (
+      {canDownloadSnapshot && (
+        <div
+          ref={exportCaptureRef}
+          style={{
+            position: "fixed",
+            left: "-10000px",
+            top: 0,
+            width: "2200px",
+            background: "#f8fafc",
+            padding: "20px",
+            zIndex: -1,
+          }}
+        >
+          <div style={{ background: "#ffffff", border: "1px solid #e5e7eb", borderRadius: "12px", overflow: "hidden" }}>
+            <div style={{ background: "linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)", color: "#fff", padding: "16px 20px" }}>
+              <h2 style={{ margin: 0, fontSize: "28px", fontWeight: 700 }}>
+                Ops-Meta Team Roster Snapshot - Week {weekNumber}
+              </h2>
+              <p style={{ margin: "8px 0 0", fontSize: "16px", opacity: 0.95 }}>
+                {new Date(startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+              </p>
+            </div>
+            <div style={{ padding: "12px 20px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", fontSize: "15px", color: "#374151" }}>
+              Team Leader: {summary?.teamLeader || currentUser?.username || "-"} | Employees: {filteredEntries.length}
+            </div>
+            <div style={{ padding: "14px 18px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: "left", padding: "12px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", fontSize: "14px", textTransform: "uppercase" }}>Employee</th>
+                    <th style={{ textAlign: "left", padding: "12px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", fontSize: "14px", textTransform: "uppercase" }}>Shift</th>
+                    <th style={{ textAlign: "left", padding: "12px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", fontSize: "14px", textTransform: "uppercase" }}>Transport</th>
+                    <th style={{ textAlign: "left", padding: "12px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", fontSize: "14px", textTransform: "uppercase" }}>Cab Route</th>
+                    <th style={{ textAlign: "left", padding: "12px", borderBottom: "1px solid #e5e7eb", background: "#f9fafb", fontSize: "14px", textTransform: "uppercase" }}>Daily Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((employee, idx) => (
+                    <tr key={employee._id || `${employee.username || "emp"}-${idx}`} style={{ background: idx % 2 === 0 ? "#fff" : "#fcfcff" }}>
+                      <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px", fontWeight: 600 }}>{employee.name || "-"}</td>
+                      <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{formatShiftHours(employee.shiftStartHour, employee.shiftEndHour)}</td>
+                      <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{employee.transport || "-"}</td>
+                      <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{employee.cabRoute || "-"}</td>
+                      <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>
+                        {(employee.dailyStatus || []).length ? (
+                          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                            {(employee.dailyStatus || []).map((day, dayIndex) => {
+                              const statusCode = day?.status || "-";
+                              const style = getSnapshotStatusInlineStyle(statusCode);
+                              return (
+                                <div
+                                  key={`${employee._id || idx}-${dayIndex}`}
+                                  style={{
+                                    border: "1px solid #e2e8f0",
+                                    borderRadius: "8px",
+                                    background: "#f8fafc",
+                                    padding: "6px 8px",
+                                    minWidth: "88px",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  <div style={{ fontSize: "11px", color: "#64748b", marginBottom: "5px" }}>
+                                    {formatDate(day.date)}
+                                  </div>
+                                  <div
+                                    style={{
+                                      border: `1px solid ${style.borderColor}`,
+                                      backgroundColor: style.backgroundColor,
+                                      color: style.color,
+                                      borderRadius: "999px",
+                                      fontSize: "13px",
+                                      fontWeight: 700,
+                                      marginTop: "6px",
+                                      padding: "4px 10px",
+                                    }}
+                                  >
+                                    {statusCode}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          "-"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+	      {openDetails && selectedEmployee && (
   <div className="fixed inset-0 z-[9999] overflow-y-auto">
     <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
       <div 

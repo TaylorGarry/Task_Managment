@@ -147,6 +147,11 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+
     realName: {
       type: String,
       trim: true,
@@ -208,6 +213,33 @@ const userSchema = new mongoose.Schema(
     reportingManager: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
+      default: null,
+    },
+
+    profilePhotoUrl: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    profilePhotoPublicId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    ctc: {
+      type: Number,
+      default: null,
+    },
+
+    inHandSalary: {
+      type: Number,
+      default: null,
+    },
+
+    transportAllowance: {
+      type: Number,
       default: null,
     },
 

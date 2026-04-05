@@ -8,6 +8,8 @@ import path from "path";
 import fs from "fs/promises";
 import { fileURLToPath } from "url";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+import { notifySuperAdminsForHrAction } from "../utils/adminNotification.js";
+import XLSX from "xlsx-js-style";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -256,6 +258,22 @@ const normalizeEmploymentType = (value = "") => {
   if (normalized === "fresher") return "fresher";
   if (normalized === "experienced") return "experienced";
   return "";
+};
+
+const normalizeOptionalAmount = (value) => {
+  if (value === undefined || value === null || value === "") return null;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
+const destroyCloudinaryAsset = async (publicId = "") => {
+  const normalized = String(publicId || "").trim();
+  if (!normalized) return;
+  try {
+    await cloudinary.uploader.destroy(normalized, { invalidate: true, resource_type: "image" });
+  } catch (error) {
+    console.warn("Failed to delete Cloudinary asset:", normalized, error?.message || error);
+  }
 };
 
 const computeDocsStatus = ({ employmentType = "", documents = [], fallback = "No" } = {}) => {
@@ -622,6 +640,11 @@ export const signup = async (req, res) => {
       reportingManager,
       policyDocuments,
       employmentType,
+      profilePhotoUrl,
+      profilePhotoPublicId,
+      ctc,
+      inHandSalary,
+      transportAllowance,
     } = req.body;
 
     // ⭐ NEW: check if any superAdmin exists
@@ -731,6 +754,11 @@ export const signup = async (req, res) => {
       designation: designation || "",
       officeLocation: String(officeLocation || "").trim(),
       reportingManager: reportingManager || null,
+      profilePhotoUrl: String(profilePhotoUrl || "").trim(),
+      profilePhotoPublicId: String(profilePhotoPublicId || "").trim(),
+      ctc: normalizeOptionalAmount(ctc),
+      inHandSalary: normalizeOptionalAmount(inHandSalary),
+      transportAllowance: normalizeOptionalAmount(transportAllowance),
       policyDocuments: effectivePolicyDocuments,
       policySignatures: effectivePolicyDocuments.map((url) => ({
         documentUrl: url,
@@ -748,6 +776,13 @@ export const signup = async (req, res) => {
       .populate("reportingManager", "username realName")
       .select("-password")
       .lean();
+
+    await notifySuperAdminsForHrAction({
+      actor: req.user,
+      action: "user_created",
+      target: populatedUser,
+      io: req.io,
+    });
 
     return res.status(201).json({
       message: "User created successfully",
@@ -937,6 +972,10 @@ export const login = async (req, res) => {
     if (!user)
       return res.status(404).json({ message: "User not found" });
 
+    if (user.isActive === false) {
+      return res.status(403).json({ message: "Your account is inactive. You cannot login." });
+    }
+
     if (!(await bcrypt.compare(password, user.password)))
       return res.status(401).json({ message: "Invalid credentials" });
 
@@ -956,12 +995,18 @@ export const login = async (req, res) => {
         department: user.department,
         isCoreTeam: user.isCoreTeam,
         isTeamLeader: user.isTeamLeader,
+        isActive: user.isActive !== false,
         realName: user.realName || "",
         pseudoName: user.pseudoName || "",
         empId: user.empId || "",
         dateOfJoining: user.dateOfJoining || null,
         designation: user.designation || "",
         officeLocation: user.officeLocation || "",
+        profilePhotoUrl: user.profilePhotoUrl || "",
+        profilePhotoPublicId: user.profilePhotoPublicId || "",
+        ctc: user.ctc ?? null,
+        inHandSalary: user.inHandSalary ?? null,
+        transportAllowance: user.transportAllowance ?? null,
         transportOffice: user.transportOffice || "No",
         docsStatus: user.docsStatus || "No",
         employmentType: user.employmentType || "",
@@ -1011,6 +1056,56 @@ const SUPER_ADMIN_VISIBLE_ROLES = [
   "AM",
 ];
 
+const DEFAULT_EMPLOYEE_DOC_NAMES = [
+  "Resume",
+  "Photo",
+  "Aadhaar Card",
+  "PAN Card",
+  "Current Address Proof",
+  "Permanent Address Proof",
+  "10th Marksheet",
+  "12th Marksheet",
+  "Graduation/Post Graduation Marksheet",
+  "Additional Certificate",
+  "Cancelled Cheque",
+  "Bank Statement (Last 3 Months)",
+  "Previous Company - Appointment Letter",
+  "Previous Company - Last 3 Months Salary Slip",
+  "Relieving/Experience Letter",
+  "Resignation Acceptance",
+  "Offer Letter",
+  "Appointment Letter",
+];
+
+const getShiftLabelFromHours = (start, end) => {
+  const startNum = Number(start);
+  const endNum = Number(end);
+  if (!Number.isFinite(startNum) || !Number.isFinite(endNum)) return "";
+  const formatHour = (hour) => {
+    const suffix = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+    return `${hour12}${suffix}`;
+  };
+  return `${formatHour(startNum)}-${formatHour(endNum)}`;
+};
+
+const formatDateOnly = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const yyyy = date.getFullYear();
+  const mm = String(date.getMonth() + 1).padStart(2, "0");
+  const dd = String(date.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+};
+
+const formatDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toISOString();
+};
+
 export const getAllEmployees = async (req, res) => {
   try {
     const requester = req.user;
@@ -1027,7 +1122,7 @@ export const getAllEmployees = async (req, res) => {
 
     const employees = await User.find(query)
       .select(
-        "_id username department accountType isCoreTeam isTeamLeader shiftStartHour shiftEndHour realName pseudoName empId dateOfJoining transportOffice docsStatus employmentType documents designation officeLocation reportingManager policyDocuments policySignatures policyAgreement hrDocumentOverrideUntil hrDocumentOverrideBy hrGlobalDocumentOverrideUntil hrGlobalDocumentOverrideBy createdAt"
+        "_id username department accountType isCoreTeam isTeamLeader isActive shiftStartHour shiftEndHour realName pseudoName empId dateOfJoining transportOffice docsStatus employmentType documents designation officeLocation reportingManager profilePhotoUrl profilePhotoPublicId ctc inHandSalary transportAllowance policyDocuments policySignatures policyAgreement hrDocumentOverrideUntil hrDocumentOverrideBy hrGlobalDocumentOverrideUntil hrGlobalDocumentOverrideBy createdAt"
       )
       .lean();
 
@@ -1131,12 +1226,18 @@ export const updateUserByAdmin = async (req, res) => {
       designation,
       officeLocation,
       reportingManager,
+      profilePhotoUrl,
+      profilePhotoPublicId,
+      ctc,
+      inHandSalary,
+      transportAllowance,
       policyDocuments,
       documents,
       employmentType,
       allowHrDocumentEdit,
       allowHrDocumentEditGlobal,
       hrDocumentOverrideMinutes,
+      isActive,
     } = req.body;
 
     const updateData = {};
@@ -1181,14 +1282,53 @@ export const updateUserByAdmin = async (req, res) => {
     if (pseudoName !== undefined) updateData.pseudoName = String(pseudoName || "").trim();
     if (designation !== undefined) updateData.designation = String(designation || "").trim();
     if (officeLocation !== undefined) updateData.officeLocation = String(officeLocation || "").trim();
+    if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = String(profilePhotoUrl || "").trim();
+    if (profilePhotoPublicId !== undefined)
+      updateData.profilePhotoPublicId = String(profilePhotoPublicId || "").trim();
+    const payrollPayloadProvided =
+      ctc !== undefined || inHandSalary !== undefined || transportAllowance !== undefined;
+    if (payrollPayloadProvided && !["HR", "superAdmin"].includes(req.user.accountType)) {
+      return res
+        .status(403)
+        .json({ message: "Only HR and superAdmin can update payroll fields" });
+    }
+    if (ctc !== undefined) updateData.ctc = normalizeOptionalAmount(ctc);
+    if (inHandSalary !== undefined) updateData.inHandSalary = normalizeOptionalAmount(inHandSalary);
+    if (transportAllowance !== undefined)
+      updateData.transportAllowance = normalizeOptionalAmount(transportAllowance);
     if (employmentType !== undefined) {
       updateData.employmentType = normalizeEmploymentType(employmentType);
     }
 
     const existingUserForUpdate = await User.findById(userId)
-      .select("accountType documents employmentType hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil")
+      .select(
+        "accountType username realName empId documents employmentType profilePhotoPublicId profilePhotoUrl hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil isActive"
+      )
       .lean();
     if (!existingUserForUpdate) return res.status(404).json({ message: "User not found" });
+
+    const wasActiveBeforeUpdate = existingUserForUpdate.isActive !== false;
+
+    const isReactivationRequest =
+      existingUserForUpdate.isActive === false &&
+      isActive !== undefined &&
+      Boolean(isActive) === true;
+
+    if (isReactivationRequest && req.user?.accountType !== "superAdmin") {
+      return res.status(403).json({
+        message: "Only superAdmin can reactivate an inactive user.",
+      });
+    }
+
+    if (existingUserForUpdate.isActive === false && !isReactivationRequest) {
+      return res.status(403).json({
+        message: "Inactive user cannot be edited from Manage Employee.",
+      });
+    }
+
+    if (isActive !== undefined) {
+      updateData.isActive = Boolean(isActive);
+    }
 
     if (allowHrDocumentEdit !== undefined) {
       if (req.user.accountType !== "superAdmin") {
@@ -1315,6 +1455,17 @@ export const updateUserByAdmin = async (req, res) => {
       updateData.passwordLastReset = new Date();
     }
 
+    const nextProfilePhotoUrl = String(updateData.profilePhotoUrl || "").trim();
+    const prevProfilePhotoUrl = String(existingUserForUpdate.profilePhotoUrl || "").trim();
+    const nextProfilePhotoPublicId = String(updateData.profilePhotoPublicId || "").trim();
+    const prevProfilePhotoPublicId = String(existingUserForUpdate.profilePhotoPublicId || "").trim();
+    const profilePhotoChanged =
+      (nextProfilePhotoUrl && nextProfilePhotoUrl !== prevProfilePhotoUrl) ||
+      (nextProfilePhotoPublicId && nextProfilePhotoPublicId !== prevProfilePhotoPublicId);
+    if (profilePhotoChanged && prevProfilePhotoPublicId) {
+      await destroyCloudinaryAsset(prevProfilePhotoPublicId);
+    }
+
     const updatedUser = await User.findByIdAndUpdate(
       userId,
       {
@@ -1329,6 +1480,16 @@ export const updateUserByAdmin = async (req, res) => {
 
     if (!updatedUser) return res.status(404).json({ message: "User not found" });
 
+    const isNowInactive = updatedUser.isActive === false;
+    if (wasActiveBeforeUpdate && isNowInactive) {
+      await notifySuperAdminsForHrAction({
+        actor: req.user,
+        action: "user_inactivated",
+        target: updatedUser,
+        io: req.io,
+      });
+    }
+
     const responseData = {
       message: "User updated successfully",
       user: updatedUser,
@@ -1342,6 +1503,114 @@ export const updateUserByAdmin = async (req, res) => {
   } catch (error) {
     console.error("Update User Error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const exportEmployeeDetailsExcel = async (req, res) => {
+  try {
+    const requester = req.user;
+    if (!["superAdmin", "admin", "HR"].includes(requester?.accountType)) {
+      return res.status(403).json({ message: "Only superAdmin, admin and HR can export employees" });
+    }
+
+    const employees = await User.find({ accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } })
+      .select(
+        "_id username realName pseudoName empId accountType department designation officeLocation reportingManager dateOfJoining isActive isCoreTeam isTeamLeader shiftStartHour shiftEndHour transportOffice docsStatus employmentType ctc inHandSalary transportAllowance policyDocuments policyAgreement hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil documents createdAt updatedAt"
+      )
+      .lean();
+
+    const managerIds = [
+      ...new Set(
+        employees
+          .map((e) => e?.reportingManager)
+          .filter((id) => mongoose.Types.ObjectId.isValid(String(id || "")))
+          .map((id) => String(id))
+      ),
+    ];
+
+    const managerMap = new Map();
+    if (managerIds.length) {
+      const managers = await User.find({ _id: { $in: managerIds } })
+        .select("_id username realName")
+        .lean();
+      for (const m of managers) {
+        managerMap.set(String(m._id), m);
+      }
+    }
+
+    const discoveredDocNames = new Set(DEFAULT_EMPLOYEE_DOC_NAMES.map((doc) => String(doc || "").trim()));
+    for (const employee of employees) {
+      for (const doc of Array.isArray(employee?.documents) ? employee.documents : []) {
+        const name = String(doc?.name || "").trim();
+        if (name) discoveredDocNames.add(name);
+      }
+    }
+    const docColumns = [...discoveredDocNames];
+
+    const rows = employees.map((emp, index) => {
+      const manager = managerMap.get(String(emp?.reportingManager || ""));
+      const docStatusByName = new Map();
+      for (const doc of Array.isArray(emp?.documents) ? emp.documents : []) {
+        const name = String(doc?.name || "").trim();
+        if (!name) continue;
+        const hasDoc = Boolean(doc?.uploaded || String(doc?.url || "").trim());
+        docStatusByName.set(name, hasDoc ? "Yes" : "No");
+      }
+
+      const row = {
+        "S No": index + 1,
+        "Employee ID": emp?.empId || "",
+        "Username": emp?.username || "",
+        "Real Name": emp?.realName || "",
+        "Pseudo Name": emp?.pseudoName || "",
+        "Account Type": emp?.accountType || "",
+        "Department": emp?.department || "",
+        "Designation": emp?.designation || "",
+        "Office Location": emp?.officeLocation || "",
+        "Reporting Manager": manager?.realName || manager?.username || "",
+        "Date Of Joining": formatDateOnly(emp?.dateOfJoining),
+        "Account Status": emp?.isActive === false ? "Inactive" : "Active",
+        "Core Team": emp?.isCoreTeam ? "Yes" : "No",
+        "Team Leader": emp?.isTeamLeader ? "Yes" : "No",
+        "Shift": getShiftLabelFromHours(emp?.shiftStartHour, emp?.shiftEndHour),
+        "Shift Start Hour": Number.isFinite(Number(emp?.shiftStartHour)) ? Number(emp.shiftStartHour) : "",
+        "Shift End Hour": Number.isFinite(Number(emp?.shiftEndHour)) ? Number(emp.shiftEndHour) : "",
+        "Transport Office": emp?.transportOffice || "",
+        "Docs Status": emp?.docsStatus || "",
+        "Employment Type": emp?.employmentType || "",
+        "CTC": emp?.ctc ?? "",
+        "In Hand Salary": emp?.inHandSalary ?? "",
+        "Transport Allowance": emp?.transportAllowance ?? "",
+        "Policy Assigned": Array.isArray(emp?.policyDocuments) && emp.policyDocuments.length ? "Yes" : "No",
+        "Policy Agreed": emp?.policyAgreement?.agreed ? "Yes" : "No",
+        "Policy Agreed At": formatDateTime(emp?.policyAgreement?.agreedAt),
+        "HR Override Active": emp?.hrDocumentOverrideUntil ? "Yes" : "No",
+        "HR Override Until": formatDateTime(emp?.hrDocumentOverrideUntil),
+        "HR Global Override Active": emp?.hrGlobalDocumentOverrideUntil ? "Yes" : "No",
+        "HR Global Override Until": formatDateTime(emp?.hrGlobalDocumentOverrideUntil),
+        "Created At": formatDateTime(emp?.createdAt),
+        "Updated At": formatDateTime(emp?.updatedAt),
+      };
+
+      for (const docName of docColumns) {
+        row[`Doc - ${docName}`] = docStatusByName.get(docName) || "No";
+      }
+      return row;
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+
+    const fileName = `Employee_Details_${new Date().toISOString().slice(0, 10)}.xlsx`;
+    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+    return res.send(buffer);
+  } catch (error) {
+    console.error("Export employee details excel error:", error);
+    return res.status(500).json({ message: "Failed to export employee details", error: error.message });
   }
 };
 
@@ -1430,19 +1699,15 @@ export const getEmployeeDashboardSummary = async (req, res) => {
     const nextWeekDate = new Date(today);
     nextWeekDate.setDate(nextWeekDate.getDate() + 7);
 
-    const currentMonth = today.getMonth() + 1;
-    const currentYear = today.getFullYear();
-    const nextMonth = nextWeekDate.getMonth() + 1;
-    const nextYear = nextWeekDate.getFullYear();
+    const rangeStart = startOfDay(today);
+    const rangeEnd = endOfDay(nextWeekDate);
 
-    const monthFilters = [{ month: currentMonth, year: currentYear }];
-    if (nextMonth !== currentMonth || nextYear !== currentYear) {
-      monthFilters.push({ month: nextMonth, year: nextYear });
-    }
-
-    const rosters = await Roster.find({ $or: monthFilters })
+    const rosters = await Roster.find({
+      rosterStartDate: { $lte: rangeEnd },
+      rosterEndDate: { $gte: rangeStart },
+    })
       .select("_id month year rosterStartDate rosterEndDate weeks")
-      .sort({ year: 1, month: 1, rosterStartDate: 1 })
+      .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
       .lean();
 
     const currentWeekResult = findWeekContainingDate(rosters, today);
@@ -1500,6 +1765,11 @@ export const getEmployeeDashboardSummary = async (req, res) => {
         department: user.department || "",
         designation: user.designation || "",
         officeLocation: user.officeLocation || "",
+        profilePhotoUrl: user.profilePhotoUrl || "",
+        profilePhotoPublicId: user.profilePhotoPublicId || "",
+        ctc: user.ctc ?? null,
+        inHandSalary: user.inHandSalary ?? null,
+        transportAllowance: user.transportAllowance ?? null,
         transportOffice: user.transportOffice || "No",
         docsStatus: user.docsStatus || "No",
         documents: user.documents || [],
@@ -1748,6 +2018,8 @@ export const uploadEmployeeAsset = async (req, res) => {
     const folder =
       assetType === "policy"
         ? "task_management/employee/policies"
+        : assetType === "profile-photo"
+        ? "task_management/employee/profile_photos"
         : "task_management/employee/documents";
 
     const result = await new Promise((resolve, reject) => {
@@ -1804,7 +2076,7 @@ export const deleteEmployeeByAdmin = async (req, res) => {
       return res.status(400).json({ message: "You cannot delete your own account" });
     }
 
-    const target = await User.findById(targetUserId).select("_id accountType username").lean();
+    const target = await User.findById(targetUserId).select("_id accountType username realName empId").lean();
     if (!target) return res.status(404).json({ message: "User not found" });
 
     if (target.accountType === "superAdmin" && requester.accountType !== "superAdmin") {
@@ -1812,6 +2084,13 @@ export const deleteEmployeeByAdmin = async (req, res) => {
     }
 
     await User.findByIdAndDelete(targetUserId);
+
+    await notifySuperAdminsForHrAction({
+      actor: requester,
+      action: "user_deleted",
+      target,
+      io: req.io,
+    });
 
     return res.status(200).json({
       message: "Employee deleted successfully",

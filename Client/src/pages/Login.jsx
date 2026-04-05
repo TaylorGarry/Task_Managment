@@ -27,7 +27,22 @@ const Login = () => {
         if (user.accountType === "admin") navigate("/admin");
         else navigate("/dashboard");
       } else {
-        toast.error(resultAction.payload || "Login failed");
+        const message = String(
+          resultAction.payload ||
+            resultAction.error?.message ||
+            "Login failed"
+        );
+        const normalizedMessage = message.toLowerCase();
+        if (
+          normalizedMessage.includes("inactive") ||
+          normalizedMessage.includes("cannot login")
+        ) {
+          const inactiveMessage =
+            "Your account is inactive. You cannot login. Ask superAdmin or HR to activate your account.";
+          toast.error(inactiveMessage);
+        } else {
+          toast.error(message);
+        }
       }
     } catch (err) {
       toast.error("Something went wrong");

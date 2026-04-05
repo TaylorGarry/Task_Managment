@@ -109,7 +109,7 @@ const AssignTask = () => {
   const departments = [...new Set(employees.map(emp => emp.department))];
 
   return (
-    <div className="relative min-h-screen mt-5 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
+    <div className="relative min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50">
       <Toaster />
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;600&display=swap');

@@ -1,231 +1,214 @@
-// utils/teamHelper.js
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
 
-// Get all employees under a team leader (based on teamLeader string field)
+const normalize = (value = "") => String(value || "").trim().toLowerCase();
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+const normalizeLabel = (value = "") =>
+  normalize(value)
+    .replace(/[()\-_/.,]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const parseDate = (value) => {
+  if (!value) return null;
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value);
+  if (typeof value === "string" && DATE_ONLY_RE.test(value)) {
+    const [y, m, d] = value.split("-").map(Number);
+    const local = new Date(y, m - 1, d, 0, 0, 0, 0);
+    return Number.isNaN(local.getTime()) ? null : local;
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const getDayRange = (dateValue) => {
+  const d = parseDate(dateValue) || new Date();
+  const start = new Date(d);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(d);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+};
+
+const overlaps = (aStart, aEnd, bStart, bEnd) => aStart <= bEnd && aEnd >= bStart;
+
+const getRostersForDate = async (dateValue) => {
+  const { start, end } = getDayRange(dateValue);
+
+  let rosters = await Roster.find({
+    $or: [
+      {
+        rosterStartDate: { $lte: end },
+        rosterEndDate: { $gte: start },
+      },
+      {
+        weeks: {
+          $elemMatch: {
+            startDate: { $lte: end },
+            endDate: { $gte: start },
+          },
+        },
+      },
+    ],
+  })
+    .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
+    .lean();
+
+  if (!rosters.length) {
+    const latest = await Roster.findOne().sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 }).lean();
+    rosters = latest ? [latest] : [];
+  }
+
+  return { rosters, start, end };
+};
+
+const getWeeksForDate = (rosters, dayStart, dayEnd) => {
+  const weeks = [];
+  for (const roster of rosters || []) {
+    for (const week of roster.weeks || []) {
+      const ws = parseDate(week?.startDate);
+      const we = parseDate(week?.endDate);
+      if (!ws || !we) continue;
+      if (overlaps(ws, we, dayStart, dayEnd)) {
+        weeks.push(week);
+      }
+    }
+  }
+  return weeks;
+};
+
 export const getTeamMembersByTeamLeader = async (teamLeaderId, date = null) => {
   try {
-    console.log("=== getTeamMembersByTeamLeader ===");
-    console.log("TeamLeaderId:", teamLeaderId);
-    
-    // Get the team leader's user details to get their username
-    const teamLeader = await User.findById(teamLeaderId);
-    if (!teamLeader) {
-      console.log("❌ Team leader not found for ID:", teamLeaderId);
-      return [];
-    }
-    
-    const teamLeaderUsername = teamLeader.username;
-    console.log("✅ Team leader found:", teamLeaderUsername);
-    console.log("Looking for employees with teamLeader =", teamLeaderUsername);
-    
-    const targetDate = date || new Date();
-    const year = targetDate.getFullYear();
-    const month = targetDate.getMonth() + 1;
-    
-    console.log("Looking for roster with month:", month, "year:", year);
-    
-    // Find roster for current month
-    let roster = await Roster.findOne({ month, year });
-    
-    // If no roster for current month, find the latest roster
-    if (!roster) {
-      console.log(`No roster found for ${month}/${year}, looking for latest...`);
-      roster = await Roster.findOne().sort({ year: -1, month: -1 });
-    }
-    
-    if (!roster) {
-      console.log("❌ No roster found in database");
-      return [];
-    }
-    
-    console.log(`Roster found for ${roster.month}/${roster.year}`);
-    
-    const teamMembers = [];
-    const seenNames = new Set();
-    
-    // Iterate through all weeks and employees
-    for (const week of roster.weeks || []) {
-      if (!week.employees || !Array.isArray(week.employees)) {
-        continue;
-      }
-      
-      for (const employee of week.employees) {
+    const teamLeader = await User.findById(teamLeaderId).lean();
+    if (!teamLeader) return [];
+
+    const tlAliases = new Set(
+      [
+        teamLeader?.username,
+        teamLeader?.realName,
+        teamLeader?.pseudoName,
+        `${teamLeader?.username || ""} ${teamLeader?.department || ""}`,
+        `${teamLeader?.realName || ""} ${teamLeader?.department || ""}`,
+      ]
+        .map(normalizeLabel)
+        .filter(Boolean)
+    );
+    if (!tlAliases.size) return [];
+
+    const { rosters, start, end } = await getRostersForDate(date);
+    if (!rosters.length) return [];
+
+    const weeks = getWeeksForDate(rosters, start, end);
+    if (!weeks.length) return [];
+
+    const matched = [];
+    const seen = new Set();
+
+    for (const week of weeks) {
+      for (const employee of week.employees || []) {
         if (!employee) continue;
-        
-        // Check if this employee's team leader matches the team leader's username
-        if (employee.teamLeader && 
-            employee.teamLeader.toLowerCase().trim() === teamLeaderUsername.toLowerCase().trim()) {
-          
-          // Skip the team leader themselves
-          if (employee.name.toLowerCase().trim() === teamLeaderUsername.toLowerCase().trim()) {
-            console.log(`Skipping self: ${employee.name} is the team leader`);
-            continue;
-          }
-          
-          // Use name as key for deduplication
-          const nameKey = employee.name.toLowerCase().trim();
-          
-          if (!seenNames.has(nameKey)) {
-            seenNames.add(nameKey);
-            
-            console.log(`✅ Found team member: ${employee.name}`);
-            
-            // Try to find if this employee exists as a user (optional)
-            let user = null;
-            try {
-              user = await User.findOne({ 
-                username: { $regex: `^${employee.name}$`, $options: "i" } 
-              }).select("username department _id");
-            } catch (err) {
-              console.log("Error finding user:", err.message);
-            }
-            
-            teamMembers.push({
-              userId: user?._id || null,  // null if no user record exists
-              name: employee.name,
-              username: employee.name,
-              department: employee.department,
-              shiftStartHour: employee.shiftStartHour,
-              shiftEndHour: employee.shiftEndHour,
-              // Store the original teamLeader for reference
-              teamLeader: employee.teamLeader
-            });
-          }
-        }
+        const empTl = normalizeLabel(employee.teamLeader || "");
+        if (!empTl) continue;
+
+        const matchesAlias = Array.from(tlAliases).some((alias) => {
+          if (empTl === alias) return true;
+          if (empTl.includes(alias) || alias.includes(empTl)) return true;
+          return false;
+        });
+        if (!matchesAlias) continue;
+
+        const empName = normalizeLabel(employee.name || "");
+        const isSelf = Array.from(tlAliases).some((alias) => empName && (empName === alias || empName.includes(alias)));
+        if (isSelf) continue;
+
+        const key = employee.userId ? `uid:${String(employee.userId)}` : `name:${normalize(employee.name)}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        matched.push(employee);
       }
     }
-    
-    console.log(`Total team members found for ${teamLeaderUsername}: ${teamMembers.length}`);
-    if (teamMembers.length > 0) {
-      console.log("Team members:", teamMembers.map(m => m.name).join(", "));
-    }
-    
-    return teamMembers;
+
+    if (!matched.length) return [];
+
+    const userIds = matched.map((e) => (e.userId ? String(e.userId) : "")).filter(Boolean);
+    const users = userIds.length
+      ? await User.find({ _id: { $in: userIds } }).select("username department _id").lean()
+      : [];
+    const usersById = new Map(users.map((u) => [String(u._id), u]));
+
+    return matched.map((employee) => {
+      const user = employee.userId ? usersById.get(String(employee.userId)) : null;
+      return {
+        userId: user?._id || employee.userId || null,
+        name: employee.name,
+        username: user?.username || employee.name,
+        department: user?.department || employee.department || "N/A",
+        shiftStartHour: employee.shiftStartHour,
+        shiftEndHour: employee.shiftEndHour,
+        teamLeader: employee.teamLeader || "",
+      };
+    });
   } catch (error) {
     console.error("Error fetching team members:", error);
     return [];
   }
 };
 
-// Get all team leaders (based on teamLeader field in roster)
-export const getAllTeamLeaders = async () => {
+export const getAllTeamLeaders = async (date = null) => {
   try {
-    console.log("=== getAllTeamLeaders ===");
-    
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1;
-    
-    console.log("Looking for roster with month:", month, "year:", year);
-    
-    // Find roster for current month
-    let roster = await Roster.findOne({ month, year });
-    
-    // If no roster for current month, find the latest roster
-    if (!roster) {
-      console.log(`No roster found for ${month}/${year}, looking for latest...`);
-      roster = await Roster.findOne().sort({ year: -1, month: -1 });
+    const { rosters, start, end } = await getRostersForDate(date);
+    if (!rosters.length) {
+      return await User.find({}).select("username department _id").limit(100).lean();
     }
-    
-    if (!roster) {
-      console.log("❌ No roster found in database");
-      // Return all users as fallback
-      const allUsers = await User.find({})
-        .select("username department _id")
-        .limit(100);
-      return allUsers;
-    }
-    
-    console.log(`Roster found for ${roster.month}/${roster.year}`);
-    
-    const teamLeaderNames = new Set();
-    
-    // Collect all unique team leader names from roster
-    for (const week of roster.weeks || []) {
-      if (!week.employees || !Array.isArray(week.employees)) continue;
-      
-      for (const employee of week.employees) {
-        if (!employee) continue;
-        
-        if (employee.teamLeader && employee.teamLeader !== "") {
-          console.log(`Found team leader in roster: "${employee.teamLeader}"`);
-          teamLeaderNames.add(employee.teamLeader);
-        }
+
+    const weeks = getWeeksForDate(rosters, start, end);
+    const leaderNames = new Set();
+    for (const week of weeks) {
+      for (const employee of week.employees || []) {
+        const name = String(employee?.teamLeader || "").trim();
+        if (name) leaderNames.add(name);
       }
     }
-    
-    console.log("Unique team leader names:", Array.from(teamLeaderNames));
-    
-    if (teamLeaderNames.size === 0) {
-      console.log("⚠️ No team leaders found in roster");
-      const allUsers = await User.find({})
-        .select("username department _id")
-        .limit(100);
-      return allUsers;
+
+    if (!leaderNames.size) {
+      return await User.find({}).select("username department _id").limit(100).lean();
     }
-    
-    // Find users matching these team leader names
-    const teamLeaders = [];
-    
-    for (const tlName of teamLeaderNames) {
-      // Find user by username (case-insensitive)
-      const user = await User.findOne({ 
-        username: { $regex: `^${tlName}$`, $options: "i" } 
-      }).select("username department _id");
-      
+
+    const leaders = [];
+    for (const tlName of leaderNames) {
+      const exact = String(tlName || "").trim();
+      const user = await User.findOne({
+        $or: [
+          { username: { $regex: `^${exact}$`, $options: "i" } },
+          { realName: { $regex: `^${exact}$`, $options: "i" } },
+          { pseudoName: { $regex: `^${exact}$`, $options: "i" } },
+        ],
+      })
+        .select("username department _id")
+        .lean();
       if (user) {
-        console.log(`✅ Found user for team leader: ${tlName} -> ${user.username}`);
-        teamLeaders.push(user);
+        leaders.push(user);
       } else {
-        console.log(`⚠️ No user found for team leader name: ${tlName}`);
-        // Still add a placeholder so it appears in dropdown
-        teamLeaders.push({
+        leaders.push({
           _id: `temp_${tlName}`,
           username: tlName,
-          department: "Unknown"
+          department: "Unknown",
         });
       }
     }
-    
-    console.log(`Total team leaders: ${teamLeaders.length}`);
-    return teamLeaders;
+    return leaders;
   } catch (error) {
     console.error("Error fetching team leaders:", error);
-    const allUsers = await User.find({})
-      .select("username department _id")
-      .limit(100);
-    return allUsers;
+    return await User.find({}).select("username department _id").limit(100).lean();
   }
 };
 
-// Check if a user is a team leader
 export const isUserTeamLeader = async (userId) => {
   try {
-    const user = await User.findById(userId);
+    const user = await User.findById(userId).lean();
     if (!user) return false;
-    
-    const currentDate = new Date();
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth() + 1;
-    
-    let roster = await Roster.findOne({ month, year });
-    if (!roster) {
-      roster = await Roster.findOne().sort({ year: -1, month: -1 });
-    }
-    
-    if (!roster) return false;
-    
-    for (const week of roster.weeks || []) {
-      for (const employee of week.employees || []) {
-        if (employee && employee.teamLeader && 
-            employee.teamLeader.toLowerCase().trim() === user.username.toLowerCase().trim()) {
-          return true;
-        }
-      }
-    }
-    
-    return false;
+    const members = await getTeamMembersByTeamLeader(user._id, new Date());
+    return members.length > 0;
   } catch (error) {
     console.error("Error checking team leader status:", error);
     return false;
