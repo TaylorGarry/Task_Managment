@@ -1018,15 +1018,18 @@
 
 
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { FiEye, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import html2canvas from "html2canvas";
+import { toast } from "react-toastify";
 import {
     getRosterForBulkEdit,
     bulkUpdateRosterWeeks,
     clearBulkEditState,
     clearBulkSaveState,
-    searchBulkEditEmployees
+    searchBulkEditEmployees,
+    fetchAllRosters
 } from '../features/slices/rosterSlice.js';
 
 const RosterBulkEditForm = ({ rosterId, onClose }) => {
@@ -1040,8 +1043,10 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         bulkSaveError,
         bulkEditSearch,
         bulkEditSearchLoading,
-        bulkEditSearchError
+        bulkEditSearchError,
+        allRosters
     } = useSelector((state) => state.roster);
+    const [selectedRosterId, setSelectedRosterId] = useState(rosterId);
     const [showHistoryModal, setShowHistoryModal] = useState(false);
     const [selectedEmployee, setSelectedEmployee] = useState(null);
     const [currentRosterWeek, setCurrentRosterWeek] = useState(null);
@@ -1051,6 +1056,38 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
+    const [showColumnMenu, setShowColumnMenu] = useState(false);
+    const [showSnapshotExportModal, setShowSnapshotExportModal] = useState(false);
+    const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState(false);
+    const exportCaptureRef = useRef(null);
+    const [columnVisibility, setColumnVisibility] = useState({
+        name: true,
+        department: true,
+        transport: true,
+        cabRoute: true,
+        teamLeader: true,
+        shiftHours: true,
+        dailyStatus: true,
+        actions: true,
+    });
+    const [snapshotColumnVisibility, setSnapshotColumnVisibility] = useState({
+        name: true,
+        department: true,
+        transport: true,
+        cabRoute: true,
+        teamLeader: true,
+        shiftHours: true,
+        dailyStatus: true,
+    });
+    const snapshotColumnOptions = [
+        { key: 'name', label: 'Name' },
+        { key: 'department', label: 'Department' },
+        { key: 'transport', label: 'Transport' },
+        { key: 'cabRoute', label: 'CAB Route' },
+        { key: 'teamLeader', label: 'Team Leader' },
+        { key: 'shiftHours', label: 'Shift Hours' },
+        { key: 'dailyStatus', label: 'Daily Status' },
+    ];
 
     const [activeTab, setActiveTab] = useState(0);
     const [editedWeeks, setEditedWeeks] = useState([]);
@@ -1110,19 +1147,165 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
       const getCurrentAccountType = () =>
         String(bulkEditRoster?.data?.userPermissions?.accountType || "").toLowerCase();
       const isEmployeeRosterEditor = () => getCurrentAccountType() === "employee";
+      const allRostersList = Array.isArray(allRosters) ? allRosters : (allRosters?.data || []);
+      const visibleColumns = columnVisibility;
+      const exportVisibleColumns = snapshotColumnVisibility;
+      const exportCanvasWidth = (() => {
+        let width = 80;
+        if (exportVisibleColumns.name) width += 240;
+        if (exportVisibleColumns.department) width += 180;
+        if (exportVisibleColumns.transport) width += 150;
+        if (exportVisibleColumns.cabRoute) width += 180;
+        if (exportVisibleColumns.teamLeader) width += 190;
+        if (exportVisibleColumns.shiftHours) width += 170;
+        if (exportVisibleColumns.dailyStatus) width += 820;
+        return Math.max(1200, Math.min(1900, width));
+      })();
+      const formatRosterMonthYear = (month, year) => {
+        const monthNum = Number(month);
+        const yearNum = Number(year);
+        if (!Number.isFinite(monthNum) || !Number.isFinite(yearNum)) return "Unknown";
+        return `${new Date(2000, Math.max(0, monthNum - 1), 1).toLocaleString("default", { month: "long" })} ${yearNum}`;
+      };
+      const getStatusInlineStyle = (status) => {
+        const palette = {
+            P: { backgroundColor: "#dcfce7", color: "#166534", borderColor: "#86efac" },
+            WO: { backgroundColor: "#dbeafe", color: "#1d4ed8", borderColor: "#93c5fd" },
+            L: { backgroundColor: "#fee2e2", color: "#b91c1c", borderColor: "#fca5a5" },
+            NCNS: { backgroundColor: "#fee2e2", color: "#7f1d1d", borderColor: "#fca5a5" },
+            UL: { backgroundColor: "#f3f4f6", color: "#374151", borderColor: "#d1d5db" },
+            LWP: { backgroundColor: "#ffedd5", color: "#c2410c", borderColor: "#fdba74" },
+            BL: { backgroundColor: "#f3f4f6", color: "#111827", borderColor: "#d1d5db" },
+            H: { backgroundColor: "#ede9fe", color: "#5b21b6", borderColor: "#c4b5fd" },
+            HD: { backgroundColor: "#fef3c7", color: "#92400e", borderColor: "#fcd34d" },
+            LWD: { backgroundColor: "#fef9c3", color: "#a16207", borderColor: "#fde047" },
+        };
+        return palette[status] || { backgroundColor: "#f3f4f6", color: "#6b7280", borderColor: "#d1d5db" };
+      };
+      const getSnapshotDayMeta = (_statusItem, dayIndex) => {
+        const dayDate = (() => {
+            if (!activeWeek?.startDate) return null;
+            const startKey = getDateKey(activeWeek.startDate);
+            if (!startKey) return null;
+            return new Date(getUTCISOStringFromDateKey(addDaysToDateKeyUTC(startKey, dayIndex)));
+        })();
+        if (!dayDate) return { dayName: '-', dayDateLabel: '-' };
+        return {
+            dayName: dayDate.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', weekday: 'short' }),
+            dayDateLabel: dayDate.toLocaleDateString('en-US', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short' })
+        };
+      };
+
+      const handleDownloadSnapshot = async () => {
+        const selectedColumns = Object.values(exportVisibleColumns).filter(Boolean).length;
+        if (!selectedColumns) {
+            toast.error('Select at least one field for snapshot export.');
+            return;
+        }
+        if (!exportCaptureRef.current || isGeneratingSnapshot) {
+            toast.error('Snapshot area not ready. Please try again.');
+            return;
+        }
+        try {
+            setIsGeneratingSnapshot(true);
+            const captureNode = exportCaptureRef.current;
+            let canvas = null;
+            let lastCaptureError = null;
+            const preferredScale = Math.max(3, Math.min(4, (window.devicePixelRatio || 1) * 2.2));
+
+            for (const scale of [preferredScale, 3, 2.5, 2]) {
+                try {
+                    canvas = await html2canvas(captureNode, {
+                        scale,
+                        useCORS: true,
+                        allowTaint: true,
+                        backgroundColor: '#ffffff',
+                        logging: false,
+                        scrollX: 0,
+                        scrollY: -window.scrollY,
+                        windowWidth: Math.max(captureNode.scrollWidth, captureNode.clientWidth),
+                        windowHeight: Math.max(captureNode.scrollHeight, captureNode.clientHeight),
+                    });
+                    if (canvas) break;
+                } catch (captureErr) {
+                    lastCaptureError = captureErr;
+                }
+            }
+
+            if (!canvas) {
+                throw lastCaptureError || new Error('Unable to render snapshot canvas.');
+            }
+            const titlePart = formatRosterMonthYear(
+                bulkEditRoster?.data?.month,
+                bulkEditRoster?.data?.year
+            )
+                .toLowerCase()
+                .replace(/\s+/g, '-');
+            const weekNumber = editedWeeks?.[activeTab]?.weekNumber ?? 'selected';
+            const filename = `roster-snapshot-${titlePart || 'selected'}-week-${weekNumber}.png`;
+            const blob = await new Promise((resolve, reject) => {
+                canvas.toBlob((value) => {
+                    if (value) resolve(value);
+                    else reject(new Error('Snapshot blob generation failed.'));
+                }, 'image/png');
+            });
+
+            try {
+                localStorage.setItem(
+                    'roster_last_snapshot_meta',
+                    JSON.stringify({
+                        filename,
+                        weekNumber,
+                        rosterId: selectedRosterId,
+                        month: bulkEditRoster?.data?.month,
+                        year: bulkEditRoster?.data?.year,
+                        capturedAt: new Date().toISOString(),
+                    })
+                );
+            } catch (storageErr) {
+                console.warn('Could not persist snapshot to localStorage:', storageErr);
+            }
+
+            const link = document.createElement('a');
+            link.download = filename;
+            const objectUrl = URL.createObjectURL(blob);
+            link.href = objectUrl;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(objectUrl);
+            setShowSnapshotExportModal(false);
+            toast.success(`Snapshot downloaded: Week ${weekNumber}`);
+        } catch (err) {
+            console.error('Snapshot generation failed:', err);
+            toast.error(`Failed to generate/download snapshot: ${err?.message || 'unknown error'}`);
+        } finally {
+            setIsGeneratingSnapshot(false);
+        }
+      };
 
     useEffect(() => {
-        if (rosterId) {
-            dispatch(getRosterForBulkEdit(rosterId));
+        setSelectedRosterId(rosterId);
+    }, [rosterId]);
+
+    useEffect(() => {
+        if (!allRostersList.length) {
+            dispatch(fetchAllRosters({ page: 1, limit: 100 }));
+        }
+    }, [dispatch, allRostersList.length]);
+
+    useEffect(() => {
+        if (selectedRosterId) {
+            dispatch(getRosterForBulkEdit(selectedRosterId));
         }
         return () => {
             dispatch(clearBulkEditState());
             dispatch(clearBulkSaveState());
         };
-    }, [rosterId, dispatch]);
+    }, [selectedRosterId, dispatch]);
 
-	    useEffect(() => {
-	        if (bulkEditRoster?.data?.weeks) {
+    useEffect(() => {
+        if (bulkEditRoster?.data?.weeks) {
 	            // Deep clone the weeks data
 	            const weeksCopy = JSON.parse(JSON.stringify(bulkEditRoster.data.weeks));
 
@@ -1202,6 +1385,13 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     }, [bulkEditRoster]);
 
     useEffect(() => {
+        setActiveTab(0);
+        setCurrentPage(1);
+        setSearchInput('');
+        setAppliedSearch('');
+    }, [selectedRosterId]);
+
+    useEffect(() => {
         const t = setTimeout(() => {
             setAppliedSearch(String(searchInput || '').trim());
         }, 350);
@@ -1213,21 +1403,21 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     }, [activeTab, appliedSearch, searchBy]);
 
     useEffect(() => {
-        if (!rosterId) return;
+        if (!selectedRosterId) return;
         const q = String(appliedSearch || '').trim();
         if (!q) return;
 
         const currentData = bulkEditSearch?.data;
         const isSameRequest =
             currentData &&
-            String(currentData.rosterId) === String(rosterId) &&
+            String(currentData.rosterId) === String(selectedRosterId) &&
             String(currentData.q || '') === String(q) &&
             String(currentData.searchBy || 'all') === String(searchBy || 'all');
 
         if (isSameRequest) return;
 
-        dispatch(searchBulkEditEmployees({ rosterId, q, searchBy }));
-    }, [dispatch, rosterId, appliedSearch, searchBy, bulkEditSearch]);
+        dispatch(searchBulkEditEmployees({ rosterId: selectedRosterId, q, searchBy }));
+    }, [dispatch, selectedRosterId, appliedSearch, searchBy, bulkEditSearch]);
 
     const localEmployeeMatches = (employee, queryLower, by) => {
         const name = String(employee?.name || '').toLowerCase();
@@ -1250,7 +1440,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         const currentData = bulkEditSearch?.data;
         const isSearchResultCurrent =
             currentData &&
-            String(currentData.rosterId) === String(rosterId) &&
+            String(currentData.rosterId) === String(selectedRosterId) &&
             String(currentData.q || '') === String(q) &&
             String(currentData.searchBy || 'all') === String(searchBy || 'all');
 
@@ -1476,7 +1666,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     };
 
     const handleSaveAll = () => {
-        if (!rosterId) return;
+        if (!selectedRosterId) return;
         const weeksData = editedWeeks.map(week => ({
             weekNumber: week.weekNumber,
             employees: week.employees.map(emp => ({
@@ -1497,7 +1687,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         }));
 
         dispatch(bulkUpdateRosterWeeks({
-            rosterId,
+            rosterId: selectedRosterId,
             data: { weeks: weeksData }
         }));
     };
@@ -1849,7 +2039,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const activeTotalPages = Math.max(1, Math.ceil(activeFilteredEmployees.length / itemsPerPage));
 
     return (
-        <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
+        <div className="fixed inset-0 md:left-[280px] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
             <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
                 <div className="p-4 md:p-6 flex flex-col gap-4 lg:flex-row lg:justify-between mt-5 lg:items-start">
                     <div>
@@ -1865,8 +2055,31 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         </div>
                     </div>
 
-                    <div className="w-full lg:w-[460px]">
-                        <div className="flex gap-2 mt-8">
+                    <div className="w-full lg:w-[560px]">
+                        <div className="flex flex-col gap-2 mt-4">
+                            <div className="flex gap-2 items-center">
+                                <label className="text-xs uppercase tracking-[0.08em] text-slate-500 font-semibold whitespace-nowrap">
+                                    Month
+                                </label>
+                                <select
+                                    value={selectedRosterId || ''}
+                                    onChange={(e) => setSelectedRosterId(e.target.value)}
+                                    disabled={bulkEditLoading || allRostersList.length === 0}
+                                    className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60"
+                                    title="Select roster month"
+                                >
+                                    {allRostersList.length === 0 ? (
+                                        <option value="">No rosters found</option>
+                                    ) : (
+                                        allRostersList.map((roster) => (
+                                            <option key={roster._id} value={roster._id}>
+                                                {formatRosterMonthYear(roster.month, roster.year)}
+                                            </option>
+                                        ))
+                                    )}
+                                </select>
+                            </div>
+                            <div className="flex gap-2">
                             <select
                                 value={searchBy}
                                 onChange={(e) => setSearchBy(e.target.value)}
@@ -1897,6 +2110,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                             </div>
                         </div>
                     </div>
+                </div>
                 </div>
 
                 <div className="border-t border-slate-200 bg-slate-50/80">
@@ -1980,6 +2194,14 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         {activeFilteredEmployees.length} employees
                                         {appliedSearch ? ` (filtered from ${activeEmployees.length})` : ''}
                                     </div>
+                                    <button
+                                        onClick={() => setShowSnapshotExportModal(true)}
+                                        disabled={isGeneratingSnapshot}
+                                        className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                        title="Select fields and download snapshot for selected week"
+                                    >
+                                        {isGeneratingSnapshot ? 'Generating...' : 'Share Snapshot'}
+                                    </button>
                                     <button
                                         onClick={() => setShowAddEmployeeForm(true)}
                                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shadow-sm"
@@ -2142,7 +2364,42 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
                             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                 <p className="text-sm font-semibold text-slate-800">Employee Roster Grid</p>
-                                <div className="flex flex-wrap items-center gap-2 text-xs">
+                                <div className="flex flex-wrap items-center gap-2 text-xs relative">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowColumnMenu((v) => !v)}
+                                        className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-xs"
+                                    >
+                                        Columns
+                                    </button>
+                                    {showColumnMenu && (
+                                        <div className="absolute right-0 top-8 z-20 w-52 rounded-lg border border-slate-200 bg-white shadow-lg p-2">
+                                            {[
+                                                { key: 'name', label: 'Name' },
+                                                { key: 'department', label: 'Department' },
+                                                { key: 'transport', label: 'Transport' },
+                                                { key: 'cabRoute', label: 'CAB Route' },
+                                                { key: 'teamLeader', label: 'Team Leader' },
+                                                { key: 'shiftHours', label: 'Shift Hours' },
+                                                { key: 'dailyStatus', label: 'Daily Status' },
+                                                { key: 'actions', label: 'Actions' },
+                                            ].map((col) => (
+                                                <label key={col.key} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(columnVisibility[col.key])}
+                                                        onChange={(e) =>
+                                                            setColumnVisibility((prev) => ({
+                                                                ...prev,
+                                                                [col.key]: e.target.checked,
+                                                            }))
+                                                        }
+                                                    />
+                                                    {col.label}
+                                                </label>
+                                            ))}
+                                        </div>
+                                    )}
                                     <span className="px-2 py-1 rounded border border-green-200 bg-green-50 text-green-700">P Present</span>
                                     <span className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700">WO Week Off</span>
                                     <span className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700">L Leave</span>
@@ -2155,14 +2412,14 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 <table className="w-full">
                                     <thead>
                                         <tr className="bg-slate-100/90">
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[180px]">Name</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[120px]">Department</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[110px]">Transport</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">CAB Route</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">Team Leader</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">Shift Hours</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[360px]">Daily Status</th>
-                                            <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[90px]">Actions</th>
+                                            {visibleColumns.name && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[180px]">Name</th>}
+                                            {visibleColumns.department && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[120px]">Department</th>}
+                                            {visibleColumns.transport && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[110px]">Transport</th>}
+                                            {visibleColumns.cabRoute && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">CAB Route</th>}
+                                            {visibleColumns.teamLeader && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">Team Leader</th>}
+                                            {visibleColumns.shiftHours && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">Shift Hours</th>}
+                                            {visibleColumns.dailyStatus && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[360px]">Daily Status</th>}
+                                            {visibleColumns.actions && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[90px]">Actions</th>}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -2174,16 +2431,16 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
                                             return (
                                                 <tr key={employee._id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                                                    <td className="p-2">
+                                                    {visibleColumns.name && <td className="p-2">
                                                         <input
                                                             type="text"
                                                             value={employee.name}
                                                             onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, 'name', e.target.value)}
                                                             className="w-full border border-gray-300 p-1 rounded text-sm"
                                                         />
-                                                    </td>
+                                                    </td>}
 
-                                                    <td className="p-2">
+                                                    {visibleColumns.department && <td className="p-2">
                                                         <select
                                                             value={employee.department || ''}
                                                             onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, 'department', e.target.value)}
@@ -2194,9 +2451,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                 <option key={idx} value={dept}>{dept}</option>
                                                             ))}
                                                         </select>
-                                                    </td>
+                                                    </td>}
 
-                                                    <td className="p-2">
+                                                    {visibleColumns.transport && <td className="p-2">
                                                         <select
                                                             value={employee.transport || ''}
                                                             onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, 'transport', e.target.value)}
@@ -2206,18 +2463,18 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                             <option value="Yes">Yes</option>
                                                             <option value="No">No</option>
                                                         </select>
-                                                    </td>
+                                                    </td>}
 
-                                                    <td className="p-2">
+                                                    {visibleColumns.cabRoute && <td className="p-2">
                                                         <input
                                                             type="text"
                                                             value={employee.cabRoute || ''}
                                                             onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, 'cabRoute', e.target.value)}
                                                             className="w-full border border-gray-300 p-1 rounded text-sm"
                                                         />
-                                                    </td>
+                                                    </td>}
 
-                                                    <td className="p-2">
+                                                    {visibleColumns.teamLeader && <td className="p-2">
                                                         <input
                                                             type="text"
                                                             value={employee.teamLeader || ''}
@@ -2225,9 +2482,9 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                             placeholder="Team Leader"
                                                             className="w-full border border-gray-300 p-1 rounded text-sm"
                                                         />
-                                                    </td>
+                                                    </td>}
 
-                                                    <td className="p-2">
+                                                    {visibleColumns.shiftHours && <td className="p-2">
                                                         <div className="flex gap-1">
                                                             <input
                                                                 type="number"
@@ -2247,11 +2504,11 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                 className="w-full border border-gray-300 p-1 rounded text-center text-sm"
                                                             />
                                                         </div>
-                                                    </td>
+                                                    </td>}
 
-	                                                    <td className="p-2">
-	                                                        <div className="flex gap-1 justify-center min-w-max">
-	                                                            {employee.dailyStatus.slice(0, daysInWeek).map((status, dayIndex) => {
+		                                                    {visibleColumns.dailyStatus && <td className="p-2">
+		                                                        <div className="flex gap-1 justify-center min-w-max">
+		                                                            {employee.dailyStatus.slice(0, daysInWeek).map((status, dayIndex) => {
                                                                 const statusDate = status?.date ? new Date(status.date) : null;
 	                                                                const dayDate = statusDate && !Number.isNaN(statusDate.getTime())
                                                                     ? statusDate
@@ -2314,12 +2571,12 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                         })()}
 	                                                                        <span className="text-xs mt-0.5">{getStatusIcon(status.status)}</span>
 	                                                                    </div>
-	                                                                );
-                                                            })}
-                                                        </div>
-                                                    </td>
+		                                                                );
+	                                                            })}
+	                                                        </div>
+	                                                    </td>}
 
-                                                    <td className="p-2">
+                                                    {visibleColumns.actions && <td className="p-2">
                                                         <div className="flex gap-2">
                                                             <button
                                                                 onClick={() => handleViewHistory(employee)}
@@ -2337,7 +2594,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                 <FiTrash2 className="w-4 h-4" />
                                                             </button>
                                                         </div>
-                                                    </td>
+                                                    </td>}
                                                 </tr>
                                             );
                                         })}
@@ -2407,6 +2664,159 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         >
                             Next Week
                         </button>
+                    </div>
+                </div>
+            </div>
+
+            {showSnapshotExportModal && (
+                <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+                    <div className="w-full max-w-md rounded-xl border border-slate-200 bg-white shadow-2xl">
+                        <div className="px-5 py-4 border-b border-slate-200">
+                            <h4 className="text-base font-semibold text-slate-900">Select Fields For Snapshot</h4>
+                            <p className="text-xs text-slate-600 mt-1">
+                                Week {activeWeek?.weekNumber ?? '-'} | Only selected fields will be exported.
+                            </p>
+                        </div>
+                        <div className="px-5 py-4 space-y-2">
+                            {snapshotColumnOptions.map((col) => (
+                                <label key={col.key} className="flex items-center gap-2 text-sm text-slate-700">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(snapshotColumnVisibility[col.key])}
+                                        onChange={(e) =>
+                                            setSnapshotColumnVisibility((prev) => ({
+                                                ...prev,
+                                                [col.key]: e.target.checked,
+                                            }))
+                                        }
+                                    />
+                                    {col.label}
+                                </label>
+                            ))}
+                        </div>
+                        <div className="px-5 py-4 border-t border-slate-200 flex items-center justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setShowSnapshotExportModal(false)}
+                                disabled={isGeneratingSnapshot}
+                                className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 text-sm"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleDownloadSnapshot}
+                                disabled={isGeneratingSnapshot}
+                                className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                            >
+                                {isGeneratingSnapshot ? 'Generating...' : 'Export Image'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div
+                ref={exportCaptureRef}
+                style={{
+                    position: "fixed",
+                    left: "-10000px",
+                    top: 0,
+                    width: `${exportCanvasWidth}px`,
+                    background: "#ffffff",
+                    padding: "20px",
+                    color: "#0f172a",
+                    zIndex: -1,
+                }}
+            >
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden", background: "#ffffff" }}>
+                    <div style={{ background: "linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)", color: "#ffffff", padding: "14px 16px" }}>
+                        <h2 style={{ margin: 0, fontSize: "24px", fontWeight: 700 }}>
+                            Roster Snapshot - Week {activeWeek?.weekNumber ?? "-"}
+                        </h2>
+                        <p style={{ margin: "8px 0 0", fontSize: "16px", opacity: 0.95 }}>
+                            {activeWeek?.startDate ? new Date(activeWeek.startDate).toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" }) : "-"} - {activeWeek?.endDate ? new Date(activeWeek.endDate).toLocaleDateString("en-GB", { timeZone: "Asia/Kolkata" }) : "-"}
+                        </p>
+                    </div>
+                    <div style={{ padding: "10px 14px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc", fontSize: "14px", color: "#334155" }}>
+                        Employees: {activeFilteredEmployees.length}
+                    </div>
+                    <div style={{ padding: "12px 14px" }}>
+                        <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+                            <thead>
+                                <tr>
+                                    {exportVisibleColumns.name && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>Name</th>}
+                                    {exportVisibleColumns.department && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>Department</th>}
+                                    {exportVisibleColumns.transport && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>Transport</th>}
+                                    {exportVisibleColumns.cabRoute && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>CAB Route</th>}
+                                    {exportVisibleColumns.teamLeader && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>Team Leader</th>}
+                                    {exportVisibleColumns.shiftHours && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>Shift</th>}
+                                    {exportVisibleColumns.dailyStatus && <th style={{ textAlign: "left", padding: "12px", fontSize: "15px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>Daily Status</th>}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {activeFilteredEmployees.map((employee, empIndex) => (
+                                    <tr key={employee?._id || `export-${empIndex}`} style={{ background: empIndex % 2 === 0 ? "#ffffff" : "#fcfcff" }}>
+                                        {exportVisibleColumns.name && <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px", fontWeight: 600 }}>{employee?.name || "-"}</td>}
+                                        {exportVisibleColumns.department && <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{employee?.department || "-"}</td>}
+                                        {exportVisibleColumns.transport && <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{employee?.transport || "-"}</td>}
+                                        {exportVisibleColumns.cabRoute && <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{employee?.cabRoute || "-"}</td>}
+                                        {exportVisibleColumns.teamLeader && <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{employee?.teamLeader || "-"}</td>}
+                                        {exportVisibleColumns.shiftHours && <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "15px" }}>{`${employee?.shiftStartHour ?? "-"} to ${employee?.shiftEndHour ?? "-"}`}</td>}
+                                        {exportVisibleColumns.dailyStatus && (
+                                            <td style={{ padding: "12px", borderBottom: "1px solid #f1f5f9", fontSize: "14px" }}>
+                                                <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                                                    {(employee?.dailyStatus || []).slice(0, 7).map((statusItem, idx) => {
+                                                        const statusCode = statusItem?.status || "P";
+                                                        const style = getStatusInlineStyle(statusCode);
+                                                        const dayMeta = getSnapshotDayMeta(statusItem, idx);
+                                                        return (
+                                                            <div
+                                                                key={`${employee?._id || empIndex}-${idx}`}
+                                                                style={{
+                                                                    minWidth: "90px",
+                                                                    border: "1px solid #e2e8f0",
+                                                                    borderRadius: "8px",
+                                                                    background: "#f8fafc",
+                                                                    padding: "6px 8px",
+                                                                    display: "flex",
+                                                                    flexDirection: "column",
+                                                                    alignItems: "center",
+                                                                    gap: "4px",
+                                                                }}
+                                                            >
+                                                                <div style={{ textAlign: "center", lineHeight: 1.1 }}>
+                                                                    <div style={{ fontSize: "14px", fontWeight: 700, color: "#334155" }}>{dayMeta.dayName}</div>
+                                                                    <div style={{ fontSize: "13px", color: "#64748b" }}>{dayMeta.dayDateLabel}</div>
+                                                                </div>
+                                                                <div
+                                                                    style={{
+                                                                        
+                                                                        border: `1px solid ${style.borderColor}`,
+                                                                        borderRadius: "999px",
+                                                                        backgroundColor: style.backgroundColor,
+                                                                        color: style.color,
+                                                                        fontSize: "13px",
+                                                                        fontWeight: 700,
+                                                                        display: "flex",
+                                                                        alignItems: "center",
+                                                                        justifyContent: "center",
+                                                                        marginTop: "6px",
+                                                                        padding: "4px 10px",
+                                                                    }}
+                                                                >
+                                                                    <span>{statusCode}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </td>
+                                        )}
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -2531,3 +2941,4 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 };
 
 export default RosterBulkEditForm;
+

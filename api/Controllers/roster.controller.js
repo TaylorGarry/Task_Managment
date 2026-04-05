@@ -568,25 +568,47 @@ export const getRosterForCRMUsers = async (req, res) => {
       return res.status(400).json({ message: "Month and year are required" });
     }
 
-    const roster = await Roster.findOne({ month, year }).lean();
-    if (!roster) {
+    const parsedMonth = Number.parseInt(month, 10);
+    const parsedYear = Number.parseInt(year, 10);
+    if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) {
+      return res.status(400).json({ message: "Month and year must be valid numbers" });
+    }
+    const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+
+    const rosters = await Roster.find({
+      rosterStartDate: { $lte: monthEnd },
+      rosterEndDate: { $gte: monthStart },
+    })
+      .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
+      .lean();
+
+    if (!rosters.length) {
       return res.status(404).json({ message: "Roster not found for this month/year" });
     }
 
     const crmUsers = await User.find({}, { username: 1 }).lean();
     const crmUsernames = crmUsers.map((u) => u.username);
 
-    const filteredWeeks = roster.weeks.map((week) => {
-      const filteredEmployees = week.employees.filter((emp) => crmUsernames.includes(emp.name));
-      return {
-        weekNumber: week.weekNumber,
-        startDate: week.startDate,
-        endDate: week.endDate,
-        employees: filteredEmployees,
-      };
-    });
+    const filteredWeeks = rosters
+      .flatMap((roster) => roster.weeks || [])
+      .filter((week) => {
+        if (!week?.startDate || !week?.endDate) return false;
+        const weekStart = new Date(week.startDate);
+        const weekEnd = new Date(week.endDate);
+        return weekStart <= monthEnd && weekEnd >= monthStart;
+      })
+      .map((week) => {
+        const filteredEmployees = (week.employees || []).filter((emp) => crmUsernames.includes(emp.name));
+        return {
+          weekNumber: week.weekNumber,
+          startDate: week.startDate,
+          endDate: week.endDate,
+          employees: filteredEmployees,
+        };
+      });
 
-    return res.status(200).json({ month: roster.month, year: roster.year, weeks: filteredWeeks });
+    return res.status(200).json({ month: parsedMonth, year: parsedYear, weeks: filteredWeeks });
   } catch (error) {
     console.error(error);
     return res.status(500).json({ message: "Server error", error: error.message });
@@ -1613,14 +1635,16 @@ export const exportRosterToExcel = async (req, res) => {
 export const exportAttendanceSnapshotToExcel = async (req, res) => {
   try {
     const user = req.user;
-    if (!["superAdmin", "HR"].includes(user?.accountType)) {
+    const isHrOrSuperAdmin = ["superAdmin", "HR"].includes(user?.accountType);
+    const isEmployee = user?.accountType === "employee";
+    if (!isHrOrSuperAdmin && !isEmployee) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. Only HR and Super Admin can export attendance snapshots."
+        message: "Access denied. Only HR, Super Admin, or delegated employee can export attendance snapshots."
       });
     }
 
-    const { startDate, endDate, department } = req.query;
+    const { startDate, endDate, department, delegatedFrom } = req.query;
 
     if (!startDate || !endDate) {
       return res.status(400).json({
@@ -1667,6 +1691,51 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
         success: false,
         message: "startDate must be before or equal to endDate"
       });
+    }
+
+    let delegatedAccessEmployeeIds = new Set();
+    let delegatedTeamLeaderNames = new Set();
+    if (isEmployee) {
+      const delegatedFromId = String(delegatedFrom || "").trim();
+      if (!delegatedFromId) {
+        return res.status(403).json({
+          success: false,
+          message: "Delegated team leader is required for employee snapshot export.",
+        });
+      }
+      if (!/^[a-f\d]{24}$/i.test(delegatedFromId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid delegated team leader identifier.",
+        });
+      }
+
+      const activeDelegation = await Delegation.findOne({
+        assignee: user._id,
+        delegator: delegatedFromId,
+        status: "active",
+        startDate: { $lte: end },
+        endDate: { $gte: start },
+      })
+        .populate("delegator", "username")
+        .lean();
+
+      if (!activeDelegation) {
+        return res.status(403).json({
+          success: false,
+          message: "No active delegation found for selected team leader and date range.",
+        });
+      }
+
+      delegatedAccessEmployeeIds = new Set(
+        (activeDelegation?.affectedEmployees || []).map((id) => String(id)).filter(Boolean)
+      );
+      const delegatedLeaderName = String(activeDelegation?.delegator?.username || "")
+        .trim()
+        .toLowerCase();
+      delegatedTeamLeaderNames = delegatedLeaderName
+        ? new Set([delegatedLeaderName])
+        : new Set();
     }
 
 	    // NOTE: Some rosters store `rosterStartDate/rosterEndDate` as the specific uploaded week range
@@ -1806,10 +1875,18 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	          (week.employees || [])
 	            .filter(Boolean)
 	            .forEach((emp) => {
-	              if (deptFilter) {
-	                const empDept = normalizeDepartment(emp.department);
-	                if (empDept !== deptFilter) return;
+	              if (isEmployee) {
+	                const employeeUserId = String(emp?.userId || "").trim();
+	                const employeeTeamLeader = String(emp?.teamLeader || "").trim().toLowerCase();
+	                const inDelegatedEmployees = employeeUserId && delegatedAccessEmployeeIds.has(employeeUserId);
+	                const inDelegatedTeam = employeeTeamLeader && delegatedTeamLeaderNames.has(employeeTeamLeader);
+	                if (!inDelegatedEmployees && !inDelegatedTeam) return;
 	              }
+
+              if (deptFilter) {
+                const empDept = normalizeDepartment(emp.department);
+                if (empDept !== deptFilter) return;
+              }
 
 	              const rowRef = ensureEmployee(emp);
 
@@ -2377,8 +2454,18 @@ export const getAllRosters = async (req, res) => {
     console.log("📡 getAllRosters called with:", { month, year, page, limit });
     
     const filter = {};
-    if (month) filter.month = parseInt(month);
-    if (year) filter.year = parseInt(year);
+    const parsedMonth = Number.parseInt(month, 10);
+    const parsedYear = Number.parseInt(year, 10);
+
+    if (Number.isFinite(parsedMonth) && Number.isFinite(parsedYear)) {
+      const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+      filter.rosterStartDate = { $lte: monthEnd };
+      filter.rosterEndDate = { $gte: monthStart };
+    } else {
+      if (month) filter.month = parsedMonth;
+      if (year) filter.year = parsedYear;
+    }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);
     
@@ -2386,7 +2473,7 @@ export const getAllRosters = async (req, res) => {
     
     // 🔥 FIX: Add population to get user details
     const rosters = await Roster.find(filter)
-      .sort({ year: -1, month: -1, 'weeks.weekNumber': 1 })
+      .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
       .skip(skip)
       .limit(parseInt(limit))
       .populate('createdBy', 'username email')
@@ -4293,44 +4380,65 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
 
     const currentDate = new Date();
     currentDate.setHours(0, 0, 0, 0);
-    const currentYear = currentDate.getFullYear();
-    const currentMonth = currentDate.getMonth() + 1;
-    
-    const roster = await Roster.findOne({ 
-      month: currentMonth, 
-      year: currentYear 
-    });
-    
-    if (!roster) {
+    const dayEnd = new Date(currentDate);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const candidateRosters = await Roster.find({
+      rosterStartDate: { $lte: dayEnd },
+      rosterEndDate: { $gte: currentDate },
+    }).sort({ rosterStartDate: -1, rosterEndDate: -1 });
+
+    if (!candidateRosters.length) {
       return res.status(404).json({
         success: false,
-        message: "No roster found for current month"
+        message: "No roster found for current date",
       });
     }
 
-    // Find current week
-    const currentWeek = roster.weeks.find(week => {
+    let selectedRoster = null;
+    let selectedWeek = null;
+    for (const roster of candidateRosters) {
+      const matchedWeek = (roster.weeks || []).find((week) => {
+        if (!week) return false;
+        const weekStart = new Date(week.startDate);
+        const weekEnd = new Date(week.endDate);
+        weekStart.setHours(0, 0, 0, 0);
+        weekEnd.setHours(23, 59, 59, 999);
+        return currentDate >= weekStart && currentDate <= weekEnd;
+      });
+      if (matchedWeek) {
+        selectedRoster = roster;
+        selectedWeek = matchedWeek;
+        break;
+      }
+    }
+
+    if (!selectedRoster || !selectedWeek) {
+      return res.status(404).json({
+        success: false,
+        message: "No roster week found for current date",
+      });
+    }
+
+    const currentWeekGroup = (selectedRoster.weeks || []).filter((week) => {
       if (!week) return false;
-      
+      if (Number.parseInt(week.weekNumber, 10) !== Number.parseInt(selectedWeek.weekNumber, 10)) {
+        return false;
+      }
       const weekStart = new Date(week.startDate);
       const weekEnd = new Date(week.endDate);
-      
       weekStart.setHours(0, 0, 0, 0);
       weekEnd.setHours(23, 59, 59, 999);
-      
       return currentDate >= weekStart && currentDate <= weekEnd;
     });
 
-    if (!currentWeek) {
-      return res.status(404).json({
-        success: false,
-        message: "No roster week found for current date"
-      });
-    }
-
     // Check edit permission
-    const weekStartDate = new Date(currentWeek.startDate);
-    const weekEndDate = new Date(currentWeek.endDate);
+    const weekStartDate = new Date(
+      Math.min(...currentWeekGroup.map((w) => new Date(w.startDate).getTime()))
+    );
+    const weekEndDate = new Date(
+      Math.max(...currentWeekGroup.map((w) => new Date(w.endDate).getTime()))
+    );
     
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
@@ -4354,8 +4462,17 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
     
     // Filter employees where teamLeader matches current user's username
     // AND employee is not null
-    const teamEmployees = (currentWeek.employees || [])
-      .filter(emp => {
+    const currentWeekEmployees = currentWeekGroup.flatMap((w) => (w.employees || []).filter(Boolean));
+    const uniqueEmployees = [];
+    const seenEmployeeIds = new Set();
+    for (const emp of currentWeekEmployees) {
+      const key = String(emp?._id || "");
+      if (!key || seenEmployeeIds.has(key)) continue;
+      seenEmployeeIds.add(key);
+      uniqueEmployees.push(emp);
+    }
+
+    const teamEmployees = uniqueEmployees.filter(emp => {
         // FIX 1: Check if employee exists
         if (!emp) return false;
         
@@ -4375,9 +4492,9 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
         success: true,
         message: `No employees assigned to you (${currentUserUsername}) as Team Leader`,
         data: {
-          weekNumber: currentWeek.weekNumber,
-          startDate: currentWeek.startDate,
-          endDate: currentWeek.endDate,
+          weekNumber: selectedWeek.weekNumber,
+          startDate: weekStartDate,
+          endDate: weekEndDate,
           currentDate: currentDate,
           canEdit: canEdit,
           editMessage: editMessage,
@@ -4436,9 +4553,9 @@ export const getOpsMetaCurrentWeekRoster = async (req, res) => {
       success: true,
       message: `Current week roster for your team (Team Leader: ${currentUserUsername})`,
       data: {
-        weekNumber: currentWeek.weekNumber,
-        startDate: currentWeek.startDate,
-        endDate: currentWeek.endDate,
+        weekNumber: selectedWeek.weekNumber,
+        startDate: weekStartDate,
+        endDate: weekEndDate,
         currentDate: currentDate,
         canEdit: canEdit,
         editMessage: editMessage,
@@ -4487,26 +4604,49 @@ export const updateOpsMetaRoster = async (req, res) => {
     };
 
     const currentDate = new Date();
-    const roster = await Roster.findOne({
-      month: currentDate.getMonth() + 1,
-      year: currentDate.getFullYear()
-    });
+    currentDate.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(currentDate);
+    dayEnd.setHours(23, 59, 59, 999);
 
-    if (!roster) {
-      return res.status(404).json({ success: false, message: "Roster not found" });
+    const candidateRosters = await Roster.find({
+      rosterStartDate: { $lte: dayEnd },
+      rosterEndDate: { $gte: currentDate },
+    }).sort({ rosterStartDate: -1, rosterEndDate: -1 });
+
+    if (!candidateRosters.length) {
+      return res.status(404).json({ success: false, message: "Roster not found for current date" });
     }
 
-    const week = roster.weeks.find(w => {
-      const start = new Date(w.startDate);
-      const end = new Date(w.endDate);
-      return currentDate >= start && currentDate <= end;
-    });
+    let roster = null;
+    let week = null;
+    let employee = null;
+
+    for (const candidate of candidateRosters) {
+      const matchingWeeks = (candidate.weeks || []).filter((w) => {
+        if (!w) return false;
+        const start = new Date(w.startDate);
+        const end = new Date(w.endDate);
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return currentDate >= start && currentDate <= end;
+      });
+
+      for (const w of matchingWeeks) {
+        const foundEmployee = w.employees?.id(employeeId);
+        if (foundEmployee) {
+          roster = candidate;
+          week = w;
+          employee = foundEmployee;
+          break;
+        }
+      }
+      if (employee) break;
+    }
 
     if (!week) {
       return res.status(404).json({ success: false, message: "Current week not found" });
     }
 
-    const employee = week.employees.id(employeeId);
     if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
@@ -5630,11 +5770,37 @@ export const exportRosterTemplate = async (req, res) => {
       });
     }
 
-    const fromDate = new Date(startDate);
-    fromDate.setHours(0, 0, 0, 0);
-    
-    const toDate = new Date(endDate);
-    toDate.setHours(23, 59, 59, 999);
+    const parseLocalDate = (value, endOfDay = false) => {
+      const raw = String(value || "").trim();
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (match) {
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+        return endOfDay
+          ? new Date(year, month - 1, day, 23, 59, 59, 999)
+          : new Date(year, month - 1, day, 0, 0, 0, 0);
+      }
+      const parsed = new Date(raw);
+      if (endOfDay) parsed.setHours(23, 59, 59, 999);
+      else parsed.setHours(0, 0, 0, 0);
+      return parsed;
+    };
+
+    const fromDate = parseLocalDate(startDate, false);
+    const toDate = parseLocalDate(endDate, true);
+    if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid startDate or endDate"
+      });
+    }
+    if (fromDate > toDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Start date must be before or equal to end date"
+      });
+    }
 
     const dateHeaders = [];
     const currentDate = new Date(fromDate);
@@ -5659,7 +5825,6 @@ export const exportRosterTemplate = async (req, res) => {
     ];
 
     const dateColumns = [...dateHeaders];
-
     const optionalSummaryColumns = [
       'Total Present',
       'Total Week Off',
@@ -5685,9 +5850,76 @@ export const exportRosterTemplate = async (req, res) => {
       CreatedDate: new Date()
     };
 
-    const data = [];
+    const data = [headers];
 
-    data.push(headers);
+    // Prefill employee details from latest previous roster rows for current TL.
+    // Daily status values are mapped into the selected export date columns by order.
+    const normalize = (v) => String(v || "").trim().toLowerCase();
+    const canPrefillAllEmployees = ["superAdmin", "HR", "admin"].includes(req.user?.accountType);
+    const currentTl = String(req.user?.username || "").trim();
+    const shouldPrefillByTl = canPrefillAllEmployees || Boolean(currentTl);
+    if (shouldPrefillByTl) {
+      const previousRosters = await Roster.find({
+        rosterEndDate: { $lt: fromDate }
+      })
+        .sort({ rosterEndDate: -1, rosterStartDate: -1, updatedAt: -1, createdAt: -1 })
+        .lean();
+
+      const employeeMap = new Map();
+      const normalizeStatus = (entry) =>
+        typeof entry === "string"
+          ? String(entry || "").trim()
+          : String(entry?.status || "").trim();
+      const isValidDate = (d) => d instanceof Date && !Number.isNaN(d.getTime());
+      for (const roster of previousRosters) {
+        const weeks = Array.isArray(roster?.weeks) ? [...roster.weeks] : [];
+        weeks.sort((a, b) => new Date(b?.endDate || 0).getTime() - new Date(a?.endDate || 0).getTime());
+
+        for (const week of weeks) {
+          const weekEnd = new Date(week?.endDate);
+          if (Number.isNaN(weekEnd.getTime()) || weekEnd >= fromDate) continue;
+
+          const employees = Array.isArray(week?.employees) ? week.employees : [];
+          for (const emp of employees) {
+            if (!canPrefillAllEmployees && normalize(emp?.teamLeader) !== normalize(currentTl)) continue;
+
+            const key =
+              String(emp?.userId || "").trim() ||
+              `${normalize(emp?.name)}__${normalize(emp?.department)}__${normalize(emp?.teamLeader)}`;
+            if (!key || employeeMap.has(key)) continue;
+
+            const sourceDailyStatus = Array.isArray(emp?.dailyStatus) ? [...emp.dailyStatus] : [];
+            sourceDailyStatus.sort((a, b) => {
+              const aDate = new Date(a?.date || 0);
+              const bDate = new Date(b?.date || 0);
+              const aTime = isValidDate(aDate) ? aDate.getTime() : Number.MAX_SAFE_INTEGER;
+              const bTime = isValidDate(bDate) ? bDate.getTime() : Number.MAX_SAFE_INTEGER;
+              return aTime - bTime;
+            });
+
+            const mappedStatuses = Array.from({ length: dateColumns.length }, (_, idx) =>
+              normalizeStatus(sourceDailyStatus[idx] || "")
+            );
+
+            employeeMap.set(key, [
+              emp?.name || "",
+              emp?.department || "",
+              emp?.transport || "",
+              emp?.cabRoute || "",
+              emp?.teamLeader || currentTl,
+              emp?.shiftStartHour ?? "",
+              emp?.shiftEndHour ?? "",
+              ...mappedStatuses,
+              ...Array(optionalSummaryColumns.length).fill("")
+            ]);
+          }
+        }
+      }
+
+      if (employeeMap.size > 0) {
+        data.push(...Array.from(employeeMap.values()));
+      }
+    }
 
     const worksheet = XLSX.utils.aoa_to_sheet(data);
     
@@ -5741,9 +5973,7 @@ export const exportRosterTemplate = async (req, res) => {
     worksheet['!cols'] = colWidths;
 
     // Set row height for header
-    worksheet['!rows'] = [
-      { hpt: 25 }  // Header row only
-    ];
+    worksheet['!rows'] = [{ hpt: 25 }, ...Array(Math.max(data.length - 1, 0)).fill({ hpt: 20 })];
 
     // Append the roster sheet
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
@@ -6130,17 +6360,27 @@ export const getRostersByDepartment = async (req, res) => {
     const limitNum = parseInt(limit);
     const skip = (pageNum - 1) * limitNum;
 
-    // Build the base filter for month/year
+    // Build the base filter. When month+year are supplied, match rosters by date overlap
+    // so cross-month weeks (e.g. Mar 30-Apr 5) are visible in both months.
     const baseFilter = {};
-    if (month) baseFilter.month = parseInt(month);
-    if (year) baseFilter.year = parseInt(year);
+    const parsedMonth = Number.parseInt(month, 10);
+    const parsedYear = Number.parseInt(year, 10);
+    if (Number.isFinite(parsedMonth) && Number.isFinite(parsedYear)) {
+      const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+      const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+      baseFilter.rosterStartDate = { $lte: monthEnd };
+      baseFilter.rosterEndDate = { $gte: monthStart };
+    } else {
+      if (Number.isFinite(parsedMonth)) baseFilter.month = parsedMonth;
+      if (Number.isFinite(parsedYear)) baseFilter.year = parsedYear;
+    }
 
     // First, get total count of rosters that match month/year
     const totalRosters = await Roster.countDocuments(baseFilter);
 
     // Fetch rosters with pagination
     const rosters = await Roster.find(baseFilter)
-      .sort({ year: -1, month: -1, 'rosterStartDate': -1 })
+      .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
       .skip(skip)
       .limit(limitNum)
       .populate('createdBy', 'username email')

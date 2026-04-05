@@ -678,13 +678,13 @@
 // export default AdminNavbar;
 
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
-import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar } from "react-icons/fi";
+import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar, FiBell } from "react-icons/fi";
 import { Clock } from "lucide-react";  
 import { Camera } from "lucide-react";  
 import { ChevronDown } from "lucide-react";  
@@ -711,9 +711,13 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const [exporting, setExporting] = useState(false);
   const [chatNotification, setChatNotification] = useState(null);
   const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const [systemNotifications, setSystemNotifications] = useState([]);
+  const [unreadSystemCount, setUnreadSystemCount] = useState(0);
+  const [showSystemNotifications, setShowSystemNotifications] = useState(false);
 
   const dropdownRef = useRef();
   const attendanceDropdownRef = useRef(); 
+  const systemNotificationRef = useRef();
   const titleResetTimerRef = useRef(null);
   const defaultTitleRef = useRef(document.title);
   const processedMessageIdsRef = useRef(new Set());
@@ -729,7 +733,9 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const canAccessAttendanceSnapshots = 
     user?.accountType === "employee" || 
     ["admin", "superAdmin", "HR"].includes(user?.accountType);
-  const canAccessDelegation = ["superAdmin", "HR"].includes(user?.accountType);
+  const canAccessDelegation =
+    ["superAdmin", "HR"].includes(user?.accountType) ||
+    (user?.accountType === "employee" && String(user?.department || "").toLowerCase() === "ops - meta");
 
   // Check if user is Ops-Meta employee
   const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
@@ -747,6 +753,9 @@ const AdminNavbar = ({ showOutlet = true }) => {
       if (attendanceDropdownRef.current && !attendanceDropdownRef.current.contains(e.target)) {
         setShowAttendanceDropdown(false);
       }
+      if (systemNotificationRef.current && !systemNotificationRef.current.contains(e.target)) {
+        setShowSystemNotifications(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -763,6 +772,13 @@ const AdminNavbar = ({ showOutlet = true }) => {
       document.body.style.overflow = "";
     };
   }, [showMobileMenu]);
+
+  useLayoutEffect(() => {
+    document.body.classList.add("admin-sidebar-layout");
+    return () => {
+      document.body.classList.remove("admin-sidebar-layout");
+    };
+  }, []);
 
   useEffect(() => {
     setShowMobileMenu(false);
@@ -789,6 +805,91 @@ const AdminNavbar = ({ showOutlet = true }) => {
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, [location.pathname]);
+
+  useEffect(() => {
+    if (user?.accountType !== "superAdmin") return;
+    const token = user?.token;
+    if (!token) return;
+
+    const fetchNotifications = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/notifications/my?limit=20`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setSystemNotifications(res.data?.data || []);
+        setUnreadSystemCount(Number(res.data?.unreadCount || 0));
+      } catch (error) {
+        console.error("Failed to fetch notifications:", error?.response?.data || error?.message);
+      }
+    };
+
+    fetchNotifications();
+  }, [user?.accountType, user?.token]);
+
+  useEffect(() => {
+    if (user?.accountType !== "superAdmin") return;
+
+    const handleSystemNotification = (notification) => {
+      if (!notification) return;
+      setSystemNotifications((prev) => [notification, ...prev].slice(0, 50));
+      setUnreadSystemCount((prev) => prev + 1);
+
+      if (document.hidden && "Notification" in window) {
+        const showBrowserNotification = () => {
+          new Notification(notification.title || "New Notification", {
+            body: notification.message || "",
+            icon: "/favicon.ico",
+            tag: `sys-${notification._id || Date.now()}`,
+          });
+        };
+
+        if (Notification.permission === "granted") {
+          showBrowserNotification();
+        } else if (Notification.permission === "default") {
+          Notification.requestPermission().then((permission) => {
+            if (permission === "granted") showBrowserNotification();
+          });
+        }
+      }
+    };
+
+    socket.on("system_notification", handleSystemNotification);
+    return () => {
+      socket.off("system_notification", handleSystemNotification);
+    };
+  }, [user?.accountType]);
+
+  const markSystemNotificationRead = async (id) => {
+    if (!id || !user?.token) return;
+    try {
+      await axios.patch(
+        `${API_URL}/notifications/${id}/read`,
+        {},
+        { headers: { Authorization: `Bearer ${user.token}` } }
+      );
+      setSystemNotifications((prev) =>
+        prev.map((n) => (String(n._id) === String(id) ? { ...n, read: true } : n))
+      );
+      setUnreadSystemCount((prev) => Math.max(0, prev - 1));
+    } catch (error) {
+      console.error("Failed to mark notification as read:", error?.response?.data || error?.message);
+    }
+  };
+
+  const markAllSystemNotificationsRead = async () => {
+    if (!user?.token) return;
+    try {
+      await axios.patch(
+        `${API_URL}/notifications/read-all`,
+        {},
+        { headers: { Authorization: `Bearer ${user.token}` } }
+      );
+      setSystemNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      setUnreadSystemCount(0);
+    } catch (error) {
+      console.error("Failed to mark all notifications as read:", error?.response?.data || error?.message);
+    }
+  };
 
   useEffect(() => {
     const currentUserId = user?.id || user?._id;
@@ -943,28 +1044,43 @@ const AdminNavbar = ({ showOutlet = true }) => {
     location.pathname === "/signup" || location.pathname === "/admin/signup";
   const canManageAdmin = ["admin", "superAdmin"].includes(user?.accountType);
   const navLinkClass = (path) =>
-    `rounded-full px-2.5 lg:px-3 py-1.5 transition-colors font-medium text-sm whitespace-nowrap ${
+    `nav-pill w-full justify-start px-3 lg:px-3.5 py-2 transition-colors font-medium text-sm whitespace-nowrap ${
       isActive(path)
-        ? "bg-blue-100 text-blue-800 border border-blue-200"
-        : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+        ? "nav-pill-blue"
+        : "text-slate-600 hover:text-slate-900"
     }`;
 
   return (
     <>
-      <nav className="fixed top-0 left-0 w-full z-50">
+      <nav className="fixed top-0 left-0 md:inset-y-0 z-50 w-full md:w-[280px] md:h-screen">
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap');
+          @media (min-width: 768px) {
+            .admin-sidebar-menu {
+              border: 0 !important;
+              border-radius: 0 !important;
+              box-shadow: none !important;
+              background: transparent !important;
+              padding: 0 !important;
+            }
+            .admin-sidebar-menu .nav-pill {
+              width: 100% !important;
+              justify-content: flex-start !important;
+              border-radius: 8px !important;
+            }
+          }
         `}</style>
-        <div className="border-b border-slate-200 bg-white/90 text-slate-900 shadow-sm backdrop-blur">
-          <div className="max-w-[1400px] mx-auto px-3 lg:px-5 py-2 flex justify-between items-center gap-3">
+        <div className="app-shell-nav text-slate-900 shadow-sm md:h-full md:pl-6 md:pr-4 md:py-5">
+          <div className="app-shell-inner md:max-w-none px-3 lg:px-5 py-2 md:p-0 flex justify-between items-center gap-4 md:h-full md:flex-col md:items-stretch md:justify-start">
             <h1
-              className="text-base lg:text-lg font-semibold text-slate-900 cursor-pointer whitespace-nowrap"
+              className="app-brand text-xl lg:text-2xl font-semibold cursor-pointer whitespace-nowrap"
               style={{ fontFamily: "'Playfair Display', serif" }}
               onClick={() => navigate("/admin/tasks")}
             >
               FDBS
             </h1>
-            <div className="hidden md:flex items-center gap-2 lg:gap-3 min-w-0" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
+            <div className="hidden md:flex flex-col gap-3 min-w-0 min-h-0 flex-1" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
+              <div className="app-nav-scroller admin-sidebar-menu md:flex-1 md:min-h-0 md:flex-col md:items-stretch md:rounded-none md:!border-0 md:!shadow-none md:!bg-transparent md:p-0 md:gap-2 md:overflow-y-auto">
               <Link 
                 to="/admin/roster" 
                 className={`flex items-center gap-2 ${navLinkClass("/admin/roster")}`}
@@ -983,7 +1099,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
                         navigate("/attendance-update");
                         setShowAttendanceDropdown(false);
                       }}
-                      className="flex items-center gap-2 bg-indigo-50 border border-indigo-200 px-2.5 lg:px-3 py-1.5 rounded-l-full text-indigo-700 font-medium text-sm whitespace-nowrap hover:bg-indigo-100 transition-all cursor-pointer"
+                      className="nav-pill nav-pill-indigo flex items-center gap-2 px-3.5 py-2 font-medium text-sm whitespace-nowrap cursor-pointer shrink-0"
                     >
                       <Clock className="w-4 h-4" />
                       Attendance Update
@@ -992,7 +1108,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
                     {/* Dropdown Toggle Button */}
                     <button
                       onClick={() => setShowAttendanceDropdown(!showAttendanceDropdown)}
-                      className="bg-indigo-50 border border-l-0 border-indigo-200 px-1.5 py-1.5 rounded-r-full text-indigo-700 hover:bg-indigo-100 transition-all cursor-pointer"
+                      className="nav-pill nav-pill-indigo ml-1 px-2 py-2 text-indigo-700 cursor-pointer shrink-0"
                       aria-label="Toggle dropdown"
                     >
                       <ChevronDown className={`w-4 h-4 transition-transform ${showAttendanceDropdown ? 'rotate-180' : ''}`} />
@@ -1042,37 +1158,64 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 </div>
               )}
 
-	             {canAccessDelegation && (
-	  <Link
-	    to="/admin/delegations"
-    className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer ${
-      location.pathname === "/admin/delegations"
-        ? "bg-cyan-100 text-cyan-800 border border-cyan-200"
-        : "bg-cyan-50 text-cyan-700 hover:bg-cyan-100 border border-cyan-200"
-    }`}
-  >
+              {canAccessAttendanceSnapshots && (
+                <button
+                  onClick={() => navigate("/attendance-snapshot")}
+                  className="nav-pill nav-pill-indigo flex items-center gap-2 px-3.5 py-2 font-medium text-sm whitespace-nowrap cursor-pointer shrink-0"
+                >
+                  <Camera className="w-4 h-4" />
+                  Attendance Snapshot
+                </button>
+              )}
+
+              {canUploadExcel && (
+                <button
+                  onClick={() => navigate("/upload-roster")}
+                  className="nav-pill nav-pill-green flex items-center gap-2 px-3.5 py-2 font-medium text-sm whitespace-nowrap cursor-pointer shrink-0"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    />
+                  </svg>
+                  Upload Roster
+                </button>
+              )}
+
+			             {canAccessDelegation && (
+				  <Link
+				    to="/admin/delegations"
+			    className={`nav-pill nav-pill-blue flex items-center gap-2 px-3.5 py-2 text-sm whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+			      location.pathname === "/delegations" || location.pathname === "/admin/delegations"
+			        ? "ring-2 ring-cyan-200"
+			        : ""
+		    }`}
+	  >
     <FiUsers className="w-4 h-4" />
     Delegation
 	  </Link>
 	)}
-	              <Link
-	                to="/admin/leave-management"
-	                className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer border ${
-	                  location.pathname === "/admin/leave-management"
-	                    ? "bg-sky-100 text-sky-800 border-sky-200"
-	                    : "border-sky-200 text-sky-700 hover:text-sky-800 hover:bg-sky-50"
-	                }`}
-	              >
-	                Leave
+		              <Link
+		                to="/admin/leave-management"
+		                className={`nav-pill nav-pill-blue flex items-center gap-2 px-3.5 py-2 text-sm whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+		                  location.pathname === "/admin/leave-management"
+		                    ? "ring-2 ring-sky-200"
+		                    : ""
+		                }`}
+		              >
+		                Leave
 	              </Link>
 
               {/* 🔥 REMOVED: Individual Attendance Snapshots and Upload Roster buttons from here */}
 
               {isOpsMeta && (
-                <button
-                  onClick={() => navigate("/ops-meta-roster")}
-                  className="flex items-center gap-2 bg-amber-50 border border-amber-200 px-2.5 lg:px-3 py-1.5 rounded-full text-amber-700 font-medium text-sm whitespace-nowrap hover:bg-amber-100 transition-all cursor-pointer"
-                >
+	                <button
+	                  onClick={() => navigate("/ops-meta-roster")}
+	                  className="nav-pill nav-pill-amber flex items-center gap-2 px-3.5 py-2 font-medium text-sm whitespace-nowrap cursor-pointer shrink-0"
+	                >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
                       d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -1106,60 +1249,131 @@ const AdminNavbar = ({ showOutlet = true }) => {
                   <Link to="/admin/defaulter" className={navLinkClass("/admin/defaulter")}>
                     Defaulter  
                   </Link>
-                  <button
-                    onClick={handleExport}
-                    disabled={exporting}
-                    className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap shadow-sm transition-all cursor-pointer"
-                  >
+	                  <button
+	                    onClick={handleExport}
+	                    disabled={exporting}
+	                    className="nav-pill nav-pill-green flex items-center gap-2 px-3.5 py-2 text-sm whitespace-nowrap shadow-sm transition-all cursor-pointer shrink-0"
+	                  >
                     <FiDownload />
                     {exporting ? "Exporting..." : "Export Excel"}
                   </button>
-                  <button
-                    onClick={() => navigate("/signup")}
-                    className={`flex items-center gap-2 px-2.5 lg:px-3 py-1.5 rounded-full text-sm whitespace-nowrap transition-all cursor-pointer border ${
-                      isCreateUserActive
-                        ? "bg-blue-100 text-blue-800 border-blue-200"
-                        : "border-blue-200 text-blue-700 hover:text-blue-800 hover:bg-blue-50"
-                    }`}
-                  >
-                    Create User
-                  </button>
-                </>
-              )}
-              <div className="relative ml-2 lg:ml-3 shrink-0" ref={dropdownRef}>
-                <button
-                  className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-semibold text-slate-800 border border-slate-200 cursor-pointer"
-                  onClick={() => setShowDropdown(!showDropdown)}
-                >
-                  {getInitials(user?.username)}
-                </button>
-
-                {showDropdown && (
-                  <div className="absolute right-0 mt-2 w-44 bg-white text-slate-800 rounded-2xl shadow-xl border border-slate-200 py-2">
-                    <button
-                      onClick={() => setShowProfilePopup(true)}
-                      className="w-full px-3 py-2 hover:bg-slate-100 text-left cursor-pointer"
-                    >
-                      My Profile
-                    </button>
-                    <button
-                      onClick={() => {
-                        navigate("/admin/manage-employee");
-                        setShowDropdown(false);
-                      }}
-                      className="w-full px-3 py-2 hover:bg-slate-100 text-left cursor-pointer"
-                    >
-                      Team
-                    </button>
-                    <button
-                      onClick={handleLogout}
-                      className="w-full px-3 py-2 hover:bg-rose-50 text-left cursor-pointer text-rose-700"
-                    >
-                      Logout
-                    </button>
-                  </div>
-                )}
+	                  <button
+	                    onClick={() => navigate("/signup")}
+	                    className={`nav-pill nav-pill-blue flex items-center gap-2 px-3.5 py-2 text-sm whitespace-nowrap transition-all cursor-pointer shrink-0 ${
+	                      isCreateUserActive
+	                        ? "ring-2 ring-blue-200"
+	                        : ""
+	                    }`}
+	                  >
+	                    Create User
+	                  </button>
+	                </>
+	              )}
               </div>
+			              <div className="mt-auto shrink-0 flex items-center gap-2">
+                      {user?.accountType === "superAdmin" && (
+                        <div className="relative" ref={systemNotificationRef}>
+	                          <button
+	                            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 border border-slate-200 cursor-pointer hover:bg-slate-200"
+	                            onClick={() => {
+                                  setShowSystemNotifications((prev) => !prev);
+                                  setShowDropdown(false);
+                                }}
+	                            title="System Notifications"
+	                          >
+                            <FiBell />
+                            {unreadSystemCount > 0 && (
+                              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] leading-[18px] text-center font-semibold">
+                                {unreadSystemCount > 99 ? "99+" : unreadSystemCount}
+                              </span>
+                            )}
+                          </button>
+
+	                          {showSystemNotifications && (
+	                            <div className="absolute left-0 bottom-full mb-2 w-[min(680px,calc(100vw-1.5rem))] max-h-[70vh] overflow-y-auto bg-white text-slate-800 rounded-2xl shadow-xl border border-slate-200 py-2 z-[120]">
+	                              <div className="flex items-center justify-between px-3 pb-2 border-b border-slate-100 sticky top-0 bg-white z-10">
+	                                <p className="text-sm font-semibold">Notifications</p>
+	                                <button
+	                                  className="text-xs text-blue-600 hover:text-blue-700"
+	                                  onClick={markAllSystemNotificationsRead}
+	                                >
+	                                  Mark all read
+	                                </button>
+	                              </div>
+	                              {systemNotifications.length === 0 ? (
+	                                <p className="px-3 py-6 text-sm text-slate-500 text-center">No notifications</p>
+	                              ) : (
+	                                systemNotifications.map((n) => (
+	                                  <button
+	                                    key={n._id}
+	                                    onClick={() => !n.read && markSystemNotificationRead(n._id)}
+	                                    className={`w-full text-left px-3 py-2 border-b border-slate-100 hover:bg-slate-50 ${
+	                                      n.read ? "bg-white" : "bg-blue-50/60"
+	                                    }`}
+	                                  >
+                                      <div className="flex items-start justify-between gap-3">
+	                                      <p className="text-xs font-semibold text-slate-700 truncate">
+                                          {n.title || "Notification"}
+                                        </p>
+	                                      <p className="text-[11px] text-slate-500 shrink-0">
+	                                        {n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ""}
+	                                      </p>
+                                      </div>
+	                                    <p className="text-sm text-slate-800 truncate">{n.message || ""}</p>
+	                                  </button>
+	                                ))
+	                              )}
+	                            </div>
+	                          )}
+                        </div>
+                      )}
+
+			              <div className="relative" ref={dropdownRef}>
+		                  <button
+		                    className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-semibold text-slate-800 border border-slate-200 cursor-pointer"
+		                    onClick={() => {
+                              setShowDropdown((prev) => !prev);
+                              setShowSystemNotifications(false);
+                            }}
+		                  >
+		                    {user?.profilePhotoUrl ? (
+		                      <img
+		                        src={user.profilePhotoUrl}
+		                        alt={user?.username || "Profile"}
+		                        className="h-full w-full rounded-full object-cover"
+		                      />
+		                    ) : (
+		                      getInitials(user?.username)
+		                    )}
+		                  </button>
+
+		                  {showDropdown && (
+		                    <div className="absolute left-0 bottom-full mb-2 w-52 bg-white text-slate-800 rounded-2xl shadow-xl border border-slate-200 py-2 z-[120]">
+		                      <button
+		                        onClick={() => setShowProfilePopup(true)}
+		                        className="w-full px-3 py-2 hover:bg-slate-100 text-left cursor-pointer"
+	                      >
+	                        My Profile
+	                      </button>
+	                      <button
+	                        onClick={() => {
+	                          navigate("/admin/manage-employee");
+	                          setShowDropdown(false);
+	                        }}
+	                        className="w-full px-3 py-2 hover:bg-slate-100 text-left cursor-pointer"
+	                      >
+	                        Team
+	                      </button>
+	                      <button
+	                        onClick={handleLogout}
+	                        className="w-full px-3 py-2 hover:bg-rose-50 text-left cursor-pointer text-rose-700"
+	                      >
+	                        Logout
+	                      </button>
+	                    </div>
+	                  )}
+	                </div>
+	              </div>
             </div>
             <div className="md:hidden">
               <button onClick={() => setShowMobileMenu(true)} className="text-2xl text-slate-700">
@@ -1172,18 +1386,50 @@ const AdminNavbar = ({ showOutlet = true }) => {
         {showMobileMenu && (
           <div className="fixed inset-0 bg-slate-900/35 backdrop-blur-sm z-50 flex md:hidden">
             <div className="bg-white w-72 h-screen overflow-y-auto p-6 flex flex-col gap-4 relative text-slate-800 border-r border-slate-200 shadow-xl" style={{ fontFamily: "'Outfit', system-ui, sans-serif" }}>
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-semibold text-slate-900">Task Management</h2>
-                <button
+	              <div className="flex justify-between items-center mb-4">
+	                <h2 className="text-lg font-semibold text-slate-900">Task Management</h2>
+	                <button
                   onClick={() => setShowMobileMenu(false)}
                   className="text-2xl text-slate-500 hover:text-slate-800"
                 >
-                  <FiX />
-                </button>
-              </div>
+	                  <FiX />
+	                </button>
+	              </div>
 
-              <Link
-                to="/admin/roster"
+                {user?.accountType === "superAdmin" && (
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-2">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm font-semibold text-slate-800">Notifications</p>
+                      <button
+                        className="text-xs text-blue-600"
+                        onClick={markAllSystemNotificationsRead}
+                      >
+                        Mark all read
+                      </button>
+                    </div>
+                    <div className="mt-2 max-h-36 overflow-y-auto space-y-2">
+                      {systemNotifications.length === 0 ? (
+                        <p className="text-xs text-slate-500">No notifications</p>
+                      ) : (
+                        systemNotifications.slice(0, 5).map((n) => (
+                          <button
+                            key={n._id}
+                            onClick={() => !n.read && markSystemNotificationRead(n._id)}
+                            className={`w-full text-left rounded-lg border px-2 py-1.5 ${
+                              n.read ? "bg-white border-slate-200" : "bg-blue-50 border-blue-200"
+                            }`}
+                          >
+                            <p className="text-[11px] font-semibold text-slate-700">{n.title}</p>
+                            <p className="text-xs text-slate-600 line-clamp-2">{n.message}</p>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+	              <Link
+	                to="/admin/roster"
                 className="flex items-center gap-2 text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
                 onClick={() => setShowMobileMenu(false)}
               >
@@ -1245,12 +1491,12 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 </div>
               )}
 
-	             {canAccessDelegation && (
-	  <Link
-	    to="/admin/delegations"
-    className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 px-3 py-2 rounded-xl text-cyan-700 font-medium hover:bg-cyan-100 transition-all w-full text-left"
-    onClick={() => setShowMobileMenu(false)}
-  >
+		             {canAccessDelegation && (
+		  <Link
+		    to="/admin/delegations"
+	    className="flex items-center gap-2 bg-cyan-50 border border-cyan-200 px-3 py-2 rounded-xl text-cyan-700 font-medium hover:bg-cyan-100 transition-all w-full text-left"
+	    onClick={() => setShowMobileMenu(false)}
+	  >
     <FiUsers className="w-4 h-4" />
     Delegation
 	  </Link>
@@ -1387,11 +1633,19 @@ const AdminNavbar = ({ showOutlet = true }) => {
                   Logout
                 </button>
               </div>
-              <div className="mt-auto pt-4 border-t border-slate-200">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-semibold text-slate-800 border border-slate-200">
-                    {getInitials(user?.username)}
-                  </div>
+	              <div className="mt-auto pt-4 border-t border-slate-200">
+	                <div className="flex items-center gap-3">
+	                  <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center font-semibold text-slate-800 border border-slate-200 overflow-hidden">
+	                    {user?.profilePhotoUrl ? (
+	                      <img
+	                        src={user.profilePhotoUrl}
+	                        alt={user?.username || "Profile"}
+	                        className="h-full w-full object-cover"
+	                      />
+	                    ) : (
+	                      getInitials(user?.username)
+	                    )}
+	                  </div>
                   <div>
                     <p className="text-sm font-medium text-slate-900">{user?.username}</p>
                     <p className="text-xs text-slate-500">{user?.accountType}</p>

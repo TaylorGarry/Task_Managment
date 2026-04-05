@@ -1,4 +1,4 @@
-// import React, { useState } from 'react';
+﻿// import React, { useState } from 'react';
 // import { useDispatch, useSelector } from 'react-redux';
 // import { uploadRosterFromExcel, clearExcelUploadState } from '../features/slices/rosterSlice.js';
 // import { toast } from 'react-toastify';
@@ -622,6 +622,7 @@ import {
 } from '../features/slices/rosterSlice.js';
 import { toast } from 'react-toastify';
 import ConditionalNavbar from './ConditionalNavbar.jsx';
+import StyledDatePicker from '../components/StyledDatePicker.jsx';
 const ExcelRosterUpload = () => {
   const dispatch = useDispatch();
   const { 
@@ -836,8 +837,10 @@ const ExcelRosterUpload = () => {
     return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
   };
 
+  const showRightColumn = Boolean(excelUploadData?.data?.summary) || uploadHistory.length > 0;
+
   return (
-    <div className="max-w-7xl mx-auto p-4 md:p-6">
+    <div className="w-full px-4 md:px-6 py-4 md:py-6">
       <ConditionalNavbar />
       {/* Header */}
       <div className="mb-8">
@@ -847,9 +850,9 @@ const ExcelRosterUpload = () => {
         <p className="text-gray-600">Upload employee roster for a 7-day period using Excel file</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className={`grid grid-cols-1 gap-6 ${showRightColumn ? "lg:grid-cols-3" : ""}`}>
         {/* Left Column: Upload Form */}
-        <div className="lg:col-span-2">
+        <div className={showRightColumn ? "lg:col-span-2" : ""}>
           <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold text-gray-800 flex items-center">
@@ -883,56 +886,67 @@ const ExcelRosterUpload = () => {
             <div className="border-b border-gray-200 mb-6"></div>
 
             <form onSubmit={handleSubmit} noValidate>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Start Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      if (validationErrors.startDate) {
-                        setValidationErrors(prev => ({ ...prev, startDate: '' }));
-                      }
-                    }}
-                    min={getMinDate()}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
-                      validationErrors.startDate ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {validationErrors.startDate ? (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.startDate}</p>
-                  ) : (
-                    <p className="mt-1 text-sm text-gray-500">{getRoleDateHint()}</p>
-                  )}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Date Range <span className="text-red-500">*</span>
+                </label>
+
+                <div className="rounded-xl border border-gray-300 bg-white p-2">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-2 md:gap-1.5 items-center">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Start Date</p>
+                      <StyledDatePicker
+                        value={startDate}
+                        onChange={(value) => {
+                          setStartDate(value);
+                          if (validationErrors.startDate) {
+                            setValidationErrors((prev) => ({ ...prev, startDate: '' }));
+                          }
+                        }}
+                        minDate={getMinDate()}
+                        initialViewDate={getMinDate()}
+                        rangeStart={startDate}
+                        rangeEnd={endDate}
+                        placeholder="Select start date"
+                      />
+                    </div>
+
+                    <div className="hidden md:flex h-full items-center justify-center px-2">
+                      <span className="rounded-full bg-blue-100 text-blue-700 text-xs font-semibold px-3 py-1">TO</span>
+                    </div>
+
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
+                      <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">End Date</p>
+                      <StyledDatePicker
+                        value={endDate}
+                        onChange={(value) => {
+                          setEndDate(value);
+                          if (validationErrors.endDate) {
+                            setValidationErrors((prev) => ({ ...prev, endDate: '' }));
+                          }
+                        }}
+                        minDate={startDate || getMinDate()}
+                        initialViewDate={startDate || getMinDate()}
+                        referenceDate={startDate}
+                        rangeStart={startDate}
+                        rangeEnd={endDate}
+                        placeholder="Select end date"
+                      />
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    End Date <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => {
-                      setEndDate(e.target.value);
-                      if (validationErrors.endDate) {
-                        setValidationErrors(prev => ({ ...prev, endDate: '' }));
-                      }
-                    }}
-                    min={startDate || getMinDate()}
-                    className={`w-full px-4 py-3 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all ${
-                      validationErrors.endDate ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {validationErrors.endDate ? (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.endDate}</p>
-                  ) : (
-                    <p className="mt-1 text-sm text-gray-500">Must be exactly 7 days from start</p>
-                  )}
-                </div>
+                {validationErrors.startDate ? (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.startDate}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-500">{getRoleDateHint()}</p>
+                )}
+
+                {validationErrors.endDate ? (
+                  <p className="mt-1 text-sm text-red-600">{validationErrors.endDate}</p>
+                ) : (
+                  <p className="mt-1 text-sm text-gray-500">Must be exactly 7 days from start</p>
+                )}
               </div>
 
               {/* File Upload */}
@@ -1077,6 +1091,7 @@ const ExcelRosterUpload = () => {
         </div>
 
         {/* Right Column: Upload Results & History */}
+        {showRightColumn && (
         <div className="space-y-6">
           {/* Upload Results */}
           {excelUploadData?.data?.summary && (
@@ -1145,6 +1160,7 @@ const ExcelRosterUpload = () => {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* User Info */}

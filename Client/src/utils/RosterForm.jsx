@@ -1897,6 +1897,7 @@ import RosterBulkEditForm from "../Roster/RosterBulkEditForm.jsx"
 
 const RosterForm = () => {
   const dispatch = useDispatch();
+  const { user: authUser } = useSelector((state) => state.auth || {});
   const {
     roster,
     loading,
@@ -1960,6 +1961,7 @@ const RosterForm = () => {
   const [showCopyPopup, setShowCopyPopup] = useState(false);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [selectedRosterId, setSelectedRosterId] = useState(null);
+  const [selectedSavedRosterId, setSelectedSavedRosterId] = useState(null);
   
   // Add loading state for bulk edit
   const [bulkEditLoading, setBulkEditLoading] = useState(false);
@@ -1969,6 +1971,9 @@ const RosterForm = () => {
   const inputRef = useRef(null);
   const scrollContainerRef = useRef(null);
   const formRef = useRef(null);
+  const currentUser = authUser || JSON.parse(localStorage.getItem("user") || "null");
+  const accountTypeLower = String(currentUser?.accountType || "").toLowerCase();
+  const isHrOrSuperAdmin = accountTypeLower === "hr" || accountTypeLower === "superadmin";
 
   const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -2037,6 +2042,21 @@ const RosterForm = () => {
       }
     }
   }, [allRosters, waitingForData]);
+
+  useEffect(() => {
+    const rosters = Array.isArray(allRosters) ? allRosters : (allRosters?.data || []);
+    if (!Array.isArray(rosters) || rosters.length === 0) {
+      setSelectedSavedRosterId(null);
+      return;
+    }
+
+    setSelectedSavedRosterId((prev) => {
+      if (prev && rosters.some((roster) => String(roster?._id) === String(prev))) {
+        return prev;
+      }
+      return rosters[0]?._id || null;
+    });
+  }, [allRosters]);
 
   // ========== MOVED useEffect from renderSavedRosterTable to here ==========
   useEffect(() => {
@@ -2139,20 +2159,25 @@ const RosterForm = () => {
     // Clear any existing bulk edit state first
     dispatch(clearBulkEditState());
     dispatch(clearBulkSaveState());
-    
+
     let rosterToEdit = null;
-    
+    const findSelectedRoster = (rosterList = []) =>
+      rosterList.find((item) => String(item?._id) === String(selectedSavedRosterId));
+
     // Check if allRosters exists and has data
     if (!allRosters) {
       toast.error("No roster data available");
       setBulkEditLoading(false);
       return;
     }
-    
+
     // Try to find a valid roster with _id
     if (Array.isArray(allRosters) && allRosters.length > 0) {
+      if (isHrOrSuperAdmin && selectedSavedRosterId) {
+        rosterToEdit = findSelectedRoster(allRosters) || null;
+      }
       // Find first roster that has an _id
-      for (let i = 0; i < allRosters.length; i++) {
+      for (let i = 0; !rosterToEdit && i < allRosters.length; i++) {
         if (allRosters[i] && allRosters[i]._id) {
           rosterToEdit = allRosters[i];
           break;
@@ -2164,8 +2189,11 @@ const RosterForm = () => {
         rosterToEdit = allRosters[0];
       }
     } else if (allRosters && allRosters.data && Array.isArray(allRosters.data) && allRosters.data.length > 0) {
+      if (isHrOrSuperAdmin && selectedSavedRosterId) {
+        rosterToEdit = findSelectedRoster(allRosters.data) || null;
+      }
       // Handle nested data structure
-      for (let i = 0; i < allRosters.data.length; i++) {
+      for (let i = 0; !rosterToEdit && i < allRosters.data.length; i++) {
         if (allRosters.data[i] && allRosters.data[i]._id) {
           rosterToEdit = allRosters.data[i];
           break;
@@ -2179,8 +2207,11 @@ const RosterForm = () => {
       // Single roster object
       rosterToEdit = allRosters;
     } else if (allRosters && allRosters.success && allRosters.data && Array.isArray(allRosters.data) && allRosters.data.length > 0) {
+      if (isHrOrSuperAdmin && selectedSavedRosterId) {
+        rosterToEdit = findSelectedRoster(allRosters.data) || null;
+      }
       // Handle API response structure
-      for (let i = 0; i < allRosters.data.length; i++) {
+      for (let i = 0; !rosterToEdit && i < allRosters.data.length; i++) {
         if (allRosters.data[i] && allRosters.data[i]._id) {
           rosterToEdit = allRosters.data[i];
           break;
@@ -2214,6 +2245,11 @@ const RosterForm = () => {
 
   // FIXED: Handle bulk edit with loading state to prevent multiple clicks
   const handleBulkEditRoster = async () => {
+    if (!isHrOrSuperAdmin) {
+      toast.error("Only HR and Super Admin can access bulk edit rosters.");
+      return;
+    }
+
     // Prevent multiple clicks while loading
     if (bulkEditLoading || waitingForData) {
       return;
@@ -2508,8 +2544,9 @@ const RosterForm = () => {
     };
 
     rosterEmployees.forEach((emp) => {
-      const dailyStatus = emp.dailyStatus || [];
+      const dailyStatus = Array.isArray(emp?.dailyStatus) ? emp.dailyStatus : [];
       dailyStatus.forEach((ds, dayIndex) => {
+        if (!summary.dayWiseSummary[dayIndex]) return;
         const status = typeof ds === "object" ? ds.status : ds;
         if (status === "P") {
           summary.totalPresents++;
@@ -3070,7 +3107,11 @@ const RosterForm = () => {
 	      );
 	    }
 
-	    const currentRoster = rosters[0];
+    const currentRoster = (
+      isHrOrSuperAdmin && selectedSavedRosterId
+        ? rosters.find((roster) => String(roster?._id) === String(selectedSavedRosterId))
+        : null
+    ) || rosters[0];
 	    const weeks = currentRoster?.weeks || [];
     
     // ========== FIX: Group weeks by weekNumber and merge employees ==========
@@ -3238,6 +3279,30 @@ const RosterForm = () => {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-700">Saved Data</p>
               <h3 className="text-xl font-semibold text-slate-900">Saved Roster</h3>
+              {isHrOrSuperAdmin && rosters.length > 1 && (
+                <div className="mt-2">
+                  <label className="block text-xs font-semibold uppercase tracking-[0.08em] text-slate-500 mb-1">
+                    Select Month
+                  </label>
+                  <select
+                    value={selectedSavedRosterId || ""}
+                    onChange={(e) => {
+                      setSelectedSavedRosterId(e.target.value || null);
+                      setSelectedWeek(null);
+                      setCurrentPage(1);
+                      setShowDepartmentFilter(false);
+                      setDepartmentFilter('');
+                    }}
+                    className="border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white text-slate-700 min-w-[240px]"
+                  >
+                    {rosters.map((roster) => (
+                      <option key={roster._id} value={roster._id}>
+                        {new Date(2000, Number(roster.month || 1) - 1, 1).toLocaleString("default", { month: "long" })} {roster.year} ({roster.totalWeeks || roster.weeks?.length || 0} weeks)
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <p className="text-slate-600">
                 Week {rosterWeek.weekNumber} • {formatDate(rosterWeek.startDate)} to {formatDate(rosterWeek.endDate)}
               </p>
@@ -3517,7 +3582,7 @@ const RosterForm = () => {
   return (    
     <>
       <AdminNavbar />
-      <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col mt-10 [&_button]:cursor-pointer [&_select]:cursor-pointer">
+      <div className="min-h-screen w-full bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col [&_button]:cursor-pointer [&_select]:cursor-pointer">
         <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
           <div className="p-4 md:p-6 flex flex-col gap-4 lg:flex-row lg:justify-between lg:items-start">
             <div>
@@ -3528,12 +3593,13 @@ const RosterForm = () => {
             <div className="flex flex-col items-end sm:flex-row gap-2 w-full lg:w-auto">
               <button
                 onClick={handleBulkEditRoster}
-                disabled={bulkEditLoading || waitingForData}
+                disabled={!isHrOrSuperAdmin || bulkEditLoading || waitingForData}
                 className={`w-full sm:w-auto px-4 py-2 rounded-lg font-medium flex items-center justify-center shadow-sm ${
-                  bulkEditLoading || waitingForData
+                  !isHrOrSuperAdmin || bulkEditLoading || waitingForData
                     ? 'bg-blue-400 cursor-not-allowed' 
                     : 'bg-blue-600 hover:bg-blue-700 text-white'
                 }`}
+                title={!isHrOrSuperAdmin ? "Only HR and Super Admin can bulk edit rosters" : ""}
               >
                 <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}

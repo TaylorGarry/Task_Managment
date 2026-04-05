@@ -1,11 +1,13 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice.js';
 import { Calendar, Users, Clock, RefreshCw, AlertCircle, ChevronDown, SlidersHorizontal, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
 import AdminNavbar from "../components/AdminNavbar.jsx";
 import Navbar from "../pages/Navbar.jsx";
 import html2canvas from "html2canvas";
+import { useLocation } from "react-router-dom";
+import { fetchMyDelegations, selectMyDelegations } from "../features/slices/delegationSlice.js";
 
 const toDateKeyLocal = (value) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -25,14 +27,16 @@ const toDateKeyLocal = (value) => {
 
 		const AttendanceSnapshot = () => {
 			  const dispatch = useDispatch();
+			  const location = useLocation();
 			  const { user } = useSelector((state) => state.auth);
+			  const myDelegations = useSelector(selectMyDelegations);
 			  const currentUser = user || JSON.parse(localStorage.getItem("user") || "null");
 			  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
 			  const isEmployeeUser = currentUser?.accountType === "employee";
 			  const isEmployeeTransportUser = isEmployeeUser && currentUser?.department === "Transport";
 			  const isEmployeeNonTransportUser = isEmployeeUser && currentUser?.department !== "Transport";
 			  const canDownloadSnapshotImage = ["HR", "superAdmin", "employee"].includes(currentUser?.accountType);
-			  const canDownloadExcel = !isEmployeeUser;
+			  const isNonEmployeeExcelUser = !isEmployeeUser;
 		  const { 
 			    updateEmployeesData,
 		    allRosters,
@@ -80,6 +84,10 @@ const toDateKeyLocal = (value) => {
 	  const [selectedYear, setSelectedYear] = useState(() => {
 	    return new Date().getFullYear();
 	  });
+	  const delegatedFromParam = useMemo(() => {
+	    const searchParams = new URLSearchParams(location.search || "");
+	    return String(searchParams.get("delegatedFrom") || "").trim();
+	  }, [location.search]);
 
   // All 12 months for dropdown
   const allMonths = [
@@ -130,6 +138,12 @@ const toDateKeyLocal = (value) => {
       }));
     }
   }, [dispatch, user, selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    if (isEmployeeUser) {
+      dispatch(fetchMyDelegations());
+    }
+  }, [dispatch, isEmployeeUser]);
 
   useEffect(() => {
     if (rosterDetailError) {
@@ -189,7 +203,8 @@ const toDateKeyLocal = (value) => {
 	        dispatch(getEmployeesForUpdates({
 	          rosterId: currentRoster._id,
 	          weekNumber,
-	          date: selectedDate
+	          date: selectedDate,
+	          ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
 	        }));
 	      } else {
 	        setAllEmployees([]);
@@ -203,7 +218,7 @@ const toDateKeyLocal = (value) => {
       setAvailableWeeks([]);
       setLoadingState('success');
     }
-  }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, selectedDate]);
+  }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, selectedDate, delegatedFromParam]);
 
   // ✅ Process the dynamic data from API
   useEffect(() => {
@@ -368,11 +383,12 @@ const toDateKeyLocal = (value) => {
 	      const weekNumber = pickWeekNumberForDate(roster, selectedDate);
 	      if (weekNumber != null) {
 	        setSelectedWeek(weekNumber);
-	        dispatch(getEmployeesForUpdates({
-	          rosterId: roster._id,
-	          weekNumber,
-	          date: selectedDate
-	        }));
+		        dispatch(getEmployeesForUpdates({
+		          rosterId: roster._id,
+		          weekNumber,
+		          date: selectedDate,
+		          ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+		        }));
 	      } else {
 	        setAllEmployees([]);
 	        setSelectedWeek(null);
@@ -399,11 +415,12 @@ const toDateKeyLocal = (value) => {
     setLoadingState('loading');
     
     if (selectedRoster) {
-      dispatch(getEmployeesForUpdates({
-        rosterId: selectedRoster,
-        weekNumber: parseInt(weekNumber),
-        date: selectedDate
-      }));
+	      dispatch(getEmployeesForUpdates({
+	        rosterId: selectedRoster,
+	        weekNumber: parseInt(weekNumber),
+	        date: selectedDate,
+	        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+	      }));
     }
   };
 
@@ -422,11 +439,12 @@ const toDateKeyLocal = (value) => {
 
 			    if (selectedRoster && nextWeek) {
 		      setLoadingState('loading');
-		      dispatch(getEmployeesForUpdates({
-	        rosterId: selectedRoster,
-	        weekNumber: nextWeek,
-	        date: newDate
-	      }));
+			      dispatch(getEmployeesForUpdates({
+		        rosterId: selectedRoster,
+		        weekNumber: nextWeek,
+		        date: newDate,
+		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+		      }));
 	    }
 	  };
 
@@ -435,11 +453,12 @@ const toDateKeyLocal = (value) => {
 	    setLoadingState('loading');
 	    setCurrentPage(1);
 	    if (selectedRoster && selectedWeek) {
-      dispatch(getEmployeesForUpdates({
-        rosterId: selectedRoster,
-        weekNumber: selectedWeek,
-        date: selectedDate
-      }));
+	      dispatch(getEmployeesForUpdates({
+	        rosterId: selectedRoster,
+	        weekNumber: selectedWeek,
+	        date: selectedDate,
+	        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+	      }));
     }
   };
 
@@ -514,25 +533,89 @@ const toDateKeyLocal = (value) => {
 	    )
 	  ).sort((a, b) => String(a).localeCompare(String(b)));
 
-	  const TEAM_LEADER_NONE = "__none__";
-	  const normalizeTeamLeader = (value) => String(value || "").trim();
-	  const availableTeamLeaders = Array.from(
-	    new Set(
-	      (allEmployees || [])
-	        .map((emp) => normalizeTeamLeader(emp?.teamLeader))
-	        .filter(Boolean)
+			  const TEAM_LEADER_NONE = "__none__";
+			  const normalizeTeamLeader = (value) => String(value || "").trim();
+			  const normalizeKey = (value) => String(value || "").trim().toLowerCase();
+			  const availableTeamLeaders = Array.from(
+			    new Set(
+			      (allEmployees || [])
+		        .map((emp) => normalizeTeamLeader(emp?.teamLeader))
+		        .filter(Boolean)
 	    )
 	  ).sort((a, b) => String(a).localeCompare(String(b)));
 
-	  useEffect(() => {
-	    if (selectedTeamLeader === "all" || selectedTeamLeader === TEAM_LEADER_NONE) return;
-	    if (!availableTeamLeaders.includes(selectedTeamLeader)) {
-	      setSelectedTeamLeader("all");
-	    }
-	  }, [TEAM_LEADER_NONE, availableTeamLeaders, selectedTeamLeader]);
+		  useEffect(() => {
+		    if (selectedTeamLeader === "all" || selectedTeamLeader === TEAM_LEADER_NONE) return;
+		    if (!availableTeamLeaders.includes(selectedTeamLeader)) {
+		      setSelectedTeamLeader("all");
+		    }
+		  }, [TEAM_LEADER_NONE, availableTeamLeaders, selectedTeamLeader]);
 
-			  const handleExportSnapshot = async () => {
-			    try {
+		  const selectedWeekRange = useMemo(() => {
+		    const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
+		    if (!week?.startDate || !week?.endDate) return null;
+		    const start = new Date(week.startDate);
+		    const end = new Date(week.endDate);
+		    if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+		    start.setHours(0, 0, 0, 0);
+		    end.setHours(23, 59, 59, 999);
+		    return { start, end };
+		  }, [availableWeeks, selectedWeek]);
+
+		  const activeDelegationsForWeek = useMemo(() => {
+		    if (!isEmployeeUser || !selectedWeekRange) return [];
+		    const safeList = Array.isArray(myDelegations) ? myDelegations : [];
+		    return safeList.filter((delegation) => {
+		      if (delegation?.status !== "active") return false;
+		      const start = new Date(delegation?.startDate);
+		      const end = new Date(delegation?.endDate);
+		      if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+		      start.setHours(0, 0, 0, 0);
+		      end.setHours(23, 59, 59, 999);
+		      return start <= selectedWeekRange.end && end >= selectedWeekRange.start;
+		    });
+		  }, [isEmployeeUser, myDelegations, selectedWeekRange]);
+
+		  const delegationByLeaderName = useMemo(() => {
+		    const map = new Map();
+		    activeDelegationsForWeek.forEach((delegation) => {
+		      const leaderName = normalizeKey(delegation?.delegator?.username);
+		      if (leaderName) map.set(leaderName, delegation);
+		    });
+		    return map;
+		  }, [activeDelegationsForWeek]);
+
+			  const employeeDelegatedFromForExport = useMemo(() => {
+		    if (!isEmployeeUser) return "";
+		    if (delegatedFromParam) {
+		      const byParam = activeDelegationsForWeek.find(
+		        (delegation) => String(delegation?.delegator?._id || "") === delegatedFromParam
+		      );
+		      if (byParam?.delegator?._id) return String(byParam.delegator._id);
+		    }
+		    if (selectedTeamLeader !== "all" && selectedTeamLeader !== TEAM_LEADER_NONE) {
+		      const byLeader = delegationByLeaderName.get(normalizeKey(selectedTeamLeader));
+		      if (byLeader?.delegator?._id) return String(byLeader.delegator._id);
+		    }
+		    if (activeDelegationsForWeek.length === 1) {
+		      const onlyDelegation = activeDelegationsForWeek[0];
+		      if (onlyDelegation?.delegator?._id) return String(onlyDelegation.delegator._id);
+		    }
+			    return "";
+			  }, [
+		    delegatedFromParam,
+		    delegationByLeaderName,
+		    activeDelegationsForWeek,
+		    isEmployeeUser,
+		    selectedTeamLeader,
+			    TEAM_LEADER_NONE,
+			  ]);
+
+			  const canDownloadExcel =
+			    isNonEmployeeExcelUser || (isEmployeeUser && activeDelegationsForWeek.length > 0);
+
+				  const handleExportSnapshot = async () => {
+				    try {
 		      const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
 		      if (!week?.startDate || !week?.endDate) {
 		        return;
@@ -544,11 +627,24 @@ const toDateKeyLocal = (value) => {
 	        return;
 	      }
 
-	      const dept = selectedDepartment === 'all' ? '' : selectedDepartment;
-	      await dispatch(exportAttendanceSnapshot({ startDate: startDateKey, endDate: endDateKey, department: dept })).unwrap();
-	    } catch (err) {
-	      // exportAttendanceSnapshot already toasts on success; keep errors silent here
-	      console.error('Export snapshot failed:', err);
+		      const dept = selectedDepartment === 'all' ? '' : selectedDepartment;
+			      const exportPayload = {
+			        startDate: startDateKey,
+			        endDate: endDateKey,
+			        department: dept,
+			      };
+				      if (isEmployeeUser) {
+				        const fallbackDelegationId =
+				          String(activeDelegationsForWeek?.[0]?.delegator?._id || "").trim();
+				        const resolvedDelegatedFrom =
+				          String(employeeDelegatedFromForExport || fallbackDelegationId || "").trim();
+				        if (!resolvedDelegatedFrom) return;
+				        exportPayload.delegatedFrom = resolvedDelegatedFrom;
+				      }
+			      await dispatch(exportAttendanceSnapshot(exportPayload)).unwrap();
+		    } catch (err) {
+		      // exportAttendanceSnapshot already toasts on success; keep errors silent here
+		      console.error('Export snapshot failed:', err);
 	    }
 			  };
 

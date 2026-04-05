@@ -111,6 +111,31 @@ export const fetchEmployees = createAsyncThunk(
   }
 );
 
+export const exportEmployeesExcel = createAsyncThunk(
+  "auth/exportEmployeesExcel",
+  async (_, thunkAPI) => {
+    try {
+      const token = thunkAPI.getState().auth.user?.token;
+      if (!token) throw new Error("No token found");
+
+      const res = await axios.get(`${API_URL}/employees/export`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+
+      const disposition = res.headers?.["content-disposition"] || "";
+      const fileNameMatch = disposition.match(/filename="?([^"]+)"?/i);
+      const fileName = fileNameMatch?.[1] || `Employee_Details_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      return { blob: res.data, fileName };
+    } catch (err) {
+      return thunkAPI.rejectWithValue(
+        err.response?.data?.message || err.message
+      );
+    }
+  }
+);
+
 export const fetchReportingManagers = createAsyncThunk(
   "auth/fetchReportingManagers",
   async (department = "Ops - Meta", thunkAPI) => {
@@ -502,6 +527,29 @@ const authSlice = createSlice({
       })
       .addCase(fetchEmployeeDashboardSummary.fulfilled, (state, action) => {
         state.employeeDashboardSummary = action.payload;
+        const profile = action.payload?.profile || {};
+        if (state.user) {
+          const nextUser = {
+            ...state.user,
+            profilePhotoUrl:
+              profile.profilePhotoUrl !== undefined
+                ? profile.profilePhotoUrl
+                : state.user.profilePhotoUrl || "",
+            profilePhotoPublicId:
+              profile.profilePhotoPublicId !== undefined
+                ? profile.profilePhotoPublicId
+                : state.user.profilePhotoPublicId || "",
+            ctc: profile.ctc ?? state.user.ctc ?? null,
+            inHandSalary: profile.inHandSalary ?? state.user.inHandSalary ?? null,
+            transportAllowance:
+              profile.transportAllowance ?? state.user.transportAllowance ?? null,
+            documents: Array.isArray(profile.documents)
+              ? profile.documents
+              : state.user.documents || [],
+          };
+          state.user = nextUser;
+          localStorage.setItem("user", JSON.stringify(nextUser));
+        }
       })
       .addCase(fetchEmployeeDashboardSummary.rejected, (state, action) => {
         state.error = action.payload;

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, TablePagination,
@@ -14,7 +14,7 @@ import {
   Cancel, Business, AccessTime, Description, Security,
   Person, Badge, Work, People, FileCopy, Save,
   FolderOpen, PictureAsPdf, Image, Description as DocIcon,
-  School, LocationOn, CreditCard, Receipt, Assignment,
+  School, LocationOn, CreditCard, Receipt, Assignment, CameraAlt,
   Campaign
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
@@ -29,6 +29,7 @@ import {
   uploadEmployeeAsset,
   hrSignPolicyDocument,
   deleteEmployeeByAdmin,
+  exportEmployeesExcel,
 } from "../features/slices/authSlice.js";
 import ConfirmActionModal from "./ConfirmActionModal.jsx";
 import toast from "react-hot-toast";
@@ -110,6 +111,12 @@ const PREVIOUS_EMPLOYMENT_DOC_NAMES = new Set(
 const isPreviousEmploymentDoc = (name = "") =>
   PREVIOUS_EMPLOYMENT_DOC_NAMES.has(String(name || "").trim().toLowerCase());
 
+const parseOptionalAmount = (value) => {
+  if (value === "" || value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+};
+
 const StyledCard = styled(Paper)(({ theme }) => ({
   borderRadius: "24px",
   border: "1px solid #eef2f6",
@@ -139,10 +146,16 @@ const ManageEmployee = () => {
     transportOffice: "No",
     docsStatus: "No",
     employmentType: "experienced",
+    profilePhotoUrl: "",
+    profilePhotoPublicId: "",
+    ctc: "",
+    inHandSalary: "",
+    transportAllowance: "",
     reportingManager: "",
     shiftLabel: "",
     isCoreTeam: false,
     isTeamLeader: false,
+    isActive: true,
     password: "",
     confirmPassword: ""
   });
@@ -165,6 +178,12 @@ const ManageEmployee = () => {
   const [deletingEmployee, setDeletingEmployee] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [overrideClockNow, setOverrideClockNow] = useState(Date.now());
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [cameraLoading, setCameraLoading] = useState(false);
+  const [uploadingProfilePhoto, setUploadingProfilePhoto] = useState(false);
+  const [isExportingEmployees, setIsExportingEmployees] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
 
   const sections = [
     { id: "basic", label: "Basic Info", icon: <Person sx={{ fontSize: 18 }} /> },
@@ -175,6 +194,8 @@ const ManageEmployee = () => {
 
   const isHrUser = currentUser?.accountType === "HR";
   const isSuperAdmin = currentUser?.accountType === "superAdmin";
+  const isSelectedUserInactive = selectedUser?.isActive === false;
+  const canManagePayroll = isHrUser || isSuperAdmin;
   const isFresher = formData.employmentType === "fresher";
   const isHrOverrideActive = Boolean(
     selectedUser?.hrDocumentOverrideUntil &&
@@ -255,6 +276,11 @@ const ManageEmployee = () => {
       transportOffice: user.transportOffice || "No",
       docsStatus: user.docsStatus || "No",
       employmentType: user.employmentType || "experienced",
+      profilePhotoUrl: user.profilePhotoUrl || "",
+      profilePhotoPublicId: user.profilePhotoPublicId || "",
+      ctc: user.ctc ?? "",
+      inHandSalary: user.inHandSalary ?? "",
+      transportAllowance: user.transportAllowance ?? "",
       reportingManager: user.reportingManager?._id || user.reportingManager || "",
       shiftLabel: (() => {
         const rawShift = String(
@@ -264,6 +290,7 @@ const ManageEmployee = () => {
       })(),
       isCoreTeam: user.isCoreTeam || false,
       isTeamLeader: Boolean(user.isTeamLeader),
+      isActive: user.isActive !== false,
       password: "",
       confirmPassword: ""
     });
@@ -303,6 +330,7 @@ const ManageEmployee = () => {
   };
 
   const handleCloseDialog = () => {
+    closeCamera();
     setSelectedUser(null);
     setActiveSection("basic");
     setFormData({
@@ -317,10 +345,16 @@ const ManageEmployee = () => {
       transportOffice: "No",
       docsStatus: "No",
       employmentType: "experienced",
+      profilePhotoUrl: "",
+      profilePhotoPublicId: "",
+      ctc: "",
+      inHandSalary: "",
+      transportAllowance: "",
       reportingManager: "",
       shiftLabel: "",
       isCoreTeam: false,
       isTeamLeader: false,
+      isActive: true,
       password: "",
       confirmPassword: ""
     });
@@ -350,6 +384,230 @@ const ManageEmployee = () => {
       });
     }
   };
+
+  const stopCameraStream = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+  };
+
+  const openCamera = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error("Camera is not supported in this browser");
+      return;
+    }
+    setCameraOpen(true);
+    setCameraLoading(true);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play();
+      }
+    } catch (error) {
+      toast.error("Unable to access camera. Please allow permission.");
+      setCameraOpen(false);
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const closeCamera = () => {
+    stopCameraStream();
+    setCameraOpen(false);
+  };
+
+  const captureProfilePhoto = async () => {
+    if (!videoRef.current || !selectedUser?._id) {
+      toast.error("Camera not ready");
+      return;
+    }
+    const video = videoRef.current;
+    const width = video.videoWidth || 640;
+    const height = video.videoHeight || 480;
+    if (!width || !height) {
+      toast.error("Camera frame unavailable");
+      return;
+    }
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      toast.error("Unable to capture image");
+      return;
+    }
+    ctx.drawImage(video, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
+
+    setUploadingProfilePhoto(true);
+    try {
+      const blob = await (await fetch(dataUrl)).blob();
+      const photoFile = new File(
+        [blob],
+        `${formData.empId || formData.username || "employee"}_profile_${Date.now()}.jpg`,
+        { type: "image/jpeg" }
+      );
+      const asset = await dispatch(
+        uploadEmployeeAsset({ file: photoFile, assetType: "profile-photo" })
+      ).unwrap();
+      setFormData((prev) => ({
+        ...prev,
+        profilePhotoUrl: asset.url || "",
+        profilePhotoPublicId: asset.publicId || "",
+      }));
+      setDocuments((prev) => ({
+        ...prev,
+        photo: {
+          name: "Photo",
+          url: asset.url || "",
+          publicId: asset.publicId || "",
+          fileName: asset.originalName || photoFile.name || "",
+          mimeType: asset.mimeType || photoFile.type || "",
+          size: asset.bytes || photoFile.size || 0,
+          uploaded: true,
+          uploadedAt: new Date().toISOString(),
+          uploadedIp: asset.uploadedIp || "",
+        },
+      }));
+      toast.success("Profile photo captured and uploaded");
+      closeCamera();
+    } catch (err) {
+      toast.error(err || "Failed to upload profile photo");
+    } finally {
+      setUploadingProfilePhoto(false);
+    }
+  };
+
+  const downloadEmployeeIdCard = async () => {
+    const employeeName = formData.realName || selectedUser?.realName || selectedUser?.username || "Employee";
+    const designation = formData.designation || selectedUser?.designation || "";
+    const empId = formData.empId || selectedUser?.empId || "";
+    const photoUrl = formData.profilePhotoUrl || selectedUser?.profilePhotoUrl || "";
+
+    const canvas = document.createElement("canvas");
+    canvas.width = 1000;
+    canvas.height = 620;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) {
+      toast.error("Unable to generate ID card");
+      return;
+    }
+
+    ctx.fillStyle = "#f9fbff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#022b68";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 120);
+    ctx.quadraticCurveTo(180, 95, 250, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#f2b318";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(0, 80);
+    ctx.quadraticCurveTo(145, 62, 220, 0);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#022b68";
+    ctx.beginPath();
+    ctx.moveTo(canvas.width, canvas.height);
+    ctx.lineTo(canvas.width, canvas.height - 140);
+    ctx.quadraticCurveTo(canvas.width - 260, canvas.height - 122, canvas.width - 360, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#f2b318";
+    ctx.beginPath();
+    ctx.moveTo(canvas.width, canvas.height);
+    ctx.lineTo(canvas.width, canvas.height - 95);
+    ctx.quadraticCurveTo(canvas.width - 210, canvas.height - 85, canvas.width - 320, canvas.height);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.fillStyle = "#f2b318";
+    ctx.fillRect(72, 185, 86, 56);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 40px Arial";
+    ctx.fillText("FD", 82, 226);
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 56px Arial";
+    ctx.fillText("BUSINESS", 172, 231);
+    ctx.fillStyle = "#b8860b";
+    ctx.font = "700 42px Arial";
+    ctx.fillText("Service Private Limited", 174, 278);
+
+    const photoX = 95;
+    const photoY = 315;
+    const photoSize = 230;
+    ctx.fillStyle = "#dbe4f0";
+    ctx.beginPath();
+    ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2 + 10, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (photoUrl) {
+      try {
+        const photo = await new Promise((resolve, reject) => {
+          const img = new window.Image();
+          img.crossOrigin = "anonymous";
+          img.onload = () => resolve(img);
+          img.onerror = reject;
+          img.src = photoUrl;
+        });
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.drawImage(photo, photoX, photoY, photoSize, photoSize);
+        ctx.restore();
+      } catch {
+        // fallback text when image loading fails
+      }
+    }
+
+    if (!photoUrl) {
+      ctx.fillStyle = "#64748b";
+      ctx.font = "600 24px Arial";
+      ctx.fillText("No Photo", photoX + 55, photoY + 125);
+    }
+
+    ctx.fillStyle = "#0f172a";
+    ctx.font = "700 58px Arial";
+    ctx.fillText(employeeName, 370, 400);
+
+    ctx.fillStyle = "#111827";
+    ctx.font = "600 46px Arial";
+    ctx.fillText(designation || "Employee", 370, 462);
+
+    ctx.fillStyle = "#1f2937";
+    ctx.font = "600 42px Arial";
+    ctx.fillText(`Emp ID : ${empId || "N/A"}`, 370, 528);
+
+    const link = document.createElement("a");
+    const safeName = String(employeeName || "employee").replace(/[^a-z0-9_-]+/gi, "_");
+    link.download = `${safeName}_id_card.png`;
+    link.href = canvas.toDataURL("image/png");
+    link.click();
+  };
+
+  useEffect(() => {
+    return () => {
+      stopCameraStream();
+    };
+  }, []);
 
   const handleFileSelect = (categoryId) => {
     const fileInput = document.getElementById(`file-input-${categoryId}`);
@@ -583,11 +841,17 @@ const ManageEmployee = () => {
         transportOffice: formData.transportOffice,
         docsStatus: docsStatusValue,
         employmentType: formData.employmentType,
+        profilePhotoUrl: formData.profilePhotoUrl || "",
+        profilePhotoPublicId: formData.profilePhotoPublicId || "",
+        ctc: parseOptionalAmount(formData.ctc),
+        inHandSalary: parseOptionalAmount(formData.inHandSalary),
+        transportAllowance: parseOptionalAmount(formData.transportAllowance),
         reportingManager: formData.reportingManager || null,
         documents: documentsArray,
         policyDocuments: STATIC_POLICY_DOCS,
         isCoreTeam: formData.isCoreTeam,
         isTeamLeader: formData.isTeamLeader,
+        isActive: formData.isActive,
         shiftLabel: formData.shiftLabel,
         shiftStartHour,
         shiftEndHour,
@@ -634,6 +898,26 @@ const ManageEmployee = () => {
     return required ? "Pending" : "Optional";
   };
 
+  const handleExportEmployeeDetails = async () => {
+    try {
+      setIsExportingEmployees(true);
+      const { blob, fileName } = await dispatch(exportEmployeesExcel()).unwrap();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName || "Employee_Details.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Employee details exported");
+    } catch (err) {
+      toast.error(err || "Failed to export employee details");
+    } finally {
+      setIsExportingEmployees(false);
+    }
+  };
+
   if (loading && localEmployees.length === 0)
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -645,9 +929,30 @@ const ManageEmployee = () => {
     );
 
   return (
-    <div className="min-h-screen bg-slate-50/50 px-8 py-6 sm:px-6 lg:px-8 mt-10">
+    <div className="min-h-screen bg-slate-50/50 px-8 py-6 sm:px-6 lg:px-8">
   {/* Employee Table */}
   <StyledCard>
+    <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "#eaeaea" }}>
+      <div>
+        <p className="text-sm font-semibold text-slate-800">Employee Details</p>
+        <p className="text-xs text-slate-500">Export complete employee data with document status columns</p>
+      </div>
+      <Button
+        variant="contained"
+        size="small"
+        onClick={handleExportEmployeeDetails}
+        disabled={isExportingEmployees}
+        startIcon={isExportingEmployees ? <CircularProgress size={14} sx={{ color: "#fff" }} /> : <Download sx={{ fontSize: 16 }} />}
+        sx={{
+          textTransform: "none",
+          borderRadius: "10px",
+          backgroundColor: "#2563eb",
+          "&:hover": { backgroundColor: "#1d4ed8" },
+        }}
+      >
+        {isExportingEmployees ? "Exporting..." : "Export Employee Details"}
+      </Button>
+    </div>
     <TableContainer>
       <Table>
         <TableHead>
@@ -674,6 +979,7 @@ const ManageEmployee = () => {
                 <TableCell>
                   <div className="flex items-center gap-3">
                     <Avatar
+                      src={user.profilePhotoUrl || ""}
                       sx={{
                         width: 40,
                         height: 40,
@@ -712,17 +1018,12 @@ const ManageEmployee = () => {
                   <div className="flex gap-1.5">
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                        user.docsStatus === "Pending"
-                          ? "bg-amber-50 text-amber-700"
-                          : user.docsStatus === "Yes"
-                          ? "bg-emerald-50 text-emerald-700"
-                          : "bg-slate-100 text-slate-600"
+                        user.isActive === false
+                          ? "bg-rose-50 text-rose-700"
+                          : "bg-emerald-50 text-emerald-700"
                       }`}
                     >
-                      Docs: {user.docsStatus || "No"}
-                    </span>
-                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-700">
-                      {user.employmentType === "fresher" ? "Fresher" : "Experienced"}
+                      {user.isActive === false ? "Inactive" : "Active"}
                     </span>
                     {user.isCoreTeam && (
                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">
@@ -742,15 +1043,17 @@ const ManageEmployee = () => {
                     >
                       <Edit sx={{ fontSize: 20 }} />
                     </IconButton>
-                    <IconButton
-                      onClick={() => setDeleteTarget(user)}
-                      sx={{
-                        color: "#ef4444",
-                        "&:hover": { backgroundColor: "#fef2f2", color: "#dc2626" }
-                      }}
-                    >
-                      <Delete sx={{ fontSize: 19 }} />
-                    </IconButton>
+                    {isSuperAdmin && (
+                      <IconButton
+                        onClick={() => setDeleteTarget(user)}
+                        sx={{
+                          color: "#ef4444",
+                          "&:hover": { backgroundColor: "#fef2f2", color: "#dc2626" }
+                        }}
+                      >
+                        <Delete sx={{ fontSize: 19 }} />
+                      </IconButton>
+                    )}
                   </div>
                 </TableCell>
               </TableRow>
@@ -792,6 +1095,7 @@ const ManageEmployee = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Avatar
+            src={formData.profilePhotoUrl || selectedUser?.profilePhotoUrl || ""}
             sx={{
               width: 48,
               height: 48,
@@ -808,9 +1112,20 @@ const ManageEmployee = () => {
             </p>
           </div>
         </div>
-        <IconButton onClick={handleCloseDialog} sx={{ color: "#94a3b8" }}>
-          <Close />
-        </IconButton>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<Badge />}
+            onClick={downloadEmployeeIdCard}
+            sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
+          >
+            Download ID Card
+          </Button>
+          <IconButton onClick={handleCloseDialog} sx={{ color: "#94a3b8" }}>
+            <Close />
+          </IconButton>
+        </div>
       </div>
     </div>
 
@@ -836,9 +1151,97 @@ const ManageEmployee = () => {
 
     {/* Content */}
     <DialogContent sx={{ p: 0, overflowY: "auto", maxHeight: "calc(90vh - 180px)" }}>
+      {isSelectedUserInactive && (
+        <div className="px-6 pt-4">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <label className="block text-xs font-medium text-amber-800 mb-1.5">Account Status</label>
+            <TextField
+              select
+              fullWidth
+              name="isActive"
+              value={formData.isActive ? "active" : "inactive"}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  isActive: e.target.value === "active",
+                }))
+              }
+              size="small"
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "10px",
+                  backgroundColor: "#fff",
+                  "& fieldset": {
+                    borderColor: "#f3d190",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#eab308",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#d97706",
+                    borderWidth: "2px",
+                  },
+                },
+              }}
+            >
+              <MenuItem value="active" disabled={!isSuperAdmin}>Active</MenuItem>
+              <MenuItem value="inactive">Inactive</MenuItem>
+            </TextField>
+          </div>
+        </div>
+      )}
+      <fieldset
+        disabled={isSelectedUserInactive}
+        className={`border-0 m-0 min-w-0 p-0 ${isSelectedUserInactive ? "pointer-events-none select-none opacity-70" : ""}`}
+      >
       {/* Basic Info Section */}
       {activeSection === "basic" && (
         <div className="p-6">
+          <div
+            className="mb-5 flex flex-wrap items-center gap-4 rounded-xl border p-4"
+            style={{ borderColor: "#e2e8f0", backgroundColor: "#f8fafc" }}
+          >
+            <Avatar
+              src={formData.profilePhotoUrl || ""}
+              sx={{ width: 88, height: 88, bgcolor: "#dbeafe", color: "#1d4ed8", fontWeight: 700 }}
+            >
+              {(formData.realName || formData.username || "U").charAt(0)}
+            </Avatar>
+            <div className="flex-1 min-w-[220px]">
+              <p className="text-sm font-semibold text-slate-800">Employee Profile Photo</p>
+              <p className="text-xs text-slate-500 mt-1">
+                Capture photo using local camera. Photo is uploaded to Cloudinary and URL is saved in DB.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="contained"
+                  size="small"
+                  startIcon={<CameraAlt />}
+                  onClick={openCamera}
+                  disabled={uploadingProfilePhoto}
+                  sx={{ textTransform: "none", borderRadius: "10px" }}
+                >
+                  Capture Photo
+                </Button>
+                {formData.profilePhotoUrl && (
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    onClick={() =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        profilePhotoUrl: "",
+                        profilePhotoPublicId: "",
+                      }))
+                    }
+                    sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
+                  >
+                    Remove
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
               <label className="block text-xs font-medium text-slate-500 mb-1.5">Username</label>
@@ -1056,6 +1459,40 @@ const ManageEmployee = () => {
         />
       </div>
       <div>
+        <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Status</label>
+        <TextField
+          select
+          fullWidth
+          name="isActive"
+          value={formData.isActive ? "active" : "inactive"}
+          onChange={(e) =>
+            setFormData((prev) => ({
+              ...prev,
+              isActive: e.target.value === "active",
+            }))
+          }
+          size="small"
+          sx={{
+            "& .MuiOutlinedInput-root": {
+              borderRadius: "12px",
+              "& fieldset": {
+                borderColor: "#eaeaea",
+              },
+              "&:hover fieldset": {
+                borderColor: "#cbd5e1",
+              },
+              "&.Mui-focused fieldset": {
+                borderColor: "#3b82f6",
+                borderWidth: "2px",
+              },
+            },
+          }}
+        >
+          <MenuItem value="active">Active</MenuItem>
+          <MenuItem value="inactive">Inactive</MenuItem>
+        </TextField>
+      </div>
+      <div>
         <label className="block text-xs font-medium text-slate-500 mb-1.5">Reporting Manager</label>
         <TextField
           select
@@ -1149,6 +1586,94 @@ const ManageEmployee = () => {
           <MenuItem value="Yes">Required</MenuItem>
         </TextField>
       </div>
+      {canManagePayroll && (
+        <>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">CTC</label>
+            <TextField
+              fullWidth
+              name="ctc"
+              value={formData.ctc}
+              onChange={handleChange}
+              size="small"
+              type="number"
+              placeholder="Enter CTC amount"
+              inputProps={{ min: 0, step: "0.01" }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "12px",
+                  "& fieldset": {
+                    borderColor: "#eaeaea",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#cbd5e1",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#3b82f6",
+                    borderWidth: "2px",
+                  },
+                },
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">In Hand</label>
+            <TextField
+              fullWidth
+              name="inHandSalary"
+              value={formData.inHandSalary}
+              onChange={handleChange}
+              size="small"
+              type="number"
+              placeholder="Enter in-hand salary"
+              inputProps={{ min: 0, step: "0.01" }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "12px",
+                  "& fieldset": {
+                    borderColor: "#eaeaea",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#cbd5e1",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#3b82f6",
+                    borderWidth: "2px",
+                  },
+                },
+              }}
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">Transport Allowance</label>
+            <TextField
+              fullWidth
+              name="transportAllowance"
+              value={formData.transportAllowance}
+              onChange={handleChange}
+              size="small"
+              type="number"
+              placeholder="Enter transport allowance"
+              inputProps={{ min: 0, step: "0.01" }}
+              sx={{
+                "& .MuiOutlinedInput-root": {
+                  borderRadius: "12px",
+                  "& fieldset": {
+                    borderColor: "#eaeaea",
+                  },
+                  "&:hover fieldset": {
+                    borderColor: "#cbd5e1",
+                  },
+                  "&.Mui-focused fieldset": {
+                    borderColor: "#3b82f6",
+                    borderWidth: "2px",
+                  },
+                },
+              }}
+            />
+          </div>
+        </>
+      )}
       <div>
         <label className="block text-xs font-medium text-slate-500 mb-1.5">Candidate Type</label>
         <TextField
@@ -1640,6 +2165,7 @@ const ManageEmployee = () => {
           </div>
         </div>
       )}
+      </fieldset>
     </DialogContent>
 
     <DialogActions sx={{ p: 3, borderTop: "1px solid #eaeaea", gap: 2 }}>
@@ -1660,7 +2186,7 @@ const ManageEmployee = () => {
       <Button
         variant="contained"
         onClick={handleSave}
-        disabled={isSaving || (formData.password && (formData.password !== formData.confirmPassword || formData.password.length < 6))}
+        disabled={(isSelectedUserInactive && !isSuperAdmin) || isSaving || (formData.password && (formData.password !== formData.confirmPassword || formData.password.length < 6))}
         startIcon={isSaving ? <CircularProgress size={18} /> : <Save />}
         sx={{
           textTransform: "none",
@@ -1671,6 +2197,51 @@ const ManageEmployee = () => {
         }}
       >
         {isSaving ? "Saving..." : "Save Changes"}
+      </Button>
+    </DialogActions>
+  </Dialog>
+
+  <Dialog
+    open={cameraOpen}
+    onClose={closeCamera}
+    fullWidth
+    maxWidth="md"
+    PaperProps={{ sx: { borderRadius: "20px", overflow: "hidden" } }}
+  >
+    <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="font-medium text-slate-900">Capture Employee Photo</p>
+          <p className="text-xs text-slate-500">Use local PC camera and upload to Cloudinary</p>
+        </div>
+        <IconButton onClick={closeCamera} size="small">
+          <Close />
+        </IconButton>
+      </div>
+    </DialogTitle>
+    <DialogContent sx={{ p: 2, backgroundColor: "#f8fafc" }}>
+      <div className="rounded-xl border bg-black" style={{ borderColor: "#e2e8f0" }}>
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{ width: "100%", maxHeight: "58vh", objectFit: "cover", borderRadius: "12px" }}
+        />
+      </div>
+      {cameraLoading && (
+        <p className="mt-2 text-xs text-slate-500">Initializing camera...</p>
+      )}
+    </DialogContent>
+    <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
+      <Button onClick={closeCamera}>Cancel</Button>
+      <Button
+        variant="contained"
+        onClick={captureProfilePhoto}
+        disabled={cameraLoading || uploadingProfilePhoto}
+        startIcon={uploadingProfilePhoto ? <CircularProgress size={16} /> : <CameraAlt />}
+      >
+        {uploadingProfilePhoto ? "Uploading..." : "Capture & Upload"}
       </Button>
     </DialogActions>
   </Dialog>

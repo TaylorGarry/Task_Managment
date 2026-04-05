@@ -244,7 +244,7 @@
 // export default AttendanceUpdateWrapper;
 
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { fetchAllRosters } from "../features/slices/rosterSlice.js";
@@ -271,6 +271,7 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
     }
   };
   const currentUser = getCurrentUser();
+  const isAdminNavbarUser = ["superAdmin", "HR"].includes(currentUser?.accountType);
   const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
   const delegatedFromUserId = new URLSearchParams(location.search).get("delegatedFrom") || "";
 
@@ -330,7 +331,26 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
       .catch(() => {});
   }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, delegatedMode]);
 
-	  const rosters = allRosters?.data || [];
+  const rosters = allRosters?.data || [];
+  const visibleRosters = useMemo(() => {
+    if (isAdminUser) return rosters;
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    return rosters.filter((roster) => {
+      const weeks = Array.isArray(roster?.weeks) ? roster.weeks : [];
+      return weeks.some((week) => {
+        if (!week?.startDate || !week?.endDate) return false;
+        const start = new Date(week.startDate);
+        const end = new Date(week.endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+        start.setHours(0, 0, 0, 0);
+        end.setHours(23, 59, 59, 999);
+        return today >= start && today <= end;
+      });
+    });
+  }, [rosters, isAdminUser]);
 	  
 	
 		  if (rosterId) {
@@ -347,7 +367,7 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
   if (delegatedMode && !delegatedFromUserId) {
     return (
       <div className="min-h-[calc(100vh-64px)] bg-gray-100">
-        <Navbar />
+        {isAdminNavbarUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
         <div className="container mx-auto px-4 py-10">
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <h2 className="text-xl font-semibold text-gray-900">No delegated team selected</h2>
@@ -366,7 +386,7 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-gray-100">
-      {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
+      {isAdminNavbarUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
       
       <div className="container mx-auto px-2 pt-18 pb-2">
         <div className="bg-white/95 rounded-2xl shadow-sm border border-slate-200 p-5">
@@ -450,9 +470,9 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
               <p className="mt-4 text-gray-600">Loading rosters...</p>
             </div>
-          ) : rosters.length > 0 ? (
-	            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {rosters.map((roster) => {
+          ) : visibleRosters.length > 0 ? (
+		            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {visibleRosters.map((roster) => {
                 // Calculate total employees across all weeks
                 const totalEmployees = roster.weeks?.reduce((sum, week) => 
                   sum + (week.employees?.length || 0), 0) || 0;
@@ -508,12 +528,14 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
                 );
               })}
             </div>
-          ) : (
-	            <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-200">
+	          ) : (
+		            <div className="text-center py-10 bg-slate-50 rounded-xl border border-slate-200">
               <AlertCircle className="w-16 h-16 text-gray-400 mx-auto mb-4" />
               <h3 className="text-lg font-medium text-gray-900">No rosters found</h3>
               <p className="text-gray-500 mt-2 max-w-md mx-auto">
-                No rosters available for {new Date(2000, selectedMonth-1).toLocaleString('default', { month: 'long' })} {selectedYear}
+                {isAdminUser
+                  ? `No rosters available for ${new Date(2000, selectedMonth-1).toLocaleString('default', { month: 'long' })} ${selectedYear}`
+                  : "No ongoing roster is available for attendance update"}
               </p>
               <button
                 onClick={() => {

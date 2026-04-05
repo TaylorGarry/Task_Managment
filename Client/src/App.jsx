@@ -428,6 +428,7 @@ import AttendanceSnapshot from "./Roster/AttendanceSnapshot.jsx";
 import DelegationPage from "./pages/DelegationPage.jsx";
 import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
 import LeaveManagement from "./pages/LeaveManagement.jsx";
+import { Toaster } from "react-hot-toast";
 
 const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
 
@@ -520,6 +521,19 @@ const AttendanceSnapshotRoute = ({ children }) => {
   return children;
 };
 
+const DelegationAccessRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+  if (!user) return <Navigate to="/login" replace />;
+  const isHrOrSuperAdmin = ["HR", "superAdmin"].includes(user.accountType);
+  const isOpsMetaEmployee =
+    user.accountType === "employee" &&
+    String(user.department || "").toLowerCase() === "ops - meta";
+  if (!isHrOrSuperAdmin && !isOpsMetaEmployee) {
+    return <Navigate to={user.accountType === "employee" ? "/dashboard" : "/admin/admintask"} replace />;
+  }
+  return children;
+};
+
 function App() {
   const { user } = useSelector((state) => state.auth);
   const location = useLocation();
@@ -528,6 +542,7 @@ function App() {
   if (isAdminLeavePath) {
     return (
       <div className="theme-crm">
+        <Toaster position="top-right" reverseOrder={false} />
         <ToastContainer position="top-right" autoClose={3000} />
         <ProtectedRoute adminOnly={true}>
           <>
@@ -541,6 +556,7 @@ function App() {
 
   return (
     <div className="theme-crm">
+      <Toaster position="top-right" reverseOrder={false} />
       <ToastContainer position="top-right" autoClose={3000} />
 
       <Routes>
@@ -626,6 +642,14 @@ function App() {
             <EmployeeOnlyRoute>
               <DelegatedActionsPage />
             </EmployeeOnlyRoute>
+          }
+        />
+        <Route
+          path="/delegations"
+          element={
+            <DelegationAccessRoute>
+              <DelegationPage />
+            </DelegationAccessRoute>
           }
         />
         <Route

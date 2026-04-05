@@ -134,7 +134,7 @@ const DashboardCard = () => {
   );
 
   return (
-    <div className="relative min-h-screen bg-slate-50 p-6 mt-15">
+    <div className="relative min-h-screen bg-slate-50 p-6">
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap');
       `}</style>

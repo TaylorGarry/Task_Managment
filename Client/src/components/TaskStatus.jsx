@@ -129,7 +129,7 @@ const TaskStatus = () => {
     : employees;
 
   return (
-    <div className="p-6 mt-10 relative min-h-[70vh]">
+    <div className="p-6 relative min-h-[70vh]">
       {(loading || employeesLoading) && (
         <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-20">
           <div className="flex flex-col items-center space-y-4">

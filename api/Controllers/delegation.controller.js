@@ -69,8 +69,8 @@ export const createDelegation = async (req, res) => {
       });
     }
     
-    // Get all employees under this team leader from roster
-    const teamMembers = await getTeamMembersByTeamLeader(delegatorId);
+    // Get all employees under this team leader for the selected start date
+    const teamMembers = await getTeamMembersByTeamLeader(delegatorId, startDate || null);
     
     console.log(`Found ${teamMembers.length} team members for ${delegator.username}`);
     
@@ -157,7 +157,7 @@ export const getTeamMembersForTeamLeader = async (req, res) => {
     
     console.log("Fetching team members for team leader:", teamLeaderId);
     
-    const teamMembers = await getTeamMembersByTeamLeader(teamLeaderId, date ? new Date(date) : null);
+    const teamMembers = await getTeamMembersByTeamLeader(teamLeaderId, date || null);
     
     console.log(`Found ${teamMembers.length} team members`);
     
@@ -180,7 +180,8 @@ export const getTeamMembersForTeamLeader = async (req, res) => {
 // Get all team leaders (for dropdown)
 export const getAllTeamLeadersForDropdown = async (req, res) => {
   try {
-    const teamLeaders = await getAllTeamLeaders();
+    const { date } = req.query || {};
+    const teamLeaders = await getAllTeamLeaders(date || null);
     
     res.json({
       success: true,

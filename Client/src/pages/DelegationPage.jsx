@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import { useLocation } from "react-router-dom";
 import {
   createDelegation,
   endDelegationEarly,
@@ -24,6 +25,7 @@ import {
 } from "../features/slices/delegationSlice.js";
 import { fetchEmployees } from "../features/slices/authSlice.js";
 import { Calendar, Users, UserCheck, Clock, AlertCircle, CheckCircle, XCircle, FileText, RefreshCw, Plus, Trash2, History } from "lucide-react";
+import Navbar from "./Navbar.jsx";
 
 const toDateInput = (value) => {
   const d = value ? new Date(value) : new Date();
@@ -58,9 +60,15 @@ const getId = (obj) => obj?._id || obj?.id || "";
 
 const DelegationPage = () => {
   const dispatch = useDispatch();
+  const location = useLocation();
   const authUser = useSelector((state) => state.auth.user);
   const currentUser = authUser || JSON.parse(localStorage.getItem("user") || "null");
-  const isAdmin = ["HR", "superAdmin"].includes(currentUser?.accountType);
+  const isHrOrSuperAdmin = ["HR", "superAdmin"].includes(currentUser?.accountType);
+  const isOpsMetaEmployee =
+    currentUser?.accountType === "employee" &&
+    String(currentUser?.department || "").trim().toLowerCase() === "ops - meta";
+  const canCreateDelegation = isHrOrSuperAdmin || isOpsMetaEmployee;
+  const isAdminDelegationRoute = location.pathname.startsWith("/admin");
 
   const activeDelegations = useSelector(selectActiveDelegations);
   const myDelegatedWork = useSelector(selectMyDelegatedWork);
@@ -134,22 +142,28 @@ const DelegationPage = () => {
     hasLoadedRef.current = true;
     dispatch(fetchMyDelegations());
     dispatch(fetchMyDelegatedWork());
-    if (isAdmin) {
+    if (isHrOrSuperAdmin) {
       dispatch(fetchActiveDelegations());
-      dispatch(fetchTeamLeaders());
+    }
+    if (canCreateDelegation) {
       dispatch(fetchEmployees());
     }
-  }, [dispatch, isAdmin]);
+  }, [dispatch, isHrOrSuperAdmin, canCreateDelegation]);
 
   useEffect(() => {
-    if (!isAdmin || !delegatorId) return;
-    dispatch(fetchTeamMembers(delegatorId));
-  }, [dispatch, isAdmin, delegatorId]);
+    if (!canCreateDelegation) return;
+    dispatch(fetchTeamLeaders(startDate));
+  }, [dispatch, canCreateDelegation, startDate]);
 
   useEffect(() => {
-    if (!isAdmin || !historyLeaderId) return;
+    if (!canCreateDelegation || !delegatorId) return;
+    dispatch(fetchTeamMembers({ teamLeaderId: delegatorId, date: startDate }));
+  }, [dispatch, canCreateDelegation, delegatorId, startDate]);
+
+  useEffect(() => {
+    if (!isHrOrSuperAdmin || !historyLeaderId) return;
     dispatch(fetchDelegationHistory(historyLeaderId));
-  }, [dispatch, isAdmin, historyLeaderId]);
+  }, [dispatch, isHrOrSuperAdmin, historyLeaderId]);
 
   const assigneeOptions = useMemo(() => {
     return (employees || []).filter((emp) => {
@@ -175,7 +189,9 @@ const DelegationPage = () => {
         notes,
       })
     ).unwrap();
-    dispatch(fetchActiveDelegations());
+    if (isHrOrSuperAdmin) {
+      dispatch(fetchActiveDelegations());
+    }
     dispatch(fetchMyDelegations());
     dispatch(fetchMyDelegatedWork());
     if (historyLeaderId) dispatch(fetchDelegationHistory(historyLeaderId));
@@ -197,16 +213,18 @@ const DelegationPage = () => {
   const visibleHistory = historyLeaderId ? safeHistory : [];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
+    <>
+      {!isAdminDelegationRoute && <Navbar />}
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 p-4 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
         {/* Header Section */}
-        <div className="rounded-2xl mt-10 bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white shadow-lg">
+        <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white shadow-lg">
           <div className="flex items-center justify-between ">
             <div>
               <h1 className="text-3xl font-bold">Delegation Management</h1>
               <p className="mt-1 text-indigo-100">Manage temporary authority assignments and track delegation history</p>
             </div>
-            {isAdmin && (
+            {canCreateDelegation && (
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
                 className="flex items-center gap-2 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/30"
@@ -225,7 +243,7 @@ const DelegationPage = () => {
         </div>
 
         {/* Create Delegation Form */}
-        {isAdmin && showCreateForm && (
+        {canCreateDelegation && showCreateForm && (
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg transition-all">
             <div className="mb-4 flex items-center gap-2 border-b border-gray-200 pb-3">
               <Users className="h-5 w-5 text-indigo-600" />
@@ -359,7 +377,7 @@ const DelegationPage = () => {
         )}
 
         {/* Active Delegations */}
-        {isAdmin && (
+        {isHrOrSuperAdmin && (
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -475,7 +493,7 @@ const DelegationPage = () => {
         </div>
 
         {/* Delegation History */}
-        {isAdmin && (
+        {isHrOrSuperAdmin && (
           <div className="rounded-2xl border border-gray-200 bg-white p-6 shadow-lg">
             <div className="mb-4 flex items-center justify-between">
               <div className="flex items-center gap-2">
@@ -545,7 +563,8 @@ const DelegationPage = () => {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
