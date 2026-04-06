@@ -47,8 +47,10 @@ const toDateKeyLocal = (value) => {
 
 		  const [selectedDate, setSelectedDate] = useState(() => toDateKeyLocal(new Date()));
 		  
-		  const [selectedDepartment, setSelectedDepartment] = useState('all');
-		  const [selectedTeamLeader, setSelectedTeamLeader] = useState('all');
+		  const [selectedDepartments, setSelectedDepartments] = useState([]);
+		  const [selectedTeamLeaders, setSelectedTeamLeaders] = useState([]);
+		  const [isDepartmentDropdownOpen, setIsDepartmentDropdownOpen] = useState(false);
+		  const [isTeamLeaderDropdownOpen, setIsTeamLeaderDropdownOpen] = useState(false);
 		  const [allEmployees, setAllEmployees] = useState([]);
 		  const [availableWeeks, setAvailableWeeks] = useState([]);
 		  const [selectedRoster, setSelectedRoster] = useState(null);
@@ -59,6 +61,8 @@ const toDateKeyLocal = (value) => {
 		  const [rostersByMonth, setRostersByMonth] = useState({});
 		  const dateInputRef = useRef(null);
 		  const exportCaptureRef = useRef(null);
+		  const departmentDropdownRef = useRef(null);
+		  const teamLeaderDropdownRef = useRef(null);
 			  const [showColumnMenu, setShowColumnMenu] = useState(false);
 					  const [columnVisibility, setColumnVisibility] = useState({
 					    employee: true,
@@ -544,12 +548,37 @@ const toDateKeyLocal = (value) => {
 	    )
 	  ).sort((a, b) => String(a).localeCompare(String(b)));
 
-		  useEffect(() => {
-		    if (selectedTeamLeader === "all" || selectedTeamLeader === TEAM_LEADER_NONE) return;
-		    if (!availableTeamLeaders.includes(selectedTeamLeader)) {
-		      setSelectedTeamLeader("all");
-		    }
-		  }, [TEAM_LEADER_NONE, availableTeamLeaders, selectedTeamLeader]);
+			  useEffect(() => {
+			    setSelectedTeamLeaders((prev) =>
+			      prev.filter((value) => value === TEAM_LEADER_NONE || availableTeamLeaders.includes(value))
+			    );
+			  }, [TEAM_LEADER_NONE, availableTeamLeaders]);
+			  useEffect(() => {
+			    setSelectedDepartments((prev) => prev.filter((value) => availableDepartments.includes(value)));
+			  }, [availableDepartments]);
+			  useEffect(() => {
+			    const handleOutsideClick = (event) => {
+			      if (
+			        isDepartmentDropdownOpen &&
+			        departmentDropdownRef.current &&
+			        !departmentDropdownRef.current.contains(event.target)
+			      ) {
+			        setIsDepartmentDropdownOpen(false);
+			      }
+			      if (
+			        isTeamLeaderDropdownOpen &&
+			        teamLeaderDropdownRef.current &&
+			        !teamLeaderDropdownRef.current.contains(event.target)
+			      ) {
+			        setIsTeamLeaderDropdownOpen(false);
+			      }
+			    };
+
+			    document.addEventListener("mousedown", handleOutsideClick);
+			    return () => {
+			      document.removeEventListener("mousedown", handleOutsideClick);
+			    };
+			  }, [isDepartmentDropdownOpen, isTeamLeaderDropdownOpen]);
 
 		  const selectedWeekRange = useMemo(() => {
 		    const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
@@ -593,11 +622,12 @@ const toDateKeyLocal = (value) => {
 		      );
 		      if (byParam?.delegator?._id) return String(byParam.delegator._id);
 		    }
-		    if (selectedTeamLeader !== "all" && selectedTeamLeader !== TEAM_LEADER_NONE) {
-		      const byLeader = delegationByLeaderName.get(normalizeKey(selectedTeamLeader));
-		      if (byLeader?.delegator?._id) return String(byLeader.delegator._id);
-		    }
-		    if (activeDelegationsForWeek.length === 1) {
+			    const selectedNamedTeamLeader = selectedTeamLeaders.find((name) => name && name !== TEAM_LEADER_NONE);
+			    if (selectedNamedTeamLeader) {
+			      const byLeader = delegationByLeaderName.get(normalizeKey(selectedNamedTeamLeader));
+			      if (byLeader?.delegator?._id) return String(byLeader.delegator._id);
+			    }
+			    if (activeDelegationsForWeek.length === 1) {
 		      const onlyDelegation = activeDelegationsForWeek[0];
 		      if (onlyDelegation?.delegator?._id) return String(onlyDelegation.delegator._id);
 		    }
@@ -607,8 +637,8 @@ const toDateKeyLocal = (value) => {
 		    delegationByLeaderName,
 		    activeDelegationsForWeek,
 		    isEmployeeUser,
-		    selectedTeamLeader,
-			    TEAM_LEADER_NONE,
+		    selectedTeamLeaders,
+		    TEAM_LEADER_NONE,
 			  ]);
 
 			  const canDownloadExcel =
@@ -627,12 +657,12 @@ const toDateKeyLocal = (value) => {
 	        return;
 	      }
 
-		      const dept = selectedDepartment === 'all' ? '' : selectedDepartment;
-			      const exportPayload = {
-			        startDate: startDateKey,
-			        endDate: endDateKey,
-			        department: dept,
-			      };
+				      const exportPayload = {
+				        startDate: startDateKey,
+				        endDate: endDateKey,
+				        department: selectedDepartments,
+				        teamLeader: selectedTeamLeaders,
+				      };
 				      if (isEmployeeUser) {
 				        const fallbackDelegationId =
 				          String(activeDelegationsForWeek?.[0]?.delegator?._id || "").trim();
@@ -650,17 +680,37 @@ const toDateKeyLocal = (value) => {
 
 			  const filteredEmployees = (allEmployees || []).filter((emp) => {
 			    const matchesDepartment =
-			      selectedDepartment === "all" || emp.department === selectedDepartment;
+			      selectedDepartments.length === 0 || selectedDepartments.includes(emp.department);
 
 			    const normalizedLeader = normalizeTeamLeader(emp?.teamLeader);
 			    const matchesTeamLeader =
-			      selectedTeamLeader === "all" ||
-			      (selectedTeamLeader === TEAM_LEADER_NONE
-			        ? !normalizedLeader
-			        : normalizedLeader === selectedTeamLeader);
+			      selectedTeamLeaders.length === 0 ||
+			      (selectedTeamLeaders.includes(TEAM_LEADER_NONE) && !normalizedLeader) ||
+			      selectedTeamLeaders.includes(normalizedLeader);
 
 			    return matchesDepartment && matchesTeamLeader;
 			  });
+
+			  const toggleDepartmentSelection = (dept) => {
+			    setSelectedDepartments((prev) =>
+			      prev.includes(dept) ? prev.filter((d) => d !== dept) : [...prev, dept]
+			    );
+			    setCurrentPage(1);
+			  };
+			  const toggleTeamLeaderSelection = (teamLeader) => {
+			    setSelectedTeamLeaders((prev) =>
+			      prev.includes(teamLeader) ? prev.filter((t) => t !== teamLeader) : [...prev, teamLeader]
+			    );
+			    setCurrentPage(1);
+			  };
+			  const selectedDepartmentLabel =
+			    selectedDepartments.length === 0
+			      ? "All Departments"
+			      : `${selectedDepartments.length} Department${selectedDepartments.length > 1 ? "s" : ""}`;
+			  const selectedTeamLeaderLabel =
+			    selectedTeamLeaders.length === 0
+			      ? "All Team Leaders"
+			      : `${selectedTeamLeaders.length} Team Leader${selectedTeamLeaders.length > 1 ? "s" : ""}`;
 
 				  const totalEmployees = filteredEmployees.length;
 				  const totalPages = Math.max(1, Math.ceil(totalEmployees / pageSize));
@@ -885,46 +935,98 @@ const toDateKeyLocal = (value) => {
 		              />
 		            </div>
 
-		            {/* Department Filter */}
-			            <div className="flex items-center gap-2">
-			              <Users size={18} className="text-gray-500" />
-			              <select
-			                value={selectedDepartment}
-		                onChange={(e) => {
-		                  setSelectedDepartment(e.target.value);
-		                  setCurrentPage(1);
-		                }}
-			                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-			              >
-		                <option value="all">All</option>
-		                {availableDepartments.map((dept) => (
-		                  <option key={dept} value={dept}>
-		                    {dept}
-		                  </option>
-		                ))}
-		              </select>
-		            </div>
-
-		            {/* Team Leader Filter */}
-			            <div className="flex items-center gap-2">
-			              <Users size={18} className="text-gray-500" />
-			              <select
-			                value={selectedTeamLeader}
-			                onChange={(e) => {
-			                  setSelectedTeamLeader(e.target.value);
-			                  setCurrentPage(1);
-			                }}
-			                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
-			              >
-			                <option value="all">All Team Leaders</option>
-			                <option value={TEAM_LEADER_NONE}>Not assigned</option>
-			                {availableTeamLeaders.map((tl) => (
-			                  <option key={tl} value={tl}>
-			                    {tl}
-			                  </option>
-			                ))}
-			              </select>
+			            {/* Department Filter */}
+				            <div className="flex items-center gap-2">
+				              <Users size={18} className="text-gray-500" />
+				              <div ref={departmentDropdownRef} className="relative">
+				                <button
+				                  type="button"
+				                  onClick={() => {
+				                    setIsDepartmentDropdownOpen((v) => !v);
+				                    setIsTeamLeaderDropdownOpen(false);
+				                  }}
+				                  className="cursor-pointer border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[170px] text-left"
+				                >
+				                  {selectedDepartmentLabel}
+				                </button>
+				                {isDepartmentDropdownOpen && (
+				                  <div className="absolute top-full left-0 mt-2 w-64 max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-20">
+				                  <button
+				                    type="button"
+				                    onClick={() => {
+				                      setSelectedDepartments([]);
+				                      setCurrentPage(1);
+				                    }}
+				                    className="w-full text-left px-2 py-1 text-xs text-sky-700 hover:bg-sky-50 rounded"
+				                  >
+				                    Clear (All Departments)
+				                  </button>
+				                  {availableDepartments.map((dept) => (
+				                    <label key={dept} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded">
+				                      <input
+				                        type="checkbox"
+				                        checked={selectedDepartments.includes(dept)}
+				                        onChange={() => toggleDepartmentSelection(dept)}
+				                        className="h-4 w-4 accent-sky-600"
+				                      />
+				                      <span>{dept}</span>
+				                    </label>
+				                  ))}
+				                  </div>
+				                )}
+				              </div>
 			            </div>
+
+			            {/* Team Leader Filter */}
+				            <div className="flex items-center gap-2">
+				              <Users size={18} className="text-gray-500" />
+				              <div ref={teamLeaderDropdownRef} className="relative">
+				                <button
+				                  type="button"
+				                  onClick={() => {
+				                    setIsTeamLeaderDropdownOpen((v) => !v);
+				                    setIsDepartmentDropdownOpen(false);
+				                  }}
+				                  className="cursor-pointer border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white min-w-[170px] text-left"
+				                >
+				                  {selectedTeamLeaderLabel}
+				                </button>
+				                {isTeamLeaderDropdownOpen && (
+				                  <div className="absolute top-full left-0 mt-2 w-64 max-h-64 overflow-y-auto bg-white border border-gray-200 rounded-lg shadow-lg p-2 z-20">
+				                  <button
+				                    type="button"
+				                    onClick={() => {
+				                      setSelectedTeamLeaders([]);
+				                      setCurrentPage(1);
+				                    }}
+				                    className="w-full text-left px-2 py-1 text-xs text-sky-700 hover:bg-sky-50 rounded"
+				                  >
+				                    Clear (All Team Leaders)
+				                  </button>
+				                  <label className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded">
+				                    <input
+				                      type="checkbox"
+				                      checked={selectedTeamLeaders.includes(TEAM_LEADER_NONE)}
+				                      onChange={() => toggleTeamLeaderSelection(TEAM_LEADER_NONE)}
+				                      className="h-4 w-4 accent-sky-600"
+				                    />
+				                    <span>Not assigned</span>
+				                  </label>
+				                  {availableTeamLeaders.map((tl) => (
+				                    <label key={tl} className="flex items-center gap-2 px-2 py-1 text-sm hover:bg-gray-50 rounded">
+				                      <input
+				                        type="checkbox"
+				                        checked={selectedTeamLeaders.includes(tl)}
+				                        onChange={() => toggleTeamLeaderSelection(tl)}
+				                        className="h-4 w-4 accent-sky-600"
+				                      />
+				                      <span>{tl}</span>
+				                    </label>
+				                  ))}
+				                  </div>
+				                )}
+				              </div>
+				            </div>
 
 		            {/* Employee Count */}
 		            <div className="ml-auto flex items-center gap-2 text-sm text-gray-500">
@@ -1280,7 +1382,7 @@ const toDateKeyLocal = (value) => {
 	                <div>
 	                  <h2 style={{ margin: 0, fontSize: "30px", lineHeight: 1.15, fontWeight: 700 }}>Attendance Snapshot</h2>
 	                  <p style={{ margin: "8px 0 0", opacity: 0.95 }}>
-	                    Date: {formatDate(selectedDate)} | Department: {selectedDepartment === "all" ? "All" : selectedDepartment} | Team Leader: {selectedTeamLeader === "all" ? "All" : (selectedTeamLeader === TEAM_LEADER_NONE ? "Not assigned" : selectedTeamLeader)}
+		                    Date: {formatDate(selectedDate)} | Department: {selectedDepartments.length === 0 ? "All" : selectedDepartments.join(", ")} | Team Leader: {selectedTeamLeaders.length === 0 ? "All" : selectedTeamLeaders.map((tl) => (tl === TEAM_LEADER_NONE ? "Not assigned" : tl)).join(", ")}
 	                  </p>
 	                </div>
 	                <div style={{ textAlign: "right", fontSize: "14px", opacity: 0.9 }}>

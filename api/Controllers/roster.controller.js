@@ -1644,7 +1644,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       });
     }
 
-    const { startDate, endDate, department, delegatedFrom } = req.query;
+    const { startDate, endDate, department, teamLeader, delegatedFrom } = req.query;
 
     if (!startDate || !endDate) {
       return res.status(400).json({
@@ -1766,7 +1766,20 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
     }
 
 	    const normalizeDepartment = (value) => String(value || "").trim().toLowerCase();
-	    const deptFilter = department ? normalizeDepartment(department) : null;
+	    const normalizeTeamLeader = (value) => String(value || "").trim().toLowerCase();
+	    const toArrayParam = (value) => {
+	      if (Array.isArray(value)) return value;
+	      if (typeof value === "string" && value.includes(",")) {
+	        return value.split(",").map((v) => v.trim()).filter(Boolean);
+	      }
+	      return value ? [value] : [];
+	    };
+	    const deptFilters = new Set(
+	      toArrayParam(department).map((v) => normalizeDepartment(v)).filter(Boolean)
+	    );
+	    const teamLeaderFilters = new Set(
+	      toArrayParam(teamLeader).map((v) => normalizeTeamLeader(v)).filter(Boolean)
+	    );
 
 	    const toIstDateKey = (value) => {
 	      if (!value) return "";
@@ -1883,9 +1896,16 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	                if (!inDelegatedEmployees && !inDelegatedTeam) return;
 	              }
 
-              if (deptFilter) {
+              if (deptFilters.size > 0) {
                 const empDept = normalizeDepartment(emp.department);
-                if (empDept !== deptFilter) return;
+                if (!deptFilters.has(empDept)) return;
+              }
+
+              if (teamLeaderFilters.size > 0) {
+                const employeeTeamLeader = normalizeTeamLeader(emp?.teamLeader);
+                const matchesNone = !employeeTeamLeader && teamLeaderFilters.has("__none__");
+                const matchesNamedLeader = employeeTeamLeader && teamLeaderFilters.has(employeeTeamLeader);
+                if (!matchesNone && !matchesNamedLeader) return;
               }
 
 	              const rowRef = ensureEmployee(emp);
@@ -4804,7 +4824,7 @@ export const rosterUploadFromExcel = async (req, res) => {
     
     const totalDays = Math.round((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24)) + 1;
     
-    if (totalDays !== 7) {
+    if (!isSuperAdmin && totalDays !== 7) {
       return res.status(400).json({
         success: false,
         message: "Date range must be exactly 7 days for roster upload."
@@ -4928,10 +4948,13 @@ export const rosterUploadFromExcel = async (req, res) => {
       }
     }
     
-    if (excelDateColumns.length !== 7) {
+    const expectedDateColumns = isSuperAdmin ? totalDays : 7;
+    if (excelDateColumns.length !== expectedDateColumns) {
       return res.status(400).json({
         success: false,
-        message: `Excel must have exactly 7 date columns. Found: ${excelDateColumns.length}`
+        message: isSuperAdmin
+          ? `Excel date columns must match selected date range (${totalDays} days). Found: ${excelDateColumns.length}`
+          : `Excel must have exactly 7 date columns. Found: ${excelDateColumns.length}`
       });
     }
     
@@ -4989,11 +5012,25 @@ export const rosterUploadFromExcel = async (req, res) => {
         
         if (errors.length > 0) continue;
         
-        // Week-off count
-        const woCount = dailyStatus.filter(d => d.status === "WO").length;
-        if (woCount > 2) {
-          errors.push(`Row ${index + dataStartRowIndex + 1}: Cannot have more than 2 week-offs`);
-          continue;
+        // Week-off count:
+        // - Non-superadmin: keep strict 7-day rule (max 2 WO)
+        // - Superadmin: validate max 2 WO per 7-day block for long ranges
+        if (!isSuperAdmin) {
+          const woCount = dailyStatus.filter(d => d.status === "WO").length;
+          if (woCount > 2) {
+            errors.push(`Row ${index + dataStartRowIndex + 1}: Cannot have more than 2 week-offs`);
+            continue;
+          }
+        } else {
+          for (let startIdx = 0; startIdx < dailyStatus.length; startIdx += 7) {
+            const chunk = dailyStatus.slice(startIdx, startIdx + 7);
+            const chunkWoCount = chunk.filter(d => d.status === "WO").length;
+            if (chunkWoCount > 2) {
+              errors.push(`Row ${index + dataStartRowIndex + 1}: Cannot have more than 2 week-offs in any 7-day block`);
+              break;
+            }
+          }
+          if (errors.length > 0) continue;
         }
         
 	        // Shift hours
