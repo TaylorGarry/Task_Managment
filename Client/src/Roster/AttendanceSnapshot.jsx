@@ -691,10 +691,7 @@ const toDateKeyLocal = (value) => {
             { key: "transportArrival", label: "Transport Arrival" },
             { key: "departmentArrival", label: "Dept Arrival" },
           ].filter((col) => {
-            if (col.key === "transportStatus" || col.key === "hrAttendance") return !isEmployeeUser;
-            if (col.key === "transportArrival") return !isEmployeeNonTransportUser;
-            if (col.key === "departmentStatus" || col.key === "departmentArrival") return !isEmployeeTransportUser;
-            return true;
+            return Boolean(effectiveColumnVisibility[col.key]);
           });
 
 				  const hrSummaryCounts = !isEmployeeUser ? filteredEmployees.reduce((acc, emp) => {

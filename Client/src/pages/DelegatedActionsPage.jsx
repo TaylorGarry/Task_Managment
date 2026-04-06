@@ -10,9 +10,25 @@ import {
 
 const formatDate = (dateValue) => {
   if (!dateValue) return "-";
+
+  const asString = String(dateValue).trim();
+  const ymdMatch = asString.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ymdMatch) {
+    const year = Number(ymdMatch[1]);
+    const month = Number(ymdMatch[2]);
+    const day = Number(ymdMatch[3]);
+    const utcDate = new Date(Date.UTC(year, month - 1, day));
+    return utcDate.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      timeZone: "UTC",
+    });
+  }
+
   const parsed = new Date(dateValue);
   if (Number.isNaN(parsed.getTime())) return "-";
-  return parsed.toLocaleDateString();
+  return parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 };
 
 const DelegatedActionsPage = () => {

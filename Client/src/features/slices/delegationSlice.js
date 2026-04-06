@@ -1,7 +1,9 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+// const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+
 const API_URL = `${API_BASE_URL}/delegations`;
 
 const getToken = () => {

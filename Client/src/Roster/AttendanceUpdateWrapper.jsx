@@ -270,24 +270,26 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
       return null;
     }
   };
-  const currentUser = getCurrentUser();
-  const isAdminNavbarUser = ["superAdmin", "HR"].includes(currentUser?.accountType);
-  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
-  const delegatedFromUserId = new URLSearchParams(location.search).get("delegatedFrom") || "";
+	  const currentUser = getCurrentUser();
+	  const isAdminNavbarUser = ["superAdmin", "HR"].includes(currentUser?.accountType);
+	  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
+	  const delegatedFromUserId = new URLSearchParams(location.search).get("delegatedFrom") || "";
 
 		  useEffect(() => {
-		    dispatch(fetchAllRosters({
+	    const payload = {
 	      month: selectedMonth,
 	      year: selectedYear,
-      page: 1,
-      limit: 50
-    }));
-  }, [dispatch, selectedMonth, selectedYear]);
+	      page: 1,
+	      limit: isAdminUser ? 50 : 100,
+	    };
+	    dispatch(fetchAllRosters(payload));
+	  }, [dispatch, selectedMonth, selectedYear, isAdminUser]);
 
-  useEffect(() => {
-    if (didAutoFallbackRef.current) return;
-    if (rosterDetailLoading) return;
-    if (delegatedMode) return;
+	  useEffect(() => {
+	    if (didAutoFallbackRef.current) return;
+	    if (rosterDetailLoading) return;
+	    if (delegatedMode) return;
+	    if (!isAdminUser) return;
 
     const rows = Array.isArray(allRosters?.data) ? allRosters.data : null;
     if (!rows) return;
@@ -329,28 +331,42 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
         }
       })
       .catch(() => {});
-  }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, delegatedMode]);
+	  }, [allRosters, rosterDetailLoading, selectedMonth, selectedYear, dispatch, delegatedMode, isAdminUser]);
 
   const rosters = allRosters?.data || [];
   const visibleRosters = useMemo(() => {
-    if (isAdminUser) return rosters;
+    const parsedMonth = Number.parseInt(selectedMonth, 10);
+    const parsedYear = Number.parseInt(selectedYear, 10);
+    if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return rosters;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
 
-    return rosters.filter((roster) => {
-      const weeks = Array.isArray(roster?.weeks) ? roster.weeks : [];
-      return weeks.some((week) => {
-        if (!week?.startDate || !week?.endDate) return false;
-        const start = new Date(week.startDate);
-        const end = new Date(week.endDate);
-        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
-        start.setHours(0, 0, 0, 0);
-        end.setHours(23, 59, 59, 999);
-        return today >= start && today <= end;
-      });
-    });
-  }, [rosters, isAdminUser]);
+    return rosters
+      .map((roster) => {
+        const weeks = Array.isArray(roster?.weeks) ? roster.weeks : [];
+        const overlappingWeeks = weeks.filter((week) => {
+          if (!week?.startDate || !week?.endDate) return false;
+          const start = new Date(week.startDate);
+          const end = new Date(week.endDate);
+          if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+          start.setHours(0, 0, 0, 0);
+          end.setHours(23, 59, 59, 999);
+          return start <= monthEnd && end >= monthStart;
+        });
+        const totalEmployees = overlappingWeeks.reduce(
+          (sum, week) => sum + (Array.isArray(week?.employees) ? week.employees.length : 0),
+          0
+        );
+        return {
+          ...roster,
+          weeks: overlappingWeeks,
+          totalWeeks: overlappingWeeks.length,
+          totalEmployees,
+        };
+      })
+      .filter((roster) => roster.weeks.length > 0);
+  }, [rosters, selectedMonth, selectedYear]);
 	  
 	
 		  if (rosterId) {
@@ -449,17 +465,18 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
 
           {/* Refresh Button */}
           <div className="mb-4 flex justify-end">
-	            <button
-	              onClick={() => {
-	                dispatch(fetchAllRosters({
-	                  month: selectedMonth,
-	                  year: selectedYear,
-                  page: 1,
-                  limit: 50
-                }));
-              }}
-              className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 text-sm font-medium"
-            >
+		            <button
+		              onClick={() => {
+		                const payload = {
+		                  month: selectedMonth,
+		                  year: selectedYear,
+		                  page: 1,
+		                  limit: isAdminUser ? 50 : 100,
+		                };
+		                dispatch(fetchAllRosters(payload));
+	              }}
+	              className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 text-sm font-medium"
+	            >
               Refresh Rosters
             </button>
           </div>
@@ -485,11 +502,15 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
                     key={roster._id}
                     onClick={() => {
                       const basePath = delegatedMode ? "/delegated-attendance" : "/attendance-update";
-                      const query = delegatedMode && delegatedFromUserId
-                        ? `?delegatedFrom=${encodeURIComponent(delegatedFromUserId)}`
-                        : "";
-                      navigate(`${basePath}/${roster._id}${query}`);
-                    }}
+	                      const queryParams = new URLSearchParams();
+	                      queryParams.set("month", String(selectedMonth));
+	                      queryParams.set("year", String(selectedYear));
+	                      if (delegatedMode && delegatedFromUserId) {
+	                        queryParams.set("delegatedFrom", delegatedFromUserId);
+	                      }
+	                      const query = `?${queryParams.toString()}`;
+	                      navigate(`${basePath}/${roster._id}${query}`);
+	                    }}
 	                    className="group relative overflow-hidden rounded-2xl border border-indigo-200/80 bg-gradient-to-br from-white via-indigo-50/20 to-sky-50/20 p-5 cursor-pointer transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md hover:border-indigo-300"
 	                  >
 	                    <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-indigo-500 to-sky-500 opacity-75"></div>

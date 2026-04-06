@@ -895,20 +895,20 @@ const ExcelRosterUpload = () => {
                   <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_1fr] gap-2 md:gap-1.5 items-center">
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Start Date</p>
-                      <StyledDatePicker
-                        value={startDate}
-                        onChange={(value) => {
-                          setStartDate(value);
-                          if (validationErrors.startDate) {
-                            setValidationErrors((prev) => ({ ...prev, startDate: '' }));
-                          }
-                        }}
-                        minDate={getMinDate()}
-                        initialViewDate={getMinDate()}
-                        rangeStart={startDate}
-                        rangeEnd={endDate}
-                        placeholder="Select start date"
-                      />
+	                      <StyledDatePicker
+	                        value={startDate}
+	                        onChange={(value) => {
+	                          setStartDate(value);
+	                          if (validationErrors.startDate) {
+	                            setValidationErrors((prev) => ({ ...prev, startDate: '' }));
+	                          }
+	                        }}
+	                        minDate={getMinDate()}
+	                        initialViewDate={todayFormatted}
+	                        rangeStart={startDate}
+	                        rangeEnd={endDate}
+	                        placeholder="Select start date"
+	                      />
                     </div>
 
                     <div className="hidden md:flex h-full items-center justify-center px-2">
@@ -917,21 +917,21 @@ const ExcelRosterUpload = () => {
 
                     <div className="rounded-lg border border-gray-200 bg-gray-50 p-2.5">
                       <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">End Date</p>
-                      <StyledDatePicker
-                        value={endDate}
-                        onChange={(value) => {
-                          setEndDate(value);
-                          if (validationErrors.endDate) {
-                            setValidationErrors((prev) => ({ ...prev, endDate: '' }));
-                          }
-                        }}
-                        minDate={startDate || getMinDate()}
-                        initialViewDate={startDate || getMinDate()}
-                        referenceDate={startDate}
-                        rangeStart={startDate}
-                        rangeEnd={endDate}
-                        placeholder="Select end date"
-                      />
+	                      <StyledDatePicker
+	                        value={endDate}
+	                        onChange={(value) => {
+	                          setEndDate(value);
+	                          if (validationErrors.endDate) {
+	                            setValidationErrors((prev) => ({ ...prev, endDate: '' }));
+	                          }
+	                        }}
+	                        minDate={startDate || getMinDate()}
+	                        initialViewDate={startDate || todayFormatted}
+	                        referenceDate={startDate}
+	                        rangeStart={startDate}
+	                        rangeEnd={endDate}
+	                        placeholder="Select end date"
+	                      />
                     </div>
                   </div>
                 </div>
