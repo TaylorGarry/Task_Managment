@@ -697,11 +697,11 @@ const ExcelRosterUpload = () => {
         errors.endDate = 'End date must be after start date';
       }
       
-      // Check if it's exactly 7 days
+      // For non-superadmin users, enforce 7-day range.
       const diffTime = Math.abs(end - start);
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
       
-      if (diffDays !== 7) {
+      if (!isSuperAdmin && diffDays !== 7) {
         errors.endDate = 'Date range must be exactly 7 days';
       }
     }
@@ -797,13 +797,13 @@ const ExcelRosterUpload = () => {
       return;
     }
 
-    // Validate date range is exactly 7 days
+    // For non-superadmin users, keep template export limited to 7 days.
     const start = new Date(startDate);
     const end = new Date(endDate);
     const diffTime = Math.abs(end - start);
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
     
-    if (diffDays !== 7) {
+    if (!isSuperAdmin && diffDays !== 7) {
       toast.error('Date range must be exactly 7 days');
       return;
     }
@@ -847,7 +847,11 @@ const ExcelRosterUpload = () => {
         <h1 className="text-2xl md:text-3xl font-bold text-blue-600 mb-2">
           📊 Upload Roster via Excel
         </h1>
-        <p className="text-gray-600">Upload employee roster for a 7-day period using Excel file</p>
+        <p className="text-gray-600">
+          {isSuperAdmin
+            ? 'Upload employee roster for any selected date range using Excel file'
+            : 'Upload employee roster for a 7-day period using Excel file'}
+        </p>
       </div>
 
       <div className={`grid grid-cols-1 gap-6 ${showRightColumn ? "lg:grid-cols-3" : ""}`}>
@@ -945,7 +949,11 @@ const ExcelRosterUpload = () => {
                 {validationErrors.endDate ? (
                   <p className="mt-1 text-sm text-red-600">{validationErrors.endDate}</p>
                 ) : (
-                  <p className="mt-1 text-sm text-gray-500">Must be exactly 7 days from start</p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {isSuperAdmin
+                      ? 'You can select any date range length'
+                      : 'Must be exactly 7 days from start'}
+                  </p>
                 )}
               </div>
 
@@ -1068,7 +1076,11 @@ const ExcelRosterUpload = () => {
             <ul className="space-y-2">
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">•</span>
-                <span className="text-gray-700">Select exactly 7 days date range</span>
+                <span className="text-gray-700">
+                  {isSuperAdmin
+                    ? 'SuperAdmin can select any date range (for example 1 month or more)'
+                    : 'Select exactly 7 days date range'}
+                </span>
               </li>
               <li className="flex items-start">
                 <span className="text-blue-600 mr-2">•</span>

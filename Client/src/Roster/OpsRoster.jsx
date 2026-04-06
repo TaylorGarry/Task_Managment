@@ -57,6 +57,68 @@ const OpsRoster = () => {
     const day = parts.find((p) => p.type === "day")?.value;
     return year && month && day ? `${year}-${month}-${day}` : null;
   }, []);
+  const getWeekDateKeys = useCallback((startValue, endValue) => {
+    const startKey = toIstDateKey(startValue);
+    const endKey = toIstDateKey(endValue);
+    if (!startKey || !endKey) return [];
+
+    const parseDateKey = (key) => {
+      const [year, month, day] = key.split("-").map(Number);
+      return new Date(Date.UTC(year, month - 1, day));
+    };
+    const formatDateKey = (date) => {
+      const year = date.getUTCFullYear();
+      const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+      const day = String(date.getUTCDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    const start = parseDateKey(startKey);
+    const end = parseDateKey(endKey);
+    if (start > end) return [];
+
+    const totalDays = Math.floor((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+    const effectiveStart = new Date(start);
+    if (totalDays > 7) {
+      effectiveStart.setUTCDate(end.getUTCDate() - 6);
+    }
+
+    const keys = [];
+    const cursor = new Date(effectiveStart);
+    while (cursor <= end && keys.length < 7) {
+      keys.push(formatDateKey(cursor));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+    return keys;
+  }, [toIstDateKey]);
+  const weekDateKeys = useMemo(() => {
+    return getWeekDateKeys(opsMetaRoster?.data?.startDate, opsMetaRoster?.data?.endDate);
+  }, [getWeekDateKeys, opsMetaRoster?.data?.startDate, opsMetaRoster?.data?.endDate]);
+  const normalizeDailyStatusToWeek = useCallback((dailyStatus, targetDateKeys) => {
+    const byDateKey = new Map();
+    (dailyStatus || []).forEach((day) => {
+      const key = toIstDateKey(day?.date);
+      if (!key || !targetDateKeys.includes(key)) return;
+      byDateKey.set(key, {
+        date: key,
+        status: day?.status || "P",
+      });
+    });
+    return targetDateKeys.map((key) => byDateKey.get(key) || { date: key, status: "P" });
+  }, [toIstDateKey]);
+  const normalizedRosterEntries = useMemo(() => {
+    const entries = opsMetaRoster?.data?.rosterEntries || [];
+    if (!weekDateKeys.length) {
+      return entries.map((emp) => ({
+        ...emp,
+        dailyStatus: Array.isArray(emp?.dailyStatus) ? [...emp.dailyStatus] : [],
+      }));
+    }
+    return entries.map((emp) => ({
+      ...emp,
+      dailyStatus: normalizeDailyStatusToWeek(emp?.dailyStatus, weekDateKeys),
+    }));
+  }, [normalizeDailyStatusToWeek, opsMetaRoster?.data?.rosterEntries, weekDateKeys]);
 
   // Load roster data on component mount
   useEffect(() => {
@@ -198,11 +260,19 @@ const OpsRoster = () => {
     setOpenDetails(true);
   }, []);
   const formatDate = useCallback((dateString) => {
-    const date = new Date(dateString);
+    let date = null;
+    if (typeof dateString === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
+      const [year, month, day] = dateString.split("-").map(Number);
+      date = new Date(Date.UTC(year, month - 1, day));
+    } else {
+      date = new Date(dateString);
+    }
+    if (Number.isNaN(date.getTime())) return "-";
     return date.toLocaleDateString('en-US', { 
       weekday: 'short', 
       day: 'numeric', 
-      month: 'short' 
+      month: 'short',
+      timeZone: 'Asia/Kolkata'
     });
   }, []);
 
@@ -224,9 +294,9 @@ const OpsRoster = () => {
 	    return `${startLabel}:00 - ${endLabel}:00`;
 	  }, []);
   const filteredEntries = useMemo(() => {
-    if (!opsMetaRoster?.data?.rosterEntries) return [];
+    if (!normalizedRosterEntries.length) return [];
     
-    let filtered = [...opsMetaRoster.data.rosterEntries];
+    let filtered = [...normalizedRosterEntries];
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(employee => 
@@ -255,7 +325,7 @@ const OpsRoster = () => {
     });
     
     return filtered;
-  }, [opsMetaRoster, searchQuery, departmentFilter, sortField, sortDirection]);
+  }, [normalizedRosterEntries, searchQuery, departmentFilter, sortField, sortDirection]);
   const isEmployeeTeamLeaderView = useMemo(() => {
     const normalizedUser = String(currentUser?.username || "").trim().toLowerCase();
     const normalizedSummaryTl = String(opsMetaRoster?.data?.summary?.teamLeader || "").trim().toLowerCase();
@@ -264,9 +334,9 @@ const OpsRoster = () => {
 
   const canDownloadSnapshot = isEmployeeTeamLeaderView && filteredEntries.length > 0;
   const departments = useMemo(() => {
-    if (!opsMetaRoster?.data?.rosterEntries) return [];
-    return [...new Set(opsMetaRoster.data.rosterEntries.map(e => e.department))].sort();
-  }, [opsMetaRoster]);
+    if (!normalizedRosterEntries.length) return [];
+    return [...new Set(normalizedRosterEntries.map(e => e.department))].sort();
+  }, [normalizedRosterEntries]);
   const paginatedEntries = useMemo(() => {
     const start = page * rowsPerPage;
     const end = start + rowsPerPage;

@@ -663,16 +663,23 @@ export const exportSavedRoster = createAsyncThunk(
 );
 export const exportAttendanceSnapshot = createAsyncThunk(
   "roster/exportAttendanceSnapshot",
-  async ({ startDate, endDate, department = "", delegatedFrom = "" }, thunkAPI) => {
+  async ({ startDate, endDate, department = "", teamLeader = "", delegatedFrom = "" }, thunkAPI) => {
     try {
       const token = getToken();
 
-      const query = new URLSearchParams({
-        startDate,
-        endDate,
-        ...(department ? { department } : {}),
-        ...(delegatedFrom ? { delegatedFrom } : {}),
-      }).toString();
+      const queryParams = new URLSearchParams({ startDate, endDate });
+      const departmentValues = Array.isArray(department) ? department : department ? [department] : [];
+      const teamLeaderValues = Array.isArray(teamLeader) ? teamLeader : teamLeader ? [teamLeader] : [];
+      departmentValues
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .forEach((value) => queryParams.append("department", value));
+      teamLeaderValues
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+        .forEach((value) => queryParams.append("teamLeader", value));
+      if (delegatedFrom) queryParams.set("delegatedFrom", delegatedFrom);
+      const query = queryParams.toString();
 
       const response = await fetch(`${API_URL}/export-attendance-snapshot?${query}`, {
         headers: {
