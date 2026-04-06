@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation } from "react-router-dom";
 import {
@@ -185,6 +185,31 @@ const getStatusColor = (status) => {
   return option?.color || "bg-gray-100 text-gray-800";
 };
 
+const isDateWithinWeek = (dateKey, week) => {
+  if (!dateKey || !week) return false;
+  const startKey = toIstDateKey(week.startDate);
+  const endKey = toIstDateKey(week.endDate);
+  if (!startKey || !endKey) return false;
+  return dateKey >= startKey && dateKey <= endKey;
+};
+
+const isWeekOverlappingMonth = (week, month, year) => {
+  if (!week?.startDate || !week?.endDate) return false;
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return true;
+
+  const start = new Date(week.startDate);
+  const end = new Date(week.endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+  start.setHours(0, 0, 0, 0);
+  end.setHours(23, 59, 59, 999);
+
+  const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+  const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+  return start <= monthEnd && end >= monthStart;
+};
+
 const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const dispatch = useDispatch();
   const location = useLocation();
@@ -219,6 +244,15 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const [punchTimeErrors, setPunchTimeErrors] = useState({});
   const exportCaptureRef = useRef(null);
   const [isDownloadingDelegatedSnapshot, setIsDownloadingDelegatedSnapshot] = useState(false);
+  const monthFilterContext = useMemo(() => {
+    const params = new URLSearchParams(location.search);
+    const month = params.get("month");
+    const year = params.get("year");
+    const parsedMonth = Number.parseInt(month, 10);
+    const parsedYear = Number.parseInt(year, 10);
+    if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return null;
+    return { month: parsedMonth, year: parsedYear };
+  }, [location.search]);
   const selectedWeekMeta = availableWeeks.find(
     (week) => String(week?.weekNumber) === String(selectedWeek)
   );
@@ -350,30 +384,43 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         });
       }
       
-      const weeks = responseData.weeks || [];
+      const responseWeeks = responseData.weeks || [];
+      const weeks = monthFilterContext
+        ? responseWeeks.filter((week) =>
+            isWeekOverlappingMonth(week, monthFilterContext.month, monthFilterContext.year)
+          )
+        : responseWeeks;
+
       if (JSON.stringify(weeks) !== JSON.stringify(availableWeeks)) {
         setAvailableWeeks(weeks);
       }
       
-      if (!selectedWeek && weeks.length > 0) {
-        setSelectedWeek(weeks[0].weekNumber.toString());
+      if (weeks.length > 0) {
+        const weekForSelectedDate = weeks.find((week) => isDateWithinWeek(selectedDate, week));
+        const hasSelectedWeek = weeks.some(
+          (week) => String(week?.weekNumber) === String(selectedWeek)
+        );
+        if (!selectedWeek || !hasSelectedWeek) {
+          const preferredWeek = weekForSelectedDate || weeks[0];
+          setSelectedWeek(String(preferredWeek.weekNumber));
+        }
       }
     }
-  }, [updateEmployeesData]);
+  }, [updateEmployeesData, availableWeeks, selectedDate, selectedWeek, monthFilterContext]);
 
   useEffect(() => {
     if (!selectedWeekStartKey || !selectedWeekEndKey) return;
     if (!selectedDate || selectedDate < selectedWeekStartKey || selectedDate > selectedWeekEndKey) {
+      const weekForSelectedDate = availableWeeks.find((week) => isDateWithinWeek(selectedDate, week));
+      if (weekForSelectedDate && String(weekForSelectedDate.weekNumber) !== String(selectedWeek)) {
+        setSelectedWeek(String(weekForSelectedDate.weekNumber));
+        setCurrentPage(1);
+        return;
+      }
       setSelectedDate(selectedWeekStartKey);
       setCurrentPage(1);
     }
-  }, [selectedDate, selectedWeekStartKey, selectedWeekEndKey]);
-
-  useEffect(() => {
-    if (!selectedWeekStartKey) return;
-    setSelectedDate(selectedWeekStartKey);
-    setCurrentPage(1);
-  }, [selectedWeek, selectedWeekStartKey]);
+  }, [selectedDate, selectedWeekStartKey, selectedWeekEndKey, availableWeeks, selectedWeek]);
 
   const rosterEntries = updateEmployeesData?.data?.rosterEntries || [];
   const pagination = updateEmployeesData?.data?.pagination;
@@ -757,7 +804,14 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               <select
                 value={selectedWeek}
                 onChange={(e) => {
+                  const nextWeek = availableWeeks.find(
+                    (week) => String(week?.weekNumber) === String(e.target.value)
+                  );
                   setSelectedWeek(e.target.value);
+                  const nextWeekStartKey = toIstDateKey(nextWeek?.startDate);
+                  if (nextWeekStartKey) {
+                    setSelectedDate(nextWeekStartKey);
+                  }
                   setCurrentPage(1);
                 }}
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"

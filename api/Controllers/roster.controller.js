@@ -8216,6 +8216,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     let filteredEmployees = [];
     let selectedTeamLeaderLabel = user.username;
     let managedTeamCount = 0;
+    let teamFilterDebug = null;
 
     // 👑 SUPERADMIN - sees all employees (filter out nulls)
     if (user.accountType === "superAdmin" || user.accountType === "HR") {
@@ -8233,6 +8234,38 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     else if (user.accountType === "employee" || Boolean(user.isTeamLeader)) {
       console.log(`👥 Team Leader check: ${user.username}`);
       const normalizedUsername = String(user.username || "").trim().toLowerCase();
+      const normalizeLabel = (value = "") =>
+        String(value || "")
+          .trim()
+          .toLowerCase()
+          .replace(/[()\-_/.,]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+      const userRecord =
+        (user?.realName || user?.pseudoName)
+          ? user
+          : await User.findById(user._id).select("username realName pseudoName department").lean();
+      const teamLeaderAliases = new Set(
+        [
+          userRecord?.username,
+          userRecord?.realName,
+          userRecord?.pseudoName,
+          `${userRecord?.username || ""} ${userRecord?.department || ""}`,
+          `${userRecord?.realName || ""} ${userRecord?.department || ""}`,
+        ]
+          .map(normalizeLabel)
+          .filter(Boolean)
+      );
+      const matchesTeamLeaderAlias = (value) => {
+        const empTl = normalizeLabel(value || "");
+        if (!empTl || !teamLeaderAliases.size) return false;
+        for (const alias of teamLeaderAliases) {
+          if (empTl === alias || empTl.includes(alias) || alias.includes(empTl)) {
+            return true;
+          }
+        }
+        return false;
+      };
       const isSelfEmployee = (emp) => {
         if (!emp) return false;
         const sameUserId = emp.userId && String(emp.userId) === String(user._id);
@@ -8241,11 +8274,34 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         return sameUserId || sameNameAsUsername;
       };
 
+      const managedEmployeesByLabel = selectedWeekEmployeesUnique.filter((emp) => {
+        if (!emp) return false;
+        return matchesTeamLeaderAlias(emp.teamLeader);
+      });
+      const employeeUserIdsInWeek = selectedWeekEmployeesUnique
+        .map((emp) => String(emp?.userId || "").trim())
+        .filter(Boolean);
+      let managedUserIdsByReporting = new Set();
+      if (employeeUserIdsInWeek.length) {
+        const managedUsers = await User.find({
+          _id: { $in: employeeUserIdsInWeek },
+          reportingManager: user._id,
+        })
+          .select("_id")
+          .lean();
+        managedUserIdsByReporting = new Set(managedUsers.map((u) => String(u._id)));
+      }
       const managedEmployees = selectedWeekEmployeesUnique.filter((emp) => {
         if (!emp) return false;
-        return String(emp.teamLeader || "").trim().toLowerCase() === normalizedUsername;
+        const byLabel = matchesTeamLeaderAlias(emp.teamLeader);
+        const byReporting = emp.userId && managedUserIdsByReporting.has(String(emp.userId));
+        return byLabel || byReporting;
       });
       managedTeamCount = managedEmployees.filter((emp) => !isSelfEmployee(emp)).length;
+      teamFilterDebug = {
+        aliases: Array.from(teamLeaderAliases),
+        reportingManagedCount: managedUserIdsByReporting.size,
+      };
 
       if (delegatedFrom) {
         const actionDate = new Date(date);
@@ -8289,11 +8345,12 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       } else if (managedTeamCount > 0 || delegatedEmployeeUserIds.size > 0) {
         filteredEmployees = selectedWeekEmployeesUnique.filter((emp) => {
           if (!emp) return false;
-          const isOwnTeamLeader =
-            String(emp.teamLeader || "").trim().toLowerCase() === normalizedUsername;
+          const isOwnTeamLeader = matchesTeamLeaderAlias(emp.teamLeader);
+          const isReportingTeamMember =
+            emp.userId && managedUserIdsByReporting.has(String(emp.userId));
           const isDelegatedEmployee =
             emp.userId && delegatedEmployeeUserIds.has(String(emp.userId));
-          return isOwnTeamLeader || isDelegatedEmployee || isSelfEmployee(emp);
+          return isOwnTeamLeader || isReportingTeamMember || isDelegatedEmployee || isSelfEmployee(emp);
         });
       } else {
         filteredEmployees = selectedWeekEmployeesUnique.filter((emp) => {
@@ -8328,6 +8385,22 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     }
 
     const totalEmployees = filteredEmployees.length;
+    if (totalEmployees === 0 && teamFilterDebug) {
+      const distinctTeamLeadersInWeek = Array.from(
+        new Set(
+          selectedWeekEmployeesUnique
+            .map((emp) => String(emp?.teamLeader || "").trim())
+            .filter(Boolean)
+        )
+      ).slice(0, 30);
+      console.log("Team filter debug (no employees matched):", {
+        user: user.username,
+        userId: String(user._id),
+        aliases: teamFilterDebug.aliases,
+        reportingManagedCount: teamFilterDebug.reportingManagedCount,
+        distinctTeamLeadersInWeek,
+      });
+    }
 
     // Pagination (optional; backward compatible when not provided)
     let page = Number.parseInt(rawPage, 10);
