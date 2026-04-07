@@ -4801,7 +4801,7 @@ export const rosterUploadFromExcel = async (req, res) => {
 	      });
 	    }
     
-    const { startDate, endDate } = req.body;
+	    const { startDate, endDate } = req.body;
     
     if (!startDate || !endDate) {
       return res.status(400).json({
@@ -4810,10 +4810,21 @@ export const rosterUploadFromExcel = async (req, res) => {
       });
     }
     
-    const selectedStartDate = new Date(startDate);
-    const selectedEndDate = new Date(endDate);
-    selectedStartDate.setHours(0, 0, 0, 0);
-    selectedEndDate.setHours(0, 0, 0, 0);
+      const parseDateOnlyToUtcNoon = (value) => {
+        const raw = String(value || "").trim();
+        const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+        if (!m) return new Date(NaN);
+        const y = Number.parseInt(m[1], 10);
+        const mo = Number.parseInt(m[2], 10);
+        const d = Number.parseInt(m[3], 10);
+        if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return new Date(NaN);
+        return new Date(Date.UTC(y, mo - 1, d, 12, 0, 0, 0));
+      };
+
+	    const selectedStartDate = parseDateOnlyToUtcNoon(startDate);
+	    const selectedEndDate = parseDateOnlyToUtcNoon(endDate);
+	    selectedStartDate.setUTCHours(0, 0, 0, 0);
+	    selectedEndDate.setUTCHours(0, 0, 0, 0);
     
     if (isNaN(selectedStartDate.getTime()) || isNaN(selectedEndDate.getTime())) {
       return res.status(400).json({
@@ -4822,12 +4833,65 @@ export const rosterUploadFromExcel = async (req, res) => {
       });
     }
     
-    if (selectedStartDate > selectedEndDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Start date cannot be after end date."
-      });
-    }
+	    if (selectedStartDate > selectedEndDate) {
+	      return res.status(400).json({
+	        success: false,
+	        message: "Start date cannot be after end date."
+	      });
+	    }
+
+      const toDateKey = (value) => {
+        const d = value instanceof Date ? value : new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        const y = d.getUTCFullYear();
+        const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(d.getUTCDate()).padStart(2, "0");
+        return `${y}-${m}-${day}`;
+      };
+      const normalizeText = (value) => String(value || "").trim().toLowerCase();
+      const buildEmployeeKey = (emp) => {
+        const rawUserId = String(emp?.userId || "").trim();
+        if (rawUserId && rawUserId !== "null" && rawUserId !== "undefined") {
+          return `uid:${rawUserId}`;
+        }
+        return `name:${normalizeText(emp?.name)}|dept:${normalizeText(emp?.department)}`;
+      };
+      const upsertEmployees = (existingEmployees = [], incomingEmployees = []) => {
+        const merged = [];
+        const keyIndexMap = new Map();
+        let unknownCounter = 0;
+
+        const addOrUpdate = (employee, preferExistingId = false) => {
+          if (!employee) return;
+          const key = buildEmployeeKey(employee) || `__unknown__${unknownCounter++}`;
+          const existingIndex = keyIndexMap.get(key);
+
+          if (existingIndex === undefined) {
+            keyIndexMap.set(key, merged.length);
+            merged.push(employee);
+            return;
+          }
+
+          const existingRow = merged[existingIndex];
+          const nextRow = {
+            ...(existingRow?.toObject ? existingRow.toObject() : existingRow),
+            ...(employee?.toObject ? employee.toObject() : employee),
+          };
+
+          if (preferExistingId && existingRow?._id && !employee?._id) {
+            nextRow._id = existingRow._id;
+          }
+          if ((!employee?.userId || String(employee.userId).trim() === "") && existingRow?.userId) {
+            nextRow.userId = existingRow.userId;
+          }
+
+          merged[existingIndex] = nextRow;
+        };
+
+        (existingEmployees || []).forEach((emp) => addOrUpdate(emp, false));
+        (incomingEmployees || []).forEach((emp) => addOrUpdate(emp, true));
+        return merged.filter(Boolean);
+      };
     
     const totalDays = Math.round((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24)) + 1;
     
@@ -4865,8 +4929,8 @@ export const rosterUploadFromExcel = async (req, res) => {
 	      console.log(`Admin ${user.username} uploading roster for date range: ${startDate} to ${endDate}`);
 	    }
     
-    const rosterMonth = selectedStartDate.getMonth() + 1;
-    const rosterYear = selectedStartDate.getFullYear();
+	    const rosterMonth = selectedStartDate.getUTCMonth() + 1;
+	    const rosterYear = selectedStartDate.getUTCFullYear();
     
     // ✅ Excel file check
     if (!req.file) {
@@ -4996,10 +5060,10 @@ export const rosterUploadFromExcel = async (req, res) => {
         const teamLeader = (row[columnMap['Team Leader']] || "").toString().trim();
         
         // Daily status
-        const dailyStatus = [];
-        const statusDate = new Date(selectedStartDate);
-        
-        for (let i = 0; i < excelDateColumns.length; i++) {
+	        const dailyStatus = [];
+          const statusSeed = parseDateOnlyToUtcNoon(startDate);
+	        
+	        for (let i = 0; i < excelDateColumns.length; i++) {
           const rawStatus = (row[excelDateColumns[i]] || "P").toString().trim();
           const status = rawStatus.toUpperCase();
           
@@ -5009,13 +5073,14 @@ export const rosterUploadFromExcel = async (req, res) => {
             continue;
           }
           
-          dailyStatus.push({
-            date: new Date(statusDate),
-            status: status || "P"
-          });
-          
-          statusDate.setDate(statusDate.getDate() + 1);
-        }
+            const statusDate = new Date(statusSeed);
+            statusDate.setUTCDate(statusDate.getUTCDate() + i);
+
+	          dailyStatus.push({
+	            date: statusDate,
+	            status: status || "P"
+	          });
+	        }
         
         if (errors.length > 0) continue;
         
@@ -5165,55 +5230,47 @@ export const rosterUploadFromExcel = async (req, res) => {
       }
     }
 
-	    if (overlappingWeeksByDept.length > 0) {
-	      // HR/SuperAdmin can re-upload an existing week by merging departments for the exact same date range.
-	      if (isHrOrSuperAdmin) {
-	        const toDateKey = (value) => {
-	          const d = value instanceof Date ? value : new Date(value);
-	          if (Number.isNaN(d.getTime())) return "";
-	          const y = d.getFullYear();
-	          const m = String(d.getMonth() + 1).padStart(2, "0");
-	          const day = String(d.getDate()).padStart(2, "0");
-	          return `${y}-${m}-${day}`;
-	        };
+		    if (overlappingWeeksByDept.length > 0) {
+		      // HR/SuperAdmin can re-upload an existing week for the exact same date range.
+		      if (isHrOrSuperAdmin) {
+		        const startKey = toDateKey(selectedStartDate);
+		        const endKey = toDateKey(selectedEndDate);
 
-	        const startKey = toDateKey(selectedStartDate);
-	        const endKey = toDateKey(selectedEndDate);
+		        const existingRoster = await Roster.findOne({ month: rosterMonth, year: rosterYear });
+		        if (existingRoster) {
+		          const matchedWeekIndexes = (existingRoster.weeks || [])
+                .map((w, idx) => ({ w, idx }))
+                .filter(({ w }) => {
+		            if (!w) return false;
+		            return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
+		          })
+                .map(({ idx }) => idx);
 
-	        const existingRoster = await Roster.findOne({ month: rosterMonth, year: rosterYear });
-	        if (existingRoster) {
-	          const matchIndex = existingRoster.weeks.findIndex((w) => {
-	            if (!w) return false;
-	            return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
-	          });
+		          if (matchedWeekIndexes.length > 0) {
+                const primaryIndex = matchedWeekIndexes[0];
+                const existingEmployees = matchedWeekIndexes.flatMap((weekIdx) =>
+                  ((existingRoster.weeks?.[weekIdx]?.employees || []).filter((emp) => emp !== null))
+                );
 
-	          if (matchIndex !== -1) {
-	            const normalizeDept = (value) => String(value || "").trim().toLowerCase();
-	            const uploadedDeptSet = new Set(
-	              employeesData.map((emp) => normalizeDept(emp?.department)).filter(Boolean)
-	            );
+		            // Employee-wise upsert: same employee gets latest uploaded row, never duplicated.
+		            existingRoster.weeks[primaryIndex].employees = upsertEmployees(existingEmployees, employeesData);
+                for (let i = matchedWeekIndexes.length - 1; i >= 1; i -= 1) {
+                  existingRoster.weeks.splice(matchedWeekIndexes[i], 1);
+                }
+		            existingRoster.updatedBy = user._id;
+		            existingRoster.markModified("weeks");
+		            await existingRoster.save();
 
-	            const existingEmployees = (existingRoster.weeks[matchIndex].employees || []).filter((emp) => emp !== null);
-	            const preservedEmployees = existingEmployees.filter(
-	              (emp) => !uploadedDeptSet.has(normalizeDept(emp?.department))
-	            );
-
-	            // Replace only uploaded departments, keep other departments as-is.
-	            existingRoster.weeks[matchIndex].employees = [...preservedEmployees, ...employeesData];
-	            existingRoster.updatedBy = user._id;
-	            existingRoster.markModified("weeks");
-	            await existingRoster.save();
-
-	            return res.status(200).json({
-	              success: true,
-	              message: `Roster merged successfully for ${startDate} to ${endDate}`,
-	              data: {
-	                summary: {
-	                  totalEmployees: existingRoster.weeks[matchIndex].employees.length,
-	                  weekNumber: existingRoster.weeks[matchIndex].weekNumber,
-	                  month: rosterMonth,
-	                  year: rosterYear,
-	                  departments: departments,
+		            return res.status(200).json({
+		              success: true,
+		              message: `Roster updated successfully for ${startDate} to ${endDate}`,
+		              data: {
+		                summary: {
+		                  totalEmployees: existingRoster.weeks[primaryIndex].employees.length,
+		                  weekNumber: existingRoster.weeks[primaryIndex].weekNumber,
+		                  month: rosterMonth,
+		                  year: rosterYear,
+		                  departments: departments,
 	                  uploadedBy: {
 	                    username: user.username,
 	                    accountType: user.accountType,
@@ -5263,17 +5320,40 @@ export const rosterUploadFromExcel = async (req, res) => {
       roster.updatedBy = user._id;
     }
     
-    const weekNumber = Math.ceil(selectedStartDate.getDate() / 7);
-    
-    // Add new week
-    roster.weeks.push({
-      weekNumber: weekNumber,
-      startDate: selectedStartDate,
-      endDate: selectedEndDate,
-      employees: employeesData
-    });
-    
-    await roster.save();
+	    const weekNumber = Math.ceil(selectedStartDate.getDate() / 7);
+
+      const startKey = toDateKey(selectedStartDate);
+      const endKey = toDateKey(selectedEndDate);
+      const matchedWeekIndexes = (roster.weeks || [])
+        .map((w, idx) => ({ w, idx }))
+        .filter(({ w }) => {
+          if (!w) return false;
+          return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
+        })
+        .map(({ idx }) => idx);
+
+      if (matchedWeekIndexes.length > 0) {
+        const primaryIndex = matchedWeekIndexes[0];
+        const existingEmployees = matchedWeekIndexes.flatMap((weekIdx) =>
+          ((roster.weeks?.[weekIdx]?.employees || []).filter((emp) => emp !== null))
+        );
+        roster.weeks[primaryIndex].employees = upsertEmployees(existingEmployees, employeesData);
+        roster.weeks[primaryIndex].weekNumber = Number.parseInt(roster.weeks[primaryIndex].weekNumber, 10) || weekNumber;
+        roster.weeks[primaryIndex].startDate = selectedStartDate;
+        roster.weeks[primaryIndex].endDate = selectedEndDate;
+        for (let i = matchedWeekIndexes.length - 1; i >= 1; i -= 1) {
+          roster.weeks.splice(matchedWeekIndexes[i], 1);
+        }
+      } else {
+        roster.weeks.push({
+          weekNumber: weekNumber,
+          startDate: selectedStartDate,
+          endDate: selectedEndDate,
+          employees: employeesData
+        });
+      }
+	    
+	    await roster.save();
     
     return res.status(200).json({
       success: true,
