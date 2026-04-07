@@ -1,0 +1,3 @@
+Sample Policy Document
+
+This is a static placeholder policy file for testing employee consent flow.
