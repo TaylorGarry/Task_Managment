@@ -3902,11 +3902,18 @@ export const getRosterForBulkEdit = async (req, res) => {
       const validEmployees = week.employees.filter(emp => emp !== null);
       
       validEmployees.forEach(emp => {
-        const employeeExists = existingWeek.employees.some(
-          e => e?.name === emp?.name || 
-          (e?.userId && emp?.userId && e.userId.toString() === emp.userId.toString())
-        );
-        
+        const empUserId = String(emp?.userId?._id || emp?.userId || "").trim();
+        const empId = String(emp?._id || "").trim();
+
+        const employeeExists = existingWeek.employees.some((e) => {
+          const existingUserId = String(e?.userId?._id || e?.userId || "").trim();
+          const existingEmpId = String(e?._id || "").trim();
+
+          if (empUserId && existingUserId) return existingUserId === empUserId;
+          if (empId && existingEmpId) return existingEmpId === empId;
+          return false;
+        });
+
         if (!employeeExists) {
           existingWeek.employees.push(emp);
         }

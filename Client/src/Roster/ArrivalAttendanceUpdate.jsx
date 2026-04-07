@@ -266,6 +266,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             ? selectedWeekEndKey
             : selectedDate)
       : selectedDate;
+  const isEmployeeUser = currentUser?.accountType === "employee";
 
   if (!rosterId) {
     return (
@@ -422,12 +423,33 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     }
   }, [selectedDate, selectedWeekStartKey, selectedWeekEndKey, availableWeeks, selectedWeek]);
 
-  const rosterEntries = updateEmployeesData?.data?.rosterEntries || [];
+  const rawRosterEntries = updateEmployeesData?.data?.rosterEntries || [];
+  const rosterEntries = useMemo(() => {
+    if (!Array.isArray(rawRosterEntries)) return [];
+
+    const seen = new Set();
+    return rawRosterEntries.filter((employee) => {
+      const userId = String(employee?.userId?._id || employee?.userId || "").trim();
+      const username = String(employee?.username || "").trim().toLowerCase();
+      const name = String(employee?.name || "").trim().toLowerCase();
+      const department = String(employee?.department || "").trim().toLowerCase();
+      const teamLeader = String(employee?.teamLeader || "").trim().toLowerCase();
+      const shiftKey = `${employee?.shiftStartHour ?? ""}-${employee?.shiftEndHour ?? ""}`;
+
+      const dedupeKey = userId || username || `${name}|${department}|${teamLeader}|${shiftKey}`;
+      if (!dedupeKey) return true;
+      if (seen.has(dedupeKey)) return false;
+      seen.add(dedupeKey);
+      return true;
+    });
+  }, [rawRosterEntries]);
   const pagination = updateEmployeesData?.data?.pagination;
-  const totalEmployees = pagination?.totalEmployees ?? rosterEntries.length;
-  const totalPages = pagination?.totalPages ?? 1;
+  const totalEmployees = Number(pagination?.totalEmployees ?? rosterEntries.length);
+  const totalPages = Number(
+    pagination?.totalPages ?? Math.max(1, Math.ceil(totalEmployees / Math.max(pageSize, 1)))
+  );
   const rangeStart = totalEmployees === 0 ? 0 : (currentPage - 1) * pageSize + 1;
-  const rangeEnd = Math.min(currentPage * pageSize, totalEmployees);
+  const rangeEnd = totalEmployees === 0 ? 0 : Math.min(currentPage * pageSize, totalEmployees);
 
   useEffect(() => {
     if (pagination?.page != null) {
@@ -527,7 +549,6 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
   const isDarkTable = tableTheme === "dark";
 
-  const isEmployeeUser = viewType.isEmployee === true;
   const managedTeamCount = Number(updateEmployeesData?.data?.summary?.managedTeamCount || 0);
   const hasManagedTeam = managedTeamCount > 0;
   const canTeamLeaderManageTeam = hasManagedTeam;
