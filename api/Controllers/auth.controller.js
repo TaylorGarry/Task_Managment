@@ -424,10 +424,15 @@ const loadDocumentBytes = async (documentUrl = "") => {
 
   const decodedPath = normalizePolicyKey(normalized);
   const relativePath = decodedPath.startsWith("/") ? decodedPath.slice(1) : decodedPath;
+  const normalizedRelativePath = relativePath.replace(/^public[\\/]/i, "");
   const localCandidates = [
-    path.resolve(__dirname, "../../Client/public", relativePath),
-    path.resolve(process.cwd(), "Client/public", relativePath),
-    path.resolve(process.cwd(), "public", relativePath),
+    path.resolve(__dirname, "../../Client/public", normalizedRelativePath),
+    path.resolve(process.cwd(), "Client/public", normalizedRelativePath),
+    path.resolve(process.cwd(), "public", normalizedRelativePath),
+    path.resolve(__dirname, "../dist", normalizedRelativePath),
+    path.resolve(process.cwd(), "dist", normalizedRelativePath),
+    path.resolve(process.cwd(), "api/dist", normalizedRelativePath),
+    path.resolve(process.cwd(), "Client/dist", normalizedRelativePath),
   ];
 
   for (const candidate of localCandidates) {
@@ -439,9 +444,10 @@ const loadDocumentBytes = async (documentUrl = "") => {
   }
 
   if (decodedPath.startsWith("/")) {
+    const encodedPath = encodeURI(decodedPath);
     for (const base of getPolicyDocumentBaseUrls()) {
       try {
-        const remoteUrl = `${base}${decodedPath}`;
+        const remoteUrl = `${base}${encodedPath}`;
         const response = await fetch(remoteUrl);
         if (!response.ok) continue;
         return Buffer.from(await response.arrayBuffer());
