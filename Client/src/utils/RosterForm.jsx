@@ -3838,7 +3838,7 @@ const RosterForm = () => {
                             <option value="NCNS" className="text-red-700">No Call No Show (NCNS)</option>
                             <option value="UL" className="text-orange-600">Unpaid Leave (UL)</option>
                             <option value="LWP" className="text-yellow-600">Leave Without Pay (LWP)</option>
-                            <option value="BL" className="text-purple-600">Bereavement Leave (BL)</option>
+                            <option value="BL" className="text-purple-600">Birthday Leave (BL)</option>
                             <option value="H" className="text-purple-700">Holiday (H)</option>
                             <option value="HD" className="text-amber-700">Half Day (HD)</option>
                             <option value="LWD" className="text-yellow-700">Last Working Day (LWD)</option>

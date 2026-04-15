@@ -270,4 +270,116 @@ body {
   animation: slideIn 0.4s ease-out;
 }
 
+.pro-table-shell {
+  border: 1px solid #cfe7dc;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(26, 88, 74, 0.06);
+}
+
+.pro-table-shell-dark {
+  border: 1px solid #cfe7dc;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(26, 88, 74, 0.06);
+}
+
+.pro-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.pro-table thead tr {
+  background: #eef9f1;
+}
+
+.pro-table th {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #33584b;
+  font-weight: 800;
+  border-bottom: 1px solid #d6ece2;
+  white-space: nowrap;
+}
+
+.pro-table td {
+  border-bottom: 1px solid #e6f2ec;
+  color: #1f3f35;
+  font-weight: 600;
+}
+
+.pro-table-dark thead tr {
+  background: #eef9f1;
+}
+
+.pro-table-dark th {
+  color: #33584b;
+  border-bottom: 1px solid #d6ece2;
+}
+
+.pro-table-dark td {
+  border-bottom: 1px solid #e6f2ec;
+  color: #1f3f35;
+  font-weight: 600;
+}
+
+.pro-row {
+  background: transparent;
+}
+
+.pro-row:hover {
+  background: transparent;
+}
+
+.pro-table-dark .pro-row:hover {
+  background: transparent;
+}
+
+.pro-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #8acbb7 #e6f5ee;
+}
+
+.pro-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.pro-scroll::-webkit-scrollbar-track {
+  background: #e6f5ee;
+  border-radius: 10px;
+}
+
+.pro-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #9de0c9 0%, #75cbb2 100%);
+  border-radius: 10px;
+  border: 2px solid #e6f5ee;
+}
+
+.pro-table-shell-dark.pro-scroll {
+  scrollbar-color: #8acbb7 #e6f5ee;
+}
+
+.pro-table-shell-dark.pro-scroll::-webkit-scrollbar-track {
+  background: #e6f5ee;
+}
+
+.pro-table-shell-dark.pro-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #9de0c9 0%, #75cbb2 100%);
+  border: 2px solid #e6f5ee;
+}
+
+.pro-sticky-col {
+  position: sticky;
+  z-index: 12;
+  background: #ffffff;
+}
+
+.pro-sticky-head {
+  z-index: 22;
+  background: #eef9f1;
+}
+
 

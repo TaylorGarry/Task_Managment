@@ -11,13 +11,15 @@ import {
 } from "../Controllers/delegation.controller.js";
 import { authMiddleware } from "../Middlewares/auth.middleware.js";
 import Delegation from "../Modals/Delegation/delegation.modal.js";
+import { getRoleType, isHrDepartment, normalizeDepartment } from "../utils/roleAccess.js";
 
 const router = express.Router();
 const canManageDelegation = (req, res, next) => {
-  const accountType = String(req.user?.accountType || "").trim();
-  const department = String(req.user?.department || "").trim().toLowerCase();
-  const isHrOrSuperAdmin = accountType === "HR" || accountType === "superAdmin";
-  const isOpsMetaEmployee = accountType === "employee" && department === "ops - meta";
+  const roleType = getRoleType(req.user || {});
+  const department = normalizeDepartment(req.user?.department).toLowerCase();
+  const isHrOrSuperAdmin = isHrDepartment(req.user || {}) || roleType === "superAdmin";
+  const isOpsMetaEmployee =
+    (roleType === "agent" || roleType === "supervisor") && department === "operations";
 
   if (isHrOrSuperAdmin || isOpsMetaEmployee) return next();
   return res.status(403).json({ message: "Forbidden: You do not have access to delegation management" });

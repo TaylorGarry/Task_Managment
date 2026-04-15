@@ -70,6 +70,7 @@ const ChatUI = () => {
   const [showMessageMenu, setShowMessageMenu] = useState(null);
   const [showFilePreview, setShowFilePreview] = useState(false);
   const [liveNotifications, setLiveNotifications] = useState([]);
+  const [onlineUsers, setOnlineUsers] = useState(() => new Set());
   const unreadNotificationCountRef = useRef(0);
   const defaultTitleRef = useRef(document.title);
 
@@ -84,6 +85,10 @@ const ChatUI = () => {
   const messageEndRef = useRef(null);
   const messagesContainerRef = useRef(null);
   const openedFromNotificationRef = useRef(null);
+  const selectedOtherUserId = selectedChat?.otherUser?._id || selectedChat?.otherUser?.id;
+  const isSelectedUserOnline = selectedOtherUserId
+    ? onlineUsers.has(String(selectedOtherUserId))
+    : false;
 
   const pushLiveNotification = useCallback((senderName, messageText, chatId) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -564,27 +569,77 @@ const ChatUI = () => {
       socket.connect();
     }
 
-    socket.on("connect", () => {
+    const handleConnect = () => {
       setSocketConnected(true);
+    };
 
-      if (userId) {
-        socket.emit("join", userId);
-      }
-    });
-
-    socket.on("disconnect", () => {
+    const handleDisconnect = () => {
       setSocketConnected(false);
-    });
+    };
 
-    socket.on("connect_error", (error) => {
-    });
+    const handleConnectError = () => {};
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+    socket.on("connect_error", handleConnectError);
 
     return () => {
-      socket.off("connect");
-      socket.off("disconnect");
-      socket.off("connect_error");
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("connect_error", handleConnectError);
     };
   }, [userId]);
+
+  useEffect(() => {
+    const normalizeUserId = (id) => (id ? String(id) : "");
+
+    const handleOnlineUsersList = (users = []) => {
+      const normalizedUsers = users
+        .map((id) => normalizeUserId(id))
+        .filter(Boolean);
+      setOnlineUsers(new Set(normalizedUsers));
+    };
+
+    const handleUserOnline = (data) => {
+      const onlineUserId = normalizeUserId(data?.userId);
+      if (!onlineUserId) return;
+      setOnlineUsers((prev) => {
+        const next = new Set(prev);
+        next.add(onlineUserId);
+        return next;
+      });
+    };
+
+    const handleUserOffline = (data) => {
+      const offlineUserId = normalizeUserId(data?.userId);
+      if (!offlineUserId) return;
+      setOnlineUsers((prev) => {
+        const next = new Set(prev);
+        next.delete(offlineUserId);
+        return next;
+      });
+    };
+
+    const requestOnlineUsers = () => {
+      socket.emit("get_online_users");
+    };
+
+    socket.on("online_users_list", handleOnlineUsersList);
+    socket.on("user_online", handleUserOnline);
+    socket.on("user_offline", handleUserOffline);
+    socket.on("connect", requestOnlineUsers);
+
+    if (socket.connected) {
+      requestOnlineUsers();
+    }
+
+    return () => {
+      socket.off("online_users_list", handleOnlineUsersList);
+      socket.off("user_online", handleUserOnline);
+      socket.off("user_offline", handleUserOffline);
+      socket.off("connect", requestOnlineUsers);
+    };
+  }, []);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1045,8 +1100,8 @@ const ChatUI = () => {
               <p className="font-semibold text-sm">
                 {selectedChat.otherUser?.username || "Unknown"}
               </p>
-              <span className={`text-xs ${socketConnected ? "text-green-600" : "text-red-600"}`}>
-                {socketConnected ? "Online" : "Offline"}
+              <span className={`text-xs ${isSelectedUserOnline ? "text-green-600" : "text-red-600"}`}>
+                {isSelectedUserOnline ? "Online" : "Offline"}
               </span>
             </div>
           </div>
@@ -1064,15 +1119,15 @@ const ChatUI = () => {
             <FaUserCircle size={45} className="text-slate-500" />
             <div>
               <p className="font-semibold text-sm lg:text-base">{user?.name || user?.username}</p>
-              <span className={`text-xs ${socketConnected ? "text-green-600" : "text-red-600"}`}>
-                {socketConnected ? "Online" : "Offline"}
+              <span className={`text-xs ${isSelectedUserOnline ? "text-green-600" : "text-red-600"}`}>
+                {isSelectedUserOnline ? "Online" : "Offline"}
               </span>
             </div>
           </div>
           <div className="hidden md:block">
             <p className="font-semibold text-sm lg:text-base">{user?.name || user?.username}</p>
-            <span className={`text-xs ${socketConnected ? "text-green-600" : "text-red-600"}`}>
-              {socketConnected ? "Online" : "Offline"}
+            <span className={`text-xs ${isSelectedUserOnline ? "text-green-600" : "text-red-600"}`}>
+              {isSelectedUserOnline ? "Online" : "Offline"}
             </span>
           </div>
         </div>
@@ -1145,8 +1200,8 @@ const ChatUI = () => {
                   <h2 className="font-semibold text-lg">
                     {selectedChat.otherUser?.username || "Unknown"}
                   </h2>
-                  <span className={`text-xs ${socketConnected ? "text-green-600" : "text-red-600"}`}>
-                    {socketConnected ? "Online" : "Offline"}
+                  <span className={`text-xs ${isSelectedUserOnline ? "text-green-600" : "text-red-600"}`}>
+                    {isSelectedUserOnline ? "Online" : "Offline"}
                   </span>
                 </div>
               </div>

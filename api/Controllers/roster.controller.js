@@ -1454,12 +1454,26 @@ export const exportRosterToExcel = async (req, res) => {
       CreatedDate: new Date()
     };
 
+    const parseDateUtc = (value) => {
+      const raw = String(value || "");
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return new Date(
+        Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate())
+      );
+    };
+
     const formatDateWithDay = (date) => {
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const day = dayNames[date.getDay()];
-      const formattedDate = date.toLocaleDateString('en-GB', { 
-        day: '2-digit', 
-        month: '2-digit' 
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const day = dayNames[date.getUTCDay()];
+      const formattedDate = date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "UTC",
       });
       return `${formattedDate} ${day}`;
     };
@@ -1495,8 +1509,13 @@ export const exportRosterToExcel = async (req, res) => {
       
       if (week.employees[0]?.dailyStatus) {
         week.employees[0].dailyStatus.forEach((ds, dayIndex) => {
-          const date = new Date(week.startDate);
-          date.setDate(date.getDate() + dayIndex);
+          const startUtc = parseDateUtc(week.startDate);
+          if (!startUtc) {
+            header.push("");
+            return;
+          }
+          const date = new Date(startUtc);
+          date.setUTCDate(startUtc.getUTCDate() + dayIndex);
           header.push(formatDateWithDay(date));
         });
       }
@@ -2689,12 +2708,26 @@ export const exportSavedRoster = async (req, res) => {
       CreatedDate: new Date()
     };
 
+    const parseDateUtc = (value) => {
+      const raw = String(value || "");
+      const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      }
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) return null;
+      return new Date(
+        Date.UTC(parsed.getUTCFullYear(), parsed.getUTCMonth(), parsed.getUTCDate())
+      );
+    };
+
     const formatDateWithDay = (date) => {
-      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      const day = dayNames[date.getDay()];
-      const formattedDate = date.toLocaleDateString('en-GB', { 
-        day: '2-digit', 
-        month: '2-digit' 
+      const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const day = dayNames[date.getUTCDay()];
+      const formattedDate = date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "2-digit",
+        timeZone: "UTC",
       });
       return `${formattedDate} ${day}`;
     };
@@ -2736,8 +2769,11 @@ export const exportSavedRoster = async (req, res) => {
     };
 
     roster.weeks.forEach((week) => {
-      const sortedEmployees = [...week.employees].sort((a, b) => 
-        (a.name || '').localeCompare(b.name || '')
+      const safeEmployees = (Array.isArray(week?.employees) ? week.employees : []).filter(
+        (emp) => emp && typeof emp === "object"
+      );
+      const sortedEmployees = [...safeEmployees].sort((a, b) =>
+        String(a?.name || "").localeCompare(String(b?.name || ""))
       );
 
       const data = [];
@@ -2747,8 +2783,13 @@ export const exportSavedRoster = async (req, res) => {
       
       const dayCount = sortedEmployees[0]?.dailyStatus?.length || 0;
       for (let i = 0; i < dayCount; i++) {
-        const date = new Date(week.startDate);
-        date.setDate(date.getDate() + i);
+        const startUtc = parseDateUtc(week.startDate);
+        if (!startUtc) {
+          header.push("");
+          continue;
+        }
+        const date = new Date(startUtc);
+        date.setUTCDate(startUtc.getUTCDate() + i);
         header.push(formatDateWithDay(date));
       }
       

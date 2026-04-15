@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { fetchDefaulters,exportEmployeeDefaulterExcel } from "../features/slices/taskSlice.js";
 import { fetchEmployees } from "../features/slices/authSlice.js";
@@ -56,10 +56,27 @@ const Defaulter = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [chartType, setChartType] = useState('pie');
+  const defaultersRequestRef = useRef(null);
 
   useEffect(() => {
-    dispatch(fetchDefaulters(filters));
     dispatch(fetchEmployees());
+  }, [dispatch]);
+
+  useEffect(() => {
+    const debounceDelayMs = 450;
+    const timer = setTimeout(() => {
+      if (defaultersRequestRef.current?.abort) {
+        defaultersRequestRef.current.abort();
+      }
+      defaultersRequestRef.current = dispatch(fetchDefaulters(filters));
+    }, debounceDelayMs);
+
+    return () => {
+      clearTimeout(timer);
+      if (defaultersRequestRef.current?.abort) {
+        defaultersRequestRef.current.abort();
+      }
+    };
   }, [dispatch, filters]);
 
   useEffect(() => {

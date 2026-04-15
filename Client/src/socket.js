@@ -123,10 +123,21 @@ export const disconnectSocket = () => {
 export const updateSocketAuth = () => {
   const newUserData = getUserData();
   if (newUserData?.userId) {
+    const nextUserId = String(newUserData.userId);
+    const currentUserId = socket.auth?.userId ? String(socket.auth.userId) : null;
+
     socket.auth = {
       userId: newUserData.userId,
       token: newUserData.token
     };
+    socket.io.opts.query = { userId: newUserData.userId };
+
+    if (socket.connected && currentUserId !== nextUserId) {
+      socket.disconnect();
+      socket.connect();
+      return;
+    }
+
     if (!socket.connected) {
       socket.connect();
     }

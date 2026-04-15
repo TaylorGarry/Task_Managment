@@ -424,7 +424,7 @@
 //         return (
 //             <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
 //                 <div className="text-center">
-//                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+//                     <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
 //                     <p className="mt-4 text-gray-600">Loading roster data...</p>
 //                 </div>
 //             </div>
@@ -440,7 +440,7 @@
 //                     <p className="text-gray-600 mb-4">{bulkEditError}</p>
 //                     <button
 //                         onClick={onClose}
-//                         className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+//                         className="bg-emerald-600 text-white px-4 py-2 rounded"
 //                     >
 //                         Close
 //                     </button>
@@ -457,11 +457,11 @@
 //     const todayKey = getLocalDateKey();
 
 //     return (
-//         <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
+//         <div className="fixed inset-0 bg-gradient-to-br from-slate-50 via-emerald-50 to-lime-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
 //             <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
 //                 <div className="p-4 md:p-6 flex flex-col gap-4 lg:flex-row lg:justify-between mt-5 lg:items-start">
 //                     <div>
-//                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Roster Workspace</p>
+//                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Roster Workspace</p>
 //                         {/* <h1 className="text-2xl md:text-3xl font-bold text-slate-900">Bulk Edit Roster</h1> */}
 //                         <p className="text-slate-600 mt-2">
 //                             Edit all weeks at once with clear day-wise attendance updates.
@@ -469,7 +469,7 @@
 //                         <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
 //                             <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">{weeks.length} week(s)</span>
 //                             <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">{weeks.reduce((sum, week) => sum + week.employees.length, 0)} employees</span>
-//                             <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full border border-blue-200">SuperAdmin: Edit All Weeks</span>
+//                             <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">SuperAdmin: Edit All Weeks</span>
 //                             <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">HR: Edit Current/Future Only</span>
 //                         </div>
 //                     </div>
@@ -494,10 +494,10 @@
 //                                     key={week.weekNumber}
 //                                     onClick={() => setActiveTab(index)}
 //                                     className={`px-4 py-2.5 rounded-xl border font-medium whitespace-nowrap flex items-center transition-colors ${activeTab === index
-//                                         ? 'border-blue-300 text-blue-800 bg-blue-100 shadow-sm'
+//                                         ? 'border-emerald-300 text-emerald-800 bg-emerald-100 shadow-sm'
 //                                         : hasWeekEnded
-//                                             ? 'border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100'
-//                                             : 'border-slate-200 text-slate-600 bg-white hover:text-slate-800 hover:bg-slate-50'
+//                                             ? 'border-amber-200 text-amber-800 bg-amber-50'
+//                                             : 'border-slate-200 text-slate-600 bg-white hover:text-slate-800 '
 //                                         } ${!isEditable ? 'cursor-not-allowed' : ''}`}
 //                                     title={!isEditable ? 'Week has ended. Only Super Admin can edit past weeks.' : ''}
 //                                 >
@@ -549,20 +549,20 @@
 //                                     </div>
 //                                     <button
 //                                         onClick={() => setShowAddEmployeeForm(true)}
-//                                         className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shadow-sm"
+//                                         className="px-3 py-2 bg-emerald-600 text-white rounded-lg text-sm shadow-sm"
 //                                     >
 //                                         + Add Employee
 //                                     </button>
 //                                     <button
 //                                         onClick={onClose}
-//                                         className="px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 text-sm"
+//                                         className="px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-700  text-sm"
 //                                     >
 //                                         Cancel
 //                                     </button>
 //                                     <button
 //                                         onClick={handleSaveAll}
 //                                         disabled={bulkSaveLoading}
-//                                         className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed text-sm"
+//                                         className="px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed text-sm"
 //                                     >
 //                                         {bulkSaveLoading ? (
 //                                             <>
@@ -582,7 +582,7 @@
 //                                     <h3 className="font-semibold text-slate-900 text-lg">Add New Employee</h3>
 //                                     <button
 //                                         onClick={() => setShowAddEmployeeForm(false)}
-//                                         className="h-8 w-8 rounded-full border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+//                                         className="h-8 w-8 rounded-full border border-slate-200 text-slate-500 "
 //                                     >
 //                                         ✕
 //                                     </button>
@@ -654,7 +654,7 @@
 
 //                                     <button
 //                                         onClick={handleAddNewEmployee}
-//                                         className="w-full bg-green-500 hover:bg-green-600 text-white p-3 rounded font-medium"
+//                                         className="w-full bg-green-600 text-white p-3 rounded font-medium"
 //                                     >
 //                                         Add to Current & Future Weeks
 //                                     </button>
@@ -695,7 +695,7 @@
 //                                 <p className="text-sm font-semibold text-slate-800">Employee Roster Grid</p>
 //                                 <div className="flex flex-wrap items-center gap-2 text-xs">
 //                                     <span className="px-2 py-1 rounded border border-green-200 bg-green-50 text-green-700">P Present</span>
-//                                     <span className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700">WO Week Off</span>
+//                                     <span className="px-2 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">WO Week Off</span>
 //                                     <span className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700">L Leave</span>
 //                                     <span className="px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-700">HD Half Day</span>
 //                                     <span className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600">Other codes available in dropdown</span>
@@ -721,7 +721,7 @@
 //                                             const daysInWeek = getDateRangeDurationDaysUTC(weekStartDateKey, weekEndDateKey);
 
 //                                             return (
-//                                                 <tr key={employee._id} className="border-b border-slate-100 hover:bg-slate-50/80">
+//                                                 <tr key={employee._id} className="border-b border-slate-100 /80">
 //                                                     <td className="p-2">
 //                                                         <input
 //                                                             type="text"
@@ -804,7 +804,7 @@
 //                                                     onChange={(e) => handleEmployeeFieldChange(activeTab, empIndex, `dailyStatus[${dayIndex}]`, e.target.value)}
 //                                                     title={`${fullDateLabel} - ${status.status}`}
 //                                                     className={`w-8 h-8 border rounded text-center text-xs ${status.status === 'P' ? 'border-green-300 bg-green-50' :
-//                                                         status.status === 'WO' ? 'border-blue-300 bg-blue-50' :
+//                                                         status.status === 'WO' ? 'border-emerald-300 bg-emerald-50' :
 //                                                                                     status.status === 'L' ? 'border-red-300 bg-red-50' :
 //                                                                                         status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
 //                                                                                         status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
@@ -833,7 +833,7 @@
 //                                                             {/* 👁 View History */}
 //                                                             <button
 //                                                                 onClick={() => handleViewHistory(employee)}
-//                                                                 className="p-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+//                                                                 className="p-2 text-slate-600 hover:text-emerald-700 hover:bg-blue-50 rounded-md transition-colors"
 //                                                                 title="View Edit History"
 //                                                                 aria-label="View Edit History"
 //                                                             >
@@ -843,7 +843,7 @@
 //                                                             {/* Remove Button */}
 //                                                             <button
 //                                                                 onClick={() => handleRemoveEmployee(activeTab, employee._id)}
-//                                                                 className="p-2 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors"
+//                                                                 className="p-2 text-slate-600  rounded-md transition-colors"
 //                                                                 title="Remove Employee"
 //                                                                 aria-label="Remove Employee"
 //                                                             >
@@ -932,7 +932,7 @@
 //                                 </div>
 //                                 <button
 //                                     onClick={() => setShowHistoryModal(false)}
-//                                     className="h-9 w-9 rounded-full border border-white/30 text-white hover:bg-white/15 transition-colors text-lg"
+//                                     className="h-9 w-9 rounded-full border border-white/30 text-white  transition-colors text-lg"
 //                                 >
 //                                     ✕
 //                                 </button>
@@ -955,7 +955,7 @@
 //                                             <div key={index} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
 //                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
 //                                                     <div className="flex items-center gap-2 text-sm">
-//                                                         <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">
+//                                                         <span className="px-2 py-1 rounded bg-blue-100 text-emerald-700 font-medium">
 //                                                             Edited By
 //                                                         </span>
 //                                                         <span className="font-semibold text-slate-800">
@@ -1020,7 +1020,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { FiEye, FiTrash2, FiChevronLeft, FiChevronRight } from 'react-icons/fi';
+import { FiEye, FiTrash2, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown } from 'react-icons/fi';
 import html2canvas from "html2canvas";
 import { toast } from "react-toastify";
 import {
@@ -1057,6 +1057,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     const [showColumnMenu, setShowColumnMenu] = useState(false);
+    const [isWorkspaceHeaderCollapsed, setIsWorkspaceHeaderCollapsed] = useState(false);
     const [showSnapshotExportModal, setShowSnapshotExportModal] = useState(false);
     const [isGeneratingSnapshot, setIsGeneratingSnapshot] = useState(false);
     const exportCaptureRef = useRef(null);
@@ -1330,7 +1331,8 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                         daysInWeek > 0
                             ? Array.from({ length: daysInWeek }, (_, idx) => {
                                   const dateKey = addDaysToDateKeyUTC(weekStartKey, idx);
-                                  const matched = byUtcKey.get(dateKey) || byIstKey.get(dateKey) || emp.dailyStatus?.[idx];
+                                  // Prefer IST day-key first to avoid 1-day drift from UTC-midnight conversions.
+                                  const matched = byIstKey.get(dateKey) || byUtcKey.get(dateKey) || emp.dailyStatus?.[idx];
                                   return {
                                       ...(matched || {}),
                                       date: getUTCISOStringFromDateKey(dateKey),
@@ -1999,7 +2001,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
         return (
             <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
                     <p className="mt-4 text-gray-600">Loading roster data...</p>
                 </div>
             </div>
@@ -2015,7 +2017,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                     <p className="text-gray-600 mb-4">{bulkEditError}</p>
                     <button
                         onClick={onClose}
-                        className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                        className="bg-emerald-600 text-white px-4 py-2 rounded"
                     >
                         Close
                     </button>
@@ -2039,24 +2041,45 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
     const activeTotalPages = Math.max(1, Math.ceil(activeFilteredEmployees.length / itemsPerPage));
 
     return (
-        <div className="fixed inset-0 md:left-[280px] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
-            <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
-                <div className="p-4 md:p-6 flex flex-col gap-4 lg:flex-row lg:justify-between mt-5 lg:items-start">
+        <div className="fixed inset-0 md:left-[280px] bg-gradient-to-br from-slate-50 via-emerald-50 to-lime-50 flex flex-col z-50 [&_button]:cursor-pointer [&_select]:cursor-pointer">
+            <div className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+                <div className="px-4 py-2 md:px-5 md:py-2 border-b border-slate-200 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-emerald-700">Roster Workspace</p>
+                    <button
+                        type="button"
+                        onClick={() => setIsWorkspaceHeaderCollapsed((prev) => !prev)}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-slate-300 bg-white text-slate-700 text-xs font-semibold"
+                        title={isWorkspaceHeaderCollapsed ? "Expand filters and summary" : "Collapse filters and summary"}
+                    >
+                        {isWorkspaceHeaderCollapsed ? (
+                            <>
+                                <FiChevronDown className="w-3 h-3" />
+                                Expand
+                            </>
+                        ) : (
+                            <>
+                                <FiChevronUp className="w-3 h-3" />
+                                Collapse
+                            </>
+                        )}
+                    </button>
+                </div>
+                {!isWorkspaceHeaderCollapsed && (
+                <div className="px-4 py-3 md:px-5 md:py-3 flex flex-col gap-3 lg:flex-row lg:justify-between lg:items-center">
                     <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-blue-700">Roster Workspace</p>
-                        <p className="text-slate-600 mt-2">
+                        <p className="text-slate-600 mt-1 text-sm">
                             Edit all weeks at once with clear day-wise attendance updates.
                         </p>
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-                            <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">{editedWeeks.length} week(s)</span>
-                            <span className="px-3 py-1.5 bg-slate-100 text-slate-700 rounded-full border border-slate-200">{editedWeeks.reduce((sum, week) => sum + week.employees.length, 0)} employees</span>
-                            <span className="px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full border border-blue-200">SuperAdmin: Edit All Weeks</span>
-                            <span className="px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200">HR: Edit All Weeks</span>
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5 text-xs">
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">{editedWeeks.length} week(s)</span>
+                            <span className="px-2.5 py-1 bg-slate-100 text-slate-700 rounded-full border border-slate-200 font-semibold">{editedWeeks.reduce((sum, week) => sum + week.employees.length, 0)} employees</span>
+                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200 font-semibold">SuperAdmin: Edit All Weeks</span>
+                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full border border-emerald-200 font-semibold">HR: Edit All Weeks</span>
                         </div>
                     </div>
 
                     <div className="w-full lg:w-[560px]">
-                        <div className="flex flex-col gap-2 mt-4">
+                        <div className="flex flex-col gap-2">
                             <div className="flex gap-2 items-center">
                                 <label className="text-xs uppercase tracking-[0.08em] text-slate-500 font-semibold whitespace-nowrap">
                                     Month
@@ -2065,7 +2088,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     value={selectedRosterId || ''}
                                     onChange={(e) => setSelectedRosterId(e.target.value)}
                                     disabled={bulkEditLoading || allRostersList.length === 0}
-                                    className="w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-60"
+                                    className="w-full border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300 disabled:opacity-60"
                                     title="Select roster month"
                                 >
                                     {allRostersList.length === 0 ? (
@@ -2083,7 +2106,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                             <select
                                 value={searchBy}
                                 onChange={(e) => setSearchBy(e.target.value)}
-                                className="border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                className="border border-slate-300 rounded-lg px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                 title="Search by"
                             >
                                 <option value="all">All</option>
@@ -2096,25 +2119,26 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     value={searchInput}
                                     onChange={(e) => setSearchInput(e.target.value)}
                                     placeholder="Type to search..."
-                                    className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                    className="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-300"
                                 />
                                 {searchInput ? (
                                     <button
                                         type="button"
                                         onClick={() => setSearchInput('')}
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-slate-800"
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-slate-600 font-semibold"
                                     >
                                         Clear
                                     </button>
                                 ) : null}
                             </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                </div>
+                )}
 
                 <div className="border-t border-slate-200 bg-slate-50/80">
-                    <div className="flex overflow-x-auto px-3 py-3 gap-2">
+                    <div className="flex overflow-x-auto px-3 py-2 gap-2">
                         {editedWeeks.map((week, index) => {
                             const weekEndDate = new Date(week.endDate);
                             const weekStartDate = new Date(week.startDate);
@@ -2132,11 +2156,11 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 <button
                                     key={week.weekNumber}
                                     onClick={() => setActiveTab(index)}
-                                    className={`px-4 py-2.5 rounded-xl border font-medium whitespace-nowrap flex items-center transition-colors ${activeTab === index
-                                        ? 'border-blue-300 text-blue-800 bg-blue-100 shadow-sm'
+                                    className={`px-3 py-2 rounded-xl border font-medium whitespace-nowrap flex items-center transition-colors ${activeTab === index
+                                        ? 'border-emerald-300 text-emerald-800 bg-emerald-100 shadow-sm'
                                         : hasWeekEnded
-                                            ? 'border-amber-200 text-amber-800 bg-amber-50 hover:bg-amber-100'
-                                            : 'border-slate-200 text-slate-600 bg-white hover:text-slate-800 hover:bg-slate-50'
+                                            ? 'border-amber-200 text-amber-800 bg-amber-50'
+                                            : 'border-slate-200 text-slate-700 bg-white'
                                         } ${!isEditable ? 'cursor-not-allowed opacity-60' : ''}`}
                                     title={!isEditable ? 'You do not have edit access for this week.' : ''}
                                 >
@@ -2174,50 +2198,50 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                 </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="flex-1 overflow-y-auto p-3 md:p-4">
                 {editedWeeks.length > 0 && (
                     <>
-                        <div className="mb-6 bg-white rounded-2xl p-5 border border-slate-200 shadow-sm">
+                        <div className="mb-4 bg-white rounded-2xl p-3 md:p-4 border border-slate-200 shadow-sm">
                             <div className="flex flex-col gap-3 md:flex-row md:justify-between md:items-center">
                                 <div>
-                                    <h3 className="font-semibold text-slate-900 text-lg">
+                                    <h3 className="font-semibold text-slate-900 text-base md:text-lg">
                                         Week {editedWeeks[activeTab].weekNumber}
                                     </h3>
-                                    <p className="text-slate-600 text-sm">
+                                    <p className="text-slate-600 text-xs md:text-sm">
                                         {new Date(editedWeeks[activeTab].startDate).toLocaleDateString(undefined, { timeZone: 'Asia/Kolkata' })} -
                                         {new Date(editedWeeks[activeTab].endDate).toLocaleDateString(undefined, { timeZone: 'Asia/Kolkata' })}
                                     </p>
                                 </div>
 
                                 <div className="flex flex-wrap items-center justify-end gap-2 md:gap-3">
-                                    <div className="text-sm text-slate-600 font-medium">
+                                    <div className="text-xs md:text-sm text-slate-600 font-semibold">
                                         {activeFilteredEmployees.length} employees
                                         {appliedSearch ? ` (filtered from ${activeEmployees.length})` : ''}
                                     </div>
                                     <button
                                         onClick={() => setShowSnapshotExportModal(true)}
                                         disabled={isGeneratingSnapshot}
-                                        className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                        className="px-3 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                                         title="Select fields and download snapshot for selected week"
                                     >
                                         {isGeneratingSnapshot ? 'Generating...' : 'Share Snapshot'}
                                     </button>
                                     <button
                                         onClick={() => setShowAddEmployeeForm(true)}
-                                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm shadow-sm"
+                                        className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-sm font-semibold shadow-sm"
                                     >
                                         + Add Employee
                                     </button>
                                     <button
                                         onClick={onClose}
-                                        className="px-4 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 text-sm"
+                                        className="px-4 py-1.5 border border-slate-300 rounded-lg bg-white text-slate-700 text-sm font-semibold"
                                     >
                                         Cancel
                                     </button>
                                     <button
                                         onClick={handleSaveAll}
                                         disabled={bulkSaveLoading}
-                                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed text-sm"
+                                        className="px-4 py-1.5 bg-emerald-600 text-white rounded-lg font-semibold flex items-center shadow-sm disabled:opacity-70 disabled:cursor-not-allowed text-sm"
                                     >
                                         {bulkSaveLoading ? (
                                             <>
@@ -2238,7 +2262,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                     <h3 className="font-semibold text-slate-900 text-lg">Add New Employee</h3>
                                     <button
                                         onClick={() => setShowAddEmployeeForm(false)}
-                                        className="h-8 w-8 rounded-full border border-slate-200 text-slate-500 hover:text-slate-700 hover:bg-slate-100"
+                                        className="h-8 w-8 rounded-full border border-slate-200 text-slate-500 "
                                     >
                                         ✕
                                     </button>
@@ -2323,7 +2347,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
                                     <button
                                         onClick={handleAddNewEmployee}
-                                        className="w-full bg-green-500 hover:bg-green-600 text-white p-3 rounded font-medium"
+                                        className="w-full bg-green-600 text-white p-3 rounded font-medium"
                                     >
                                         Add to Current & Future Weeks
                                     </button>
@@ -2361,14 +2385,14 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                             </div>
                         )}
 
-                        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                        <div className="pro-table-shell overflow-hidden">
                             <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                 <p className="text-sm font-semibold text-slate-800">Employee Roster Grid</p>
                                 <div className="flex flex-wrap items-center gap-2 text-xs relative">
                                     <button
                                         type="button"
                                         onClick={() => setShowColumnMenu((v) => !v)}
-                                        className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 text-xs"
+                                        className="px-2 py-1 rounded border border-slate-300 bg-white text-slate-700  text-xs"
                                     >
                                         Columns
                                     </button>
@@ -2384,7 +2408,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                 { key: 'dailyStatus', label: 'Daily Status' },
                                                 { key: 'actions', label: 'Actions' },
                                             ].map((col) => (
-                                                <label key={col.key} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 rounded">
+                                                <label key={col.key} className="flex items-center gap-2 px-2 py-1 text-xs text-slate-700 rounded">
                                                     <input
                                                         type="checkbox"
                                                         checked={Boolean(columnVisibility[col.key])}
@@ -2401,18 +2425,25 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         </div>
                                     )}
                                     <span className="px-2 py-1 rounded border border-green-200 bg-green-50 text-green-700">P Present</span>
-                                    <span className="px-2 py-1 rounded border border-blue-200 bg-blue-50 text-blue-700">WO Week Off</span>
+                                    <span className="px-2 py-1 rounded border border-emerald-200 bg-emerald-50 text-emerald-700">WO Week Off</span>
                                     <span className="px-2 py-1 rounded border border-red-200 bg-red-50 text-red-700">L Leave</span>
                                     <span className="px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-700">HD Half Day</span>
                                     <span className="px-2 py-1 rounded border border-slate-200 bg-white text-slate-600">Other codes available in dropdown</span>
                                 </div>
                             </div>
 
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
+                            <div className="pro-scroll overflow-x-auto">
+                                <table className="pro-table w-full">
                                     <thead>
-                                        <tr className="bg-slate-100/90">
-                                            {visibleColumns.name && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[180px]">Name</th>}
+                                        <tr>
+                                            {visibleColumns.name && (
+                                                <th
+                                                    className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[180px] sticky left-0 z-30 bg-[#eef9f1]"
+                                                    style={{ left: 0 }}
+                                                >
+                                                    Name
+                                                </th>
+                                            )}
                                             {visibleColumns.department && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[120px]">Department</th>}
                                             {visibleColumns.transport && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[110px]">Transport</th>}
                                             {visibleColumns.cabRoute && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[150px]">CAB Route</th>}
@@ -2422,7 +2453,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                             {visibleColumns.actions && <th className="p-2 text-left font-semibold text-slate-800 border-b border-slate-200 min-w-[90px]">Actions</th>}
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="bg-white">
                                         {getCurrentPageEmployees(activeWeekNumber, activeEmployees).map((employee, empIndex) => {
                                             const weekStartDate = new Date(editedWeeks[activeTab].startDate);
                                             const weekEndDate = new Date(editedWeeks[activeTab].endDate);
@@ -2430,15 +2461,20 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                             const originalIndex = editedWeeks[activeTab].employees.findIndex(emp => emp._id === employee._id);
 
                                             return (
-                                                <tr key={employee._id} className="border-b border-slate-100 hover:bg-slate-50/80">
-                                                    {visibleColumns.name && <td className="p-2">
-                                                        <input
-                                                            type="text"
-                                                            value={employee.name}
-                                                            onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, 'name', e.target.value)}
-                                                            className="w-full border border-gray-300 p-1 rounded text-sm"
-                                                        />
-                                                    </td>}
+                                                <tr key={employee._id} className="pro-row border-b border-slate-100">
+                                                    {visibleColumns.name && (
+                                                        <td
+                                                            className="p-2 sticky left-0 z-20 bg-white"
+                                                            style={{ left: 0, minWidth: "180px" }}
+                                                        >
+                                                            <input
+                                                                type="text"
+                                                                value={employee.name}
+                                                                onChange={(e) => handleEmployeeFieldChange(activeTab, originalIndex, 'name', e.target.value)}
+                                                                className="w-full border border-gray-300 p-1 rounded text-sm"
+                                                            />
+                                                        </td>
+                                                    )}
 
                                                     {visibleColumns.department && <td className="p-2">
                                                         <select
@@ -2549,7 +2585,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 	                                                                            title={`${fullDateLabel} - ${status.status}`}
                                                                                 disabled={isPastDayLocked}
 	                                                                            className={`w-8 h-8 border rounded text-center text-xs ${isPastDayLocked ? 'opacity-50 cursor-not-allowed bg-slate-100 border-slate-300' : ''} ${status.status === 'P' ? 'border-green-300 bg-green-50' :
-	                                                                                status.status === 'WO' ? 'border-blue-300 bg-blue-50' :
+	                                                                                status.status === 'WO' ? 'border-emerald-300 bg-emerald-50' :
 	                                                                                    status.status === 'L' ? 'border-red-300 bg-red-50' :
 	                                                                                        status.status === 'HD' ? 'border-amber-400 bg-amber-100' :
 	                                                                                            status.status === 'LWD' ? 'border-yellow-400 bg-yellow-100' :
@@ -2580,7 +2616,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                         <div className="flex gap-2">
                                                             <button
                                                                 onClick={() => handleViewHistory(employee)}
-                                                                className="p-2 text-slate-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                                                className="p-2 text-slate-700 rounded-md"
                                                                 title="View Edit History"
                                                             >
                                                                 <FiEye className="w-4 h-4" />
@@ -2588,7 +2624,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 
                                                             <button
                                                                 onClick={() => handleRemoveEmployee(activeTab, employee._id)}
-                                                                className="p-2 text-slate-600 hover:text-rose-700 hover:bg-rose-50 rounded-md transition-colors"
+                                                                className="p-2 text-slate-600  rounded-md transition-colors"
                                                                 title="Remove Employee"
                                                             >
                                                                 <FiTrash2 className="w-4 h-4" />
@@ -2614,7 +2650,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                         >
                                             <FiChevronLeft />
                                         </button>
-                                        <span className="px-3 py-2 bg-blue-100 text-blue-700 rounded-lg">
+                                        <span className="px-3 py-2 bg-emerald-100 text-emerald-700 rounded-lg">
                                             Page {currentPage} of {activeTotalPages}
                                         </span>
                                         <button
@@ -2699,7 +2735,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 type="button"
                                 onClick={() => setShowSnapshotExportModal(false)}
                                 disabled={isGeneratingSnapshot}
-                                className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700 hover:bg-slate-50 text-sm"
+                                className="px-3 py-2 border border-slate-300 rounded-lg bg-white text-slate-700  text-sm"
                             >
                                 Cancel
                             </button>
@@ -2707,7 +2743,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 type="button"
                                 onClick={handleDownloadSnapshot}
                                 disabled={isGeneratingSnapshot}
-                                className="px-3 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-700 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                                className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 {isGeneratingSnapshot ? 'Generating...' : 'Export Image'}
                             </button>
@@ -2860,7 +2896,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                 </div>
                                 <button
                                     onClick={() => setShowHistoryModal(false)}
-                                    className="h-9 w-9 rounded-full border border-white/30 text-white hover:bg-white/15 transition-colors text-lg"
+                                    className="h-9 w-9 rounded-full border border-white/30 text-white  transition-colors text-lg"
                                 >
                                     ✕
                                 </button>
@@ -2883,7 +2919,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                             <div key={index} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-3">
                                                     <div className="flex items-center gap-2 text-sm">
-                                                        <span className="px-2 py-1 rounded bg-blue-100 text-blue-700 font-medium">
+                                                        <span className="px-2 py-1 rounded bg-emerald-100 text-emerald-700 font-semibold">
                                                             Edited By
                                                         </span>
                                                         <span className="font-semibold text-slate-800">
@@ -2941,4 +2977,8 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 };
 
 export default RosterBulkEditForm;
+
+
+
+//Keshav	Developer	Yes	1	Gaurav	18	3	P	P	P	P	P	WO	WO									
 

@@ -74,6 +74,7 @@ export const fetchAdminLeaveRequests = createAsyncThunk(
       const res = await axios.get(`${API_URL}/admin/requests`, {
         headers: getAuthHeaders(state),
         params: { status, search },
+        signal: thunkAPI.signal,
       });
       return res.data;
     } catch (err) {
@@ -185,6 +186,10 @@ const leaveSlice = createSlice({
         state.adminRequests = action.payload?.requests || [];
       })
       .addCase(fetchAdminLeaveRequests.rejected, (state, action) => {
+        if (action.meta?.aborted) {
+          state.loadingAdminRequests = false;
+          return;
+        }
         state.loadingAdminRequests = false;
         state.error = action.payload;
       })
@@ -214,4 +219,3 @@ const leaveSlice = createSlice({
 
 export const { clearLeaveMessage } = leaveSlice.actions;
 export default leaveSlice.reducer;
-

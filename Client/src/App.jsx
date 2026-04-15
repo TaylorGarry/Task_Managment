@@ -400,7 +400,7 @@
 // export default App;
 
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import Signup from "./pages/Signup";
@@ -429,18 +429,34 @@ import DelegationPage from "./pages/DelegationPage.jsx";
 import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
 import LeaveManagement from "./pages/LeaveManagement.jsx";
 import { Toaster } from "react-hot-toast";
+import { disconnectSocket, updateSocketAuth } from "./socket.js";
+import {
+  canManageAdminPanels,
+  getRoleType,
+  isAgent,
+  isHrDepartment,
+  isSuperAdmin,
+  normalizeDepartment,
+} from "./utils/roleAccess.js";
 
-const ALLOWED_ROSTER_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
+const ALLOWED_ROSTER_DEPARTMENTS = [
+  "Operations",
+  "Marketing",
+  "Customer Service",
+  "Developer",
+  "Ticketing",
+  "SEO",
+];
 
 const ProtectedRoute = ({ children, adminOnly }) => {
   const { user } = useSelector((state) => state.auth);
   if (!user) return <Navigate to="/login" replace />;
 
-  if (adminOnly && !["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+  if (adminOnly && !canManageAdminPanels(user)) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  if (!adminOnly && ["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+  if (!adminOnly && canManageAdminPanels(user)) {
     return <Navigate to="/admin/admintask" replace />;
   }
 
@@ -452,12 +468,13 @@ const OpsMetaRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
+  const normalizedDepartment = normalizeDepartment(user.department);
   const isEligible =
-    user.accountType === "employee" &&
-    ALLOWED_ROSTER_DEPARTMENTS.includes(user.department);
+    (getRoleType(user) === "agent" || getRoleType(user) === "supervisor") &&
+    ALLOWED_ROSTER_DEPARTMENTS.includes(normalizedDepartment);
 
   if (!isEligible) {
-    if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+    if (canManageAdminPanels(user)) {
       return <Navigate to="/admin/admintask" replace />;
     }
     return <Navigate to="/dashboard" replace />;
@@ -471,8 +488,8 @@ const EmployeeOnlyRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  if (user.accountType !== "employee") {
-    if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+  if (!isAgent(user) && getRoleType(user) !== "supervisor") {
+    if (canManageAdminPanels(user)) {
       return <Navigate to="/admin/admintask" replace />;
     }
     return <Navigate to="/dashboard" replace />;
@@ -486,12 +503,14 @@ const OpsMetaUploadRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
+  const normalizedDepartment = normalizeDepartment(user.department);
   const canUploadExcel = 
-    (user.accountType === "employee" && ALLOWED_ROSTER_DEPARTMENTS.includes(user.department)) ||
-    ["admin", "superAdmin", "HR"].includes(user.accountType);
+    ((isAgent(user) || getRoleType(user) === "supervisor") &&
+      ALLOWED_ROSTER_DEPARTMENTS.includes(normalizedDepartment)) ||
+    canManageAdminPanels(user);
 
   if (!canUploadExcel) {
-    if (["admin", "superAdmin", "HR", "Operations", "AM"].includes(user.accountType)) {
+    if (canManageAdminPanels(user)) {
       return <Navigate to="/admin/admintask" replace />;
     }
     return <Navigate to="/dashboard" replace />;
@@ -505,8 +524,8 @@ const AttendanceUpdateRoute = ({ children }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  const isAllowedEmployee = user.accountType === "employee";
-  const isAdmin = ["admin", "superAdmin", "HR"].includes(user.accountType);
+  const isAllowedEmployee = isAgent(user) || getRoleType(user) === "supervisor";
+  const isAdmin = canManageAdminPanels(user);
 
   if (!isAllowedEmployee && !isAdmin) {
     return <Navigate to="/dashboard" replace />;
@@ -524,12 +543,12 @@ const AttendanceSnapshotRoute = ({ children }) => {
 const DelegationAccessRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
   if (!user) return <Navigate to="/login" replace />;
-  const isHrOrSuperAdmin = ["HR", "superAdmin"].includes(user.accountType);
+  const isHrOrSuperAdmin = isHrDepartment(user) || isSuperAdmin(user);
   const isOpsMetaEmployee =
-    user.accountType === "employee" &&
-    String(user.department || "").toLowerCase() === "ops - meta";
+    (isAgent(user) || getRoleType(user) === "supervisor") &&
+    normalizeDepartment(user.department) === "Operations";
   if (!isHrOrSuperAdmin && !isOpsMetaEmployee) {
-    return <Navigate to={user.accountType === "employee" ? "/dashboard" : "/admin/admintask"} replace />;
+    return <Navigate to={(isAgent(user) || getRoleType(user) === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
   }
   return children;
 };
@@ -538,6 +557,14 @@ function App() {
   const { user } = useSelector((state) => state.auth);
   const location = useLocation();
   const isAdminLeavePath = location.pathname === "/admin/leave-management";
+
+  useEffect(() => {
+    if (user?._id || user?.id) {
+      updateSocketAuth();
+      return;
+    }
+    disconnectSocket();
+  }, [user?._id, user?.id, user?.token]);
 
   if (isAdminLeavePath) {
     return (
@@ -721,7 +748,7 @@ function App() {
           path="*"
           element={
             <Navigate
-              to={user?.accountType === "employee"
+              to={(isAgent(user) || getRoleType(user) === "supervisor")
                 ? "/dashboard"
                 : "/admin/tasks"}
               replace

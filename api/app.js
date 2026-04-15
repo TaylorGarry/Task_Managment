@@ -382,6 +382,7 @@ import delegationRoutes from "./routes/delegation.routes.js";  // ← ADD THIS
 import leaveRoutes from "./routes/leave.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
+import { isPrivilegedUser } from "./utils/roleAccess.js";
 
 dotenv.config();
 const app = express();
@@ -488,7 +489,7 @@ app.use((req, res, next) => {
     });
   }
 
-  if (req.user?.accountType === "admin" || req.user?.accountType === "superAdmin") return next();
+  if (isPrivilegedUser(req.user || {})) return next();
 
   if (allowedIPs.includes(clientIp)) return next();
 

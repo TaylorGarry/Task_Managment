@@ -1006,6 +1006,7 @@ export const fetchDefaulters = createAsyncThunk(
 
       const res = await axios.get(`${API_URL}/defaulter?${query}`, {
         headers: { Authorization: `Bearer ${token}` },
+        signal: thunkAPI.signal,
       });
 
       const { data, totalDefaulters, overallTotalDefaults } = res.data;
@@ -1526,6 +1527,10 @@ employeeCurrentPage: 1,
         state.overallTotalDefaults = action.payload.overallTotalDefaults;
       })
       .addCase(fetchDefaulters.rejected, (state, action) => {
+        if (action.meta?.aborted) {
+          state.loading = false;
+          return;
+        }
         state.loading = false;
         state.error = typeof action.payload === "string" ? action.payload : "Something went wrong";
       })

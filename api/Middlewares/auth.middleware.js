@@ -1,5 +1,10 @@
 import jwt from "jsonwebtoken";
 import User from "../Modals/User.modal.js";
+import {
+  getRoleType,
+  isHrDepartment,
+  normalizeDepartment,
+} from "../utils/roleAccess.js";
 
 export const authMiddleware = async (req, res, next) => {
   try {
@@ -29,6 +34,16 @@ export const authMiddleware = async (req, res, next) => {
     }
     if (user.isActive === false) {
       return res.status(403).json({ message: "Account is inactive. Please contact HR/admin." });
+    }
+
+    const normalizedDepartment = normalizeDepartment(user.department);
+    user.normalizedDepartment = normalizedDepartment;
+    user.roleType = getRoleType(user);
+    user.legacyAccountType = user.accountType;
+    if (isHrDepartment(user) && user.accountType !== "superAdmin") {
+      user.accountType = "HR";
+    } else if (user.accountType === "agent" || user.accountType === "supervisor") {
+      user.accountType = "employee";
     }
 
     req.user = user;

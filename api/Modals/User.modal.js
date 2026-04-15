@@ -49,6 +49,7 @@
 
 
 import mongoose from "mongoose";
+import { getRoleType } from "../utils/roleAccess.js";
 
 const employeeDocumentSchema = new mongoose.Schema(
   {
@@ -105,7 +106,16 @@ const userSchema = new mongoose.Schema(
 
     accountType: {
       type: String,
-      enum: ["employee", "admin", "superAdmin", "HR", "Operations", "AM"],
+      enum: [
+        "employee",
+        "admin",
+        "superAdmin",
+        "HR",
+        "Operations",
+        "AM",
+        "agent",
+        "supervisor",
+      ],
       default: "employee",
     },
 
@@ -119,21 +129,21 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["Start", "Mid", "End"],
       required: function () {
-        return this.accountType === "employee" && !this.isCoreTeam;
+        return getRoleType(this) !== "superAdmin" && !this.isCoreTeam;
       },
     },
 
     shiftStartHour: {
       type: Number,
       required: function () {
-        return this.accountType === "employee" && !this.isCoreTeam;
+        return getRoleType(this) !== "superAdmin" && !this.isCoreTeam;
       },
     },
 
     shiftEndHour: {
       type: Number,
       required: function () {
-        return this.accountType === "employee" && !this.isCoreTeam;
+        return getRoleType(this) !== "superAdmin" && !this.isCoreTeam;
       },
     },
 

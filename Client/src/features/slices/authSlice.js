@@ -1,10 +1,11 @@
 
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
+import { getRoleType, normalizeDepartment } from "../../utils/roleAccess.js";
 
-// const API_URL = "http://localhost:4000/api/v1";
+const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 const EMPLOYEE_SEARCH_THROTTLE_MS = 1200;
 
 const normalizeEmployeeSearch = (value = "") =>
@@ -15,18 +16,28 @@ const getToken = () => {
   return user?.token;
 };
 
+const normalizeUserRoleData = (user = {}) => ({
+  ...(user || {}),
+  department: normalizeDepartment(user?.department),
+  roleType: user?.roleType || getRoleType(user || {}),
+});
+
+const storedUserRaw = JSON.parse(localStorage.getItem("user"));
+const storedUser = storedUserRaw ? normalizeUserRoleData(storedUserRaw) : null;
+
 export const loginUser = createAsyncThunk(
   "auth/loginUser",
   async (userData, thunkAPI) => {
     try {
       const res = await axios.post(`${API_URL}/login`, userData);
+      const normalizedUser = normalizeUserRoleData(res.data.user || {});
 
       localStorage.setItem(
         "user",
-        JSON.stringify({ ...res.data.user, token: res.data.token })
+        JSON.stringify({ ...normalizedUser, token: res.data.token })
       );
 
-      return { ...res.data.user, token: res.data.token };
+      return { ...normalizedUser, token: res.data.token };
     } catch (err) {
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || err.response?.data?.error || err.message
@@ -47,7 +58,7 @@ export const signupUser = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return { user: res.data.user, createdByAdmin: true };
+      return { user: normalizeUserRoleData(res.data.user), createdByAdmin: true };
     } catch (err) {
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || err.response?.data?.error || err.message
@@ -67,7 +78,7 @@ export const createCoreTeamUser = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      return { user: res.data.user, createdByAdmin: true };
+      return { user: normalizeUserRoleData(res.data.user), createdByAdmin: true };
     } catch (err) {
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || err.message
@@ -100,9 +111,10 @@ export const fetchEmployees = createAsyncThunk(
       const res = await axios.get(`${API_URL}/employees`, {
         params: normalizedSearch ? { name: search.trim() } : undefined,
         headers: { Authorization: `Bearer ${token}` },
+        signal: thunkAPI.signal,
       });
 
-      return res.data;
+      return Array.isArray(res.data) ? res.data.map((u) => normalizeUserRoleData(u)) : [];
     } catch (err) {
       return thunkAPI.rejectWithValue(
         err.response?.data?.message || err.message
@@ -286,7 +298,7 @@ export const updateProfile = createAsyncThunk(
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      const updatedUser = { ...res.data.user, token };
+      const updatedUser = { ...normalizeUserRoleData(res.data.user), token };
       localStorage.setItem("user", JSON.stringify(updatedUser));
 
       return updatedUser;
@@ -352,7 +364,7 @@ export const resetUserPassword = createAsyncThunk(
       );
 
       return {
-        user: res.data.user,
+        user: normalizeUserRoleData(res.data.user),
         passwordReset: true,
         message: res.data.message || "Password reset successfully"
       };
@@ -402,7 +414,7 @@ export const deleteEmployeeByAdmin = createAsyncThunk(
 const authSlice = createSlice({
   name: "auth",
   initialState: {
-    user: JSON.parse(localStorage.getItem("user")) || null,
+    user: storedUser,
 
     // employee caching
     employees: [],
@@ -509,6 +521,11 @@ const authSlice = createSlice({
         }
       })
       .addCase(fetchEmployees.rejected, (state, action) => {
+        if (action.meta?.aborted) {
+          state.loading = false;
+          state.loadingEmployeesQuery = "";
+          return;
+        }
         state.loading = false;
         state.error = action.payload;
         state.loadingEmployeesQuery = "";

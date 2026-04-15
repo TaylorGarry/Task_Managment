@@ -10,6 +10,11 @@ import EmployeeCreateConfirmModal from "../components/EmployeeCreateConfirmModal
 import StyledDatePicker from "../components/StyledDatePicker.jsx";
 import { DESIGNATION_OPTIONS } from "../constants/designationOptions.js";
 import { Toaster } from "react-hot-toast";
+import {
+  DEPARTMENT_OPTIONS,
+  canManageAdminPanels,
+  normalizeDepartment,
+} from "../utils/roleAccess.js";
 
 const shiftOptions = [
   { label: "1 AM - 10 AM", shiftLabel: "1am-10am" },
@@ -20,16 +25,7 @@ const shiftOptions = [
   { label: "11 PM - 8 AM", shiftLabel: "11pm-8am" },
 ];
 
-const departmentOptions = [
-  "Ops - Meta",
-  "Marketing",
-  "CS",
-  "Developer",
-  "Ticketing",
-  "Seo",
-  "Transport",
-  "HR",
-];
+const departmentOptions = DEPARTMENT_OPTIONS;
 
 const STATIC_POLICY_DOCS = [
   "/policies/Leave Policy.pdf",
@@ -56,8 +52,8 @@ const Signup = () => {
 
   const { register, handleSubmit, reset, watch, setValue, getValues } = useForm({
     defaultValues: {
-      accountType: "employee",
-      department: "Ops - Meta",
+      accountType: "agent",
+      department: "Operations",
       isCoreTeam: false,
       isTeamLeader: false,
       transportOffice: "No",
@@ -80,7 +76,7 @@ const Signup = () => {
   const reportingManager = watch("reportingManager");
   const shiftLabel = watch("shiftLabel");
   const docsStatus = watch("docsStatus");
-  const isEmployee = accountType === "employee";
+  const isEmployee = accountType === "agent" || accountType === "supervisor";
   const totalSteps = isEmployee ? 3 : 1;
 
   useEffect(() => {
@@ -90,10 +86,7 @@ const Signup = () => {
   }, [isEmployee]);
 
   useEffect(() => {
-    const allowed =
-      user?.accountType === "admin" ||
-      user?.accountType === "superAdmin" ||
-      user?.accountType === "HR";
+    const allowed = canManageAdminPanels(user);
 
     if (!user || !allowed) {
       navigate(user ? "/dashboard" : "/login", { replace: true });
@@ -182,14 +175,14 @@ const Signup = () => {
       username: data.username,
       password: data.password,
       accountType: data.accountType,
-      department: data.department,
+      department: normalizeDepartment(data.department),
       isCoreTeam: Boolean(data.isCoreTeam),
     };
 
     if (isEmployee) {
       payload.realName = data.realName;
       payload.pseudoName = data.pseudoName;
-      payload.isTeamLeader = Boolean(data.isTeamLeader);
+      payload.isTeamLeader = data.accountType === "supervisor" ? true : Boolean(data.isTeamLeader);
       payload.empId = data.empId;
       payload.dateOfJoining = data.dateOfJoining;
       payload.transportOffice = data.transportOffice;
@@ -212,7 +205,7 @@ const Signup = () => {
     return {
       username: data.username,
       accountType: data.accountType,
-      department: data.department,
+      department: normalizeDepartment(data.department),
       realName: data.realName,
       pseudoName: data.pseudoName,
       empId: data.empId,
@@ -268,8 +261,8 @@ const Signup = () => {
         setPendingPayload(null);
         setConfirmSummary({});
         reset({
-          accountType: "employee",
-          department: "Ops - Meta",
+          accountType: "agent",
+          department: "Operations",
           isCoreTeam: false,
           isTeamLeader: false,
           transportOffice: "No",
@@ -399,11 +392,8 @@ const Signup = () => {
                             className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition focus:border-cyan-500 focus:bg-white"
                             disabled={creatingUser}
                           >
-                            <option value="employee">Employee</option>
-                            <option value="admin">Admin</option>
-                            <option value="Operations">Operations</option>
-                            <option value="AM">AM</option>
-                            <option value="HR">HR</option>
+                            <option value="agent">Agent</option>
+                            <option value="supervisor">Supervisor</option>
                             <option value="superAdmin">Super Admin</option>
                           </select>
                         </div>
@@ -526,7 +516,7 @@ const Signup = () => {
                           </select>
                           {managerOptions.length === 0 && (
                             <p className="mt-1 text-xs text-amber-700">
-                              No managers found in this department. Mark a user as Team Leader Eligible or assign AM/Operations in this department.
+                              No managers found in this department. Mark a user as Team Leader Eligible (Supervisor) for this department.
                             </p>
                           )}
                         </div>
