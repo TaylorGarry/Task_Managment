@@ -690,6 +690,14 @@ import { Camera } from "lucide-react";
 import { ChevronDown } from "lucide-react";  
 import toast from "react-hot-toast";
 import { socket } from "../socket.js";
+import {
+  canManageAdminPanels,
+  getRoleLabel,
+  getRoleType,
+  isHrDepartment,
+  isSuperAdmin,
+  normalizeDepartment,
+} from "../utils/roleAccess.js";
 
  const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7e5os.ondigitalocean.app/api/v1";
@@ -722,28 +730,31 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const defaultTitleRef = useRef(document.title);
   const processedMessageIdsRef = useRef(new Set());
 
-  const allowedAttendanceDepartments = ["Ops - Meta", "Transport"];
+  const allowedAttendanceDepartments = ["Operations", "Transport"];
+  const roleType = getRoleType(user);
+  const normalizedDepartment = normalizeDepartment(user?.department);
+  const isEmployeeFlow = roleType === "agent" || roleType === "supervisor";
   
   const canAccessAttendanceUpdate =
-    (user?.accountType === "employee" &&
-      allowedAttendanceDepartments.includes(user?.department)) ||
-    ["admin", "superAdmin", "HR"].includes(user?.accountType);
+    (isEmployeeFlow &&
+      allowedAttendanceDepartments.includes(normalizedDepartment)) ||
+    canManageAdminPanels(user);
 
   // 🔥 NEW: Attendance Snapshots Permission - Available to all employees
   const canAccessAttendanceSnapshots = 
-    user?.accountType === "employee" || 
-    ["admin", "superAdmin", "HR"].includes(user?.accountType);
+    isEmployeeFlow || canManageAdminPanels(user);
   const canAccessDelegation =
-    ["superAdmin", "HR"].includes(user?.accountType) ||
-    (user?.accountType === "employee" && String(user?.department || "").toLowerCase() === "ops - meta");
+    isSuperAdmin(user) ||
+    isHrDepartment(user) ||
+    (isEmployeeFlow && normalizedDepartment === "Operations");
 
   // Check if user is Ops-Meta employee
-  const isOpsMeta = user?.accountType === "employee" && user?.department === "Ops - Meta";
+  const isOpsMeta = isEmployeeFlow && normalizedDepartment === "Operations";
   
   // Check if user can upload Excel (Ops-Meta employees + Admin/HR/superAdmin)
   const canUploadExcel = 
-    (user?.accountType === "employee" && user?.department === "Ops - Meta") ||
-    ["admin", "superAdmin", "HR"].includes(user?.accountType);
+    (isEmployeeFlow && normalizedDepartment === "Operations") ||
+    canManageAdminPanels(user);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -807,7 +818,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
   }, [location.pathname]);
 
   useEffect(() => {
-    if (user?.accountType !== "superAdmin") return;
+    if (!isSuperAdmin(user)) return;
     const token = user?.token;
     if (!token) return;
 
@@ -824,10 +835,10 @@ const AdminNavbar = ({ showOutlet = true }) => {
     };
 
     fetchNotifications();
-  }, [user?.accountType, user?.token]);
+  }, [user?.accountType, user?.roleType, user?.token]);
 
   useEffect(() => {
-    if (user?.accountType !== "superAdmin") return;
+    if (!isSuperAdmin(user)) return;
 
     const handleSystemNotification = (notification) => {
       if (!notification) return;
@@ -857,7 +868,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
     return () => {
       socket.off("system_notification", handleSystemNotification);
     };
-  }, [user?.accountType]);
+  }, [user?.accountType, user?.roleType]);
 
   const markSystemNotificationRead = async (id) => {
     if (!id || !user?.token) return;
@@ -988,6 +999,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
       : name[0].toUpperCase();
   };
   const handleLogout = () => {
+    toast.dismiss("auth-login-success");
     dispatch(logoutUser());
     setShowDropdown(false);
     setShowMobileMenu(false);
@@ -1042,7 +1054,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const isActive = (path) => location.pathname === path;
   const isCreateUserActive =
     location.pathname === "/signup" || location.pathname === "/admin/signup";
-  const canManageAdmin = ["admin", "superAdmin"].includes(user?.accountType);
+  const canManageAdmin = canManageAdminPanels(user);
   const navLinkClass = (path) =>
     `nav-pill w-full justify-start px-3 lg:px-3.5 py-2 transition-colors font-medium text-sm whitespace-nowrap ${
       isActive(path)
@@ -1271,7 +1283,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
 	              )}
               </div>
 			              <div className="mt-auto shrink-0 flex items-center gap-2">
-                      {user?.accountType === "superAdmin" && (
+                      {isSuperAdmin(user) && (
                         <div className="relative" ref={systemNotificationRef}>
 	                          <button
 	                            className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-700 border border-slate-200 cursor-pointer hover:bg-slate-200"
@@ -1396,7 +1408,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
 	                </button>
 	              </div>
 
-                {user?.accountType === "superAdmin" && (
+                {isSuperAdmin(user) && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 mb-2">
                     <div className="flex items-center justify-between">
                       <p className="text-sm font-semibold text-slate-800">Notifications</p>
@@ -1648,7 +1660,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
 	                  </div>
                   <div>
                     <p className="text-sm font-medium text-slate-900">{user?.username}</p>
-                    <p className="text-xs text-slate-500">{user?.accountType}</p>
+	                    <p className="text-xs text-slate-500">{getRoleLabel(user)}</p>
                     {user?.department && (
                       <p className="text-xs text-slate-500">{user?.department}</p>
                     )}

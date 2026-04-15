@@ -26,15 +26,15 @@ const getCurrentUser = () => {
 
 const STATUS_OPTIONS = [
   { value: "P", label: "Present (P)", color: "bg-green-100 text-green-800" },
-  { value: "WO", label: "Weekly Off (WO)", color: "bg-blue-100 text-blue-800" },
+  { value: "WO", label: "Weekly Off (WO)", color: "bg-emerald-100 text-emerald-800" },
   { value: "L", label: "Leave (L)", color: "bg-yellow-100 text-yellow-800" },
   { value: "NCNS", label: "No Call No Show (NCNS)", color: "bg-red-100 text-red-800" },
   { value: "UL", label: "Unpaid Leave (UL)", color: "bg-orange-100 text-orange-800" },
   { value: "LWP", label: "Leave Without Pay (LWP)", color: "bg-purple-100 text-purple-800" },
-  { value: "BL", label: "Bereavement Leave (BL)", color: "bg-indigo-100 text-indigo-800" },
+  { value: "BL", label: "Birthday Leave (BL)", color: "bg-teal-100 text-teal-800" },
   { value: "H", label: "Holiday (H)", color: "bg-pink-100 text-pink-800" },
   { value: "LWD", label: "Last Working Day (LWD)", color: "bg-gray-100 text-gray-800" },
-  { value: "HD", label: "Half Day (HD)", color: "bg-cyan-100 text-cyan-800" }
+  { value: "HD", label: "Half Day (HD)", color: "bg-teal-100 text-teal-800" }
 ];
 
 const getLocalDateKey = (d = new Date()) => {
@@ -223,7 +223,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const [selectedWeek, setSelectedWeek] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [tableTheme, setTableTheme] = useState("dark");
+  const [tableTheme, setTableTheme] = useState("light");
   const [updates, setUpdates] = useState({});
   const [searchBy, setSearchBy] = useState("all");
   const [searchInput, setSearchInput] = useState("");
@@ -275,13 +275,13 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         <div className="container mx-auto w-full max-w-full px-4 py-8">
           <div className="bg-white rounded-lg shadow p-12 text-center">
             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-            <h3 className="text-xl font-medium text-gray-900">No Roster Selected</h3>
+            <h3 className="text-xl font-bold text-gray-900">No Roster Selected</h3>
             <p className="text-gray-500 mt-2">
               Please select a roster from the list to start updating attendance.
             </p>
             <button
               onClick={() => window.history.back()}
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+              className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg"
             >
               Go Back
             </button>
@@ -522,7 +522,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       return null;
     }
 
-    const selectedDateKey = toLocalDateKey(selectedDate) || toUtcDateKey(selectedDate) || toIstDateKey(selectedDate);
+    const selectedDateKey = toIstDateKey(selectedDate) || toLocalDateKey(selectedDate) || toUtcDateKey(selectedDate);
     if (!selectedDateKey) return null;
 
     const matches = employee.dailyStatus.filter((d) => {
@@ -531,9 +531,9 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       const utcKey = toUtcDateKey(d.date);
       const istKey = toIstDateKey(d.date);
       return (
+        istKey === selectedDateKey ||
         localKey === selectedDateKey ||
-        utcKey === selectedDateKey ||
-        istKey === selectedDateKey
+        utcKey === selectedDateKey
       );
     });
 
@@ -781,7 +781,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             <div className={`px-4 py-2 rounded-lg ${
               viewType.isSuperAdmin ? "bg-purple-100 text-purple-800" :
               viewType.isHR ? "bg-amber-100 text-amber-800" :
-              viewType.isTransport ? "bg-blue-100 text-blue-800" :
+              viewType.isTransport ? "bg-emerald-100 text-emerald-800" :
               "bg-green-100 text-green-800"
             }`}>
               <span className="font-semibold flex items-center gap-2">
@@ -799,7 +799,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 	                type="button"
 	                onClick={handleDownloadDelegatedSnapshotImage}
 	                disabled={isDownloadingDelegatedSnapshot}
-	                className="px-4 py-2 text-sm rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100"
+	                className="px-4 py-2 text-sm rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800"
 	              >
 	                {isDownloadingDelegatedSnapshot ? "Generating Snapshot..." : "Export Delegated Snapshot Image"}
 	              </button>
@@ -819,7 +819,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
           <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-bold text-gray-700 mb-1">
                 Select Week
               </label>
               <select
@@ -835,7 +835,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   }
                   setCurrentPage(1);
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
               >
                 <option value="">Choose a week</option>
                 {availableWeeks.map((week) => (
@@ -847,7 +847,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-bold text-gray-700 mb-1">
                 Select Date
               </label>
               <input
@@ -859,19 +859,19 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   setSelectedDate(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
               />
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-bold text-gray-700 mb-1">
                 Search
               </label>
               <div className="flex gap-2">
                 <select
                   value={searchBy}
                   onChange={(e) => setSearchBy(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
                   title="Search by"
                 >
                   <option value="all">All</option>
@@ -884,13 +884,13 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     value={searchInput}
                     onChange={(e) => setSearchInput(e.target.value)}
                     placeholder="Type to search…"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
                   />
                   {searchInput ? (
                     <button
                       type="button"
                       onClick={() => setSearchInput("")}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-500 hover:text-gray-800"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-600 font-semibold"
                     >
                       Clear
                     </button>
@@ -926,7 +926,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         {/* Employees Table */}
         {loading && rosterEntries.length === 0 ? (
           <div className="bg-white rounded-lg shadow p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
             <p className="mt-4 text-gray-600">Loading employees...</p>
           </div>
         ) : rosterEntries.length > 0 ? (
@@ -941,7 +941,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   <span className="font-semibold">Selected:</span> {selectedEditableCount}
                 </div>
                 {!canBulkUpdate && (
-                  <div className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
+                  <div className="text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-1">
                     View only mode
                   </div>
                 )}
@@ -949,7 +949,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 {canUpdatePunchTimes && (
                   <>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Punch In</label>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Punch In</label>
                       <input
                         type="time"
                         value={bulkUpdate.punchIn}
@@ -960,7 +960,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Punch Out</label>
+                      <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Punch Out</label>
                       <input
                         type="time"
                         value={bulkUpdate.punchOut}
@@ -975,7 +975,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
                 {canUpdateTransport && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Transport Status</label>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Transport Status</label>
                     <select
                       value={bulkUpdate.transportStatus}
                       onChange={(e) => setBulkUpdate((p) => ({ ...p, transportStatus: e.target.value }))}
@@ -994,7 +994,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
                 {canUpdateDepartment && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Dept Status</label>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Dept Status</label>
                     <select
                       value={bulkUpdate.departmentStatus}
                       onChange={(e) => setBulkUpdate((p) => ({ ...p, departmentStatus: e.target.value }))}
@@ -1013,7 +1013,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
                 {(canUpdateTransport || canUpdateDepartment) && (
                   <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Arrival Time</label>
+                    <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Arrival Time</label>
                     <input
                       type="time"
                       value={bulkUpdate.arrivalTime}
@@ -1028,7 +1028,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   <button
                     type="button"
                     onClick={() => setTableTheme((t) => (t === "dark" ? "light" : "dark"))}
-                    className="px-3 py-2 text-sm rounded border border-gray-200 hover:bg-gray-50"
+                    className="px-3 py-2 text-sm rounded border border-gray-200 "
                   >
                     {isDarkTable ? (
                       <span className="inline-flex items-center gap-2">
@@ -1054,7 +1054,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                             punchOut: ""
                           });
                         }}
-                        className="px-3 py-2 text-sm rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+                        className="px-3 py-2 text-sm rounded border border-gray-200  disabled:opacity-50"
                         disabled={bulkUpdating}
                       >
                         Clear
@@ -1062,7 +1062,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       <button
                         type="button"
                         onClick={handleApplyBulkUpdate}
-                        className="px-4 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 text-sm rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={bulkUpdating || selectedEditableCount === 0}
                       >
                         Apply to Selected
@@ -1075,25 +1075,38 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
             <div className={
               isDarkTable
-                ? "w-full max-w-full rounded-lg shadow border border-neutral-800 bg-neutral-900 text-neutral-100 overflow-x-auto overflow-y-auto max-h-[70vh]"
-                : "w-full max-w-full rounded-lg shadow border border-gray-200 bg-white text-gray-900 overflow-x-auto overflow-y-auto max-h-[70vh]"
+                ? "pro-table-shell-dark w-full max-w-full text-neutral-100"
+                : "pro-table-shell w-full max-w-full text-gray-900"
             }>
-              <table className={isDarkTable ? "min-w-full divide-y divide-neutral-800" : "min-w-full divide-y divide-gray-200"}>
-                <thead className={isDarkTable ? "bg-neutral-950 sticky top-0 z-10" : "bg-gray-50 sticky top-0 z-10"}>
+              <div className="pro-scroll overflow-x-auto overflow-y-auto max-h-[70vh]">
+                <table className={isDarkTable ? "pro-table pro-table-dark min-w-full" : "pro-table min-w-full"}>
+                  <thead className="sticky top-0 z-10">
                   <tr>
                     {canBulkUpdate && (
-                      <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>
+                      <th
+                        className={`${isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"} pro-sticky-col pro-sticky-head`}
+                        style={{ left: 0, minWidth: "56px" }}
+                      >
                         <input
                           type="checkbox"
                           checked={isAllSelected}
                           onChange={(e) => handleToggleSelectAll(e.target.checked)}
                           aria-label="Select all employees"
-                          className="h-4 w-4 accent-indigo-500"
+                          className="h-4 w-4 accent-emerald-600"
                           disabled={selectableEntries.length === 0}
                         />
                       </th>
                     )}
-                    <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Employee</th>
+                    <th
+                      className={`${isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"} pro-sticky-col pro-sticky-head`}
+                      style={{
+                        left: canBulkUpdate ? 56 : 0,
+                        minWidth: "180px",
+                        width: "180px",
+                      }}
+                    >
+                      Employee
+                    </th>
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Department</th>
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Transport</th>
                     <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Cab Route</th>
@@ -1135,8 +1148,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     )}
                     {/* Actions column header removed */}
                   </tr>
-                </thead>
-                <tbody className={isDarkTable ? "bg-neutral-900 divide-y divide-neutral-800" : "bg-white divide-y divide-gray-200"}>
+                  </thead>
+                  <tbody className={isDarkTable ? "bg-[#13214f]" : "bg-white"}>
                   {rosterEntries.map((employee) => {
                     const todayStatus = getTodayStatus(employee);
                     const isSelected = selectedEmployeeIds.some((id) => String(id) === String(employee._id));
@@ -1153,23 +1166,33 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     return (
                       <tr
                         key={employee._id}
-                        className={`${isDarkTable ? "hover:bg-neutral-800/40" : "hover:bg-gray-50"} ${isSelected ? (isDarkTable ? "bg-indigo-500/10" : "bg-indigo-50") : ""}`}
+                        className={`pro-row ${isSelected ? (isDarkTable ? "bg-emerald-100" : "bg-emerald-50") : ""}`}
                       >
                         {canBulkUpdate && (
-                          <td className="px-4 py-3">
+                          <td
+                            className="px-4 py-3 pro-sticky-col"
+                            style={{ left: 0, minWidth: "56px", width: "56px" }}
+                          >
                             <input
                               type="checkbox"
                               checked={isSelected}
                               onChange={(e) => handleToggleSelectOne(employee._id, e.target.checked)}
                               aria-label={`Select ${employee.name}`}
-                              className="h-4 w-4 accent-indigo-500"
+                              className="h-4 w-4 accent-emerald-600"
                               disabled={isOwnRow}
                               title={isOwnRow ? "You cannot edit your own attendance" : ""}
                             />
                           </td>
                         )}
-                        <td className="px-4 py-3">
-                          <div className={isDarkTable ? "font-medium text-neutral-100" : "font-medium text-gray-900"}>{employee.name}</div>
+                        <td
+                          className="px-4 py-3 pro-sticky-col whitespace-nowrap"
+                          style={{
+                            left: canBulkUpdate ? 56 : 0,
+                            minWidth: "180px",
+                            width: "180px",
+                          }}
+                        >
+                          <div className={isDarkTable ? "font-bold text-neutral-100" : "font-bold text-gray-900"}>{employee.name}</div>
                         </td>
                         <td className={isDarkTable ? "px-4 py-3 text-sm text-neutral-300" : "px-4 py-3 text-sm text-gray-600"}>{employee.department}</td>
                         <td className="px-4 py-3">
@@ -1209,7 +1232,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                         {canViewTotalHours && (
                           <td className="px-4 py-3">
                             {totalHours ? (
-                              <span className={`font-medium ${isDarkTable ? 'text-purple-300' : 'text-purple-700'}`}>
+                              <span className={`font-bold ${isDarkTable ? 'text-purple-300' : 'text-purple-700'}`}>
                                 {totalHours} hrs
                               </span>
                             ) : (
@@ -1282,7 +1305,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                           <td className="px-4 py-3">
                             <div className="text-sm">
                               {todayStatus?.transportArrivalTime ? (
-                                <span className={isDarkTable ? "text-blue-300" : "text-blue-600 font-medium"}>
+                                <span className={isDarkTable ? "text-teal-700 font-bold" : "text-teal-700 font-bold"}>
                                   {formatTimeForDisplay(todayStatus.transportArrivalTime)}
                                 </span>
                               ) : (
@@ -1311,8 +1334,9 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       </tr>
                     );
                   })}
-                </tbody>
-              </table>
+                  </tbody>
+                </table>
+              </div>
               {pagination && (
                 <div className={isDarkTable ? "flex flex-wrap items-center justify-end gap-6 border-t border-neutral-800 bg-neutral-950 px-4 py-3 text-neutral-300" : "flex flex-wrap items-center justify-end gap-6 border-t border-gray-200 bg-gray-50 px-4 py-3 text-gray-700"}>
                   <div className="flex items-center gap-2 text-sm">
@@ -1342,7 +1366,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       type="button"
                       onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                       disabled={currentPage <= 1}
-                      className={isDarkTable ? "p-2 rounded hover:bg-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"}
+                      className={isDarkTable ? "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"}
                       aria-label="Previous page"
                     >
                       <ChevronLeft className="h-4 w-4" />
@@ -1351,7 +1375,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       type="button"
                       onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                       disabled={currentPage >= totalPages}
-                      className={isDarkTable ? "p-2 rounded hover:bg-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"}
+                      className={isDarkTable ? "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"}
                       aria-label="Next page"
                     >
                       <ChevronRight className="h-4 w-4" />
@@ -1364,7 +1388,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         ) : (
           <div className="bg-white rounded-lg shadow p-8 text-center">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">No employees found</h3>
+            <h3 className="text-lg font-bold text-gray-900">No employees found</h3>
             <p className="text-gray-500 mt-2">
               {selectedWeek ? "No employees available for the selected criteria" : "Please select a week to view employees"}
             </p>
@@ -1503,7 +1527,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 <span className="inline-block w-2 h-2 rounded-full bg-purple-400 mr-1"></span>
                 HR Attendance (Auto-calculated): Based on punch hours:
                 <span className="ml-2 px-1 bg-green-100 text-green-800 rounded">P (≥7.5h)</span>
-                <span className="ml-1 px-1 bg-cyan-100 text-cyan-800 rounded">HD (5-7.5h)</span>
+                <span className="ml-1 px-1 bg-teal-100 text-teal-800 rounded">HD (5-7.5h)</span>
                 <span className="ml-1 px-1 bg-purple-100 text-purple-800 rounded">LWP (&lt;5h)</span>
               </p>
             </div>
@@ -1543,15 +1567,15 @@ export default ArrivalAttendanceUpdate;
 
 // const STATUS_OPTIONS = [
 //   { value: "P", label: "Present (P)", color: "bg-green-100 text-green-800" },
-//   { value: "WO", label: "Weekly Off (WO)", color: "bg-blue-100 text-blue-800" },
+//   { value: "WO", label: "Weekly Off (WO)", color: "bg-emerald-100 text-emerald-800" },
 //   { value: "L", label: "Leave (L)", color: "bg-yellow-100 text-yellow-800" },
 //   { value: "NCNS", label: "No Call No Show (NCNS)", color: "bg-red-100 text-red-800" },
 //   { value: "UL", label: "Unpaid Leave (UL)", color: "bg-orange-100 text-orange-800" },
 //   { value: "LWP", label: "Leave Without Pay (LWP)", color: "bg-purple-100 text-purple-800" },
-//   { value: "BL", label: "Bereavement Leave (BL)", color: "bg-indigo-100 text-indigo-800" },
+//   { value: "BL", label: "Bereavement Leave (BL)", color: "bg-teal-100 text-teal-800" },
 //   { value: "H", label: "Holiday (H)", color: "bg-pink-100 text-pink-800" },
 //   { value: "LWD", label: "Last Working Day (LWD)", color: "bg-gray-100 text-gray-800" },
-//   { value: "HD", label: "Half Day (HD)", color: "bg-cyan-100 text-cyan-800" }
+//   { value: "HD", label: "Half Day (HD)", color: "bg-teal-100 text-teal-800" }
 // ];
 
 // const getLocalDateKey = (d = new Date()) => {
@@ -1613,13 +1637,13 @@ export default ArrivalAttendanceUpdate;
 //         <div className="container mx-auto px-4 py-8">
 //           <div className="bg-white rounded-lg shadow p-12 text-center">
 //             <AlertCircle className="w-16 h-16 text-yellow-500 mx-auto mb-4" />
-//             <h3 className="text-xl font-medium text-gray-900">No Roster Selected</h3>
+//             <h3 className="text-xl font-bold text-gray-900">No Roster Selected</h3>
 //             <p className="text-gray-500 mt-2">
 //               Please select a roster from the list to start updating attendance.
 //             </p>
 //             <button
 //               onClick={() => window.history.back()}
-//               className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+//               className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg"
 //             >
 //               Go Back
 //             </button>
@@ -2290,7 +2314,7 @@ export default ArrivalAttendanceUpdate;
 // 	            <div className={`px-4 py-2 rounded-lg ${
 // 	              viewType.isSuperAdmin ? "bg-purple-100 text-purple-800" :
 // 	              viewType.isHR ? "bg-amber-100 text-amber-800" :
-// 	              viewType.isTransport ? "bg-blue-100 text-blue-800" :
+// 	              viewType.isTransport ? "bg-emerald-100 text-emerald-800" :
 // 	              "bg-green-100 text-green-800"
 // 	            }`}>
 //               <span className="font-semibold flex items-center gap-2">
@@ -2318,7 +2342,7 @@ export default ArrivalAttendanceUpdate;
 // 	          {/* Filters */}
 // 	          <div className="mt-6 grid grid-cols-1 md:grid-cols-4 gap-4">
 // 	            <div>
-// 	              <label className="block text-sm font-medium text-gray-700 mb-1">
+// 	              <label className="block text-sm font-bold text-gray-700 mb-1">
 // 	                Select Week
 // 	              </label>
 // 	              <select
@@ -2327,7 +2351,7 @@ export default ArrivalAttendanceUpdate;
 // 	                  setSelectedWeek(e.target.value);
 // 	                  setCurrentPage(1);
 // 	                }}
-// 	                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+// 	                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
 // 	              >
 //                 <option value="">Choose a week</option>
 // 	                {availableWeeks.map((week) => (
@@ -2339,7 +2363,7 @@ export default ArrivalAttendanceUpdate;
 //             </div>
 
 // 	            <div>
-// 	              <label className="block text-sm font-medium text-gray-700 mb-1">
+// 	              <label className="block text-sm font-bold text-gray-700 mb-1">
 // 	                Select Date
 // 	              </label>
 // 	              <input
@@ -2349,19 +2373,19 @@ export default ArrivalAttendanceUpdate;
 // 	                  setSelectedDate(e.target.value);
 // 	                  setCurrentPage(1);
 // 	                }}
-// 		                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400"
+// 		                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
 // 		              />
 // 	            </div>
 
 // 	            <div>
-// 	              <label className="block text-sm font-medium text-gray-700 mb-1">
+// 	              <label className="block text-sm font-bold text-gray-700 mb-1">
 // 	                Search
 // 	              </label>
 // 	              <div className="flex gap-2">
 // 	                <select
 // 	                  value={searchBy}
 // 	                  onChange={(e) => setSearchBy(e.target.value)}
-// 	                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+// 	                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
 // 	                  title="Search by"
 // 	                >
 // 	                  <option value="all">All</option>
@@ -2374,7 +2398,7 @@ export default ArrivalAttendanceUpdate;
 // 	                    value={searchInput}
 // 	                    onChange={(e) => setSearchInput(e.target.value)}
 // 	                    placeholder="Type to search…"
-// 	                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+// 	                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
 // 	                  />
 // 	                  {searchInput ? (
 // 	                    <button
@@ -2411,7 +2435,7 @@ export default ArrivalAttendanceUpdate;
 //         {/* Employees Table */}
 // 	        {loading && rosterEntries.length === 0 ? (
 // 	          <div className="bg-white rounded-lg shadow p-8 text-center">
-// 	            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+// 	            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600 mx-auto"></div>
 // 	            <p className="mt-4 text-gray-600">Loading employees...</p>
 // 	          </div>
 // 		        ) : rosterEntries.length > 0 ? (
@@ -2428,7 +2452,7 @@ export default ArrivalAttendanceUpdate;
 
 // 	                {canUpdateTransport && (
 // 	                  <div>
-// 	                    <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Transport Status</label>
+// 	                    <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Transport Status</label>
 // 	                    <select
 // 	                      value={bulkUpdate.transportStatus}
 // 	                      onChange={(e) => setBulkUpdate((p) => ({ ...p, transportStatus: e.target.value }))}
@@ -2447,7 +2471,7 @@ export default ArrivalAttendanceUpdate;
 
 // 	                {canUpdateDepartment && (
 // 	                  <div>
-// 	                    <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Dept Status</label>
+// 	                    <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Dept Status</label>
 // 	                    <select
 // 	                      value={bulkUpdate.departmentStatus}
 // 	                      onChange={(e) => setBulkUpdate((p) => ({ ...p, departmentStatus: e.target.value }))}
@@ -2466,7 +2490,7 @@ export default ArrivalAttendanceUpdate;
 
 // 	                {(canUpdateTransport || canUpdateDepartment) && (
 // 	                  <div>
-// 	                    <label className="block text-xs font-medium text-gray-600 mb-1">Bulk Arrival Time</label>
+// 	                    <label className="block text-xs font-bold text-gray-600 mb-1">Bulk Arrival Time</label>
 // 	                    <input
 // 	                      type="time"
 // 	                      value={bulkUpdate.arrivalTime}
@@ -2481,7 +2505,7 @@ export default ArrivalAttendanceUpdate;
 // 		                  <button
 // 		                    type="button"
 // 		                    onClick={() => setTableTheme((t) => (t === "dark" ? "light" : "dark"))}
-// 		                    className="px-3 py-2 text-sm rounded border border-gray-200 hover:bg-gray-50"
+// 		                    className="px-3 py-2 text-sm rounded border border-gray-200 "
 // 		                  >
 // 		                    {isDarkTable ? (
 // 		                      <span className="inline-flex items-center gap-2">
@@ -2499,7 +2523,7 @@ export default ArrivalAttendanceUpdate;
 // 	                      setSelectedEmployeeIds([]);
 // 	                      setBulkUpdate({ transportStatus: "", departmentStatus: "", arrivalTime: "" });
 // 	                    }}
-// 	                    className="px-3 py-2 text-sm rounded border border-gray-200 hover:bg-gray-50 disabled:opacity-50"
+// 	                    className="px-3 py-2 text-sm rounded border border-gray-200  disabled:opacity-50"
 // 	                    disabled={bulkUpdating}
 // 	                  >
 // 	                    Clear
@@ -2507,7 +2531,7 @@ export default ArrivalAttendanceUpdate;
 // 	                  <button
 // 	                    type="button"
 // 	                    onClick={handleApplyBulkUpdate}
-// 	                    className="px-4 py-2 text-sm rounded bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+// 	                    className="px-4 py-2 text-sm rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
 // 	                    disabled={bulkUpdating || selectedEmployeeIds.length === 0}
 // 	                  >
 // 	                    Apply to Selected
@@ -2530,7 +2554,7 @@ export default ArrivalAttendanceUpdate;
 //           checked={isAllSelected}
 //           onChange={(e) => handleToggleSelectAll(e.target.checked)}
 //           aria-label="Select all employees"
-//           className="h-4 w-4 accent-indigo-500"
+//           className="h-4 w-4 accent-emerald-600"
 //         />
 //       </th>
 //       <th className={isDarkTable ? "px-4 py-3 text-left text-xs font-semibold text-neutral-300 uppercase tracking-wider" : "px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider"}>Employee</th>
@@ -2558,7 +2582,7 @@ export default ArrivalAttendanceUpdate;
 //       return (
 //         <tr
 //           key={employee._id}
-//           className={`${isDarkTable ? "hover:bg-neutral-800/40" : "hover:bg-gray-50"} ${isSelected ? (isDarkTable ? "bg-indigo-500/10" : "bg-indigo-50") : ""}`}
+//           className={`${isDarkTable ? "hover:bg-neutral-800/40" : ""} ${isSelected ? (isDarkTable ? "bg-emerald-100" : "bg-emerald-50") : ""}`}
 //         >
 //           <td className="px-4 py-3">
 //             <input
@@ -2566,11 +2590,11 @@ export default ArrivalAttendanceUpdate;
 //               checked={isSelected}
 //               onChange={(e) => handleToggleSelectOne(employee._id, e.target.checked)}
 //               aria-label={`Select ${employee.name}`}
-//               className="h-4 w-4 accent-indigo-500"
+//               className="h-4 w-4 accent-emerald-600"
 //             />
 //           </td>
 //           <td className="px-4 py-3">
-//             <div className={isDarkTable ? "font-medium text-neutral-100" : "font-medium text-gray-900"}>{employee.name}</div>
+//             <div className={isDarkTable ? "font-bold text-neutral-100" : "font-bold text-gray-900"}>{employee.name}</div>
 //           </td>
 //           <td className={isDarkTable ? "px-4 py-3 text-sm text-neutral-300" : "px-4 py-3 text-sm text-gray-600"}>{employee.department}</td>
 //           <td className="px-4 py-3">
@@ -2638,7 +2662,7 @@ export default ArrivalAttendanceUpdate;
 //                   }
 //                   onChange={(e) => handleTransportArrivalChange(employee._id, e.target.value)}
 //                   disabled={isUpdating}
-//                   className="w-28 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+//                   className="w-28 border border-gray-300 rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
 //                   placeholder="Transport"
 //                 />
 //                 {todayStatus?.transportArrivalTime && !employeeUpdate.transportArrivalTime && (
@@ -2711,7 +2735,7 @@ export default ArrivalAttendanceUpdate;
 //                     }
 //                     onChange={(e) => handleTransportStatusChange(employee._id, e.target.value)}
 //                     disabled={isUpdating}
-//                     className={isDarkTable ? "w-32 bg-neutral-950 text-neutral-200 border border-neutral-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" : "w-32 bg-white text-gray-900 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"}
+//                     className={isDarkTable ? "w-32 bg-neutral-950 text-neutral-200 border border-neutral-700 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500" : "w-32 bg-white text-gray-900 border border-gray-300 rounded px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-emerald-300"}
 //                   >
 //                     <option value="">Transport Attendance</option>
 //                     {STATUS_OPTIONS.map(option => (
@@ -2835,7 +2859,7 @@ export default ArrivalAttendanceUpdate;
 // 			                    type="button"
 // 			                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
 // 			                    disabled={currentPage <= 1}
-// 				                    className={isDarkTable ? "p-2 rounded hover:bg-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"}
+// 				                    className={isDarkTable ? "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"}
 // 			                    aria-label="Previous page"
 // 			                  >
 // 			                    <ChevronLeft className="h-4 w-4" />
@@ -2844,7 +2868,7 @@ export default ArrivalAttendanceUpdate;
 // 			                    type="button"
 // 			                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
 // 			                    disabled={currentPage >= totalPages}
-// 				                    className={isDarkTable ? "p-2 rounded hover:bg-neutral-900 disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed"}
+// 				                    className={isDarkTable ? "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed" : "p-2 rounded disabled:opacity-50 disabled:cursor-not-allowed"}
 // 			                    aria-label="Next page"
 // 			                  >
 // 			                    <ChevronRight className="h-4 w-4" />
@@ -2857,7 +2881,7 @@ export default ArrivalAttendanceUpdate;
 // 		        ) : (
 // 	          <div className="bg-white rounded-lg shadow p-8 text-center">
 //             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-//             <h3 className="text-lg font-medium text-gray-900">No employees found</h3>
+//             <h3 className="text-lg font-bold text-gray-900">No employees found</h3>
 //             <p className="text-gray-500 mt-2">
 //               {selectedWeek ? "No employees available for the selected criteria" : "Please select a week to view employees"}
 //             </p>
@@ -2882,3 +2906,5 @@ export default ArrivalAttendanceUpdate;
 // };
 
 // export default ArrivalAttendanceUpdate;
+
+

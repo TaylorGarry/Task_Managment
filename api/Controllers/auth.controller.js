@@ -10,6 +10,15 @@ import { fileURLToPath } from "url";
 import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { notifySuperAdminsForHrAction } from "../utils/adminNotification.js";
 import XLSX from "xlsx-js-style";
+import {
+  getRoleType,
+  isHrDepartment,
+  isPrivilegedUser,
+  normalizeDepartment,
+  toStorageDepartment,
+  toStorageAccountType,
+  withRoleType,
+} from "../utils/roleAccess.js";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -652,6 +661,12 @@ export const signup = async (req, res) => {
       inHandSalary,
       transportAllowance,
     } = req.body;
+    const normalizedDepartment = normalizeDepartment(department);
+    const storageDepartment = toStorageDepartment(normalizedDepartment);
+    const storageRole = toStorageAccountType(accountType, isTeamLeader);
+    const storageAccountType = storageRole.accountType;
+    const storageIsTeamLeader = storageRole.isTeamLeader;
+    const isEmployeeFlow = storageAccountType === "employee";
 
     // ⭐ NEW: check if any superAdmin exists
     const superAdminExists = await User.exists({
@@ -659,13 +674,9 @@ export const signup = async (req, res) => {
     });
 
     // ⭐ NEW: allow first superAdmin creation without token
-    const isFirstSuperAdmin =
-      !superAdminExists && accountType === "superAdmin";
+    const isFirstSuperAdmin = !superAdminExists && storageAccountType === "superAdmin";
 
-    const isAdminOrSuperAdmin =
-      req.user?.accountType === "admin" ||
-      req.user?.accountType === "superAdmin" ||
-      req.user?.accountType === "HR";
+    const isAdminOrSuperAdmin = isPrivilegedUser(req.user || {});
 
     // ⭐ MODIFIED: block only if NOT first superAdmin
     if (!isAdminOrSuperAdmin && !isFirstSuperAdmin) {
@@ -674,20 +685,20 @@ export const signup = async (req, res) => {
       });
     }
 
-    if (!username || !password || !department || !accountType) {
+    if (!username || !password || !normalizedDepartment || !accountType) {
       return res.status(400).json({
         message:
           "Username, password, department, and account type are required",
       });
     }
 
-    if (accountType === "employee" && !isCoreTeam && !shiftLabel) {
+    if (isEmployeeFlow && !isCoreTeam && !shiftLabel) {
       return res.status(400).json({
         message: "Shift label is required for non-core team employees",
       });
     }
 
-    if (accountType === "employee") {
+    if (isEmployeeFlow) {
       if (!realName || !pseudoName || !empId || !dateOfJoining || !designation || !reportingManager) {
         return res.status(400).json({
           message:
@@ -699,12 +710,12 @@ export const signup = async (req, res) => {
     // 🔥 Parallel DB checks (kept your optimization)
     const [userExists, empIdExists] = await Promise.all([
       User.exists({ username }),
-      accountType === "employee" && empId ? User.exists({ empId: String(empId).trim() }) : Promise.resolve(false),
+      isEmployeeFlow && empId ? User.exists({ empId: String(empId).trim() }) : Promise.resolve(false),
     ]);
 
     // 🔥 Only superAdmin can create another superAdmin (after first)
     if (
-      accountType === "superAdmin" &&
+      storageAccountType === "superAdmin" &&
       superAdminExists &&
       req.user?.accountType !== "superAdmin"
     ) {
@@ -723,7 +734,7 @@ export const signup = async (req, res) => {
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
 
-    if (accountType === "employee" && !isCoreTeam && !selectedShift) {
+    if (isEmployeeFlow && !isCoreTeam && !selectedShift) {
       return res.status(400).json({ message: "Invalid shift label" });
     }
 
@@ -742,10 +753,10 @@ export const signup = async (req, res) => {
     const newUserPayload = {
       username,
       password: hashedPassword,
-      accountType,
-      department,
-      isCoreTeam: accountType === "employee" && !!isCoreTeam,
-      isTeamLeader: Boolean(isTeamLeader),
+      accountType: storageAccountType,
+      department: storageDepartment,
+      isCoreTeam: isEmployeeFlow && !!isCoreTeam,
+      isTeamLeader: Boolean(storageIsTeamLeader),
       shift: selectedShift?.shift || null,
       shiftStartHour: selectedShift?.shiftStartHour || null,
       shiftEndHour: selectedShift?.shiftEndHour || null,
@@ -792,7 +803,7 @@ export const signup = async (req, res) => {
 
     return res.status(201).json({
       message: "User created successfully",
-      user: populatedUser,
+      user: withRoleType(populatedUser),
     });
   } catch (error) {
     console.error("Signup error:", error);
@@ -907,11 +918,14 @@ export const signup = async (req, res) => {
 export const createCoreTeamUser = async (req, res) => {
   try {
     const { username, password, accountType, department } = req.body;
+    const normalizedDepartment = normalizeDepartment(department);
+    const storageDepartment = toStorageDepartment(normalizedDepartment);
+    const storageRole = toStorageAccountType(accountType || "agent", false);
 
-    if (req.user?.accountType !== "admin" && req.user.accountType !== "superAdmin")
-      return res.status(403).json({ message: "Only admin and super Admin can create users" });
+    if (!isPrivilegedUser(req.user || {}))
+      return res.status(403).json({ message: "Only privileged users can create users" });
 
-    if (!username || !password || !department)
+    if (!username || !password || !normalizedDepartment)
       return res.status(400).json({ message: "Username, password, and department are required" });
 
     if (await User.exists({ username }))
@@ -922,9 +936,10 @@ export const createCoreTeamUser = async (req, res) => {
     const newUser = await User.create({
       username,
       password: hashedPassword,
-      accountType: accountType || "employee",
-      department,
+      accountType: storageRole.accountType,
+      department: storageDepartment,
       isCoreTeam: true,
+      isTeamLeader: Boolean(storageRole.isTeamLeader),
     });
 
     res.status(201).json({
@@ -933,7 +948,8 @@ export const createCoreTeamUser = async (req, res) => {
         id: newUser._id,
         username,
         accountType: newUser.accountType,
-        department,
+        roleType: getRoleType(newUser),
+        department: normalizeDepartment(newUser.department),
         isCoreTeam: newUser.isCoreTeam,
       },
     });
@@ -998,7 +1014,8 @@ export const login = async (req, res) => {
         id: user._id,
         username: user.username,
         accountType: user.accountType,
-        department: user.department,
+        roleType: getRoleType(user),
+        department: normalizeDepartment(user.department),
         isCoreTeam: user.isCoreTeam,
         isTeamLeader: user.isTeamLeader,
         isActive: user.isActive !== false,
@@ -1060,6 +1077,8 @@ const SUPER_ADMIN_VISIBLE_ROLES = [
   "HR",
   "Operations",
   "AM",
+  "agent",
+  "supervisor",
 ];
 
 const DEFAULT_EMPLOYEE_DOC_NAMES = [
@@ -1117,7 +1136,7 @@ export const getAllEmployees = async (req, res) => {
     const requester = req.user;
     const name = String(req.query?.name || "").trim();
 
-    const isPrivilegedRole = ["superAdmin", "admin", "HR"].includes(requester.accountType);
+    const isPrivilegedRole = isPrivilegedUser(requester || {});
     const query = isPrivilegedRole
       ? { accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } }
       : { accountType: "employee" };
@@ -1151,10 +1170,10 @@ export const getAllEmployees = async (req, res) => {
     }
     const normalizedEmployees = employees.map((emp) => {
       const managerId = String(emp?.reportingManager || "");
-      return {
+      return withRoleType({
         ...emp,
         reportingManager: managerMap.get(managerId) || null,
-      };
+      });
     });
 
     return res.status(200).json(normalizedEmployees);
@@ -1209,8 +1228,8 @@ export const updateProfile = async (req, res) => {
 
 export const updateUserByAdmin = async (req, res) => {
   try {
-    if (!req.user?.accountType || req.user.accountType !== "admin" && req.user.accountType !== "superAdmin" && req.user.accountType !== "HR") {
-      return res.status(403).json({ message: "Only admin, superAdmin and HR can update users" });
+    if (!isPrivilegedUser(req.user || {})) {
+      return res.status(403).json({ message: "Only privileged users can update users" });
     }
 
     const userId = req.params.id;
@@ -1256,8 +1275,14 @@ export const updateUserByAdmin = async (req, res) => {
       updateData.username = username;
     }
 
-    if (accountType) updateData.accountType = accountType;
-    if (department) updateData.department = department;
+    if (accountType !== undefined) {
+      const mapped = toStorageAccountType(accountType, isTeamLeader);
+      updateData.accountType = mapped.accountType;
+      if (isTeamLeader === undefined) {
+        updateData.isTeamLeader = Boolean(mapped.isTeamLeader);
+      }
+    }
+    if (department) updateData.department = toStorageDepartment(department);
     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
     if (typeof isTeamLeader !== "undefined") updateData.isTeamLeader = Boolean(isTeamLeader);
     if (dateOfJoining) updateData.dateOfJoining = new Date(dateOfJoining);
@@ -1293,7 +1318,7 @@ export const updateUserByAdmin = async (req, res) => {
       updateData.profilePhotoPublicId = String(profilePhotoPublicId || "").trim();
     const payrollPayloadProvided =
       ctc !== undefined || inHandSalary !== undefined || transportAllowance !== undefined;
-    if (payrollPayloadProvided && !["HR", "superAdmin"].includes(req.user.accountType)) {
+    if (payrollPayloadProvided && !(isHrDepartment(req.user || {}) || req.user.accountType === "superAdmin")) {
       return res
         .status(403)
         .json({ message: "Only HR and superAdmin can update payroll fields" });
@@ -1356,7 +1381,7 @@ export const updateUserByAdmin = async (req, res) => {
       if (req.user.accountType !== "superAdmin") {
         return res.status(403).json({ message: "Only superAdmin can grant global HR document override" });
       }
-      if (existingUserForUpdate.accountType !== "HR") {
+      if (!isHrDepartment(existingUserForUpdate || {})) {
         return res.status(400).json({ message: "Global HR document override can only be granted to HR accounts" });
       }
       const shouldAllowGlobal = Boolean(allowHrDocumentEditGlobal);
@@ -1391,7 +1416,7 @@ export const updateUserByAdmin = async (req, res) => {
 
       const hasEmployeeScopedOverride = isHrOverrideActive(existingUserForUpdate);
       const hasGlobalHrOverride = isHrGlobalOverrideActive(req.user);
-      if (req.user.accountType === "HR" && !(hasEmployeeScopedOverride || hasGlobalHrOverride)) {
+      if (isHrDepartment(req.user || {}) && !(hasEmployeeScopedOverride || hasGlobalHrOverride)) {
         const lockedDocuments = evaluateLockedDocumentChanges({
           existingDocuments: existingUserForUpdate.documents || [],
           incomingDocuments: normalizedIncomingDocs,
@@ -1498,7 +1523,7 @@ export const updateUserByAdmin = async (req, res) => {
 
     const responseData = {
       message: "User updated successfully",
-      user: updatedUser,
+      user: withRoleType(updatedUser),
       passwordReset: password ? true : false
     };
     if (password) {
@@ -1515,7 +1540,7 @@ export const updateUserByAdmin = async (req, res) => {
 export const exportEmployeeDetailsExcel = async (req, res) => {
   try {
     const requester = req.user;
-    if (!["superAdmin", "admin", "HR"].includes(requester?.accountType)) {
+    if (!isPrivilegedUser(requester || {})) {
       return res.status(403).json({ message: "Only superAdmin, admin and HR can export employees" });
     }
 
@@ -1622,8 +1647,9 @@ export const exportEmployeeDetailsExcel = async (req, res) => {
 
 export const getReportingManagers = async (req, res) => {
   try {
-    const { department = "Ops - Meta" } = req.query;
-    const departmentRegex = new RegExp(`^\\s*${String(department).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+    const normalizedDepartment = normalizeDepartment(req.query?.department || "Operations");
+    const storageDepartment = toStorageDepartment(normalizedDepartment);
+    const departmentRegex = new RegExp(`^\\s*${String(storageDepartment).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
 
     let managers = await User.find({
       department: departmentRegex,
@@ -1636,7 +1662,7 @@ export const getReportingManagers = async (req, res) => {
     if (!managers.length) {
       managers = await User.find({
         department: departmentRegex,
-        accountType: { $in: ["AM", "Operations", "admin", "superAdmin", "HR"] },
+        $or: [{ isTeamLeader: true }, { accountType: "superAdmin" }],
       })
         .select("_id username realName accountType department isTeamLeader")
         .sort({ username: 1 })
@@ -1838,7 +1864,7 @@ export const signPolicyDocumentByEmployee = async (req, res) => {
   try {
     const userId = req.user?._id;
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
-    if (req.user?.accountType !== "employee") {
+    if (getRoleType(req.user || {}) === "superAdmin") {
       return res.status(403).json({ message: "Only employee can sign this endpoint" });
     }
 
@@ -1931,7 +1957,9 @@ export const signPolicyDocumentByHR = async (req, res) => {
 
     const employee = await User.findById(targetUserId).select("accountType policyDocuments policySignatures");
     if (!employee) return res.status(404).json({ message: "Employee not found" });
-    if (employee.accountType !== "employee") return res.status(400).json({ message: "Target user is not an employee" });
+    if (getRoleType(employee || {}) === "superAdmin") {
+      return res.status(400).json({ message: "Target user is not an employee" });
+    }
 
     const effectivePolicyDocuments = resolvePolicyDocuments(employee.policyDocuments);
     const normalizedDocKey = normalizePolicyKey(normalizedUrl);
@@ -2013,7 +2041,7 @@ export const signPolicyDocumentByHR = async (req, res) => {
 export const uploadEmployeeAsset = async (req, res) => {
   try {
     const user = req.user;
-    if (!user || !["superAdmin", "HR"].includes(user.accountType)) {
+    if (!user || !isPrivilegedUser(user)) {
       return res.status(403).json({ message: "Only superAdmin and HR can upload assets" });
     }
 
@@ -2069,7 +2097,7 @@ export const uploadEmployeeAsset = async (req, res) => {
 export const deleteEmployeeByAdmin = async (req, res) => {
   try {
     const requester = req.user;
-    if (!requester || !["admin", "superAdmin", "HR"].includes(requester.accountType)) {
+    if (!requester || !isPrivilegedUser(requester)) {
       return res.status(403).json({ message: "Only admin, superAdmin and HR can delete employees" });
     }
 

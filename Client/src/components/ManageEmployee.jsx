@@ -34,6 +34,7 @@ import {
 import ConfirmActionModal from "./ConfirmActionModal.jsx";
 import toast from "react-hot-toast";
 import { DESIGNATION_OPTIONS } from "../constants/designationOptions.js";
+import { isHrDepartment, isSuperAdmin } from "../utils/roleAccess.js";
 
 const shiftOptions = [
   { label: "1am-10am", value: "1am-10am" },
@@ -192,10 +193,10 @@ const ManageEmployee = () => {
     { id: "security", label: "Security", icon: <Security sx={{ fontSize: 18 }} /> }
   ];
 
-  const isHrUser = currentUser?.accountType === "HR";
-  const isSuperAdmin = currentUser?.accountType === "superAdmin";
+  const isHrUser = isHrDepartment(currentUser || {});
+  const isSuperAdminUser = isSuperAdmin(currentUser || {});
   const isSelectedUserInactive = selectedUser?.isActive === false;
-  const canManagePayroll = isHrUser || isSuperAdmin;
+  const canManagePayroll = isHrUser || isSuperAdminUser;
   const isFresher = formData.employmentType === "fresher";
   const isHrOverrideActive = Boolean(
     selectedUser?.hrDocumentOverrideUntil &&
@@ -244,7 +245,7 @@ const ManageEmployee = () => {
   }, [dispatch, loadedOnce]);
 
   useEffect(() => {
-    dispatch(fetchReportingManagers("Ops - Meta"));
+    dispatch(fetchReportingManagers("Operations"));
   }, [dispatch]);
 
   useEffect(() => {
@@ -719,10 +720,10 @@ const ManageEmployee = () => {
   };
 
   const handleSetHrOverride = async (enabled) => {
-    if (!selectedUser?._id || !isSuperAdmin) return;
+    if (!selectedUser?._id || !isSuperAdminUser) return;
     setGrantingOverride(true);
     try {
-      const isGrantingGlobalToHr = selectedUser?.accountType === "HR";
+      const isGrantingGlobalToHr = isHrDepartment(selectedUser || {});
       const result = await dispatch(
         updateUserByAdmin({
           userId: selectedUser._id,
@@ -992,12 +993,11 @@ const ManageEmployee = () => {
                     </Avatar>
                     <div>
                       <p className="font-medium text-slate-900">{user.realName || user.username}</p>
-                      <p className="text-xs text-slate-500">@{user.username}</p>
                     </div>
                   </div>
                 </TableCell>
                 <TableCell>
-                  <span className="font-mono text-sm text-slate-600">{user.empId || "—"}</span>
+                  <span className="font-mono text-sm text-slate-700">{user.empId || "—"}</span>
                 </TableCell>
                 <TableCell>
                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
@@ -1043,7 +1043,7 @@ const ManageEmployee = () => {
                     >
                       <Edit sx={{ fontSize: 20 }} />
                     </IconButton>
-                    {isSuperAdmin && (
+                    {isSuperAdminUser && (
                       <IconButton
                         onClick={() => setDeleteTarget(user)}
                         sx={{
@@ -1184,7 +1184,7 @@ const ManageEmployee = () => {
                 },
               }}
             >
-              <MenuItem value="active" disabled={!isSuperAdmin}>Active</MenuItem>
+	              <MenuItem value="active" disabled={!isSuperAdminUser}>Active</MenuItem>
               <MenuItem value="inactive">Inactive</MenuItem>
             </TextField>
           </div>
@@ -1734,25 +1734,25 @@ const ManageEmployee = () => {
       {activeSection === "documents" && (
         <div className="p-6">
           <div className="mb-6 rounded-xl border p-4" style={{ borderColor: "#eaeaea", backgroundColor: "#f0f9ff" }}>
-            {isSuperAdmin && (
+            {isSuperAdminUser && (
               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3" style={{ borderColor: "#e2e8f0" }}>
                 <div className="flex items-center gap-2">
-                  <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-                    {selectedUser?.accountType === "HR" ? "Global HR Window" : "HR Re-upload Window"}
-                  </span>
-                  <span
-                    className={`rounded-lg px-2 py-1 text-xs font-semibold ${
-                      (selectedUser?.accountType === "HR" ? isHrGlobalOverrideActive : isHrOverrideActive)
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-slate-100 text-slate-600"
-                    }`}
-                  >
-                    {(selectedUser?.accountType === "HR" ? isHrGlobalOverrideActive : isHrOverrideActive)
-                      ? formatRemaining(
-                          selectedUser?.accountType === "HR"
-                            ? selectedUser?.hrGlobalDocumentOverrideUntil
-                            : selectedUser?.hrDocumentOverrideUntil
-                        )
+	                  <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+	                    {isHrDepartment(selectedUser || {}) ? "Global HR Window" : "HR Re-upload Window"}
+	                  </span>
+	                  <span
+	                    className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+	                      (isHrDepartment(selectedUser || {}) ? isHrGlobalOverrideActive : isHrOverrideActive)
+	                        ? "bg-emerald-100 text-emerald-700"
+	                        : "bg-slate-100 text-slate-600"
+	                    }`}
+	                  >
+	                    {(isHrDepartment(selectedUser || {}) ? isHrGlobalOverrideActive : isHrOverrideActive)
+	                      ? formatRemaining(
+	                          isHrDepartment(selectedUser || {})
+	                            ? selectedUser?.hrGlobalDocumentOverrideUntil
+	                            : selectedUser?.hrDocumentOverrideUntil
+	                        )
                       : "00:00"}
                   </span>
                 </div>
@@ -2186,7 +2186,7 @@ const ManageEmployee = () => {
       <Button
         variant="contained"
         onClick={handleSave}
-        disabled={(isSelectedUserInactive && !isSuperAdmin) || isSaving || (formData.password && (formData.password !== formData.confirmPassword || formData.password.length < 6))}
+        disabled={(isSelectedUserInactive && !isSuperAdminUser) || isSaving || (formData.password && (formData.password !== formData.confirmPassword || formData.password.length < 6))}
         startIcon={isSaving ? <CircularProgress size={18} /> : <Save />}
         sx={{
           textTransform: "none",

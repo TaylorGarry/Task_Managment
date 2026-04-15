@@ -4,7 +4,8 @@ import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { loginUser } from "../features/slices/authSlice.js";
 import { Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { canManageAdminPanels } from "../utils/roleAccess.js";
 
 const Login = () => {
   const { register, handleSubmit } = useForm();
@@ -13,6 +14,10 @@ const Login = () => {
   const { loading } = useSelector((state) => state.auth);
   const [showPassword, setShowPassword] = useState(false);
 
+  useEffect(() => {
+    toast.dismiss("auth-login-success");
+  }, []);
+
   const onSubmit = async (data) => {
     if (loading) return;
     try {
@@ -20,32 +25,31 @@ const Login = () => {
         identifier: data.identifier,
         password: data.password,
       };
-      const resultAction = await dispatch(loginUser(payload));
-      if (loginUser.fulfilled.match(resultAction)) {
-        toast.success("Login successful!");
-        const user = resultAction.payload;
-        if (user.accountType === "admin") navigate("/admin");
-        else navigate("/dashboard");
-      } else {
-        const message = String(
-          resultAction.payload ||
-            resultAction.error?.message ||
-            "Login failed"
-        );
-        const normalizedMessage = message.toLowerCase();
-        if (
-          normalizedMessage.includes("inactive") ||
-          normalizedMessage.includes("cannot login")
-        ) {
-          const inactiveMessage =
-            "Your account is inactive. You cannot login. Ask superAdmin or HR to activate your account.";
-          toast.error(inactiveMessage);
-        } else {
-          toast.error(message);
-        }
-      }
+      const user = await dispatch(loginUser(payload)).unwrap();
+      toast.success("Login successful!", { id: "auth-login-success", duration: 2000 });
+      navigate(canManageAdminPanels(user) ? "/admin" : "/dashboard");
     } catch (err) {
-      toast.error("Something went wrong");
+      const message = String(err || "Login failed");
+      const normalizedMessage = message.toLowerCase();
+      if (
+        normalizedMessage.includes("inactive") ||
+        normalizedMessage.includes("cannot login")
+      ) {
+        toast.error(
+          "Your account is inactive. You cannot login. Ask superAdmin or HR to activate your account."
+        );
+        return;
+      }
+      if (
+        normalizedMessage.includes("invalid") ||
+        normalizedMessage.includes("credential") ||
+        normalizedMessage.includes("password") ||
+        normalizedMessage.includes("not found")
+      ) {
+        toast.error("Invalid credentials");
+        return;
+      }
+      toast.error(message);
     }
   };
 

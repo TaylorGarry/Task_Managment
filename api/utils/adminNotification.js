@@ -1,5 +1,6 @@
 import User from "../Modals/User.modal.js";
 import Notification from "../Modals/Notification.modal.js";
+import { isHrDepartment } from "./roleAccess.js";
 
 const resolveName = (user = {}) =>
   String(user.realName || user.username || "Unknown").trim();
@@ -10,7 +11,7 @@ export const notifySuperAdminsForHrAction = async ({
   target = null,
   io = null,
 } = {}) => {
-  if (!actor || actor.accountType !== "HR" || !target || !action) return;
+  if (!actor || !isHrDepartment(actor) || !target || !action) return;
 
   const superAdmins = await User.find({
     accountType: "superAdmin",
@@ -71,4 +72,3 @@ export const notifySuperAdminsForHrAction = async ({
     });
   }
 };
-

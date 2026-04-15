@@ -5,8 +5,21 @@ import { Menu, X, AlertCircle, Clock, Camera } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { fetchMyDelegations, selectMyDelegations } from "../features/slices/delegationSlice.js";
+import {
+  canManageAdminPanels,
+  getRoleType,
+  isAgent,
+  normalizeDepartment,
+} from "../utils/roleAccess.js";
 
-const ROSTER_ALLOWED_DEPARTMENTS = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
+const ROSTER_ALLOWED_DEPARTMENTS = [
+  "Operations",
+  "Marketing",
+  "Customer Service",
+  "Developer",
+  "Ticketing",
+  "SEO",
+];
 
 const Navbar = () => {
   const { user, employeeDashboardSummary } = useSelector((state) => state.auth);
@@ -20,31 +33,30 @@ const Navbar = () => {
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
 
   const handleLogout = async () => {
+    toast.dismiss("auth-login-success");
     await dispatch(logoutUser());
     toast.success("Logged out successfully!");
     navigate("/login");
   };
 
-  const isEmployee = user?.accountType === "employee";
-  const isTransportDepartment = user?.department === "Transport";
+  const roleType = getRoleType(user);
+  const normalizedDepartment = normalizeDepartment(user?.department);
+  const isEmployee = roleType === "agent" || roleType === "supervisor";
+  const isTransportDepartment = normalizedDepartment === "Transport";
 
   const canAccessAttendanceUpdate =
-    user?.accountType === "employee" ||
-    ["admin", "superAdmin", "HR"].includes(user?.accountType);
+    isEmployee || canManageAdminPanels(user);
 
   const canAccessAttendanceSnapshot = true;
 
   const isAllowedRosterDepartmentEmployee =
-    user?.accountType === "employee" &&
-    ROSTER_ALLOWED_DEPARTMENTS.includes(user?.department);
+    isEmployee && ROSTER_ALLOWED_DEPARTMENTS.includes(normalizedDepartment);
   const canCreateDelegation =
-    user?.accountType === "employee" &&
-    String(user?.department || "").toLowerCase() === "ops - meta";
+    isEmployee && normalizedDepartment === "Operations";
 
   const canUploadExcel =
-    (user?.accountType === "employee" &&
-      ROSTER_ALLOWED_DEPARTMENTS.includes(user?.department)) ||
-    ["admin", "superAdmin", "HR"].includes(user?.accountType);
+    (isEmployee && ROSTER_ALLOWED_DEPARTMENTS.includes(normalizedDepartment)) ||
+    canManageAdminPanels(user);
 
   useEffect(() => {
     if (isEmployee) {
