@@ -699,10 +699,10 @@ export const signup = async (req, res) => {
     }
 
     if (isEmployeeFlow) {
-      if (!realName || !pseudoName || !empId || !dateOfJoining || !designation || !reportingManager) {
+      if (!realName || !pseudoName || !empId || !dateOfJoining || !designation) {
         return res.status(400).json({
           message:
-            "Real name, pseudo name, employee ID, joining date, designation and reporting manager are required for employees",
+            "Real name, pseudo name, employee ID, joining date, and designation are required for employees",
         });
       }
     }

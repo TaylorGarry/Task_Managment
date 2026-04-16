@@ -128,7 +128,7 @@ const Navbar = () => {
     <>
       <Toaster position="top-right" />
 
-      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen h-dvh w-[252px] border-r border-[#d4e2dd] bg-white/96 z-50">
+      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen h-dvh w-[232px] border-r border-[#d4e2dd] bg-white/96 z-50">
         <div className="h-full w-full px-5 py-6 flex flex-col">
           <h1
             className="text-[34px] leading-none font-bold text-sky-700 tracking-tight cursor-pointer"
