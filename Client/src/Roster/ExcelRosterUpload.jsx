@@ -623,6 +623,7 @@ import {
 import { toast } from 'react-toastify';
 import ConditionalNavbar from './ConditionalNavbar.jsx';
 import StyledDatePicker from '../components/StyledDatePicker.jsx';
+import { getRoleType, normalizeDepartment } from '../utils/roleAccess.js';
 const ExcelRosterUpload = () => {
   const dispatch = useDispatch();
   const { 
@@ -642,12 +643,15 @@ const ExcelRosterUpload = () => {
 
   // User info from localStorage
   const user = JSON.parse(localStorage.getItem('user')) || {};
-  const isSuperAdmin = user.accountType === 'superAdmin';
-  const isAdmin = ['admin', 'HR'].includes(user.accountType);
-  const allowedRosterDepartments = ['Ops - Meta', 'Marketing', 'CS', 'Developer', 'Ticketing', 'Seo'];
+  const accountType = String(user.accountType || '').trim().toLowerCase();
+  const roleType = getRoleType(user);
+  const normalizedDepartment = normalizeDepartment(user.department);
+  const isSuperAdmin = roleType === 'superAdmin';
+  const isAdmin = accountType === 'admin' || accountType === 'hr';
+  const allowedRosterDepartments = ['Operations', 'Marketing', 'Customer Service', 'Developer', 'Ticketing', 'SEO'];
   const isAllowedDepartmentEmployee =
-    user.accountType === 'employee' &&
-    allowedRosterDepartments.includes(user.department);
+    (roleType === 'agent' || roleType === 'supervisor') &&
+    allowedRosterDepartments.includes(normalizedDepartment);
   const canUpload = isSuperAdmin || isAdmin || isAllowedDepartmentEmployee;
 
   // Calculate tomorrow's date for allowed department employees
@@ -666,7 +670,7 @@ const ExcelRosterUpload = () => {
 
   const getRoleDateHint = () => {
     if (isSuperAdmin) return 'SuperAdmin can upload for any date (past, present, future).';
-    if (isAllowedDepartmentEmployee) return 'Ops-Meta/Marketing/CS/Developer/Ticketing/Seo employees can upload only from tomorrow onward.';
+    if (isAllowedDepartmentEmployee) return 'Operations/Marketing/Customer Service/Developer/Ticketing/SEO users can upload only from tomorrow onward.';
     return 'Admin/HR can upload for today and future dates.';
   };
 
@@ -681,7 +685,7 @@ const ExcelRosterUpload = () => {
       today.setHours(0, 0, 0, 0);
 
       if (isAllowedDepartmentEmployee && startDate < tomorrowFormatted) {
-        errors.startDate = 'Ops-Meta/Marketing/CS/Developer/Ticketing/Seo employees can only upload roster starting from tomorrow';
+        errors.startDate = 'Operations/Marketing/Customer Service/Developer/Ticketing/SEO users can only upload roster starting from tomorrow';
       } else if (!isSuperAdmin && start < today) {
         errors.startDate = 'Cannot select past dates';
       }
@@ -1091,7 +1095,7 @@ const ExcelRosterUpload = () => {
                 <span className="text-gray-700">
                   {isSuperAdmin && 'SuperAdmin can upload for any date (past, present, future)'}
                   {isAdmin && 'Admin/HR can upload for today and future dates'}
-                  {isAllowedDepartmentEmployee && 'Ops-Meta/Marketing/CS/Developer/Ticketing/Seo employees can upload from tomorrow onward only'}
+                  {isAllowedDepartmentEmployee && 'Operations/Marketing/Customer Service/Developer/Ticketing/SEO users can upload from tomorrow onward only'}
                 </span>
               </li>
               <li className="flex items-start">
