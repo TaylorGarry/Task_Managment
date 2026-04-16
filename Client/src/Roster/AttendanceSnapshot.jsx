@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice.js';
-import { Calendar, Users, Clock, RefreshCw, AlertCircle, ChevronDown, SlidersHorizontal, ChevronLeft, ChevronRight, Sun, Moon } from 'lucide-react';
+import { Calendar, Users, Clock, RefreshCw, AlertCircle, ChevronDown, SlidersHorizontal, ChevronLeft, ChevronRight, Sun, Moon, X, Sparkles } from 'lucide-react';
 import AdminNavbar from "../components/AdminNavbar.jsx";
 import Navbar from "../pages/Navbar.jsx";
 import html2canvas from "html2canvas";
@@ -23,6 +23,36 @@ const toDateKeyLocal = (value) => {
   const day = parts.find((p) => p.type === "day")?.value;
   if (!year || !month || !day) return "";
   return `${year}-${month}-${day}`;
+};
+
+const toDateKeyPlain = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const parseDateKeyToDate = (dateKey) => {
+  const match = String(dateKey || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day, 12, 0, 0, 0);
+  if (Number.isNaN(date.getTime())) return null;
+  return date;
+};
+
+const formatPrettyDate = (dateKey) => {
+  const date = parseDateKeyToDate(dateKey);
+  if (!date) return "--";
+  return date.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
 };
 
 		const AttendanceSnapshot = () => {
@@ -46,6 +76,15 @@ const toDateKeyLocal = (value) => {
 		  } = useSelector((state) => state.roster);
 
 		  const [selectedDate, setSelectedDate] = useState(() => toDateKeyLocal(new Date()));
+		  const [exportStartDate, setExportStartDate] = useState(() => toDateKeyLocal(new Date()));
+		  const [exportEndDate, setExportEndDate] = useState(() => toDateKeyLocal(new Date()));
+		  const [isExportRangeModalOpen, setIsExportRangeModalOpen] = useState(false);
+		  const [draftExportStartDate, setDraftExportStartDate] = useState("");
+		  const [draftExportEndDate, setDraftExportEndDate] = useState("");
+		  const [exportCalendarBaseMonth, setExportCalendarBaseMonth] = useState(() => {
+		    const now = new Date();
+		    return new Date(now.getFullYear(), now.getMonth(), 1);
+		  });
 		  
 		  const [selectedDepartments, setSelectedDepartments] = useState([]);
 		  const [selectedTeamLeaders, setSelectedTeamLeaders] = useState([]);
@@ -641,21 +680,50 @@ const toDateKeyLocal = (value) => {
 		    TEAM_LEADER_NONE,
 			  ]);
 
-			  const canDownloadExcel =
-			    isNonEmployeeExcelUser || (isEmployeeUser && activeDelegationsForWeek.length > 0);
+				  const canDownloadExcel =
+				    isNonEmployeeExcelUser || (isEmployeeUser && activeDelegationsForWeek.length > 0);
 
-				  const handleExportSnapshot = async () => {
-				    try {
-		      const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
-		      if (!week?.startDate || !week?.endDate) {
-		        return;
-	      }
+				  useEffect(() => {
+				    const week = availableWeeks.find((w) => String(w.weekNumber) === String(selectedWeek));
+				    if (!week?.startDate || !week?.endDate) return;
+				    const weekStartKey = toDateKeyLocal(week.startDate);
+				    const weekEndKey = toDateKeyLocal(week.endDate);
+				    if (!weekStartKey || !weekEndKey) return;
+				    setExportStartDate(weekStartKey);
+				    setExportEndDate(weekEndKey);
+				  }, [availableWeeks, selectedWeek]);
 
-	      const startDateKey = toDateKeyLocal(week.startDate);
-	      const endDateKey = toDateKeyLocal(week.endDate);
-	      if (!startDateKey || !endDateKey) {
-	        return;
-	      }
+				  useEffect(() => {
+				    if (!isExportRangeModalOpen) return undefined;
+				    const onKeyDown = (event) => {
+				      if (event.key === "Escape") {
+				        setIsExportRangeModalOpen(false);
+				      }
+				    };
+				    window.addEventListener("keydown", onKeyDown);
+				    return () => window.removeEventListener("keydown", onKeyDown);
+				  }, [isExportRangeModalOpen]);
+
+				  const openExportRangeModal = () => {
+				    const resolvedStart = exportStartDate || selectedDate || toDateKeyLocal(new Date());
+				    const resolvedEnd = exportEndDate || resolvedStart;
+				    setDraftExportStartDate(resolvedStart);
+				    setDraftExportEndDate(resolvedEnd);
+
+				    const monthSeed = parseDateKeyToDate(resolvedStart) || new Date();
+				    setExportCalendarBaseMonth(new Date(monthSeed.getFullYear(), monthSeed.getMonth(), 1));
+				    setIsExportRangeModalOpen(true);
+				  };
+
+				  const handleExportSnapshot = async (startDateKey, endDateKey) => {
+					    try {
+			      if (!startDateKey || !endDateKey) {
+				        return;
+			      }
+
+			      if (startDateKey > endDateKey) {
+			        return;
+			      }
 
 				      const exportPayload = {
 				        startDate: startDateKey,
@@ -673,10 +741,59 @@ const toDateKeyLocal = (value) => {
 				      }
 			      await dispatch(exportAttendanceSnapshot(exportPayload)).unwrap();
 		    } catch (err) {
-		      // exportAttendanceSnapshot already toasts on success; keep errors silent here
-		      console.error('Export snapshot failed:', err);
-	    }
-			  };
+			      // exportAttendanceSnapshot already toasts on success; keep errors silent here
+			      console.error('Export snapshot failed:', err);
+		    }
+				  };
+
+				  const handleConfirmExportRange = async () => {
+				    if (!draftExportStartDate || !draftExportEndDate) return;
+				    const finalStart = draftExportStartDate <= draftExportEndDate ? draftExportStartDate : draftExportEndDate;
+				    const finalEnd = draftExportStartDate <= draftExportEndDate ? draftExportEndDate : draftExportStartDate;
+				    setExportStartDate(finalStart);
+				    setExportEndDate(finalEnd);
+				    await handleExportSnapshot(finalStart, finalEnd);
+				    setIsExportRangeModalOpen(false);
+				  };
+
+				  const handleRangeDatePick = (dateKey) => {
+				    if (!dateKey) return;
+				    if (!draftExportStartDate || (draftExportStartDate && draftExportEndDate)) {
+				      setDraftExportStartDate(dateKey);
+				      setDraftExportEndDate("");
+				      return;
+				    }
+				    if (dateKey < draftExportStartDate) {
+				      setDraftExportStartDate(dateKey);
+				      return;
+				    }
+				    setDraftExportEndDate(dateKey);
+				  };
+
+				  const goExportCalendarPrevMonth = () => {
+				    setExportCalendarBaseMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+				  };
+
+				  const goExportCalendarNextMonth = () => {
+				    setExportCalendarBaseMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+				  };
+
+				  const exportCalendarMonths = useMemo(() => {
+				    const first = new Date(exportCalendarBaseMonth.getFullYear(), exportCalendarBaseMonth.getMonth(), 1);
+				    const second = new Date(exportCalendarBaseMonth.getFullYear(), exportCalendarBaseMonth.getMonth() + 1, 1);
+				    return [first, second];
+				  }, [exportCalendarBaseMonth]);
+
+				  const buildCalendarDays = (monthDate) => {
+				    const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+				    const gridStart = new Date(monthStart);
+				    gridStart.setDate(monthStart.getDate() - monthStart.getDay());
+				    return Array.from({ length: 42 }, (_, idx) => {
+				      const day = new Date(gridStart);
+				      day.setDate(gridStart.getDate() + idx);
+				      return day;
+				    });
+				  };
 
 			  const filteredEmployees = (allEmployees || []).filter((emp) => {
 			    const matchesDepartment =
@@ -916,9 +1033,9 @@ const toDateKeyLocal = (value) => {
             )}
 
 		            {/* Date Picker */}
-		            <div className="flex items-center gap-2">
-		              <button
-		                type="button"
+			            <div className="flex items-center gap-2">
+			              <button
+			                type="button"
 		                onClick={openDatePicker}
 		                className="text-gray-500 hover:text-gray-700"
 		                aria-label="Open calendar"
@@ -931,9 +1048,9 @@ const toDateKeyLocal = (value) => {
 		                value={selectedDate}
 		                onChange={(e) => handleDateChange(e.target.value)}
 		                onClick={(e) => e.currentTarget.showPicker?.()}
-		                className="border border-gray-200 rounded-lg px-3 py-2 text-sm hover:bg-gray-50 min-w-[160px]"
-		              />
-		            </div>
+			                className="border border-gray-200 rounded-lg px-3 py-2 text-sm hover:bg-gray-50 min-w-[160px]"
+			              />
+			            </div>
 
 			            {/* Department Filter */}
 				            <div className="flex items-center gap-2">
@@ -1049,11 +1166,12 @@ const toDateKeyLocal = (value) => {
 	            {/* Export (HR/SuperAdmin) */}
 		            {canDownloadExcel && (
 		              <button
-		                onClick={handleExportSnapshot}
-		                disabled={!selectedWeek}
+		                onClick={openExportRangeModal}
+		                disabled={!selectedRoster}
 		                className="flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 disabled:opacity-50 disabled:cursor-not-allowed"
-		                title={!selectedWeek ? 'Select a week to export' : 'Download attendance snapshot Excel'}
+		                title={!selectedRoster ? "No roster selected" : "Choose date range and export attendance snapshot Excel"}
 		              >
+		                <Sparkles size={15} />
 		                Download Excel
 		              </button>
 		            )}
@@ -1542,9 +1660,135 @@ const toDateKeyLocal = (value) => {
 	            </div>
 	          </div>
 	        </div>
-	      )}
-	    </div>
-	  );
+		      )}
+
+		      {isExportRangeModalOpen && (
+		        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/60 backdrop-blur-[2px] p-4">
+		          <div className="w-full max-w-5xl rounded-2xl overflow-hidden border border-slate-200 bg-white shadow-2xl">
+		            <div className="relative p-5 md:p-6 bg-gradient-to-r from-emerald-500 via-sky-500 to-indigo-500 text-white">
+		              <button
+		                type="button"
+		                onClick={() => setIsExportRangeModalOpen(false)}
+		                className="absolute top-4 right-4 h-9 w-9 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center"
+		                aria-label="Close export date range"
+		              >
+		                <X size={18} />
+		              </button>
+		              <h3 className="text-xl font-semibold">Export Attendance Range</h3>
+		              <p className="text-sm text-emerald-50 mt-1">
+		                Pick start and end date from connected calendars.
+		              </p>
+		              <div className="mt-4 rounded-xl bg-white/15 border border-white/25 p-3">
+		                <div className="flex flex-wrap items-center gap-2">
+		                  <span className="text-xs uppercase tracking-wide text-white/80">From</span>
+		                  <span className="px-3 py-1.5 rounded-lg bg-white text-slate-800 text-sm font-semibold">
+		                    {formatPrettyDate(draftExportStartDate)}
+		                  </span>
+		                  <span className="text-white/80">to</span>
+		                  <span className="px-3 py-1.5 rounded-lg bg-white text-slate-800 text-sm font-semibold">
+		                    {formatPrettyDate(draftExportEndDate)}
+		                  </span>
+		                </div>
+		              </div>
+		            </div>
+
+		            <div className="p-5 md:p-6 bg-slate-50">
+		              <div className="mb-4 flex items-center justify-between">
+		                <button
+		                  type="button"
+		                  onClick={goExportCalendarPrevMonth}
+		                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+		                >
+		                  <ChevronLeft size={16} />
+		                  Prev
+		                </button>
+		                <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+		                  Click once for start date, click again for end date
+		                </div>
+		                <button
+		                  type="button"
+		                  onClick={goExportCalendarNextMonth}
+		                  className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-100"
+		                >
+		                  Next
+		                  <ChevronRight size={16} />
+		                </button>
+		              </div>
+
+		              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+		                {exportCalendarMonths.map((monthDate, monthIdx) => {
+		                  const days = buildCalendarDays(monthDate);
+		                  return (
+		                    <div key={`${monthDate.getFullYear()}-${monthDate.getMonth()}`} className="rounded-xl border border-slate-200 bg-white p-4">
+		                      <div className="mb-3 text-center font-semibold text-slate-800">
+		                        {monthDate.toLocaleDateString("en-US", { month: "long", year: "numeric" })}
+		                      </div>
+		                      <div className="grid grid-cols-7 gap-1 mb-2">
+		                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((dayName) => (
+		                          <div key={`${monthIdx}-${dayName}`} className="text-[11px] uppercase tracking-wide text-slate-400 text-center py-1">
+		                            {dayName}
+		                          </div>
+		                        ))}
+		                      </div>
+		                      <div className="grid grid-cols-7 gap-1">
+		                        {days.map((day, idx) => {
+		                          const dayKey = toDateKeyPlain(day);
+		                          const inCurrentMonth = day.getMonth() === monthDate.getMonth();
+		                          const isStart = dayKey === draftExportStartDate;
+		                          const isEnd = dayKey === draftExportEndDate;
+		                          const isInRange =
+		                            Boolean(draftExportStartDate && draftExportEndDate) &&
+		                            dayKey > draftExportStartDate &&
+		                            dayKey < draftExportEndDate;
+
+		                          const baseClass = "h-10 rounded-lg text-sm transition-colors border";
+		                          let stateClass = "border-transparent text-slate-700 hover:bg-slate-100";
+		                          if (!inCurrentMonth) stateClass = "border-transparent text-slate-300 hover:bg-slate-50";
+		                          if (isInRange) stateClass = "border-sky-100 bg-sky-50 text-sky-700";
+		                          if (isStart || isEnd) {
+		                            stateClass = "border-emerald-500 bg-emerald-500 text-white font-semibold shadow-sm";
+		                          }
+
+		                          return (
+		                            <button
+		                              key={`${monthIdx}-${idx}-${dayKey}`}
+		                              type="button"
+		                              onClick={() => handleRangeDatePick(dayKey)}
+		                              className={`${baseClass} ${stateClass}`}
+		                            >
+		                              {day.getDate()}
+		                            </button>
+		                          );
+		                        })}
+		                      </div>
+		                    </div>
+		                  );
+		                })}
+		              </div>
+		            </div>
+
+		            <div className="px-5 md:px-6 py-4 border-t border-slate-200 bg-white flex flex-wrap items-center justify-end gap-2">
+		              <button
+		                type="button"
+		                onClick={() => setIsExportRangeModalOpen(false)}
+		                className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-50"
+		              >
+		                Cancel
+		              </button>
+		              <button
+		                type="button"
+		                onClick={handleConfirmExportRange}
+		                disabled={!draftExportStartDate || !draftExportEndDate}
+		                className="px-4 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+		              >
+		                Export Excel
+		              </button>
+		            </div>
+		          </div>
+		        </div>
+		      )}
+		    </div>
+		  );
 };
 
 export default AttendanceSnapshot;

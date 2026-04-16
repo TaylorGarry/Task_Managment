@@ -1878,8 +1878,14 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	    const dateLabels = dateKeys.map((k) => dayLabelFromKey(k));
 
 	    const employeeMap = new Map();
+	    const normalizeKeyPart = (value) => String(value || "").trim().toLowerCase();
 	    const ensureEmployee = (emp) => {
-	      const key = emp?._id ? String(emp._id) : `${emp?.name || ""}__${emp?.department || ""}`;
+	      const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
+	      const key = employeeUserId
+	        ? `uid:${employeeUserId}`
+	        : `name:${normalizeKeyPart(emp?.name)}|dept:${normalizeKeyPart(emp?.department)}|tl:${normalizeKeyPart(
+	            emp?.teamLeader
+	          )}`;
 	      if (!employeeMap.has(key)) {
 	        employeeMap.set(key, {
 	          name: emp?.name || "",
@@ -2108,7 +2114,15 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 	    const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
 	    const startKey = startDate;
 	    const endKey = endDate;
-	    const deptSuffix = deptFilter ? `_dept_${deptFilter.replace(/\s+/g, "-")}` : "";
+	    const selectedDepartmentValues = toArrayParam(department)
+	      .map((value) => String(value || "").trim())
+	      .filter(Boolean);
+	    const deptSuffix = selectedDepartmentValues.length
+	      ? `_dept_${selectedDepartmentValues
+	          .join("-")
+	          .replace(/\s+/g, "-")
+	          .replace(/[^a-zA-Z0-9_-]/g, "")}`
+	      : "";
 
     res.setHeader(
       "Content-Type",
