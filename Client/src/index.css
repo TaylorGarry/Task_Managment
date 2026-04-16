@@ -218,11 +218,11 @@ body {
 
 @media (min-width: 768px) {
   body.employee-sidebar-layout {
-    padding-left: 252px;
+    padding-left: 232px;
   }
 
   body.admin-sidebar-layout {
-    padding-left: 280px;
+    padding-left: 256px;
   }
 }
 

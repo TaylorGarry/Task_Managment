@@ -73,7 +73,6 @@ const Signup = () => {
   const empId = watch("empId");
   const dateOfJoining = watch("dateOfJoining");
   const designation = watch("designation");
-  const reportingManager = watch("reportingManager");
   const shiftLabel = watch("shiftLabel");
   const docsStatus = watch("docsStatus");
   const isEmployee = accountType === "agent" || accountType === "supervisor";
@@ -158,7 +157,6 @@ const Signup = () => {
       hasText(empId) &&
       hasText(dateOfJoining) &&
       hasText(designation) &&
-      hasText(reportingManager) &&
       (isCoreTeam || hasText(shiftLabel)));
   const isStep3Complete = !isEmployee || (docsStatus === "No" ? true : documents.length > 0);
 
@@ -189,7 +187,9 @@ const Signup = () => {
       payload.docsStatus = data.docsStatus;
       payload.documents = documents;
       payload.designation = data.designation;
-      payload.reportingManager = data.reportingManager;
+      if (hasText(data.reportingManager)) {
+        payload.reportingManager = data.reportingManager;
+      }
       payload.policyDocuments = STATIC_POLICY_DOCS;
     }
 
@@ -286,7 +286,7 @@ const Signup = () => {
       <div className="relative min-h-screen overflow-y-auto bg-gradient-to-br from-slate-100 via-cyan-50 to-white pt-16">
         <div className="absolute inset-0 bg-[radial-gradient(55%_55%_at_15%_10%,rgba(2,132,199,0.12),rgba(255,255,255,0))]" />
         <div className="absolute inset-0 bg-[radial-gradient(50%_45%_at_90%_10%,rgba(14,116,144,0.14),rgba(255,255,255,0))]" />
-        <div className="relative mx-auto max-w-7xl px-4 py-6">
+        <div className="relative mx-auto max-w-[1600px] px-3 md:px-4 py-6">
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_65px_-45px_rgba(15,23,42,0.45)]">
             <div className="grid gap-0 lg:grid-cols-[0.9fr_1.35fr]">
               <section className="border-b border-slate-200 bg-gradient-to-br from-slate-900 via-cyan-900 to-slate-900 p-8 text-white lg:border-b-0 lg:border-r">
@@ -503,7 +503,7 @@ const Signup = () => {
                         <div>
                           <label className="text-sm font-medium text-slate-700">Reporting Manager</label>
                           <select
-                            {...register("reportingManager", { required: true })}
+                            {...register("reportingManager")}
                             className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
                             disabled={creatingUser}
                           >

@@ -1064,7 +1064,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
 
   return (
     <>
-      <nav className="fixed top-0 left-0 md:inset-y-0 z-50 w-full md:w-[280px] md:h-screen">
+      <nav className="fixed top-0 left-0 md:inset-y-0 z-50 w-full md:w-[256px] md:h-screen">
         <style>{`
           @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Playfair+Display:wght@600&display=swap');
           @media (min-width: 768px) {
@@ -1082,7 +1082,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
             }
           }
         `}</style>
-        <div className="app-shell-nav text-slate-900 shadow-sm md:h-full md:pl-6 md:pr-4 md:py-5">
+        <div className="app-shell-nav text-slate-900 shadow-sm md:h-full md:pl-4 md:pr-3 md:py-5">
           <div className="app-shell-inner md:max-w-none px-3 lg:px-5 py-2 md:p-0 flex justify-between items-center gap-4 md:h-full md:flex-col md:items-stretch md:justify-start">
             <h1
               className="app-brand text-xl lg:text-2xl font-semibold cursor-pointer whitespace-nowrap"
