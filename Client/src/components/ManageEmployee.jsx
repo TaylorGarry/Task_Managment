@@ -14,7 +14,7 @@ import {
   Cancel, Business, AccessTime, Description, Security,
   Person, Badge, Work, People, FileCopy, Save,
   FolderOpen, PictureAsPdf, Image, Description as DocIcon,
-  School, LocationOn, CreditCard, Receipt, Assignment, CameraAlt,
+  School, LocationOn, CreditCard, Receipt, Assignment, CameraAlt, Search,
   Campaign
 } from "@mui/icons-material";
 import { styled } from "@mui/material/styles";
@@ -173,7 +173,9 @@ const ManageEmployee = () => {
   const [uploadStates, setUploadStates] = useState({});
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [isSearchingEmployees, setIsSearchingEmployees] = useState(false);
+  const [hasFetchedEmployees, setHasFetchedEmployees] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [grantingOverride, setGrantingOverride] = useState(false);
   const [deletingEmployee, setDeletingEmployee] = useState(false);
@@ -185,6 +187,7 @@ const ManageEmployee = () => {
   const [isExportingEmployees, setIsExportingEmployees] = useState(false);
   const videoRef = useRef(null);
   const streamRef = useRef(null);
+  const activeSearchRequestRef = useRef(0);
 
   const sections = [
     { id: "basic", label: "Basic Info", icon: <Person sx={{ fontSize: 18 }} /> },
@@ -233,16 +236,37 @@ const ManageEmployee = () => {
   };
 
   useEffect(() => {
-    if (!loadedOnce) {
-      dispatch(fetchEmployees())
-        .unwrap()
-        .then((data) => {
-          setLocalEmployees(data);
-          setLoadedOnce(true);
+    const seq = ++activeSearchRequestRef.current;
+    const normalizedSearch = employeeSearch.trim();
+    let searchRequest;
+
+    const timer = setTimeout(() => {
+      setIsSearchingEmployees(true);
+      searchRequest = dispatch(fetchEmployees({ search: normalizedSearch, force: true }));
+
+      searchRequest
+        .then((action) => {
+          if (activeSearchRequestRef.current !== seq) return;
+          if (fetchEmployees.fulfilled.match(action)) {
+            setLocalEmployees(action.payload || []);
+            setHasFetchedEmployees(true);
+            setPage(0);
+          } else if (!action.meta?.aborted) {
+            toast.error(action.payload || "Failed to load employees");
+          }
         })
-        .catch(() => toast.error("Failed to load employees"));
-    }
-  }, [dispatch, loadedOnce]);
+        .finally(() => {
+          if (activeSearchRequestRef.current === seq) {
+            setIsSearchingEmployees(false);
+          }
+        });
+    }, 350);
+
+    return () => {
+      clearTimeout(timer);
+      if (searchRequest?.abort) searchRequest.abort();
+    };
+  }, [dispatch, employeeSearch]);
 
   useEffect(() => {
     dispatch(fetchReportingManagers("Operations"));
@@ -919,7 +943,7 @@ const ManageEmployee = () => {
     }
   };
 
-  if (loading && localEmployees.length === 0)
+  if (!hasFetchedEmployees && loading && localEmployees.length === 0)
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="text-center">
@@ -933,26 +957,77 @@ const ManageEmployee = () => {
     <div className="min-h-screen bg-slate-50/50 px-8 py-6 sm:px-6 lg:px-8">
   {/* Employee Table */}
   <StyledCard>
-    <div className="flex items-center justify-between border-b px-4 py-3" style={{ borderColor: "#eaeaea" }}>
-      <div>
-        <p className="text-sm font-semibold text-slate-800">Employee Details</p>
-        <p className="text-xs text-slate-500">Export complete employee data with document status columns</p>
+    <div className="border-b px-4 py-3" style={{ borderColor: "#eaeaea" }}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-800">Employee Details</p>
+          <p className="text-xs text-slate-500">Export complete employee data with document status columns</p>
+        </div>
+        <Button
+          variant="contained"
+          size="small"
+          onClick={handleExportEmployeeDetails}
+          disabled={isExportingEmployees}
+          startIcon={isExportingEmployees ? <CircularProgress size={14} sx={{ color: "#fff" }} /> : <Download sx={{ fontSize: 16 }} />}
+          sx={{
+            textTransform: "none",
+            borderRadius: "10px",
+            backgroundColor: "#2563eb",
+            "&:hover": { backgroundColor: "#1d4ed8" },
+          }}
+        >
+          {isExportingEmployees ? "Exporting..." : "Export Employee Details"}
+        </Button>
       </div>
-      <Button
-        variant="contained"
-        size="small"
-        onClick={handleExportEmployeeDetails}
-        disabled={isExportingEmployees}
-        startIcon={isExportingEmployees ? <CircularProgress size={14} sx={{ color: "#fff" }} /> : <Download sx={{ fontSize: 16 }} />}
-        sx={{
-          textTransform: "none",
-          borderRadius: "10px",
-          backgroundColor: "#2563eb",
-          "&:hover": { backgroundColor: "#1d4ed8" },
-        }}
-      >
-        {isExportingEmployees ? "Exporting..." : "Export Employee Details"}
-      </Button>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <TextField
+          fullWidth
+          size="small"
+          placeholder="Search employee by name or username..."
+          value={employeeSearch}
+          onChange={(e) => setEmployeeSearch(e.target.value)}
+          sx={{
+            maxWidth: { xs: "100%", md: 420 },
+            "& .MuiOutlinedInput-root": {
+              borderRadius: "999px",
+              background:
+                "linear-gradient(90deg, rgba(248,250,252,0.95) 0%, rgba(241,245,249,0.95) 100%)",
+              "& fieldset": { borderColor: "#dbe2ea" },
+              "&:hover fieldset": { borderColor: "#93c5fd" },
+              "&.Mui-focused fieldset": { borderColor: "#2563eb", borderWidth: "2px" },
+            },
+          }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <Search sx={{ fontSize: 18, color: "#2563eb" }} />
+              </InputAdornment>
+            ),
+            endAdornment: employeeSearch ? (
+              <InputAdornment position="end">
+                <IconButton
+                  size="small"
+                  onClick={() => setEmployeeSearch("")}
+                  aria-label="clear employee search"
+                >
+                  <Close sx={{ fontSize: 16 }} />
+                </IconButton>
+              </InputAdornment>
+            ) : null,
+          }}
+        />
+        <Chip
+          size="small"
+          label={`${localEmployees.length} result${localEmployees.length === 1 ? "" : "s"}`}
+          sx={{
+            borderRadius: "999px",
+            backgroundColor: "#eff6ff",
+            color: "#1d4ed8",
+            fontWeight: 600,
+          }}
+        />
+      </div>
+      {isSearchingEmployees && <LinearProgress sx={{ mt: 2, borderRadius: 999 }} />}
     </div>
     <TableContainer>
       <Table>
@@ -1058,6 +1133,17 @@ const ManageEmployee = () => {
                 </TableCell>
               </TableRow>
             ))}
+          {!isSearchingEmployees && localEmployees.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+                <Typography variant="body2" sx={{ color: "#64748b" }}>
+                  {employeeSearch.trim()
+                    ? "No employees match this search."
+                    : "No employees found."}
+                </Typography>
+              </TableCell>
+            </TableRow>
+          )}
         </TableBody>
       </Table>
     </TableContainer>

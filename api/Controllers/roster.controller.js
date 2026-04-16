@@ -6,6 +6,7 @@ import {
   getDelegationContextForDate,
   canDelegatedAssigneeManageEmployee,
 } from "../utils/delegationAccess.js";
+import { getRoleType, normalizeDepartment } from "../utils/roleAccess.js";
 
 const getDelegatedTeamLeaderNames = async ({ assigneeId, actionDate }) => {
   const baseDate = new Date(actionDate);
@@ -4440,12 +4441,17 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
 export const getOpsMetaCurrentWeekRoster = async (req, res) => {
   try {
     const user = req.user;
-    const allowedTeamLeaderDepartments = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
-    
-    if (!allowedTeamLeaderDepartments.includes(user.department)) {
+    const roleType = getRoleType(user || {});
+    const normalizedDepartment = normalizeDepartment(user?.department);
+    const allowedTeamLeaderDepartments = ["Operations", "Marketing", "Customer Service", "Developer", "Ticketing", "SEO"];
+    const canAccessCurrentWeekRoster =
+      (roleType === "agent" || roleType === "supervisor") &&
+      allowedTeamLeaderDepartments.includes(normalizedDepartment);
+
+    if (!canAccessCurrentWeekRoster) {
       return res.status(403).json({
         success: false,
-        message: "Access denied. Only Ops-Meta, Marketing, CS, Developer, Ticketing, or Seo department employees can access this."
+        message: "Access denied. Only Operations, Marketing, Customer Service, Developer, Ticketing, or SEO employees can access this."
       });
     }
 
@@ -4842,17 +4848,22 @@ export const updateOpsMetaRoster = async (req, res) => {
 export const rosterUploadFromExcel = async (req, res) => {
   try {
 	    const user = req.user;
-	    const isSuperAdmin = user.accountType === "superAdmin";
-	    const isHR = user.accountType === "HR";
-	    const isAdmin = user.accountType === "admin";
-	    const allowedEmployeeDepartments = ["Ops - Meta", "Marketing", "CS", "Developer", "Ticketing", "Seo"];
-	    const isAllowedDepartmentEmployee = user.accountType === "employee" && allowedEmployeeDepartments.includes(user.department);
+	    const accountType = String(user?.accountType || "").trim().toLowerCase();
+	    const roleType = getRoleType(user || {});
+	    const normalizedDepartment = normalizeDepartment(user?.department);
+	    const isSuperAdmin = roleType === "superAdmin";
+	    const isHR = accountType === "hr";
+	    const isAdmin = accountType === "admin";
+	    const allowedEmployeeDepartments = ["Operations", "Marketing", "Customer Service", "Developer", "Ticketing", "SEO"];
+	    const isAllowedDepartmentEmployee =
+	      (roleType === "agent" || roleType === "supervisor") &&
+	      allowedEmployeeDepartments.includes(normalizedDepartment);
 	    const isHrOrSuperAdmin = isSuperAdmin || isHR;
 	    
 	    if (!isSuperAdmin && !isHR && !isAdmin && !isAllowedDepartmentEmployee) {
 	      return res.status(403).json({
 	        success: false,
-	        message: "Access denied. Only superAdmin, admin, HR, or Ops-Meta/Marketing/CS/Developer/Ticketing/Seo department employees can upload roster."
+	        message: "Access denied. Only superAdmin, admin, HR, or Operations/Marketing/Customer Service/Developer/Ticketing/SEO employees can upload roster."
 	      });
 	    }
     
@@ -4965,12 +4976,12 @@ export const rosterUploadFromExcel = async (req, res) => {
       const tomorrow = new Date(today);
       tomorrow.setDate(tomorrow.getDate() + 1);
       
-      if (selectedStartDate < tomorrow) {
-        return res.status(400).json({
-          success: false,
-	          message: "Ops-Meta, Marketing, CS, Developer, Ticketing, and Seo employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
-        });
-      }
+	      if (selectedStartDate < tomorrow) {
+	        return res.status(400).json({
+	          success: false,
+		          message: "Operations, Marketing, Customer Service, Developer, Ticketing, and SEO employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
+	        });
+	      }
 	    } 
 	    else if (isAdmin) {
 	      if (selectedStartDate < today) {
