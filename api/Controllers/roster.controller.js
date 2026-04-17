@@ -8743,6 +8743,10 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         });
       }
 
+      // Include delegated employees in editable team count so delegated assignees
+      // are not forced into read-only mode.
+      managedTeamCount = filteredEmployees.filter((emp) => !isSelfEmployee(emp)).length;
+
       console.log(`👥 Team Leader ${user.username}: Found ${filteredEmployees.length} employees`);
     }
     

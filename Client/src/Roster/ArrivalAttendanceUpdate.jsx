@@ -668,7 +668,24 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
   const isDarkTable = tableTheme === "dark";
 
-  const managedTeamCount = Number(updateEmployeesData?.data?.summary?.managedTeamCount || 0);
+  const serverManagedTeamCount = Number(updateEmployeesData?.data?.summary?.managedTeamCount || 0);
+  const currentUserId = String(currentUser?._id || currentUser?.id || "").trim();
+  const currentUsername = String(currentUser?.username || "").trim().toLowerCase();
+  const inferredManagedTeamCount = rosterEntries.filter((employee) => {
+    if (!employee) return false;
+    const sameUserId =
+      currentUserId &&
+      employee.userId &&
+      String(employee.userId).trim() === currentUserId;
+    const sameName =
+      currentUsername &&
+      String(employee.name || "").trim().toLowerCase() === currentUsername;
+    const sameUsername =
+      currentUsername &&
+      String(employee.username || "").trim().toLowerCase() === currentUsername;
+    return !(sameUserId || sameName || sameUsername);
+  }).length;
+  const managedTeamCount = Math.max(serverManagedTeamCount, inferredManagedTeamCount);
   const hasManagedTeam = managedTeamCount > 0;
   const canTeamLeaderManageTeam = hasManagedTeam;
   const canUpdateTransport =
