@@ -8,7 +8,7 @@ import { fetchMyDelegations, selectMyDelegations } from "../features/slices/dele
 import {
   canManageAdminPanels,
   getRoleType,
-  isAgent,
+  isTeamLeaderUser,
   normalizeDepartment,
 } from "../utils/roleAccess.js";
 
@@ -51,8 +51,9 @@ const Navbar = () => {
 
   const isAllowedRosterDepartmentEmployee =
     isEmployee && ROSTER_ALLOWED_DEPARTMENTS.includes(normalizedDepartment);
+  const isTeamLeader = isTeamLeaderUser(user);
   const canCreateDelegation =
-    isEmployee && normalizedDepartment === "Operations";
+    (isEmployee && normalizedDepartment === "Operations") || isTeamLeader;
 
   const canUploadExcel =
     (isEmployee && ROSTER_ALLOWED_DEPARTMENTS.includes(normalizedDepartment)) ||

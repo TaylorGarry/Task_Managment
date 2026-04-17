@@ -436,6 +436,7 @@ import {
   isAgent,
   isHrDepartment,
   isSuperAdmin,
+  isTeamLeaderUser,
   normalizeDepartment,
 } from "./utils/roleAccess.js";
 
@@ -547,7 +548,8 @@ const DelegationAccessRoute = ({ children }) => {
   const isOpsMetaEmployee =
     (isAgent(user) || getRoleType(user) === "supervisor") &&
     normalizeDepartment(user.department) === "Operations";
-  if (!isHrOrSuperAdmin && !isOpsMetaEmployee) {
+  const isTeamLeader = isTeamLeaderUser(user);
+  if (!isHrOrSuperAdmin && !isOpsMetaEmployee && !isTeamLeader) {
     return <Navigate to={(isAgent(user) || getRoleType(user) === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
   }
   return children;

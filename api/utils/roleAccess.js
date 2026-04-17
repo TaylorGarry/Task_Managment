@@ -24,6 +24,7 @@ const DEPARTMENT_ALIASES = {
 };
 
 const normalizeText = (value = "") => String(value || "").trim();
+const TEAM_LEADER_DESIGNATION_RE = /\bteam\s*leader\b/i;
 
 export const normalizeDepartment = (department = "") => {
   const raw = normalizeText(department);
@@ -58,6 +59,13 @@ export const getRoleType = (userLike = {}) => {
   }
 
   return userLike?.isTeamLeader ? "supervisor" : "agent";
+};
+
+export const isTeamLeaderUser = (userLike = {}) => {
+  if (!userLike) return false;
+  if (Boolean(userLike?.isTeamLeader)) return true;
+  const designation = String(userLike?.designation || "").trim();
+  return TEAM_LEADER_DESIGNATION_RE.test(designation);
 };
 
 export const isSuperAdmin = (userLike = {}) => getRoleType(userLike) === "superAdmin";

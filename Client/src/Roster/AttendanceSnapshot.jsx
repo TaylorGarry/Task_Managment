@@ -45,6 +45,71 @@ const parseDateKeyToDate = (dateKey) => {
   return date;
 };
 
+const getMonthStartDateKey = (month, year) => {
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return "";
+  return `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01`;
+};
+
+const getMonthBounds = (month, year) => {
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return null;
+  const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+  const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+  return { monthStart, monthEnd, parsedMonth, parsedYear };
+};
+
+const getWeekNumberForMonth = (dateValue, month, year) => {
+  const dateKey = typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+    ? dateValue
+    : toDateKeyLocal(dateValue);
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (
+    !dateKey ||
+    !Number.isFinite(parsedMonth) ||
+    !Number.isFinite(parsedYear)
+  ) {
+    return 1;
+  }
+  const dayOfMonth = Number.parseInt(dateKey.split("-")[2], 10);
+  if (!Number.isFinite(dayOfMonth)) return 1;
+  const firstDayOfMonth = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1));
+  return Math.max(1, Math.ceil((firstDayOfMonth.getUTCDay() + dayOfMonth) / 7));
+};
+
+const getDisplayWeeksForMonth = (weeks = [], month, year) => {
+  const bounds = getMonthBounds(month, year);
+  if (!bounds) return Array.isArray(weeks) ? weeks : [];
+  const { parsedMonth, parsedYear } = bounds;
+  const monthStartKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01`;
+  const monthEndDay = new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate();
+  const monthEndKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
+
+  return (Array.isArray(weeks) ? weeks : [])
+    .filter((week) => {
+      if (!week?.startDate || !week?.endDate) return false;
+      const startKey = toDateKeyLocal(week.startDate);
+      const endKey = toDateKeyLocal(week.endDate);
+      if (!startKey || !endKey) return false;
+      return startKey <= monthEndKey && endKey >= monthStartKey;
+    })
+    .map((week) => {
+      const startKey = toDateKeyLocal(week.startDate);
+      const endKey = toDateKeyLocal(week.endDate);
+      const clippedStartKey = startKey < monthStartKey ? monthStartKey : startKey;
+      const clippedEndKey = endKey > monthEndKey ? monthEndKey : endKey;
+      return {
+        ...week,
+        startDate: new Date(`${clippedStartKey}T00:00:00.000Z`).toISOString(),
+        endDate: new Date(`${clippedEndKey}T00:00:00.000Z`).toISOString(),
+        displayWeekNumber: getWeekNumberForMonth(clippedStartKey, parsedMonth, parsedYear),
+      };
+    });
+};
+
 const formatPrettyDate = (dateKey) => {
   const date = parseDateKeyToDate(dateKey);
   if (!date) return "--";
@@ -75,7 +140,10 @@ const formatPrettyDate = (dateKey) => {
 		    error,
 		  } = useSelector((state) => state.roster);
 
-		  const [selectedDate, setSelectedDate] = useState(() => toDateKeyLocal(new Date()));
+		  const [selectedDate, setSelectedDate] = useState(() => {
+		    const now = new Date();
+		    return getMonthStartDateKey(now.getMonth() + 1, now.getFullYear()) || toDateKeyLocal(now);
+		  });
 		  const [exportStartDate, setExportStartDate] = useState(() => toDateKeyLocal(new Date()));
 		  const [exportEndDate, setExportEndDate] = useState(() => toDateKeyLocal(new Date()));
 		  const [isExportRangeModalOpen, setIsExportRangeModalOpen] = useState(false);
@@ -200,6 +268,15 @@ const formatPrettyDate = (dateKey) => {
     }
   }, [error, loadingState]);
 
+  useEffect(() => {
+    const monthStartKey = getMonthStartDateKey(selectedMonth, selectedYear);
+    if (!monthStartKey) return;
+    if (selectedDate !== monthStartKey) {
+      setSelectedDate(monthStartKey);
+      setCurrentPage(1);
+    }
+  }, [selectedMonth, selectedYear]);
+
   // ✅ Process allRosters data to find available rosters
   useEffect(() => {
     if (rosterDetailLoading) return;
@@ -224,29 +301,51 @@ const formatPrettyDate = (dateKey) => {
     const currentKey = `${selectedMonth}-${selectedYear}`;
     const currentRoster = rosterMap[currentKey];
 
-    if (currentRoster) {
-	      setSelectedRoster(currentRoster._id);
+	    if (currentRoster) {
+		      setSelectedRoster(currentRoster._id);
 
-	      const weeks = currentRoster.weeks || [];
+			      const weeks = currentRoster.weeks || [];
+	      let requestDate = selectedDate;
+	      let resolvedWeekNumber = null;
 	      if (Array.isArray(weeks) && weeks.length > 0) {
-	        setAvailableWeeks(weeks.map(w => ({
+	        const displayWeeks = getDisplayWeeksForMonth(weeks, selectedMonth, selectedYear);
+	        setAvailableWeeks(displayWeeks.map(w => ({
 	          weekNumber: w.weekNumber,
+	          displayWeekNumber: w.displayWeekNumber || w.weekNumber,
 	          startDate: w.startDate,
 	          endDate: w.endDate,
 	          employeeCount: w.employees?.length || 0
 	        })));
+
+	        const weekForSelectedDate = displayWeeks.find((w) => {
+	          const startKey = toDateKeyLocal(w?.startDate);
+	          const endKey = toDateKeyLocal(w?.endDate);
+	          if (!startKey || !endKey || !requestDate) return false;
+	          return requestDate >= startKey && requestDate <= endKey;
+	        });
+
+	        if (!weekForSelectedDate && displayWeeks.length > 0) {
+	          requestDate = toDateKeyLocal(displayWeeks[0].startDate) || requestDate;
+	          if (requestDate && requestDate !== selectedDate) {
+	            setSelectedDate(requestDate);
+	          }
+	          resolvedWeekNumber = Number(displayWeeks[0].weekNumber);
+	        }
 	      } else {
 	        setAvailableWeeks([]);
 	      }
 
-	      const weekNumber = pickWeekNumberForDate(currentRoster, selectedDate);
+	      const weekNumber =
+	        resolvedWeekNumber ?? pickWeekNumberForDate(currentRoster, requestDate);
 	      if (weekNumber != null) {
 	        setSelectedWeek(weekNumber);
 	        setLoadingState('loading');
 	        dispatch(getEmployeesForUpdates({
 	          rosterId: currentRoster._id,
 	          weekNumber,
-	          date: selectedDate,
+	          date: requestDate,
+            month: selectedMonth,
+            year: selectedYear,
 	          ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
 	        }));
 	      } else {
@@ -276,10 +375,11 @@ const formatPrettyDate = (dateKey) => {
         setAllEmployees([]);
       }
       
-      // Set available weeks for dropdown
-      if (responseData.weeks && responseData.weeks.length > 0) {
-	        setAvailableWeeks(responseData.weeks);
-      }
+	      // Set available weeks for dropdown
+	      if (responseData.weeks && responseData.weeks.length > 0) {
+	        const displayWeeks = getDisplayWeeksForMonth(responseData.weeks, selectedMonth, selectedYear);
+	        setAvailableWeeks(displayWeeks);
+	      }
       
       // Set summary data
       if (responseData.summary) {
@@ -403,52 +503,19 @@ const formatPrettyDate = (dateKey) => {
   const handleMonthChange = (month) => {
     setSelectedMonth(month);
     setShowMonthDropdown(false);
+    const monthStartKey = getMonthStartDateKey(month, selectedYear);
+    if (monthStartKey) setSelectedDate(monthStartKey);
+    setCurrentPage(1);
     setLoadingState('loading');
-    
-    // Check if we have a roster for this month
-    const key = `${month}-${selectedYear}`;
-    const roster = rostersByMonth[key];
-    
-	    if (roster) {
-	      setSelectedRoster(roster._id);
-
-	      if (roster.weeks) {
-	        setAvailableWeeks(roster.weeks.map(w => ({
-	          weekNumber: w.weekNumber,
-	          startDate: w.startDate,
-	          endDate: w.endDate,
-	          employeeCount: w.employees?.length || 0
-	        })));
-	      } else {
-	        setAvailableWeeks([]);
-	      }
-
-	      const weekNumber = pickWeekNumberForDate(roster, selectedDate);
-	      if (weekNumber != null) {
-	        setSelectedWeek(weekNumber);
-		        dispatch(getEmployeesForUpdates({
-		          rosterId: roster._id,
-		          weekNumber,
-		          date: selectedDate,
-		          ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-		        }));
-	      } else {
-	        setAllEmployees([]);
-	        setSelectedWeek(null);
-	        setLoadingState('success');
-	      }
-	    } else {
-	      setAllEmployees([]);
-	      setSelectedRoster(null);
-      setSelectedWeek(null);
-      setAvailableWeeks([]);
-      setLoadingState('success');
-    }
   };
 
   // Handle year change
   const handleYearChange = (year) => {
-    setSelectedYear(parseInt(year));
+    const parsedYear = parseInt(year);
+    setSelectedYear(parsedYear);
+    const monthStartKey = getMonthStartDateKey(selectedMonth, parsedYear);
+    if (monthStartKey) setSelectedDate(monthStartKey);
+    setCurrentPage(1);
     setLoadingState('loading');
   };
 
@@ -458,12 +525,14 @@ const formatPrettyDate = (dateKey) => {
     setLoadingState('loading');
     
     if (selectedRoster) {
-	      dispatch(getEmployeesForUpdates({
-	        rosterId: selectedRoster,
-	        weekNumber: parseInt(weekNumber),
-	        date: selectedDate,
-	        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-	      }));
+		      dispatch(getEmployeesForUpdates({
+		        rosterId: selectedRoster,
+		        weekNumber: parseInt(weekNumber),
+		        date: selectedDate,
+            month: selectedMonth,
+            year: selectedYear,
+		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+		      }));
     }
   };
 
@@ -482,12 +551,14 @@ const formatPrettyDate = (dateKey) => {
 
 			    if (selectedRoster && nextWeek) {
 		      setLoadingState('loading');
-			      dispatch(getEmployeesForUpdates({
-		        rosterId: selectedRoster,
-		        weekNumber: nextWeek,
-		        date: newDate,
-		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-		      }));
+				      dispatch(getEmployeesForUpdates({
+			        rosterId: selectedRoster,
+			        weekNumber: nextWeek,
+			        date: newDate,
+              month: selectedMonth,
+              year: selectedYear,
+			        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+			      }));
 	    }
 	  };
 
@@ -496,12 +567,14 @@ const formatPrettyDate = (dateKey) => {
 	    setLoadingState('loading');
 	    setCurrentPage(1);
 	    if (selectedRoster && selectedWeek) {
-	      dispatch(getEmployeesForUpdates({
-	        rosterId: selectedRoster,
-	        weekNumber: selectedWeek,
-	        date: selectedDate,
-	        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-	      }));
+		      dispatch(getEmployeesForUpdates({
+		        rosterId: selectedRoster,
+		        weekNumber: selectedWeek,
+		        date: selectedDate,
+            month: selectedMonth,
+            year: selectedYear,
+		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
+		      }));
     }
   };
 
@@ -1023,13 +1096,13 @@ const formatPrettyDate = (dateKey) => {
                   onChange={(e) => handleWeekChange(e.target.value)}
                   className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                 >
-                  {availableWeeks.map((week) => (
-                    <option key={week.weekNumber} value={week.weekNumber}>
-                      Week {week.weekNumber}: {formatDate(week.startDate)} - {formatDate(week.endDate)} ({week.employeeCount || 0} employees)
-                    </option>
-                  ))}
-                </select>
-              </div>
+	                  {availableWeeks.map((week) => (
+	                    <option key={week.weekNumber} value={week.weekNumber}>
+	                      Week {week.displayWeekNumber || week.weekNumber}: {formatDate(week.startDate)} - {formatDate(week.endDate)} ({week.employeeCount || 0} employees)
+	                    </option>
+	                  ))}
+	                </select>
+	              </div>
             )}
 
 		            {/* Date Picker */}

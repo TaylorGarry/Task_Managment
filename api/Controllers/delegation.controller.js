@@ -2,6 +2,12 @@
 import Delegation from "../Modals/Delegation/delegation.modal.js";
 import User from "../Modals/User.modal.js";
 import { getAllTeamLeaders, getTeamMembersByTeamLeader } from "../utils/teamHelper.js";
+import {
+  getRoleType,
+  isHrDepartment,
+  isTeamLeaderUser,
+  normalizeDepartment,
+} from "../utils/roleAccess.js";
 
 const getUtcDayRange = (base = new Date()) => {
   const startOfDayUtc = new Date(
@@ -54,6 +60,43 @@ export const createDelegation = async (req, res) => {
         success: false,
         message: "Assignee not found"
       });
+    }
+
+    const requester = req.user || {};
+    const requesterRoleType = getRoleType(requester);
+    const requesterIsPrivileged =
+      isHrDepartment(requester) || requesterRoleType === "superAdmin";
+
+    if (!requesterIsPrivileged) {
+      if (!isTeamLeaderUser(requester)) {
+        return res.status(403).json({
+          success: false,
+          message: "Only team leaders can create delegation",
+        });
+      }
+
+      const requesterDepartment = normalizeDepartment(requester.department);
+      const delegatorDepartment = normalizeDepartment(delegator.department);
+      const assigneeDepartment = normalizeDepartment(assignee.department);
+      const requesterId = String(requester._id || requester.id || "");
+
+      if (requesterId && String(delegator._id) !== requesterId) {
+        return res.status(403).json({
+          success: false,
+          message: "You can create delegation only for yourself",
+        });
+      }
+
+      if (
+        requesterDepartment &&
+        (delegatorDepartment !== requesterDepartment ||
+          assigneeDepartment !== requesterDepartment)
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: "You can create delegation only within your own department",
+        });
+      }
     }
     
     // Check if delegator already has active delegation

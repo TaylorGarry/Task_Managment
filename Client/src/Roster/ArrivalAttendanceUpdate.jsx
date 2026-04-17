@@ -199,15 +199,51 @@ const isWeekOverlappingMonth = (week, month, year) => {
   const parsedYear = Number.parseInt(year, 10);
   if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return true;
 
-  const start = new Date(week.startDate);
-  const end = new Date(week.endDate);
-  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
-  start.setHours(0, 0, 0, 0);
-  end.setHours(23, 59, 59, 999);
+  const startKey = toIstDateKey(week.startDate);
+  const endKey = toIstDateKey(week.endDate);
+  if (!startKey || !endKey) return false;
+  const monthStartKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01`;
+  const monthEndDay = new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate();
+  const monthEndKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
+  return startKey <= monthEndKey && endKey >= monthStartKey;
+};
 
-  const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
-  const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
-  return start <= monthEnd && end >= monthStart;
+const parseMonthYearFromDateKey = (dateKey) => {
+  const match = String(dateKey || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month)) return null;
+  return { month, year };
+};
+
+const clipWeekToMonth = (week, month, year) => {
+  if (!week?.startDate || !week?.endDate) return week;
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return week;
+
+  const weekStartKey = toIstDateKey(week.startDate);
+  const weekEndKey = toIstDateKey(week.endDate);
+  if (!weekStartKey || !weekEndKey) return week;
+
+  const monthStartKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01`;
+  const monthEndDay = new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate();
+  const monthEndKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
+  const clippedStartKey = weekStartKey < monthStartKey ? monthStartKey : weekStartKey;
+  const clippedEndKey = weekEndKey > monthEndKey ? monthEndKey : weekEndKey;
+  const clippedStartDate = new Date(`${clippedStartKey}T00:00:00.000Z`);
+  const clippedEndDate = new Date(`${clippedEndKey}T00:00:00.000Z`);
+  const startDay = Number.parseInt(clippedStartKey.split("-")[2], 10);
+  const firstDayOfMonth = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1));
+  const displayWeekNumber = Math.max(1, Math.ceil((firstDayOfMonth.getUTCDay() + startDay) / 7));
+
+  return {
+    ...week,
+    startDate: clippedStartDate.toISOString(),
+    endDate: clippedEndDate.toISOString(),
+    displayWeekNumber,
+  };
 };
 
 const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
@@ -219,7 +255,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   
   const initialFetchDone = useRef(false);
   
-  const [selectedDate, setSelectedDate] = useState(() => getLocalDateKey());
+  const [selectedDate, setSelectedDate] = useState(() => toIstDateKey(new Date()) || getLocalDateKey());
   const [selectedWeek, setSelectedWeek] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -232,6 +268,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const [viewType, setViewType] = useState({});
   const [availableWeeks, setAvailableWeeks] = useState([]);
   const [weekInfo, setWeekInfo] = useState(null);
+  const [activeRosterId, setActiveRosterId] = useState(rosterId);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
   const [bulkUpdate, setBulkUpdate] = useState({
     transportStatus: "",
@@ -244,6 +281,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const [punchTimeErrors, setPunchTimeErrors] = useState({});
   const exportCaptureRef = useRef(null);
   const [isDownloadingDelegatedSnapshot, setIsDownloadingDelegatedSnapshot] = useState(false);
+  const didInitMonthViewRef = useRef(false);
   const monthFilterContext = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const month = params.get("month");
@@ -253,6 +291,15 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return null;
     return { month: parsedMonth, year: parsedYear };
   }, [location.search]);
+
+  useEffect(() => {
+    didInitMonthViewRef.current = false;
+    if (monthFilterContext) {
+      const monthStartKey = `${monthFilterContext.year}-${String(monthFilterContext.month).padStart(2, "0")}-01`;
+      setSelectedDate(monthStartKey);
+      setSelectedWeek("1");
+    }
+  }, [monthFilterContext?.month, monthFilterContext?.year]);
   const selectedWeekMeta = availableWeeks.find(
     (week) => String(week?.weekNumber) === String(selectedWeek)
   );
@@ -266,6 +313,13 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
             ? selectedWeekEndKey
             : selectedDate)
       : selectedDate;
+  const monthYearForRequests = useMemo(() => {
+    if (monthFilterContext) return monthFilterContext;
+    return (
+      parseMonthYearFromDateKey(effectiveSelectedDate) ||
+      parseMonthYearFromDateKey(selectedDate)
+    );
+  }, [monthFilterContext, effectiveSelectedDate, selectedDate]);
   const isEmployeeUser = currentUser?.accountType === "employee";
 
   if (!rosterId) {
@@ -307,6 +361,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
   useEffect(() => {
     initialFetchDone.current = false;
+    didInitMonthViewRef.current = false;
+    setActiveRosterId(rosterId);
     setSelectedWeek("");
     setCurrentPage(1);
     setUpdates({});
@@ -314,19 +370,21 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   }, [rosterId, delegatedFromUserId]);
 
   useEffect(() => {
-    if (rosterId && !initialFetchDone.current) {
+    if (rosterId && !initialFetchDone.current) initialFetchDone.current = true;
+    if (rosterId && !selectedWeek) {
       setSelectedWeek("1");
-      initialFetchDone.current = true;
     }
   }, [rosterId]);
 
   useEffect(() => {
-    if (rosterId && selectedWeek && effectiveSelectedDate) {
+    if (activeRosterId && selectedWeek && effectiveSelectedDate) {
       const weekNumber = parseInt(selectedWeek);
       dispatch(getEmployeesForUpdates({
-        rosterId,
+        rosterId: activeRosterId,
         weekNumber,
         date: effectiveSelectedDate,
+        month: monthYearForRequests?.month,
+        year: monthYearForRequests?.year,
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
@@ -334,23 +392,25 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         delegatedFrom: delegatedFromUserId,
       }));
     }
-  }, [dispatch, rosterId, selectedWeek, effectiveSelectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
+  }, [dispatch, activeRosterId, selectedWeek, effectiveSelectedDate, monthYearForRequests?.month, monthYearForRequests?.year, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
 
   useEffect(() => {
-    if (!rosterId || !selectedWeek || !effectiveSelectedDate) return;
+    if (!activeRosterId || !selectedWeek || !effectiveSelectedDate) return;
     if (!location.pathname.includes("/attendance-update")) return;
 
     dispatch(getEmployeesForUpdates({
-      rosterId,
+      rosterId: activeRosterId,
       weekNumber: parseInt(selectedWeek),
       date: effectiveSelectedDate,
+      month: monthYearForRequests?.month,
+      year: monthYearForRequests?.year,
       page: currentPage,
       limit: pageSize,
       q: appliedSearch,
       searchBy,
       delegatedFrom: delegatedFromUserId,
     }));
-  }, [location.key, rosterId, selectedWeek, effectiveSelectedDate, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId, dispatch]); // Re-entering this route should refetch without manual refresh
+  }, [location.key, activeRosterId, selectedWeek, effectiveSelectedDate, monthYearForRequests?.month, monthYearForRequests?.year, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId, dispatch]); // Re-entering this route should refetch without manual refresh
 
   useEffect(() => {
     if (!error) return;
@@ -376,38 +436,95 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       const responseData = updateEmployeesData.data;
       
       if (responseData.weekNumber) {
-        setWeekInfo({
+        let nextWeekInfo = {
+          rosterId: responseData.rosterId || activeRosterId,
           weekNumber: responseData.weekNumber,
+          displayWeekNumber: responseData.weekNumber,
           startDate: responseData.startDate,
           endDate: responseData.endDate,
           canEdit: responseData.canEdit,
           editMessage: responseData.editMessage
-        });
+        };
+        if (
+          monthFilterContext &&
+          isWeekOverlappingMonth(nextWeekInfo, monthFilterContext.month, monthFilterContext.year)
+        ) {
+          nextWeekInfo = clipWeekToMonth(
+            nextWeekInfo,
+            monthFilterContext.month,
+            monthFilterContext.year
+          );
+        }
+        setWeekInfo(nextWeekInfo);
+      }
+      if (responseData.rosterId && String(responseData.rosterId) !== String(activeRosterId)) {
+        setActiveRosterId(responseData.rosterId);
       }
       
       const responseWeeks = responseData.weeks || [];
       const weeks = monthFilterContext
-        ? responseWeeks.filter((week) =>
-            isWeekOverlappingMonth(week, monthFilterContext.month, monthFilterContext.year)
-          )
+        ? responseWeeks
+            .filter((week) =>
+              isWeekOverlappingMonth(week, monthFilterContext.month, monthFilterContext.year)
+            )
+            .map((week) => clipWeekToMonth(week, monthFilterContext.month, monthFilterContext.year))
         : responseWeeks;
+      const sortedWeeks = [...weeks].sort((a, b) => {
+        const aStart = new Date(a?.startDate || 0).getTime();
+        const bStart = new Date(b?.startDate || 0).getTime();
+        return aStart - bStart;
+      });
 
-      if (JSON.stringify(weeks) !== JSON.stringify(availableWeeks)) {
-        setAvailableWeeks(weeks);
+      if (JSON.stringify(sortedWeeks) !== JSON.stringify(availableWeeks)) {
+        setAvailableWeeks(sortedWeeks);
       }
       
-      if (weeks.length > 0) {
-        const weekForSelectedDate = weeks.find((week) => isDateWithinWeek(selectedDate, week));
-        const hasSelectedWeek = weeks.some(
+      if (sortedWeeks.length > 0) {
+        if (monthFilterContext && !didInitMonthViewRef.current) {
+          const monthStartKey = `${monthFilterContext.year}-${String(monthFilterContext.month).padStart(2, "0")}-01`;
+          const preferredWeek =
+            sortedWeeks.find((week) => {
+              const startKey = toIstDateKey(week?.startDate);
+              const endKey = toIstDateKey(week?.endDate);
+              if (!startKey || !endKey) return false;
+              return monthStartKey >= startKey && monthStartKey <= endKey;
+            }) || sortedWeeks[0];
+          const firstWeekStartKey = toIstDateKey(preferredWeek?.startDate);
+          if (preferredWeek?.weekNumber != null) {
+            setSelectedWeek(String(preferredWeek.weekNumber));
+          }
+          if (firstWeekStartKey) {
+            setSelectedDate(firstWeekStartKey);
+          }
+          setCurrentPage(1);
+          didInitMonthViewRef.current = true;
+          return;
+        }
+        if (!monthFilterContext && !didInitMonthViewRef.current) {
+          const firstWeek = sortedWeeks[0];
+          const firstWeekStartKey = toIstDateKey(firstWeek?.startDate);
+          if (firstWeek?.weekNumber != null) {
+            setSelectedWeek(String(firstWeek.weekNumber));
+          }
+          if (firstWeekStartKey) {
+            setSelectedDate(firstWeekStartKey);
+          }
+          setCurrentPage(1);
+          didInitMonthViewRef.current = true;
+          return;
+        }
+
+        const weekForSelectedDate = sortedWeeks.find((week) => isDateWithinWeek(selectedDate, week));
+        const hasSelectedWeek = sortedWeeks.some(
           (week) => String(week?.weekNumber) === String(selectedWeek)
         );
         if (!selectedWeek || !hasSelectedWeek) {
-          const preferredWeek = weekForSelectedDate || weeks[0];
+          const preferredWeek = weekForSelectedDate || sortedWeeks[0];
           setSelectedWeek(String(preferredWeek.weekNumber));
         }
       }
     }
-  }, [updateEmployeesData, availableWeeks, selectedDate, selectedWeek, monthFilterContext]);
+  }, [updateEmployeesData, availableWeeks, selectedDate, selectedWeek, monthFilterContext, activeRosterId]);
 
   useEffect(() => {
     if (!selectedWeekStartKey || !selectedWeekEndKey) return;
@@ -502,12 +619,14 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   };
 
   const refetchEmployees = () => {
-    if (!rosterId || !selectedWeek || !effectiveSelectedDate) return;
+    if (!activeRosterId || !selectedWeek || !effectiveSelectedDate) return;
     dispatch(
       getEmployeesForUpdates({
-        rosterId,
+        rosterId: activeRosterId,
         weekNumber: parseInt(selectedWeek),
         date: effectiveSelectedDate,
+        month: monthYearForRequests?.month,
+        year: monthYearForRequests?.year,
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
@@ -642,7 +761,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     }
 
     const payload = {
-      rosterId,
+      rosterId: activeRosterId || rosterId,
       weekNumber: parseInt(selectedWeek),
       employeeIds: filteredEmployeeIds,
       date: effectiveSelectedDate,
@@ -695,9 +814,11 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       }
       
       dispatch(getEmployeesForUpdates({
-        rosterId,
+        rosterId: activeRosterId || rosterId,
         weekNumber: parseInt(selectedWeek),
         date: selectedDate,
+        month: monthYearForRequests?.month,
+        year: monthYearForRequests?.year,
         page: currentPage,
         limit: pageSize,
         q: appliedSearch,
@@ -811,7 +932,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               weekInfo.canEdit ? 'bg-green-50 text-green-800' : 'bg-yellow-50 text-yellow-800'
             }`}>
               <p className="text-sm font-medium">
-                Week {weekInfo.weekNumber}: {new Date(weekInfo.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(weekInfo.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+                Week {weekInfo.displayWeekNumber || weekInfo.weekNumber}: {new Date(weekInfo.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(weekInfo.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
               </p>
               <p className="text-xs mt-1">{weekInfo.editMessage}</p>
             </div>
@@ -840,7 +961,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 <option value="">Choose a week</option>
                 {availableWeeks.map((week) => (
                   <option key={week.weekNumber} value={week.weekNumber}>
-                    Week {week.weekNumber} ({new Date(week.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(week.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}) - {week.employeeCount || 0} employees
+                    Week {week.displayWeekNumber || week.weekNumber} ({new Date(week.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(week.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}) - {week.employeeCount || 0} employees
                   </option>
                 ))}
               </select>
