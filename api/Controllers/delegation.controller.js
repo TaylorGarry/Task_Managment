@@ -243,13 +243,9 @@ export const getActiveDelegations = async (req, res) => {
   try {
     console.log("=== Fetching active delegations ===");
     await expireOldDelegations();
-    const now = new Date();
-    const { startOfDayUtc, endOfDayUtc } = getUtcDayRange(now);
     
     const delegations = await Delegation.find({
       status: "active",
-      startDate: { $lte: endOfDayUtc }, // Start date <= end of today (UTC)
-      endDate: { $gte: startOfDayUtc }  // End date >= start of today (UTC)
     })
       .populate("delegator", "username department _id")
       .populate("assignee", "username department _id")
@@ -257,8 +253,6 @@ export const getActiveDelegations = async (req, res) => {
       .sort({ createdAt: -1 });
     
     console.log(`Found ${delegations.length} active delegations`);
-    console.log(`Current time: ${now}`);
-    console.log(`UTC date range: ${startOfDayUtc.toISOString()} to ${endOfDayUtc.toISOString()}`);
     
     res.json({
       success: true,
