@@ -11,7 +11,7 @@ import {
 } from "../Controllers/delegation.controller.js";
 import { authMiddleware } from "../Middlewares/auth.middleware.js";
 import Delegation from "../Modals/Delegation/delegation.modal.js";
-import { getRoleType, isHrDepartment, normalizeDepartment } from "../utils/roleAccess.js";
+import { getRoleType, isHrDepartment, isTeamLeaderUser, normalizeDepartment } from "../utils/roleAccess.js";
 
 const router = express.Router();
 const canManageDelegation = (req, res, next) => {
@@ -20,8 +20,9 @@ const canManageDelegation = (req, res, next) => {
   const isHrOrSuperAdmin = isHrDepartment(req.user || {}) || roleType === "superAdmin";
   const isOpsMetaEmployee =
     (roleType === "agent" || roleType === "supervisor") && department === "operations";
+  const isTeamLeader = isTeamLeaderUser(req.user || {});
 
-  if (isHrOrSuperAdmin || isOpsMetaEmployee) return next();
+  if (isHrOrSuperAdmin || isOpsMetaEmployee || isTeamLeader) return next();
   return res.status(403).json({ message: "Forbidden: You do not have access to delegation management" });
 };
 const getUtcDayRange = (base = new Date()) => {

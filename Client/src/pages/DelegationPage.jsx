@@ -26,6 +26,12 @@ import {
 import { fetchEmployees } from "../features/slices/authSlice.js";
 import { Calendar, Users, UserCheck, Clock, AlertCircle, CheckCircle, XCircle, FileText, RefreshCw, Plus, Trash2, History } from "lucide-react";
 import Navbar from "./Navbar.jsx";
+import {
+  isHrDepartment,
+  isSuperAdmin,
+  isTeamLeaderUser,
+  normalizeDepartment,
+} from "../utils/roleAccess.js";
 
 const toDateInput = (value) => {
   const d = value ? new Date(value) : new Date();
@@ -79,11 +85,13 @@ const DelegationPage = () => {
   const location = useLocation();
   const authUser = useSelector((state) => state.auth.user);
   const currentUser = authUser || JSON.parse(localStorage.getItem("user") || "null");
-  const isHrOrSuperAdmin = ["HR", "superAdmin"].includes(currentUser?.accountType);
+  const isHrOrSuperAdmin = isHrDepartment(currentUser) || isSuperAdmin(currentUser);
+  const isTeamLeader = isTeamLeaderUser(currentUser);
+  const currentDepartment = normalizeDepartment(currentUser?.department);
   const isOpsMetaEmployee =
-    currentUser?.accountType === "employee" &&
-    String(currentUser?.department || "").trim().toLowerCase() === "ops - meta";
-  const canCreateDelegation = isHrOrSuperAdmin || isOpsMetaEmployee;
+    (currentUser?.accountType === "employee" || currentUser?.roleType === "agent" || currentUser?.roleType === "supervisor") &&
+    currentDepartment === "Operations";
+  const canCreateDelegation = isHrOrSuperAdmin || isOpsMetaEmployee || isTeamLeader;
   const isAdminDelegationRoute = location.pathname.startsWith("/admin");
 
   const activeDelegations = useSelector(selectActiveDelegations);
@@ -184,14 +192,29 @@ const DelegationPage = () => {
   const assigneeOptions = useMemo(() => {
     return (employees || []).filter((emp) => {
       const empId = getId(emp);
-      return Boolean(empId) && empId !== delegatorId;
+      if (!empId || empId === delegatorId) return false;
+      if (isHrOrSuperAdmin) return true;
+      return normalizeDepartment(emp?.department) === currentDepartment;
     });
-  }, [employees, delegatorId]);
+  }, [employees, delegatorId, isHrOrSuperAdmin, currentDepartment]);
 
   const teamLeaderOptions = useMemo(() => {
     const list = Array.isArray(employees) ? employees : [];
-    return list.filter((emp) => Boolean(getId(emp)));
-  }, [employees]);
+    if (isHrOrSuperAdmin) {
+      return list.filter((emp) => Boolean(getId(emp)));
+    }
+    if (isTeamLeader) {
+      return list.filter((emp) => String(getId(emp)) === String(getId(currentUser)));
+    }
+    return list.filter((emp) => normalizeDepartment(emp?.department) === currentDepartment);
+  }, [employees, isHrOrSuperAdmin, isTeamLeader, currentUser, currentDepartment]);
+
+  useEffect(() => {
+    if (!canCreateDelegation || !isTeamLeader || isHrOrSuperAdmin) return;
+    const selfId = String(getId(currentUser));
+    if (!selfId) return;
+    setDelegatorId((prev) => (prev ? prev : selfId));
+  }, [canCreateDelegation, isTeamLeader, isHrOrSuperAdmin, currentUser]);
 
   const handleCreate = async (e) => {
     e.preventDefault();

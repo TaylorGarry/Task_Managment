@@ -696,6 +696,7 @@ import {
   getRoleType,
   isHrDepartment,
   isSuperAdmin,
+  isTeamLeaderUser,
   normalizeDepartment,
 } from "../utils/roleAccess.js";
 
@@ -746,7 +747,8 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const canAccessDelegation =
     isSuperAdmin(user) ||
     isHrDepartment(user) ||
-    (isEmployeeFlow && normalizedDepartment === "Operations");
+    (isEmployeeFlow && normalizedDepartment === "Operations") ||
+    isTeamLeaderUser(user);
 
   // Check if user is Ops-Meta employee
   const isOpsMeta = isEmployeeFlow && normalizedDepartment === "Operations";

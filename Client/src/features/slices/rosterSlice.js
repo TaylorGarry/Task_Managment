@@ -69632,9 +69632,9 @@ export const updateAttendanceBulk = createAsyncThunk(
 
 export const getEmployeesForUpdates = createAsyncThunk(
   "roster/getEmployeesForUpdates",
-		  async ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom }, thunkAPI) => {
+		  async ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year }, thunkAPI) => {
 		    try {
-		      const cacheKey = getEmployeesForUpdatesCacheKey({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom });
+		      const cacheKey = getEmployeesForUpdatesCacheKey({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year });
 	      const cached = getCachedEmployeesForUpdates(cacheKey);
 	      if (cached) {
 	        console.log("Returning cached employees-for-updates data");
@@ -69645,10 +69645,12 @@ export const getEmployeesForUpdates = createAsyncThunk(
       console.log("🔍 Fetching employees for updates:", { rosterId, weekNumber, date });
       
 	      const params = new URLSearchParams();
-	      if (page !== undefined && page !== null) params.set("page", String(page));
-	      if (limit !== undefined && limit !== null) params.set("limit", String(limit));
-		      if (q !== undefined && q !== null && String(q).trim()) params.set("q", String(q).trim());
-		      if (searchBy !== undefined && searchBy !== null && String(searchBy).trim()) params.set("searchBy", String(searchBy).trim());
+		      if (page !== undefined && page !== null) params.set("page", String(page));
+		      if (limit !== undefined && limit !== null) params.set("limit", String(limit));
+			      if (q !== undefined && q !== null && String(q).trim()) params.set("q", String(q).trim());
+			      if (searchBy !== undefined && searchBy !== null && String(searchBy).trim()) params.set("searchBy", String(searchBy).trim());
+          if (month !== undefined && month !== null && String(month).trim()) params.set("month", String(month).trim());
+          if (year !== undefined && year !== null && String(year).trim()) params.set("year", String(year).trim());
           if (delegatedFrom !== undefined && delegatedFrom !== null && String(delegatedFrom).trim()) {
             params.set("delegatedFrom", String(delegatedFrom).trim());
           }

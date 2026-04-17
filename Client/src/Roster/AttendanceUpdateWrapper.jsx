@@ -253,6 +253,39 @@ import Navbar from "../pages/Navbar.jsx";
 import AdminNavbar from "../components/AdminNavbar.jsx";
 import { Calendar, AlertCircle, Clock } from "lucide-react";
 
+const getWeekNumberForMonth = (dateValue, month, year) => {
+  const date =
+    typeof dateValue === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+      ? dateValue
+      : (() => {
+          const d = new Date(dateValue);
+          if (Number.isNaN(d.getTime())) return "";
+          const parts = new Intl.DateTimeFormat("en-GB", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          }).formatToParts(d);
+          const y = parts.find((p) => p.type === "year")?.value;
+          const m = parts.find((p) => p.type === "month")?.value;
+          const day = parts.find((p) => p.type === "day")?.value;
+          return y && m && day ? `${y}-${m}-${day}` : "";
+        })();
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (
+    !date ||
+    !Number.isFinite(parsedMonth) ||
+    !Number.isFinite(parsedYear)
+  ) {
+    return 1;
+  }
+  const dayOfMonth = Number.parseInt(date.split("-")[2], 10);
+  if (!Number.isFinite(dayOfMonth)) return 1;
+  const firstDayOfMonth = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1));
+  return Math.max(1, Math.ceil((firstDayOfMonth.getUTCDay() + dayOfMonth) / 7));
+};
+
 const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
@@ -339,30 +372,74 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
     const parsedYear = Number.parseInt(selectedYear, 10);
     if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) return rosters;
 
-    const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
-    const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+    const monthStartKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01`;
+    const monthEndDay = new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate();
+    const monthEndKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
+    const toIstKey = (value) => {
+      const d = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(d.getTime())) return "";
+      const parts = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(d);
+      const y = parts.find((p) => p.type === "year")?.value;
+      const m = parts.find((p) => p.type === "month")?.value;
+      const day = parts.find((p) => p.type === "day")?.value;
+      return y && m && day ? `${y}-${m}-${day}` : "";
+    };
 
     return rosters
       .map((roster) => {
         const weeks = Array.isArray(roster?.weeks) ? roster.weeks : [];
-        const overlappingWeeks = weeks.filter((week) => {
-          if (!week?.startDate || !week?.endDate) return false;
-          const start = new Date(week.startDate);
-          const end = new Date(week.endDate);
-          if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
-          start.setHours(0, 0, 0, 0);
-          end.setHours(23, 59, 59, 999);
-          return start <= monthEnd && end >= monthStart;
-        });
+        const overlappingWeeks = weeks
+          .filter((week) => {
+            if (!week?.startDate || !week?.endDate) return false;
+            const startKey = toIstKey(week.startDate);
+            const endKey = toIstKey(week.endDate);
+            if (!startKey || !endKey) return false;
+            return startKey <= monthEndKey && endKey >= monthStartKey;
+          })
+          .map((week) => {
+            const startKey = toIstKey(week.startDate);
+            const endKey = toIstKey(week.endDate);
+            const clippedStartKey = startKey < monthStartKey ? monthStartKey : startKey;
+            const clippedEndKey = endKey > monthEndKey ? monthEndKey : endKey;
+            return {
+              ...week,
+              displayStartDate: new Date(`${clippedStartKey}T00:00:00.000Z`).toISOString(),
+              displayEndDate: new Date(`${clippedEndKey}T00:00:00.000Z`).toISOString(),
+              displayWeekNumber: getWeekNumberForMonth(
+                clippedStartKey,
+                parsedMonth,
+                parsedYear
+              ),
+            };
+          });
         const totalEmployees = overlappingWeeks.reduce(
           (sum, week) => sum + (Array.isArray(week?.employees) ? week.employees.length : 0),
           0
         );
+        const displayStartDate = overlappingWeeks.length
+          ? overlappingWeeks
+              .map((week) => new Date(week.displayStartDate))
+              .sort((a, b) => a - b)[0]
+              ?.toISOString()
+          : roster?.rosterStartDate;
+        const displayEndDate = overlappingWeeks.length
+          ? overlappingWeeks
+              .map((week) => new Date(week.displayEndDate))
+              .sort((a, b) => b - a)[0]
+              ?.toISOString()
+          : roster?.rosterEndDate;
         return {
           ...roster,
           weeks: overlappingWeeks,
           totalWeeks: overlappingWeeks.length,
           totalEmployees,
+          displayStartDate,
+          displayEndDate,
         };
       })
       .filter((roster) => roster.weeks.length > 0);
@@ -494,8 +571,8 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
                 const totalEmployees = roster.weeks?.reduce((sum, week) => 
                   sum + (week.employees?.length || 0), 0) || 0;
                 
-                // Get the first week's number for display
-                const firstWeekNumber = roster.weeks?.[0]?.weekNumber || 1;
+                // Show week number in selected month context for cross-month carryover.
+                const firstWeekNumber = roster.weeks?.[0]?.displayWeekNumber || roster.weeks?.[0]?.weekNumber || 1;
                 
                 return (
 	                  <article
@@ -522,12 +599,12 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
 	                            Week {firstWeekNumber}
 	                          </span>
 	                        </div>
-		                        <h3 className="font-bold text-slate-800 tracking-tight">
-		                          {new Date(roster.rosterStartDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(roster.rosterEndDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
-		                        </h3>
-	                        <p className="text-sm text-slate-500 mt-1">
-	                          {new Date(2000, roster.month-1, 1).toLocaleString('default', { month: 'long' })} {roster.year}
-	                        </p>
+			                        <h3 className="font-bold text-slate-800 tracking-tight">
+			                          {new Date(roster.displayStartDate || roster.rosterStartDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(roster.displayEndDate || roster.rosterEndDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}
+			                        </h3>
+		                        <p className="text-sm text-slate-500 mt-1">
+		                          {new Date(2000, Number(selectedMonth) - 1, 1).toLocaleString('default', { month: 'long' })} {selectedYear}
+		                        </p>
 	                        <div className="mt-3 flex items-center gap-3 text-sm">
 	                          <span className="bg-indigo-100 text-indigo-800 px-2.5 py-1 rounded-full font-medium">
 	                            {roster.totalWeeks || 0} week{roster.totalWeeks !== 1 ? 's' : ''}
