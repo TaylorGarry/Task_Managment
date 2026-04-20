@@ -8480,9 +8480,12 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
-    const requestedDate = parseYmdToUtcDate(date);
-    const requestedDateKey = requestedDate ? toIstDateKey(requestedDate) : null;
-    if (!requestedDate || !requestedDateKey) {
+    // Treat incoming `date` as an IST calendar day key (YYYY-MM-DD).
+    // This avoids UTC drift and keeps comparisons consistent with `toIstDateKey(week.startDate/endDate)`.
+    const requestedDateKey = /^\d{4}-\d{2}-\d{2}$/.test(String(date || "").trim())
+      ? String(date).trim()
+      : null;
+    if (!requestedDateKey) {
       return res.status(400).json({
         success: false,
         message: "Invalid date format"
@@ -8492,8 +8495,14 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
     let contextualRosters = [roster];
     if (hasMonthContext) {
-      const monthStart = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0));
-      const monthEnd = new Date(Date.UTC(parsedYear, parsedMonth, 0, 23, 59, 59, 999));
+      // Build month boundaries in IST, then convert to UTC for Mongo date comparisons.
+      const IST_OFFSET_MS = 330 * 60 * 1000;
+      const istWallTimeToUtcDate = (year, month, day, hour, minute, second, ms) =>
+        new Date(Date.UTC(year, month - 1, day, hour, minute, second, ms) - IST_OFFSET_MS);
+
+      const monthEndDay = new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate();
+      const monthStart = istWallTimeToUtcDate(parsedYear, parsedMonth, 1, 0, 0, 0, 0);
+      const monthEnd = istWallTimeToUtcDate(parsedYear, parsedMonth, monthEndDay, 23, 59, 59, 999);
       const overlappingRosters = await Roster.find({
         $or: [
           {
@@ -8522,24 +8531,30 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     const resolveWeekGroupInRoster = (targetRoster) => {
       if (!targetRoster) return null;
       const weeks = (targetRoster.weeks || []).filter(Boolean);
-      const byWeekNumber = weeks.filter(
-        (w) => Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
-      );
-      if (byWeekNumber.length) {
-        return { weekGroup: byWeekNumber, resolvedByDate: false };
-      }
       const matchedWeek = weeks.find((w) => {
         const startKey = toIstDateKey(w.startDate);
         const endKey = toIstDateKey(w.endDate);
         if (!startKey || !endKey) return false;
         return requestedDateKey >= startKey && requestedDateKey <= endKey;
       });
-      if (!matchedWeek) return null;
-      const matchedGroup = weeks.filter(
-        (w) => Number.parseInt(w.weekNumber, 10) === Number.parseInt(matchedWeek.weekNumber, 10)
+      if (matchedWeek) {
+        const matchedGroup = weeks.filter(
+          (w) => Number.parseInt(w.weekNumber, 10) === Number.parseInt(matchedWeek.weekNumber, 10)
+        );
+        if (matchedGroup.length) {
+          return { weekGroup: matchedGroup, resolvedByDate: true };
+        }
+      }
+
+      // Fallback: explicit weekNumber (used by the UI dropdown).
+      const byWeekNumber = weeks.filter(
+        (w) => Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
       );
-      if (!matchedGroup.length) return null;
-      return { weekGroup: matchedGroup, resolvedByDate: true };
+      if (byWeekNumber.length) {
+        return { weekGroup: byWeekNumber, resolvedByDate: false };
+      }
+
+      return null;
     };
 
     let activeRoster = roster;
@@ -8986,6 +9001,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     });
   }
 };
+
 export const getTransportDetailForSuperAdmin = async (req, res) => {
   try {
     const { rosterId, weekNumber, date } = req.params;
@@ -9167,6 +9183,189 @@ export const getTransportDetailForSuperAdmin = async (req, res) => {
     });
   }
 };
+
+
+// export const getTransportDetailForSuperAdmin = async (req, res) => {
+//   try {
+//     const { rosterId, weekNumber, date } = req.params;
+//     const user = req.user;
+//     if (user.accountType !== "superAdmin") {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Access denied. Super Admin only."
+//       });
+//     }
+
+//     console.log("👑 SuperAdmin fetching transport details:", { 
+//       rosterId, 
+//       weekNumber: parseInt(weekNumber), 
+//       date,
+//       user: user.username 
+//     });
+
+//     if (!rosterId || !weekNumber || !date) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Missing required fields: rosterId, weekNumber, date"
+//       });
+//     }
+
+//     const roster = await Roster.findById(rosterId)
+//       .populate('createdBy', 'username email')
+//       .populate('updatedBy', 'username email')
+//       .populate('weeks.employees.userId', 'username email department')
+//       .populate('weeks.employees.transportUpdatedBy', 'username department')
+//       .populate('weeks.employees.departmentUpdatedBy', 'username department')
+//       .populate('weeks.employees.transportStatusUpdatedBy', 'username department')
+//       .populate('weeks.employees.departmentStatusUpdatedBy', 'username department');
+
+//     if (!roster) {
+//       return res.status(404).json({ success: false, message: "Roster not found" });
+//     }
+
+//     const week = roster.weeks.find(w => w && w.weekNumber === parseInt(weekNumber));
+//     if (!week) {
+//       return res.status(404).json({ 
+//         success: false, 
+//         message: `Week ${weekNumber} not found in roster.`
+//       });
+//     }
+//     const allEmployees = (week.employees || []).filter(emp => emp !== null);
+//     const formattedEmployees = allEmployees.map(emp => {
+//       const dailyStatus = (emp.dailyStatus || []).find(
+//         d => new Date(d.date).toDateString() === new Date(date).toDateString()
+//       );
+//       return {
+//         name: emp.name || 'Unknown',
+//         department: emp.department || 'N/A',
+//         transport: emp.transport || 'No',
+//         cabRoute: emp.cabRoute || '',
+//         teamLeader: emp.teamLeader || '',
+//         shiftStartHour: emp.shiftStartHour || 0,
+//         shiftEndHour: emp.shiftEndHour || 0,
+        
+//         transportStatus: dailyStatus?.transportStatus || null,
+//         transportStatusUpdatedBy: dailyStatus?.transportStatusUpdatedBy ? {
+//           username: dailyStatus.transportStatusUpdatedBy.username,
+//           department: dailyStatus.transportStatusUpdatedBy.department
+//         } : null,
+//         transportStatusUpdatedAt: dailyStatus?.transportStatusUpdatedAt || null,
+
+//         departmentStatus: dailyStatus?.departmentStatus || null,
+//         departmentStatusUpdatedBy: dailyStatus?.departmentStatusUpdatedBy ? {
+//           username: dailyStatus.departmentStatusUpdatedBy.username,
+//           department: dailyStatus.departmentStatusUpdatedBy.department
+//         } : null,
+//         departmentStatusUpdatedAt: dailyStatus?.departmentStatusUpdatedAt || null,
+
+//         transportArrivalTime: dailyStatus?.transportArrivalTime || null,
+//         transportUpdatedBy: dailyStatus?.transportUpdatedBy ? {
+//           username: dailyStatus.transportUpdatedBy.username,
+//           department: dailyStatus.transportUpdatedBy.department
+//         } : null,
+//         transportUpdatedAt: dailyStatus?.transportUpdatedAt || null,
+
+//         departmentArrivalTime: dailyStatus?.departmentArrivalTime || null,
+//         departmentUpdatedBy: dailyStatus?.departmentUpdatedBy ? {
+//           username: dailyStatus.departmentUpdatedBy.username,
+//           department: dailyStatus.departmentUpdatedBy.department
+//         } : null,
+//         departmentUpdatedAt: dailyStatus?.departmentUpdatedAt || null
+//       };
+//     });
+
+//     const summary = {
+//       totalEmployees: allEmployees.length,
+//       employeesWithTransportStatus: formattedEmployees.filter(e => e.transportStatus).length,
+//       employeesWithDepartmentStatus: formattedEmployees.filter(e => e.departmentStatus).length,
+//       employeesWithTransportArrival: formattedEmployees.filter(e => e.transportArrivalTime).length,
+//       employeesWithDepartmentArrival: formattedEmployees.filter(e => e.departmentArrivalTime).length,
+      
+//       transportStatusBreakdown: {},
+//       departmentStatusBreakdown: {}
+//     };
+
+//     formattedEmployees.forEach(emp => {
+//       if (emp.transportStatus) {
+//         summary.transportStatusBreakdown[emp.transportStatus] = 
+//           (summary.transportStatusBreakdown[emp.transportStatus] || 0) + 1;
+//       }
+//       if (emp.departmentStatus) {
+//         summary.departmentStatusBreakdown[emp.departmentStatus] = 
+//           (summary.departmentStatusBreakdown[emp.departmentStatus] || 0) + 1;
+//       }
+//     });
+
+//     const weeksForDropdown = roster.weeks
+//       .filter(w => w !== null)
+//       .map(w => ({
+//         weekNumber: w.weekNumber,
+//         startDate: w.startDate,
+//         endDate: w.endDate,
+//         employeeCount: w.employees?.filter(e => e !== null).length || 0
+//       }));
+
+//     const currentDate = new Date();
+//     currentDate.setHours(0, 0, 0, 0);
+    
+//     const weekStartDate = new Date(week.startDate);
+//     const weekEndDate = new Date(week.endDate);
+    
+//     weekStartDate.setHours(0, 0, 0, 0);
+//     weekEndDate.setHours(23, 59, 59, 999);
+    
+//     let canEdit = false;
+//     let editMessage = "";
+    
+//     if (currentDate < weekStartDate) {
+//       canEdit = false;
+//       editMessage = "Week hasn't started yet";
+//     } else if (currentDate > weekEndDate) {
+//       canEdit = false;
+//       editMessage = "Week has ended";
+//     } else {
+//       canEdit = true;
+//       editMessage = "Current week - edits allowed";
+//     }
+
+//     const response = {
+//       success: true,
+//       message: "Transport details fetched successfully for Super Admin",
+//       data: {
+//         rosterId: roster._id, 
+//         month: roster.month,
+//         year: roster.year,
+//         rosterStartDate: roster.rosterStartDate,
+//         rosterEndDate: roster.rosterEndDate,
+//         weekNumber: parseInt(weekNumber),
+//         weekStartDate: week.startDate,
+//         weekEndDate: week.endDate,
+//         selectedDate: date,
+//         canEdit,
+//         editMessage,
+//         employees: formattedEmployees,
+//         weeks: weeksForDropdown,
+//         summary,
+//         userInfo: {
+//           accountType: user.accountType,
+//           username: user.username,
+//           department: user.department
+//         }
+//       }
+//     };
+
+//     console.log(`👑 SuperAdmin: Returning ${formattedEmployees.length} employees with full details`);
+//     return res.status(200).json(response);
+
+//   } catch (error) {
+//     console.error("❌ SuperAdmin Transport Details Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Server error",
+//       error: error.stack
+//     });
+//   }
+// };
 export const getDepartmentWiseAttendance = async (req, res) => {
   try {
     const { rosterId, weekNumber, date } = req.params;
