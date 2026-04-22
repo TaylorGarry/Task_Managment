@@ -1142,7 +1142,7 @@ export const getAllEmployees = async (req, res) => {
       : { accountType: "employee" };
     if (name) {
       const nameRegex = new RegExp(escapeRegex(name), "i");
-      query.$or = [{ realName: nameRegex }, { username: nameRegex }];
+      query.$or = [{ realName: nameRegex }, { username: nameRegex }, { pseudoName: nameRegex }];
     }
 
     const employees = await User.find(query)
@@ -1651,6 +1651,7 @@ export const getReportingManagers = async (req, res) => {
     const storageDepartment = toStorageDepartment(normalizedDepartment);
     const departmentRegex = new RegExp(`^\\s*${String(storageDepartment).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
 
+    // Only fetch team leaders (supervisors) for the department
     let managers = await User.find({
       department: departmentRegex,
       isTeamLeader: true,
@@ -1659,26 +1660,24 @@ export const getReportingManagers = async (req, res) => {
       .sort({ username: 1 })
       .lean();
 
+    // If no team leaders found in the specific department, try to find team leaders across all departments
+    // This allows cross-department team leadership
     if (!managers.length) {
       managers = await User.find({
-        department: departmentRegex,
-        $or: [{ isTeamLeader: true }, { accountType: "superAdmin" }],
+        isTeamLeader: true,
       })
         .select("_id username realName accountType department isTeamLeader")
         .sort({ username: 1 })
         .lean();
     }
 
+    // If still no team leaders found, return empty array instead of falling back to all employees
     if (!managers.length) {
-      managers = await User.find({
-        department: departmentRegex,
-        accountType: "employee",
-      })
-        .select("_id username realName accountType department isTeamLeader")
-        .sort({ username: 1 })
-        .lean();
+      console.log(`No team leaders found for department: ${normalizedDepartment}`);
+      return res.status(200).json([]);
     }
 
+    console.log(`Found ${managers.length} team leaders for department: ${normalizedDepartment}`);
     return res.status(200).json(managers);
   } catch (error) {
     console.error("Get reporting managers error:", error);

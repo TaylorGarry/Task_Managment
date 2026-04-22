@@ -16,23 +16,32 @@ import {
 
 const formatDate = (value) => {
   if (!value) return "-";
-  const raw = String(value).slice(0, 10);
-  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-  if (!match) {
-    const d = new Date(value);
+  const str = String(value);
+  if (str.includes('T')) {
+    // ISO string, adjust for IST
+    const d = new Date(str);
     if (Number.isNaN(d.getTime())) return "-";
-    return d.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "2-digit" });
+    d.setHours(d.getHours() + 5.5);
+    return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", year: "numeric", month: "short", day: "2-digit" });
+  } else {
+    // Assume YYYY-MM-DD or other
+    const match = str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) {
+      const d = new Date(str);
+      if (Number.isNaN(d.getTime())) return "-";
+      return d.toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "2-digit" });
+    }
+    const y = Number(match[1]);
+    const m = Number(match[2]) - 1;
+    const day = Number(match[3]);
+    const d = new Date(Date.UTC(y, m, day));
+    return d.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+    });
   }
-  const y = Number(match[1]);
-  const m = Number(match[2]) - 1;
-  const day = Number(match[3]);
-  const d = new Date(Date.UTC(y, m, day));
-  return d.toLocaleDateString("en-IN", {
-    timeZone: "UTC",
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-  });
 };
 
 const getStatusChipClass = (status) => {

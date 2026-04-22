@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table, TableBody, TableCell, TableContainer,
@@ -983,7 +985,7 @@ const ManageEmployee = () => {
         <TextField
           fullWidth
           size="small"
-          placeholder="Search employee by name or username..."
+          // placeholder="Search employee by name, username, or pseudo name..."
           value={employeeSearch}
           onChange={(e) => setEmployeeSearch(e.target.value)}
           sx={{
@@ -1037,7 +1039,7 @@ const ManageEmployee = () => {
               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>ID</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Department</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Designation</TableCell>
-              <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Office Location</TableCell>
+              <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Pseudo Name</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Shift</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Status</TableCell>
               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }} align="center">Action</TableCell>
@@ -1080,7 +1082,7 @@ const ManageEmployee = () => {
                   </span>
                 </TableCell>
                 <TableCell className="text-sm text-slate-600">{user.designation || "—"}</TableCell>
-                <TableCell className="text-sm text-slate-600">{user.officeLocation || "—"}</TableCell>
+                <TableCell className="text-sm text-slate-600">{user.pseudoName || "—"}</TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     <AccessTime sx={{ fontSize: 14, color: "#f59e0b" }} />
@@ -1336,11 +1338,10 @@ const ManageEmployee = () => {
                 name="username"
                 value={formData.username}
                 onChange={handleChange}
-                disabled
                 size="small"
                 sx={{
                   "& .MuiOutlinedInput-root": {
-                    backgroundColor: "#f8fafc",
+                    backgroundColor: "#fff",
                     borderRadius: "12px",
                     "& fieldset": {
                       borderColor: "#eaeaea",

@@ -178,8 +178,13 @@ export const createDelegation = async (req, res) => {
       message: "Delegation created successfully",
       data: {
         delegation,
-        affectedEmployeesCount: teamMembers.length,
-        affectedEmployees: teamMembers
+        affectedEmployeesCount: affectedEmployeeIds.length,
+        affectedEmployees: teamMembers.map(m => ({
+          userId: m.userId,
+          name: m.name,
+          department: m.department,
+          teamLeader: m.teamLeader
+        }))
       }
     });
   } catch (error) {
@@ -198,22 +203,24 @@ export const getTeamMembersForTeamLeader = async (req, res) => {
     const { teamLeaderId } = req.params;
     const { date } = req.query;
     
-    console.log("Fetching team members for team leader:", teamLeaderId);
+    console.log("Fetching team members for team leader:", teamLeaderId, "on date:", date);
     
     const teamMembers = await getTeamMembersByTeamLeader(teamLeaderId, date || null);
     
-    console.log(`Found ${teamMembers.length} team members`);
+    console.log(`Found ${teamMembers.length} team members for ${teamLeaderId} on ${date}`);
     
+    // Even if no members found, return success - the week may not have started yet
     res.json({
       success: true,
       data: teamMembers,
-      count: teamMembers.length
+      count: teamMembers.length,
+      message: teamMembers.length === 0 ? "No team members found for this date. Roster may not be available yet." : undefined
     });
   } catch (error) {
     console.error("Error in getTeamMembersForTeamLeader:", error);
     res.status(500).json({
       success: false,
-      message: error.message,
+      message: error.message || "Failed to fetch team members",
       data: [],
       count: 0
     });
@@ -224,16 +231,33 @@ export const getTeamMembersForTeamLeader = async (req, res) => {
 export const getAllTeamLeadersForDropdown = async (req, res) => {
   try {
     const { date } = req.query || {};
+    
+    console.log("📋 Fetching team leaders for date:", date || "current date");
+    
     const teamLeaders = await getAllTeamLeaders(date || null);
+    
+    console.log(`✅ Found ${teamLeaders.length} team leaders`);
+    
+    if (teamLeaders.length === 0) {
+      console.warn("⚠️ No team leaders found. Roster data may not be available.");
+      return res.json({
+        success: true,
+        data: [],
+        message: "No roster data available for this date. Please ensure roster exists."
+      });
+    }
     
     res.json({
       success: true,
-      data: teamLeaders
+      data: teamLeaders,
+      count: teamLeaders.length
     });
   } catch (error) {
+    console.error("❌ Error in getAllTeamLeadersForDropdown:", error);
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message || "Failed to fetch team leaders",
+      data: []
     });
   }
 };
@@ -250,6 +274,7 @@ export const getActiveDelegations = async (req, res) => {
       .populate("delegator", "username department _id")
       .populate("assignee", "username department _id")
       .populate("createdBy", "username")
+      .populate("affectedEmployees", "username department _id")
       .sort({ createdAt: -1 });
     
     console.log(`Found ${delegations.length} active delegations`);
@@ -281,6 +306,7 @@ export const getMyDelegations = async (req, res) => {
     const delegations = await Delegation.find({ assignee: req.user._id })
       .populate("delegator", "username department _id")
       .populate("assignee", "username department _id")
+      .populate("affectedEmployees", "username department _id")
       .sort({ createdAt: -1 });
     
     console.log(`Found ${delegations.length} delegations for ${req.user.username}`);
@@ -353,6 +379,7 @@ export const getDelegationHistory = async (req, res) => {
       .populate("assignee", "username department _id")
       .populate("createdBy", "username _id")
       .populate("endedEarlyBy", "username accountType department _id")
+      .populate("affectedEmployees", "username department _id")
       .sort({ endDate: -1, createdAt: -1 });
 
     res.json({
