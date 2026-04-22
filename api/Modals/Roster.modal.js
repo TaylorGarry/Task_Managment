@@ -109,7 +109,9 @@ const dailyStatusSchema = new mongoose.Schema({
 
 const rosterEmployeeSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+  
   name: { type: String, required: true },
+  empId: { type: String, default: "" },
   department: {
     type: String,
     required: true,

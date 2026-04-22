@@ -979,7 +979,6 @@ export const updateAttendance = createAsyncThunk(
   }
 );
 
-
 export const updatePunchTimes = createAsyncThunk(
   "roster/updatePunchTimes",
   async ({ rosterId, weekNumber, employeeId, date, punchIn, punchOut }, thunkAPI) => {

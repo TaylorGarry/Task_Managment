@@ -137,16 +137,22 @@ const ensureLeaveBalanceForUser = async (userId, asOfDate = new Date()) => {
 
   const { start, end } = getFinancialYearBounds(asOfDate);
   const startYear = start.getFullYear();
-  const userMatch = { $or: [{ userId: user._id }, { user: user._id }] };
   let balance = await LeaveBalance.findOne({
-    ...userMatch,
+    userId: user._id,
     $or: [{ financialYearStart: start }, { year: startYear }],
   });
 
   if (!balance) {
+    balance = await LeaveBalance.findOne({
+      user: user._id,
+      $or: [{ financialYearStart: start }, { year: startYear }],
+    });
+  }
+
+  if (!balance) {
     balance = await LeaveBalance.findOneAndUpdate(
       {
-        ...userMatch,
+        userId: user._id,
         $or: [{ financialYearStart: start }, { year: startYear }],
       },
       {
@@ -195,7 +201,7 @@ const ensureLeaveBalanceForUser = async (userId, asOfDate = new Date()) => {
   const accrualStartMonth = getAccrualStartMonth({
     dateOfJoining: user.dateOfJoining,
     financialYearStart: start,
-  });
+  });  
 
   const accrual = computeMonthlyAccrual({
     // Recompute from cycle start every time so stale historical values can't
