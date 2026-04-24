@@ -241,8 +241,8 @@ const clipWeekToMonth = (week, month, year) => {
 const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const dispatch = useDispatch();
   const location = useLocation();
-  const currentUser = getCurrentUser();
-  const isAdminNavbarUser = ["superAdmin", "HR"].includes(currentUser?.accountType);
+  const currentUser = useMemo(() => getCurrentUser(), []);
+  const isAdminNavbarUser = useMemo(() => ["superAdmin", "HR"].includes(currentUser?.accountType), [currentUser]);
   const { updateEmployeesData, loading, error } = useSelector((state) => state.roster);
   
   const initialFetchDone = useRef(false);
@@ -605,13 +605,18 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
   useEffect(() => {
     const currentIds = new Set(rosterEntries.map((e) => String(e._id)));
-    setSelectedEmployeeIds((prev) =>
-      prev.filter((id) => {
+    setSelectedEmployeeIds((prev) => {
+      const newSelected = prev.filter((id) => {
         if (!currentIds.has(String(id))) return false;
         const row = rosterEntries.find((emp) => String(emp._id) === String(id));
         return row ? !isOwnRosterRow(row) : false;
-      })
-    );
+      });
+      // Prevent unnecessary re-renders if the filtered list is the same
+      if (newSelected.length === prev.length && newSelected.every((id, i) => id === prev[i])) {
+        return prev;
+      }
+      return newSelected;
+    });
   }, [rosterEntries]);
 
   const clearEmployeeUpdateField = (employeeId, field) => {

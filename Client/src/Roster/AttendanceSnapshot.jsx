@@ -1,4 +1,5 @@
 
+
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice.js';
@@ -521,6 +522,9 @@ const formatPrettyDate = (dateKey) => {
 
   // Handle week change
   const handleWeekChange = (weekNumber) => {
+    const week = availableWeeks.find(w => w.weekNumber === parseInt(weekNumber));
+    const newDate = week ? toDateKeyLocal(week.startDate) : selectedDate;
+    setSelectedDate(newDate);
     setSelectedWeek(parseInt(weekNumber));
     setLoadingState('loading');
     
@@ -528,7 +532,7 @@ const formatPrettyDate = (dateKey) => {
 		      dispatch(getEmployeesForUpdates({
 		        rosterId: selectedRoster,
 		        weekNumber: parseInt(weekNumber),
-		        date: selectedDate,
+		        date: newDate,
             month: selectedMonth,
             year: selectedYear,
 		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
@@ -641,32 +645,44 @@ const formatPrettyDate = (dateKey) => {
 		    input.focus();
 		  };
 
-	  const availableDepartments = Array.from(
+	  const availableDepartments = useMemo(() => Array.from(
 	    new Set(
 	      (allEmployees || [])
 	        .map((emp) => emp?.department)
 	        .filter(Boolean)
 	    )
-	  ).sort((a, b) => String(a).localeCompare(String(b)));
+	  ).sort((a, b) => String(a).localeCompare(String(b))), [allEmployees]);
 
 			  const TEAM_LEADER_NONE = "__none__";
 			  const normalizeTeamLeader = (value) => String(value || "").trim();
 			  const normalizeKey = (value) => String(value || "").trim().toLowerCase();
-			  const availableTeamLeaders = Array.from(
+			  const availableTeamLeaders = useMemo(() => Array.from(
 			    new Set(
 			      (allEmployees || [])
 		        .map((emp) => normalizeTeamLeader(emp?.teamLeader))
 		        .filter(Boolean)
 	    )
-	  ).sort((a, b) => String(a).localeCompare(String(b)));
+	  ).sort((a, b) => String(a).localeCompare(String(b))), [allEmployees]);
 
 			  useEffect(() => {
-			    setSelectedTeamLeaders((prev) =>
-			      prev.filter((value) => value === TEAM_LEADER_NONE || availableTeamLeaders.includes(value))
-			    );
+			    setSelectedTeamLeaders((prev) => {
+			      const newSelected = prev.filter((value) => value === TEAM_LEADER_NONE || availableTeamLeaders.includes(value));
+			      // Prevent unnecessary re-renders if the filtered list is the same
+			      if (newSelected.length === prev.length && newSelected.every((val, i) => val === prev[i])) {
+			        return prev;
+			      }
+			      return newSelected;
+			    });
 			  }, [TEAM_LEADER_NONE, availableTeamLeaders]);
 			  useEffect(() => {
-			    setSelectedDepartments((prev) => prev.filter((value) => availableDepartments.includes(value)));
+			    setSelectedDepartments((prev) => {
+			      const newSelected = prev.filter((value) => availableDepartments.includes(value));
+			      // Prevent unnecessary re-renders if the filtered list is the same
+			      if (newSelected.length === prev.length && newSelected.every((val, i) => val === prev[i])) {
+			        return prev;
+			      }
+			      return newSelected;
+			    });
 			  }, [availableDepartments]);
 			  useEffect(() => {
 			    const handleOutsideClick = (event) => {

@@ -1,5 +1,8 @@
 import Delegation from "../Modals/Delegation/delegation.modal.js";
 
+const DELEGATION_EXPIRY_SYNC_INTERVAL_MS = 60 * 1000;
+let lastDelegationExpirySyncAt = 0;
+
 const toIdString = (value) => {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -61,7 +64,11 @@ export const getDelegationContextForDate = async ({ userId, actionDate }) => {
   const userIdValue = toIdString(userId);
   const { startOfDayUtc, endOfDayUtc } = getUtcDayRange(actionDate);
 
-  await expireOldDelegations(startOfDayUtc);
+  const now = Date.now();
+  if (now - lastDelegationExpirySyncAt >= DELEGATION_EXPIRY_SYNC_INTERVAL_MS) {
+    await expireOldDelegations(startOfDayUtc);
+    lastDelegationExpirySyncAt = now;
+  }
 
   const [asDelegator, asAssignee] = await Promise.all([
     Delegation.findOne({
@@ -96,4 +103,3 @@ export const canDelegatedAssigneeActForDelegator = (delegation, targetUserId) =>
   if (!delegation || !targetUserId) return false;
   return toIdString(delegation.delegator) === toIdString(targetUserId);
 };
-

@@ -99,6 +99,7 @@ const delegationSchema = new mongoose.Schema(
 // Indexes for better query performance
 delegationSchema.index({ delegator: 1, status: 1 });
 delegationSchema.index({ assignee: 1, status: 1 });
+delegationSchema.index({ assignee: 1, delegator: 1, status: 1, startDate: 1, endDate: 1 });
 delegationSchema.index({ startDate: 1, endDate: 1 });
 delegationSchema.index({ status: 1, endDate: 1 });
 delegationSchema.index({ createdBy: 1, createdAt: -1 });
