@@ -1,3 +1,5 @@
+
+
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { CalendarDays, CheckCircle2, Clock3, Search, ShieldCheck, UserRound, XCircle } from "lucide-react";
@@ -81,6 +83,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   });
   const [requestFilter, setRequestFilter] = useState("pending");
   const [search, setSearch] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
 
   useEffect(() => {
     if (isAdminView) {
@@ -151,11 +154,6 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
       {!embeddedAdmin ? <Navbar /> : null}
       <div className={`${!embeddedAdmin ? "pt-0" : "pt-0"} px-4 md:px-6 pb-10`}>
         <div className="max-w-[1300px] mx-auto space-y-6">
-          {/* <div className="rounded-3xl bg-gradient-to-r from-blue-800 via-blue-700 to-sky-600 p-6 text-white shadow-lg">
-            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight">Leave Management Dashboard</h1>
-            <p className="text-blue-100 mt-1">Welcome back, {user?.realName || user?.username}</p>
-          </div> */}
-
           <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <form onSubmit={handleApply} className="xl:col-span-2 crm-card p-5">
               <div className="flex items-center gap-2 crm-title">
@@ -275,11 +273,11 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
             <div className="overflow-x-auto">
               <table className="crm-table text-sm">
                 <thead>
-                    <tr className="text-left text-slate-500 border-b">
-                      <th className="py-2 pr-4">Type</th>
-                      <th className="py-2 pr-4">Session</th>
-                      <th className="py-2 pr-4">Date Range</th>
-                      <th className="py-2 pr-4">Requested</th>
+                  <tr className="text-left text-slate-500 border-b">
+                    <th className="py-2 pr-4">Type</th>
+                    <th className="py-2 pr-4">Session</th>
+                    <th className="py-2 pr-4">Date Range</th>
+                    <th className="py-2 pr-4">Requested</th>
                     <th className="py-2 pr-4">Sandwich</th>
                     <th className="py-2 pr-4">Charged</th>
                     <th className="py-2 pr-4">Status</th>
@@ -307,7 +305,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                   ))}
                 </tbody>
               </table>
-                  {!loadingRequests && (myRequests || []).length === 0 ? (
+              {!loadingRequests && (myRequests || []).length === 0 ? (
                 <p className="text-sm crm-muted py-4">No leave requests yet.</p>
               ) : null}
             </div>
@@ -320,6 +318,16 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   const renderAdminView = () => {
     const stats = adminDashboard?.stats || {};
     const employees = adminDashboard?.employees || [];
+    
+    const filteredEmployees = employees.filter(emp => {
+      if (!employeeSearch.trim()) return true;
+      const searchTerm = employeeSearch.toLowerCase();
+      return (
+        (emp.name && emp.name.toLowerCase().includes(searchTerm)) ||
+        (emp.empId && emp.empId.toLowerCase().includes(searchTerm)) ||
+        (emp.username && emp.username.toLowerCase().includes(searchTerm))
+      );
+    });
 
     return (
       <div className="crm-page min-h-screen">
@@ -371,7 +379,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
               <div className="overflow-x-auto mt-4">
                 <table className="crm-table text-sm">
                   <thead>
-                    <tr className="text-left text-slate-500 border-b">
+                    <tr className="text-left text-slate-500 border-b"> 
                       <th className="py-2 pr-4">Employee</th>
                       <th className="py-2 pr-4">Type</th>
                       <th className="py-2 pr-4">Session</th>
@@ -436,15 +444,27 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
             </div>
 
             <div className="crm-card p-5">
-              <div className="flex items-center gap-2 crm-title mb-4">
-                <UserRound className="w-5 h-5 text-violet-600" />
-                Employee Leave Buckets
+              <div className="flex flex-col md:flex-row md:items-center gap-3 md:justify-between mb-4">
+                <div className="flex items-center gap-2 crm-title">
+                  <UserRound className="w-5 h-5 text-violet-600" />
+                  Employee Leave Buckets
+                </div>
+                <div className="relative">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+                  <input
+                    value={employeeSearch}
+                    onChange={(e) => setEmployeeSearch(e.target.value)}
+                    // placeholder="Search by name, e"
+                    className="crm-input pl-9 pr-3 py-2 text-sm w-full md:w-64"
+                  />
+                </div>
               </div>
               <div className="overflow-x-auto">
                 <table className="crm-table text-sm">
                   <thead>
                     <tr className="text-left text-slate-500 border-b">
                       <th className="py-2 pr-4">Employee</th>
+                      <th className="py-2 pr-4">Pseudo Name</th>
                       <th className="py-2 pr-4">Department</th>
                       <th className="py-2 pr-4">Probation</th>
                       <th className="py-2 pr-4">EL</th>
@@ -453,12 +473,13 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                     </tr>
                   </thead>
                   <tbody>
-                    {employees.map((row) => (
+                    {filteredEmployees.map((row) => (
                       <tr key={row.userId} className="border-b border-slate-100">
                         <td className="py-2 pr-4">
                           <div className="font-medium text-slate-800">{row.name}</div>
                           <div className="text-xs text-slate-500">{row.empId || row.username}</div>
                         </td>
+                        <td className="py-2 pr-4 text-slate-700">{row.username || "-"}</td>
                         <td className="py-2 pr-4 text-slate-700">{row.department || "-"}</td>
                         <td className="py-2 pr-4">
                           <span
@@ -478,6 +499,9 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                     ))}
                   </tbody>
                 </table>
+                {filteredEmployees.length === 0 && employeeSearch && (
+                  <p className="text-sm crm-muted py-4 text-center">No employees found matching "{employeeSearch}"</p>
+                )}
               </div>
             </div>
           </div>
@@ -501,3 +525,16 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
 };
 
 export default LeaveManagement;
+
+
+
+
+
+
+
+
+
+
+
+
+

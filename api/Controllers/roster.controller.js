@@ -9,19 +9,32 @@ import {
 import { getRoleType, normalizeDepartment } from "../utils/roleAccess.js";
 import mongoose from 'mongoose';
 
+const IST_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Kolkata",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
 const toIstDateKey = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Asia/Kolkata",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(date);
+  const parts = IST_DATE_KEY_FORMATTER.formatToParts(date);
   const year = parts.find((p) => p.type === "year")?.value;
   const month = parts.find((p) => p.type === "month")?.value;
   const day = parts.find((p) => p.type === "day")?.value;
   return year && month && day ? `${year}-${month}-${day}` : null;
+};
+
+const ROSTER_UPDATES_CONTEXT_PROJECTION = {
+  month: 1,
+  year: 1,
+  rosterStartDate: 1,
+  rosterEndDate: 1,
+  "weeks.weekNumber": 1,
+  "weeks.startDate": 1,
+  "weeks.endDate": 1,
+  "weeks.employees._id": 1,
 };
 
 const parseYmdToUtcDate = (value) => {
@@ -8795,7 +8808,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId);
+    const roster = await Roster.findById(rosterId)
+      .select(ROSTER_UPDATES_CONTEXT_PROJECTION)
+      .lean();
 
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
@@ -8830,7 +8845,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
             },
           },
         ],
-      });
+      })
+        .select(ROSTER_UPDATES_CONTEXT_PROJECTION)
+        .lean();
       const seen = new Set();
       contextualRosters = [roster, ...(overlappingRosters || [])].filter((r) => {
         const id = String(r?._id || "");
@@ -8862,7 +8879,11 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         const sameNumberWeeks = weeks.filter(
           (w) => Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
         );
-        return { weekGroup: sameNumberWeeks, resolvedByDate: false };
+        return {
+          weekNumber: parsedWeekNumber,
+          weekGroup: sameNumberWeeks,
+          resolvedByDate: false,
+        };
       }
 
       // Second, if no valid week by number, try to find by date only
@@ -8880,28 +8901,35 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       );
       if (!matchedGroup.length) return null;
 
-      return { weekGroup: matchedGroup, resolvedByDate: true };
+      return {
+        weekNumber: Number.parseInt(matchedWeek.weekNumber, 10),
+        weekGroup: matchedGroup,
+        resolvedByDate: true,
+      };
     };
 
     let activeRoster = roster;
-    let selectedWeekGroup = [];
+    let selectedWeekGroupMeta = [];
+    let selectedWeekNumber = parsedWeekNumber;
     let resolvedByDate = false;
     const primaryResolution = resolveWeekGroupInRoster(roster);
     if (primaryResolution) {
-      selectedWeekGroup = primaryResolution.weekGroup;
+      selectedWeekGroupMeta = primaryResolution.weekGroup;
+      selectedWeekNumber = primaryResolution.weekNumber;
       resolvedByDate = primaryResolution.resolvedByDate;
     } else {
       for (const candidateRoster of contextualRosters) {
         const resolution = resolveWeekGroupInRoster(candidateRoster);
         if (!resolution) continue;
         activeRoster = candidateRoster;
-        selectedWeekGroup = resolution.weekGroup;
+        selectedWeekGroupMeta = resolution.weekGroup;
+        selectedWeekNumber = resolution.weekNumber;
         resolvedByDate = resolution.resolvedByDate;
         break;
       }
     }
 
-    if (!selectedWeekGroup.length) {
+    if (!selectedWeekGroupMeta.length) {
       const allWeeks = contextualRosters.flatMap((r) => (r.weeks || []).filter(Boolean));
       return res.status(404).json({
         success: false,
@@ -8909,6 +8937,32 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       });
     }
 
+
+    const [activeRosterWithSelectedWeeks] = await Roster.aggregate([
+      { $match: { _id: new mongoose.Types.ObjectId(String(activeRoster._id)) } },
+      {
+        $project: {
+          _id: 1,
+          weeks: {
+            $filter: {
+              input: "$weeks",
+              as: "week",
+              cond: {
+                $eq: [{ $toInt: "$$week.weekNumber" }, selectedWeekNumber],
+              },
+            },
+          },
+        },
+      },
+    ]);
+
+    const selectedWeekGroup = (activeRosterWithSelectedWeeks?.weeks || []).filter(Boolean);
+    if (!selectedWeekGroup.length) {
+      return res.status(404).json({
+        success: false,
+        message: `Week ${selectedWeekNumber} not found in resolved roster`,
+      });
+    }
 
     const selectedWeekEmployees = selectedWeekGroup.flatMap((w) => (w.employees || []).filter((e) => e !== null));
     const selectedWeekEmployeesUnique = [];
