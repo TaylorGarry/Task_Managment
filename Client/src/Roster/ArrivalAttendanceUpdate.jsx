@@ -291,6 +291,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       const monthStartKey = `${monthFilterContext.year}-${String(monthFilterContext.month).padStart(2, "0")}-01`;
       setSelectedDate(monthStartKey);
       setSelectedWeek(""); // ✅ Reset to empty
+      setAvailableWeeks([]);
+      setWeekInfo(null);
     }
   }, [monthFilterContext?.month, monthFilterContext?.year]);
   
@@ -359,6 +361,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     autoSelectWeekDone.current = false; // ✅ Reset
     setActiveRosterId(rosterId);
     setSelectedWeek(""); // ✅ Reset
+    setAvailableWeeks([]);
+    setWeekInfo(null);
     setCurrentPage(1);
     setUpdates({});
     setSelectedEmployeeIds([]);
@@ -370,6 +374,23 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   }, [rosterId]);
 
   // ✅ NEW: Auto-select first available week when weeks load
+  useEffect(() => {
+    if (!activeRosterId || selectedWeek || !effectiveSelectedDate) return;
+
+    dispatch(getEmployeesForUpdates({
+      rosterId: activeRosterId,
+      weekNumber: 1,
+      date: effectiveSelectedDate,
+      month: monthYearForRequests?.month,
+      year: monthYearForRequests?.year,
+      page: currentPage,
+      limit: pageSize,
+      q: appliedSearch,
+      searchBy,
+      delegatedFrom: delegatedFromUserId,
+    }));
+  }, [dispatch, activeRosterId, selectedWeek, effectiveSelectedDate, monthYearForRequests?.month, monthYearForRequests?.year, currentPage, pageSize, appliedSearch, searchBy, delegatedFromUserId]);
+
   useEffect(() => {
     if (availableWeeks.length > 0 && !selectedWeek && !autoSelectWeekDone.current) {
       const firstWeek = availableWeeks[0];
@@ -996,7 +1017,10 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               >
                 <option value="">-- Select Week --</option>
                 {availableWeeks.map((week) => (
-                  <option key={week.weekNumber} value={week.weekNumber}>
+                  <option
+                    key={`${week.weekNumber}-${toIstDateKey(week.startDate) || ""}-${toIstDateKey(week.endDate) || ""}`}
+                    value={week.weekNumber}
+                  >
                     Week {week.displayWeekNumber || week.weekNumber} ({new Date(week.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(week.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}) - {week.employeeCount || 0} employees
                   </option>
                 ))}
