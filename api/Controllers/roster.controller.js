@@ -9,32 +9,19 @@ import {
 import { getRoleType, normalizeDepartment } from "../utils/roleAccess.js";
 import mongoose from 'mongoose';
 
-const IST_DATE_KEY_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Kolkata",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit",
-});
-
 const toIstDateKey = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
-  const parts = IST_DATE_KEY_FORMATTER.formatToParts(date);
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
   const year = parts.find((p) => p.type === "year")?.value;
   const month = parts.find((p) => p.type === "month")?.value;
   const day = parts.find((p) => p.type === "day")?.value;
   return year && month && day ? `${year}-${month}-${day}` : null;
-};
-
-const ROSTER_UPDATES_CONTEXT_PROJECTION = {
-  month: 1,
-  year: 1,
-  rosterStartDate: 1,
-  rosterEndDate: 1,
-  "weeks.weekNumber": 1,
-  "weeks.startDate": 1,
-  "weeks.endDate": 1,
-  "weeks.employees._id": 1,
 };
 
 const parseYmdToUtcDate = (value) => {
@@ -133,6 +120,115 @@ const getDelegatedTeamLeaderNames = async ({ assigneeId, actionDate }) => {
       .map((delegation) => String(delegation?.delegator?.username || "").trim().toLowerCase())
       .filter(Boolean)
   );
+};
+
+const isDateKeyWithinWeek = (dateKey, week) => {
+  if (!dateKey || !week?.startDate || !week?.endDate) return false;
+  const startKey = toIstDateKey(week.startDate);
+  const endKey = toIstDateKey(week.endDate);
+  if (!startKey || !endKey) return false;
+  return dateKey >= startKey && dateKey <= endKey;
+};
+
+const getWeekRangeKey = (week) => {
+  const startKey = toIstDateKey(week?.startDate);
+  const endKey = toIstDateKey(week?.endDate);
+  if (!startKey || !endKey) return "";
+  return `${startKey}|${endKey}`;
+};
+
+const getWeekNumberForMonth = (dateValue, month, year) => {
+  const dateKey = toIstDateKey(dateValue);
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (
+    !dateKey ||
+    !Number.isFinite(parsedMonth) ||
+    !Number.isFinite(parsedYear)
+  ) {
+    return 1;
+  }
+
+  const dayOfMonth = Number.parseInt(String(dateKey).split("-")[2], 10);
+  if (!Number.isFinite(dayOfMonth)) return 1;
+
+  const firstDayOfMonth = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1));
+  return Math.max(1, Math.ceil((firstDayOfMonth.getUTCDay() + dayOfMonth) / 7));
+};
+
+const clipWeekToMonthContext = (week, month, year) => {
+  if (!week?.startDate || !week?.endDate) return null;
+  const parsedMonth = Number.parseInt(month, 10);
+  const parsedYear = Number.parseInt(year, 10);
+  if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) {
+    return {
+      ...week,
+      displayWeekNumber: Number.parseInt(week?.weekNumber, 10) || 1,
+    };
+  }
+
+  const startKey = toIstDateKey(week.startDate);
+  const endKey = toIstDateKey(week.endDate);
+  if (!startKey || !endKey) return null;
+
+  const monthStartKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01`;
+  const monthEndDay = new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate();
+  const monthEndKey = `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`;
+
+  if (!(startKey <= monthEndKey && endKey >= monthStartKey)) {
+    return null;
+  }
+
+  const clippedStartKey = startKey < monthStartKey ? monthStartKey : startKey;
+  const clippedEndKey = endKey > monthEndKey ? monthEndKey : endKey;
+  const clippedStartDate = new Date(`${clippedStartKey}T00:00:00.000Z`);
+  const clippedEndDate = new Date(`${clippedEndKey}T00:00:00.000Z`);
+
+  return {
+    ...week,
+    startDate: clippedStartDate,
+    endDate: clippedEndDate,
+    displayWeekNumber: getWeekNumberForMonth(clippedStartKey, parsedMonth, parsedYear),
+  };
+};
+
+const resolveWeekGroupByNumberAndDate = (weeks = [], parsedWeekNumber, dateKey) => {
+  const validWeeks = (Array.isArray(weeks) ? weeks : []).filter(Boolean);
+
+  const groupByRange = (targetWeek) => {
+    const rangeKey = getWeekRangeKey(targetWeek);
+    if (!rangeKey) return [];
+    return validWeeks.filter((week) => getWeekRangeKey(week) === rangeKey);
+  };
+
+  const candidatesByNumber = Number.isFinite(parsedWeekNumber)
+    ? validWeeks.filter((week) => Number.parseInt(week?.weekNumber, 10) === parsedWeekNumber)
+    : [];
+
+  const exactByNumberAndDate = candidatesByNumber.find((week) =>
+    isDateKeyWithinWeek(dateKey, week)
+  );
+  if (exactByNumberAndDate) {
+    return groupByRange(exactByNumberAndDate);
+  }
+
+  const matchedByDate = validWeeks.find((week) => isDateKeyWithinWeek(dateKey, week));
+  if (matchedByDate) {
+    return groupByRange(matchedByDate);
+  }
+
+  if (candidatesByNumber.length === 1) {
+    return groupByRange(candidatesByNumber[0]);
+  }
+
+  if (candidatesByNumber.length > 1) {
+    const sortedCandidates = [...candidatesByNumber].sort(
+      (a, b) => new Date(a.startDate) - new Date(b.startDate)
+    );
+    return groupByRange(sortedCandidates[0]);
+  }
+
+  return [];
 };
 
 // export const addRosterWeek = async (req, res) => {
@@ -680,8 +776,20 @@ export const getRosterForCRMUsers = async (req, res) => {
     const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
 
     const rosters = await Roster.find({
-      rosterStartDate: { $lte: monthEnd },
-      rosterEndDate: { $gte: monthStart },
+      $or: [
+        {
+          rosterStartDate: { $lte: monthEnd },
+          rosterEndDate: { $gte: monthStart },
+        },
+        {
+          weeks: {
+            $elemMatch: {
+              startDate: { $lte: monthEnd },
+              endDate: { $gte: monthStart },
+            },
+          },
+        },
+      ],
     })
       .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
       .lean();
@@ -701,10 +809,11 @@ export const getRosterForCRMUsers = async (req, res) => {
         const weekEnd = new Date(week.endDate);
         return weekStart <= monthEnd && weekEnd >= monthStart;
       })
-      .map((week) => {
+      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+      .map((week, index) => {
         const filteredEmployees = (week.employees || []).filter((emp) => crmUsernames.includes(emp.name));
         return {
-          weekNumber: week.weekNumber,
+          weekNumber: index + 1,
           startDate: week.startDate,
           endDate: week.endDate,
           employees: filteredEmployees,
@@ -2616,8 +2725,20 @@ export const getAllRosters = async (req, res) => {
     if (Number.isFinite(parsedMonth) && Number.isFinite(parsedYear)) {
       const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
       const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
-      filter.rosterStartDate = { $lte: monthEnd };
-      filter.rosterEndDate = { $gte: monthStart };
+      filter.$or = [
+        {
+          rosterStartDate: { $lte: monthEnd },
+          rosterEndDate: { $gte: monthStart },
+        },
+        {
+          weeks: {
+            $elemMatch: {
+              startDate: { $lte: monthEnd },
+              endDate: { $gte: monthStart },
+            },
+          },
+        },
+      ];
     } else {
       if (month) filter.month = parsedMonth;
       if (year) filter.year = parsedYear;
@@ -2804,24 +2925,100 @@ export const exportSavedRoster = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findOne({ month, year });
-    if (!roster) {
+    const parsedMonth = Number.parseInt(month, 10);
+    const parsedYear = Number.parseInt(year, 10);
+    if (!Number.isFinite(parsedMonth) || !Number.isFinite(parsedYear)) {
+      return res.status(400).json({
+        success: false,
+        message: "Month and year must be valid numbers"
+      });
+    }
+    const monthStart = new Date(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0);
+    const monthEnd = new Date(parsedYear, parsedMonth, 0, 23, 59, 59, 999);
+    const exportMonthStartUtc = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0));
+    const exportMonthEndUtc = new Date(Date.UTC(parsedYear, parsedMonth, 0, 0, 0, 0, 0));
+
+    const rosters = await Roster.find({
+      $or: [
+        {
+          rosterStartDate: { $lte: monthEnd },
+          rosterEndDate: { $gte: monthStart },
+        },
+        {
+          weeks: {
+            $elemMatch: {
+              startDate: { $lte: monthEnd },
+              endDate: { $gte: monthStart },
+            },
+          },
+        },
+      ],
+    })
+      .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
+      .lean();
+
+    if (!rosters.length) {
       return res.status(404).json({
         success: false,
         message: "Roster not found for the specified month and year"
       });
     }
 
-    if (!roster.weeks || roster.weeks.length === 0) {
+    const weeksMap = new Map();
+    rosters
+      .flatMap((roster) => roster.weeks || [])
+      .forEach((week) => {
+        if (!week?.startDate || !week?.endDate) return;
+        const weekStart = new Date(week.startDate);
+        const weekEnd = new Date(week.endDate);
+        if (!(weekStart <= monthEnd && weekEnd >= monthStart)) return;
+
+        const weekKey = `${toIstDateKey(week.startDate) || ""}|${toIstDateKey(week.endDate) || ""}`;
+        if (!weekKey || weekKey === "|") return;
+
+        if (!weeksMap.has(weekKey)) {
+          weeksMap.set(weekKey, {
+            ...week,
+            employees: [],
+          });
+        }
+
+        const groupedWeek = weeksMap.get(weekKey);
+        const existingEmployeeKeys = new Set(
+          (groupedWeek.employees || []).map((emp) =>
+            String(emp?.userId || emp?.empId || `${emp?.name || ""}|${emp?.department || ""}`).trim()
+          )
+        );
+
+        (Array.isArray(week.employees) ? week.employees : [])
+          .filter((emp) => emp && typeof emp === "object")
+          .forEach((emp) => {
+            const employeeKey = String(
+              emp?.userId || emp?.empId || `${emp?.name || ""}|${emp?.department || ""}`
+            ).trim();
+            if (!employeeKey || existingEmployeeKeys.has(employeeKey)) return;
+            existingEmployeeKeys.add(employeeKey);
+            groupedWeek.employees.push(emp);
+          });
+      });
+
+    const weeks = Array.from(weeksMap.values())
+      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate))
+      .map((week, index) => ({
+        ...week,
+        weekNumber: index + 1,
+      }));
+
+    if (!weeks.length) {
       return res.status(404).json({
         success: false,
-        message: "No weeks found in the roster"
+        message: "No weeks found in the roster for the specified month and year"
       });
     }
 
     const workbook = XLSX.utils.book_new();
     workbook.Props = {
-      Title: `Roster_${month}_${year}`,
+      Title: `Roster_${parsedMonth}_${parsedYear}`,
       Author: "Task Management CRM",
       CreatedDate: new Date()
     };
@@ -2886,7 +3083,52 @@ export const exportSavedRoster = async (req, res) => {
       "LWD": "Last Working Day"
     };
 
-    roster.weeks.forEach((week) => {
+    const getVisibleDaysForWeek = (week) => {
+      const weekStartUtc = parseDateUtc(week?.startDate);
+      const weekEndUtc = parseDateUtc(week?.endDate);
+
+      if (!weekStartUtc || !weekEndUtc || weekStartUtc > weekEndUtc) {
+        return [];
+      }
+
+      const visibleDays = [];
+      const cursor = new Date(weekStartUtc);
+      let offset = 0;
+
+      while (cursor <= weekEndUtc) {
+        if (cursor >= exportMonthStartUtc && cursor <= exportMonthEndUtc) {
+          visibleDays.push({
+            date: new Date(cursor),
+            dateKey: toIstDateKey(cursor),
+            offset,
+          });
+        }
+
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        offset += 1;
+      }
+
+      return visibleDays;
+    };
+
+    const getDailyStatusForDay = (employee, visibleDay) => {
+      const dailyStatuses = Array.isArray(employee?.dailyStatus) ? employee.dailyStatus : [];
+      const matchedByDate =
+        visibleDay?.dateKey
+          ? dailyStatuses.find((ds) => toIstDateKey(ds?.date) === visibleDay.dateKey)
+          : null;
+
+      return matchedByDate || dailyStatuses[visibleDay?.offset] || null;
+    };
+
+    let exportedWeekCount = 0;
+
+    weeks.forEach((week) => {
+      const visibleDays = getVisibleDaysForWeek(week);
+      if (!visibleDays.length) {
+        return;
+      }
+
       const safeEmployees = (Array.isArray(week?.employees) ? week.employees : []).filter(
         (emp) => emp && typeof emp === "object"
       );
@@ -2899,17 +3141,10 @@ export const exportSavedRoster = async (req, res) => {
       // ✅ DEPARTMENT COLUMN ADD 
       const header = ["Name", "Department", "Transport", "CAB Route", "Team Leader", "Shift Start Hour", "Shift End Hour"];
 
-      const dayCount = sortedEmployees[0]?.dailyStatus?.length || 0;
-      for (let i = 0; i < dayCount; i++) {
-        const startUtc = parseDateUtc(week.startDate);
-        if (!startUtc) {
-          header.push("");
-          continue;
-        }
-        const date = new Date(startUtc);
-        date.setUTCDate(startUtc.getUTCDate() + i);
-        header.push(formatDateWithDay(date));
-      }
+      const dayCount = visibleDays.length;
+      visibleDays.forEach((visibleDay) => {
+        header.push(formatDateWithDay(visibleDay.date));
+      });
 
       STATUS_TYPES.forEach(status => {
         header.push(`Total ${STATUS_NAMES[status] || status}`);
@@ -2932,18 +3167,15 @@ export const exportSavedRoster = async (req, res) => {
         const statusCounts = {};
         STATUS_TYPES.forEach(status => statusCounts[status] = 0);
 
-        if (emp.dailyStatus && emp.dailyStatus.length > 0) {
-          emp.dailyStatus.forEach((ds) => {
-            const status = ds?.status || "";
-            row.push(status);
+        visibleDays.forEach((visibleDay) => {
+          const dailyStatus = getDailyStatusForDay(emp, visibleDay);
+          const status = dailyStatus?.status || "";
+          row.push(status);
 
-            if (status && STATUS_TYPES.includes(status)) {
-              statusCounts[status]++;
-            }
-          });
-        } else {
-          for (let i = 0; i < dayCount; i++) row.push("");
-        }
+          if (status && STATUS_TYPES.includes(status)) {
+            statusCounts[status]++;
+          }
+        });
 
         STATUS_TYPES.forEach(status => row.push(statusCounts[status]));
         data.push(row);
@@ -2955,12 +3187,10 @@ export const exportSavedRoster = async (req, res) => {
 
         STATUS_TYPES.forEach(status => {
           const totalStatus = sortedEmployees.reduce((sum, emp) => {
-            let empCount = 0;
-            if (emp.dailyStatus) {
-              emp.dailyStatus.forEach(ds => {
-                if (ds?.status === status) empCount++;
-              });
-            }
+            const empCount = visibleDays.reduce((employeeSum, visibleDay) => {
+              const dailyStatus = getDailyStatusForDay(emp, visibleDay);
+              return employeeSum + (dailyStatus?.status === status ? 1 : 0);
+            }, 0);
             return sum + empCount;
           }, 0);
           summaryRow.push(`${STATUS_NAMES[status] || status}: ${totalStatus}`);
@@ -2985,12 +3215,20 @@ export const exportSavedRoster = async (req, res) => {
 
       const sheetName = getUniqueSheetName(`Week ${week.weekNumber}`);
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+      exportedWeekCount += 1;
     });
+
+    if (!exportedWeekCount) {
+      return res.status(404).json({
+        success: false,
+        message: "No roster days found in the specified month and year"
+      });
+    }
 
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename=roster_${month}_${year}_export.xlsx`);
+    res.setHeader('Content-Disposition', `attachment; filename=roster_${parsedMonth}_${parsedYear}_export.xlsx`);
 
     res.send(buffer);
 
@@ -5659,7 +5897,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         const existingRow = merged[existingIndex];
         const nextRow = {
           ...(existingRow?.toObject ? existingRow.toObject() : existingRow),
-          ...(employee?.toObject ? employee.toObject() : employee),
+          ...(employee?.toObject ? employee.toObject() : employee),  
         };
 
         // Preserve empId from existing if new one doesn't have it
@@ -6277,12 +6515,14 @@ export const exportRosterTemplate = async (req, res) => {
     }
 
     const dateHeaders = [];
+    const dates = [];
     const currentDate = new Date(fromDate);
     
     while (currentDate <= toDate) {
       const day = currentDate.getDate().toString().padStart(2, '0');
       const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
       const weekday = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
+      dates.push(new Date(currentDate));
       dateHeaders.push(`${day}/${month} ${weekday}`);
       currentDate.setDate(currentDate.getDate() + 1);
     }
@@ -6333,7 +6573,20 @@ export const exportRosterTemplate = async (req, res) => {
     
     if (shouldPrefillByTl) {
       const previousRosters = await Roster.find({
-        rosterEndDate: { $lt: fromDate }
+        $or: [
+          {
+            rosterStartDate: { $lte: toDate },
+            rosterEndDate: { $gte: fromDate }
+          },
+          {
+            weeks: {
+              $elemMatch: {
+                startDate: { $lte: toDate },
+                endDate: { $gte: fromDate }
+              }
+            }
+          }
+        ]
       })
         .sort({ rosterEndDate: -1, rosterStartDate: -1, updatedAt: -1, createdAt: -1 })
         .lean();
@@ -6347,8 +6600,14 @@ export const exportRosterTemplate = async (req, res) => {
         weeks.sort((a, b) => new Date(b?.endDate || 0).getTime() - new Date(a?.endDate || 0).getTime());
 
         for (const week of weeks) {
+          const weekStart = new Date(week?.startDate);
           const weekEnd = new Date(week?.endDate);
-          if (Number.isNaN(weekEnd.getTime()) || weekEnd >= fromDate) continue;
+          if (
+            Number.isNaN(weekStart.getTime()) ||
+            Number.isNaN(weekEnd.getTime()) ||
+            weekEnd < fromDate ||
+            weekStart > toDate
+          ) continue;
 
           const employees = Array.isArray(week?.employees) ? week.employees : [];
           for (const emp of employees) {
@@ -6410,7 +6669,13 @@ export const exportRosterTemplate = async (req, res) => {
           return aTime - bTime;
         });
 
-        const mappedStatuses = Array.from({ length: dateColumns.length }, () => "");
+        const mappedStatuses = dates.map(date => {
+          const statusEntry = sourceDailyStatus.find(s => {
+            const sDate = new Date(s.date);
+            return sDate.toDateString() === date.toDateString();
+          });
+          return statusEntry ? normalizeStatus(statusEntry) : "";
+        });
 
         // Get empId from User collection
         const employeeId = userId ? (userMap.get(userId) || "") : "";
@@ -7114,15 +7379,35 @@ export const updateArrivalTime = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
+    const selectedDate = parseYmdToUtcDate(date);
+    if (!selectedDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    const selectedDateKey = toIstDateKey(selectedDate);
+    if (!selectedDateKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
-    const weekCandidates = (roster.weeks || []).filter(
-      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    const weekCandidates = resolveWeekGroupByNumberAndDate(
+      roster.weeks || [],
+      parsedWeekNumber,
+      selectedDateKey
     );
     if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
 
-    const week = weekCandidates.find((w) => w.employees?.id(employeeId));
+    const week = weekCandidates.find((w) => w.employees?.id(employeeId))
+      || (roster.weeks || []).find(
+        (w) => isDateKeyWithinWeek(selectedDateKey, w) && w?.employees?.id(employeeId)
+      );
     if (!week) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
@@ -7609,15 +7894,35 @@ export const updateAttendance = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
+    const selectedDate = parseYmdToUtcDate(date);
+    if (!selectedDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    const selectedDateKey = toIstDateKey(selectedDate);
+    if (!selectedDateKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
-    const weekCandidates = (roster.weeks || []).filter(
-      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    const weekCandidates = resolveWeekGroupByNumberAndDate(
+      roster.weeks || [],
+      parsedWeekNumber,
+      selectedDateKey
     );
     if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
 
-    const week = weekCandidates.find((w) => w.employees?.id(employeeId));
+    const week = weekCandidates.find((w) => w.employees?.id(employeeId))
+      || (roster.weeks || []).find(
+        (w) => isDateKeyWithinWeek(selectedDateKey, w) && w?.employees?.id(employeeId)
+      );
     if (!week) {
       return res.status(404).json({ success: false, message: "Employee not found" });
     }
@@ -7735,14 +8040,6 @@ export const updateAttendance = async (req, res) => {
       console.log(`Department user access granted. Team Leader: ${isTeamLeader}, Same Dept: ${isSameDepartment}`);
     }
 
-    const selectedDate = parseYmdToUtcDate(date);
-    if (!selectedDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format"
-      });
-    }
-    const selectedDateKey = toIstDateKey(selectedDate);
     const weekStartKey = toIstDateKey(week.startDate);
     const weekEndKey = toIstDateKey(week.endDate);
     if (!selectedDateKey || !weekStartKey || !weekEndKey) {
@@ -8195,9 +8492,26 @@ export const updateAttendanceBulk = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
+    const selectedDate = parseYmdToUtcDate(date);
+    if (!selectedDate) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+    const selectedDateKey = toIstDateKey(selectedDate);
+    if (!selectedDateKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
     const parsedWeekNumber = parseInt(weekNumber);
-    const weekCandidates = (roster.weeks || []).filter(
-      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    const weekCandidates = resolveWeekGroupByNumberAndDate(
+      roster.weeks || [],
+      parsedWeekNumber,
+      selectedDateKey
     );
     if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
@@ -8225,16 +8539,8 @@ export const updateAttendanceBulk = async (req, res) => {
       });
     }
 
-    const selectedDate = parseYmdToUtcDate(date);
-    if (!selectedDate) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid date format"
-      });
-    }
     const selectedDayEnd = new Date(selectedDate);
     selectedDayEnd.setUTCHours(23, 59, 59, 999);
-    const selectedDateKey = toIstDateKey(selectedDate);
     const weekStartKey = toIstDateKey(weekStartDate);
     const weekEndKey = toIstDateKey(weekEndDate);
 
@@ -8343,7 +8649,10 @@ export const updateAttendanceBulk = async (req, res) => {
 
     for (const employeeId of employeeIds) {
       try {
-        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
+        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId))
+          || (roster.weeks || []).find(
+            (w) => isDateKeyWithinWeek(selectedDateKey, w) && w?.employees?.id(employeeId)
+          );
         const employee = matchedWeek?.employees?.id(employeeId);
         if (!employee) {
           failed.push({ employeeId, message: "Employee not found" });
@@ -8808,9 +9117,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId)
-      .select(ROSTER_UPDATES_CONTEXT_PROJECTION)
-      .lean();
+    const roster = await Roster.findById(rosterId);
 
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
@@ -8845,9 +9152,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
             },
           },
         ],
-      })
-        .select(ROSTER_UPDATES_CONTEXT_PROJECTION)
-        .lean();
+      });
       const seen = new Set();
       contextualRosters = [roster, ...(overlappingRosters || [])].filter((r) => {
         const id = String(r?._id || "");
@@ -8857,79 +9162,42 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Improved week resolution logic
     const resolveWeekGroupInRoster = (targetRoster) => {
       if (!targetRoster) return null;
       const weeks = (targetRoster.weeks || []).filter(Boolean);
-
-      // First, try to find week by number AND verify date range includes requested date
-      const byWeekNumber = weeks.filter(
-        (w) => Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
-      );
-
-      // Check if any week with this number contains the requested date
-      const validWeekByNumber = byWeekNumber.find((w) => {
-        const startKey = toIstDateKey(w.startDate);
-        const endKey = toIstDateKey(w.endDate);
-        if (!startKey || !endKey) return false;
-        return requestedDateKey >= startKey && requestedDateKey <= endKey;
-      });
-
-      if (validWeekByNumber) {
-        const sameNumberWeeks = weeks.filter(
-          (w) => Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
-        );
-        return {
-          weekNumber: parsedWeekNumber,
-          weekGroup: sameNumberWeeks,
-          resolvedByDate: false,
-        };
-      }
-
-      // Second, if no valid week by number, try to find by date only
-      const matchedWeek = weeks.find((w) => {
-        const startKey = toIstDateKey(w.startDate);
-        const endKey = toIstDateKey(w.endDate);
-        if (!startKey || !endKey) return false;
-        return requestedDateKey >= startKey && requestedDateKey <= endKey;
-      });
-
-      if (!matchedWeek) return null;
-
-      const matchedGroup = weeks.filter(
-        (w) => Number.parseInt(w.weekNumber, 10) === Number.parseInt(matchedWeek.weekNumber, 10)
+      const matchedGroup = resolveWeekGroupByNumberAndDate(
+        weeks,
+        parsedWeekNumber,
+        requestedDateKey
       );
       if (!matchedGroup.length) return null;
 
-      return {
-        weekNumber: Number.parseInt(matchedWeek.weekNumber, 10),
-        weekGroup: matchedGroup,
-        resolvedByDate: true,
-      };
+      const resolvedByDate = !matchedGroup.some(
+        (week) => Number.parseInt(week?.weekNumber, 10) === parsedWeekNumber
+      );
+
+      return { weekGroup: matchedGroup, resolvedByDate };
     };
 
     let activeRoster = roster;
-    let selectedWeekGroupMeta = [];
-    let selectedWeekNumber = parsedWeekNumber;
+    let selectedWeekGroup = [];
     let resolvedByDate = false;
     const primaryResolution = resolveWeekGroupInRoster(roster);
     if (primaryResolution) {
-      selectedWeekGroupMeta = primaryResolution.weekGroup;
-      selectedWeekNumber = primaryResolution.weekNumber;
+      selectedWeekGroup = primaryResolution.weekGroup;
       resolvedByDate = primaryResolution.resolvedByDate;
     } else {
       for (const candidateRoster of contextualRosters) {
         const resolution = resolveWeekGroupInRoster(candidateRoster);
         if (!resolution) continue;
         activeRoster = candidateRoster;
-        selectedWeekGroupMeta = resolution.weekGroup;
-        selectedWeekNumber = resolution.weekNumber;
+        selectedWeekGroup = resolution.weekGroup;
         resolvedByDate = resolution.resolvedByDate;
         break;
       }
     }
 
-    if (!selectedWeekGroupMeta.length) {
+    if (!selectedWeekGroup.length) {
       const allWeeks = contextualRosters.flatMap((r) => (r.weeks || []).filter(Boolean));
       return res.status(404).json({
         success: false,
@@ -8937,32 +9205,6 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       });
     }
 
-
-    const [activeRosterWithSelectedWeeks] = await Roster.aggregate([
-      { $match: { _id: new mongoose.Types.ObjectId(String(activeRoster._id)) } },
-      {
-        $project: {
-          _id: 1,
-          weeks: {
-            $filter: {
-              input: "$weeks",
-              as: "week",
-              cond: {
-                $eq: [{ $toInt: "$$week.weekNumber" }, selectedWeekNumber],
-              },
-            },
-          },
-        },
-      },
-    ]);
-
-    const selectedWeekGroup = (activeRosterWithSelectedWeeks?.weeks || []).filter(Boolean);
-    if (!selectedWeekGroup.length) {
-      return res.status(404).json({
-        success: false,
-        message: `Week ${selectedWeekNumber} not found in resolved roster`,
-      });
-    }
 
     const selectedWeekEmployees = selectedWeekGroup.flatMap((w) => (w.employees || []).filter((e) => e !== null));
     const selectedWeekEmployeesUnique = [];
@@ -9280,49 +9522,55 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       }))
     }));
 
-    // Also return all weeks for the dropdown (merged by weekNumber)
+    // Return distinct week ranges for the dropdown so duplicate raw week numbers
+    // do not collapse separate weeks into a single option.
     const weeksMap = new Map();
-    const monthStartKey = hasMonthContext ? `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-01` : null;
-    const monthEndDay = hasMonthContext ? new Date(Date.UTC(parsedYear, parsedMonth, 0)).getUTCDate() : null;
-    const monthEndKey = hasMonthContext
-      ? `${parsedYear}-${String(parsedMonth).padStart(2, "0")}-${String(monthEndDay).padStart(2, "0")}`
-      : null;
     contextualRosters
       .flatMap((r) => (r?.weeks || []).filter((w) => w !== null))
-      .forEach((w) => {
-        if (hasMonthContext) {
-          const startKey = toIstDateKey(w.startDate);
-          const endKey = toIstDateKey(w.endDate);
-          if (!startKey || !endKey) return;
-          if (!(startKey <= monthEndKey && endKey >= monthStartKey)) return;
-        }
-        const key = String(w.weekNumber);
+      .forEach((week) => {
+        const normalizedWeek = hasMonthContext
+          ? clipWeekToMonthContext(week, parsedMonth, parsedYear)
+          : {
+              ...week,
+              displayWeekNumber: Number.parseInt(week?.weekNumber, 10) || 1,
+            };
+        if (!normalizedWeek) return;
+
+        const startKey = toIstDateKey(normalizedWeek.startDate);
+        const endKey = toIstDateKey(normalizedWeek.endDate);
+        if (!startKey || !endKey) return;
+
+        const key = `${startKey}|${endKey}`;
         if (!weeksMap.has(key)) {
           weeksMap.set(key, {
-            weekNumber: w.weekNumber,
-            startDate: w.startDate,
-            endDate: w.endDate,
+            weekNumber: hasMonthContext
+              ? normalizedWeek.displayWeekNumber
+              : Number.parseInt(week?.weekNumber, 10) || 1,
+            actualWeekNumber: Number.parseInt(week?.weekNumber, 10) || null,
+            displayWeekNumber:
+              normalizedWeek.displayWeekNumber || Number.parseInt(week?.weekNumber, 10) || 1,
+            startDate: normalizedWeek.startDate,
+            endDate: normalizedWeek.endDate,
             employeeIds: new Set(),
           });
         }
+
         const grouped = weeksMap.get(key);
-        const currentStart = new Date(w.startDate);
-        const currentEnd = new Date(w.endDate);
-        if (currentStart < new Date(grouped.startDate)) grouped.startDate = w.startDate;
-        if (currentEnd > new Date(grouped.endDate)) grouped.endDate = w.endDate;
-        (w.employees || []).filter((e) => e !== null).forEach((emp) => {
+        (week.employees || []).filter((e) => e !== null).forEach((emp) => {
           grouped.employeeIds.add(String(emp._id));
         });
       });
 
     const weeksForDropdown = Array.from(weeksMap.values())
-      .map((w) => ({
-        weekNumber: w.weekNumber,
-        startDate: w.startDate,
-        endDate: w.endDate,
-        employeeCount: w.employeeIds.size,
+      .map((week) => ({
+        weekNumber: week.weekNumber,
+        actualWeekNumber: week.actualWeekNumber,
+        displayWeekNumber: week.displayWeekNumber,
+        startDate: week.startDate,
+        endDate: week.endDate,
+        employeeCount: week.employeeIds.size,
       }))
-      .sort((a, b) => Number(a.weekNumber) - Number(b.weekNumber));
+      .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
 
     const currentDateKey = toIstDateKey(new Date());
     const weekStartKey = (selectedWeekGroup || [])
@@ -9363,6 +9611,22 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     // Get unique departments
     const departments = [...new Set(filteredEmployees.map(e => e?.department).filter(Boolean))];
 
+    const responseWeekMeta = hasMonthContext
+      ? clipWeekToMonthContext(
+          {
+            weekNumber: selectedWeekGroup[0]?.weekNumber,
+            startDate: selectedWeekGroup[0]?.startDate,
+            endDate: selectedWeekGroup[0]?.endDate,
+          },
+          parsedMonth,
+          parsedYear
+        )
+      : null;
+
+    const responseWeekNumber = hasMonthContext
+      ? responseWeekMeta?.displayWeekNumber || Number.parseInt(selectedWeekGroup[0].weekNumber, 10)
+      : Number.parseInt(selectedWeekGroup[0].weekNumber, 10);
+
     const response = {
       success: true,
       message: resolvedByDate
@@ -9373,7 +9637,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         requestedDate: date,
         q,
         searchBy,
-        weekNumber: Number.parseInt(selectedWeekGroup[0].weekNumber, 10),
+        weekNumber: responseWeekNumber,
         startDate: weekStartKey,
         endDate: weekEndKey,
         currentDate: currentDateKey,
@@ -10727,15 +10991,29 @@ export const updatePunchTimes = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
+    const selectedDate = parseYmdToUtcDate(date);
+    const selectedDateKey = toIstDateKey(selectedDate);
+    if (!selectedDate || !selectedDateKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
-    const weekCandidates = (roster.weeks || []).filter(
-      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    const weekCandidates = resolveWeekGroupByNumberAndDate(
+      roster.weeks || [],
+      parsedWeekNumber,
+      selectedDateKey
     );
     if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
     }
 
-    const week = weekCandidates.find((w) => w.employees?.id(employeeId));
+    const week = weekCandidates.find((w) => w.employees?.id(employeeId))
+      || (roster.weeks || []).find(
+        (w) => isDateKeyWithinWeek(selectedDateKey, w) && w?.employees?.id(employeeId)
+      );
     const employee = week?.employees?.id(employeeId);
     if (!employee) {
       return res.status(404).json({ success: false, message: "Employee not found" });
@@ -10743,9 +11021,6 @@ export const updatePunchTimes = async (req, res) => {
 
     // Parse date parts
     const [year, month, day] = date.split('-').map(Number);
-
-    // Create base date in UTC
-    const selectedDate = new Date(Date.UTC(year, month - 1, day, 0, 0, 0));
 
     // Find or create daily status
     let daily = employee.dailyStatus.find(d => {
@@ -11326,9 +11601,20 @@ export const bulkUpdatePunchTimes = async (req, res) => {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
 
+    const selectedDate = parseYmdToUtcDate(date);
+    const selectedDateKey = toIstDateKey(selectedDate);
+    if (!selectedDate || !selectedDateKey) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid date format"
+      });
+    }
+
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
-    const weekCandidates = (roster.weeks || []).filter(
-      (w) => w && Number.parseInt(w.weekNumber, 10) === parsedWeekNumber
+    const weekCandidates = resolveWeekGroupByNumberAndDate(
+      roster.weeks || [],
+      parsedWeekNumber,
+      selectedDateKey
     );
     if (!weekCandidates.length) {
       return res.status(404).json({ success: false, message: "Week not found" });
@@ -11374,7 +11660,10 @@ export const bulkUpdatePunchTimes = async (req, res) => {
 
     for (const employeeId of employeeIds) {
       try {
-        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId));
+        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId))
+          || (roster.weeks || []).find(
+            (w) => isDateKeyWithinWeek(selectedDateKey, w) && w?.employees?.id(employeeId)
+          );
         const employee = matchedWeek?.employees?.id(employeeId);
         if (!employee) {
           errors.push({ employeeId, error: "Employee not found" });

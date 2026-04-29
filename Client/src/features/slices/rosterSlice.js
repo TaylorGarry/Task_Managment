@@ -70242,9 +70242,10 @@ canEdit: true,
 
   // Update in allRosters
   if (state.allRosters?.data) {
-    state.allRosters.data.forEach(roster => {
-      roster.weeks?.forEach(week => {
-        if (week.weekNumber === weekNumber) {
+	    state.allRosters.data.forEach(roster => {
+	      if (String(roster?._id || roster?.rosterId || "") !== String(rosterId)) return;
+	      roster.weeks?.forEach(week => {
+	        if (week.weekNumber === weekNumber) {
           const emp = week.employees?.find(e => e._id === employeeId);
           if (emp) {
             const dayIndex = emp.dailyStatus?.findIndex(d => 
@@ -70309,8 +70310,9 @@ canEdit: true,
 	  // Update in departmentRosters
 	  if (state.departmentRosters?.data) {
 	    state.departmentRosters.data.forEach(roster => {
-      roster.weeks?.forEach(week => {
-        if (week.weekNumber === weekNumber) {
+	      if (String(roster?._id || roster?.rosterId || "") !== String(rosterId)) return;
+	      roster.weeks?.forEach(week => {
+	        if (week.weekNumber === weekNumber) {
           const emp = week.employees?.find(e => e._id === employeeId);
           if (emp) {
             const dayIndex = emp.dailyStatus?.findIndex(d => 
@@ -70380,9 +70382,10 @@ canEdit: true,
 
   // Update in allRosters
   if (state.allRosters?.data) {
-    state.allRosters.data.forEach(roster => {
-      roster.weeks?.forEach(week => {
-        if (week.weekNumber === weekNumber) {
+	    state.allRosters.data.forEach(roster => {
+	      if (String(roster?._id || roster?.rosterId || "") !== String(rosterId)) return;
+	      roster.weeks?.forEach(week => {
+	        if (week.weekNumber === weekNumber) {
           const emp = week.employees?.find(e => e._id === employeeId);
           if (emp) {
             const dayIndex = emp.dailyStatus?.findIndex(d => 
@@ -70447,8 +70450,9 @@ canEdit: true,
 	  // Update in departmentRosters
 	  if (state.departmentRosters?.data) {
 	    state.departmentRosters.data.forEach(roster => {
-      roster.weeks?.forEach(week => {
-        if (week.weekNumber === weekNumber) {
+	      if (String(roster?._id || roster?.rosterId || "") !== String(rosterId)) return;
+	      roster.weeks?.forEach(week => {
+	        if (week.weekNumber === weekNumber) {
           const emp = week.employees?.find(e => e._id === employeeId);
           if (emp) {
             const dayIndex = emp.dailyStatus?.findIndex(d => 
@@ -70521,8 +70525,12 @@ canEdit: true,
 		    return false;
 		  };
 
-		  const applyDailyUpdate = (rosterLike, employeeId, daily) => {
+		  const applyDailyUpdate = (rosterLike, employeeId, daily, targetRosterId = null) => {
 		    if (!rosterLike?.weeks) return;
+		    if (targetRosterId) {
+		      const currentRosterId = String(rosterLike?._id || rosterLike?.rosterId || "");
+		      if (currentRosterId && currentRosterId !== String(targetRosterId)) return;
+		    }
 		    rosterLike.weeks.forEach((week) => {
 		      if (String(week.weekNumber) !== String(weekNumber)) return;
 		      const emp = week.employees?.find((e) => String(e._id) === String(employeeId));
@@ -70543,17 +70551,17 @@ canEdit: true,
 	    });
 	  };
 
-	  results.forEach(({ employeeId, data }) => {
-	    // Update in main roster
-	    applyDailyUpdate(state.roster, employeeId, data);
+		  results.forEach(({ employeeId, data }) => {
+		    // Update in main roster
+		    applyDailyUpdate(state.roster, employeeId, data, rosterId);
 
 	    // Update in allRosters
-	    if (state.allRosters?.data) {
-	      state.allRosters.data.forEach((roster) => applyDailyUpdate(roster, employeeId, data));
-	    }
+		    if (state.allRosters?.data) {
+		      state.allRosters.data.forEach((roster) => applyDailyUpdate(roster, employeeId, data, rosterId));
+		    }
 
 	    // Update in bulkEditRoster
-	    applyDailyUpdate(state.bulkEditRoster?.data, employeeId, data);
+		    applyDailyUpdate(state.bulkEditRoster?.data, employeeId, data, rosterId);
 
 	    // Update in opsMetaRoster (different shape)
 		    if (state.opsMetaRoster?.data?.rosterEntries) {
@@ -70572,7 +70580,7 @@ canEdit: true,
 
 	    // Update in departmentRosters
 		    if (state.departmentRosters?.data) {
-		      state.departmentRosters.data.forEach((roster) => applyDailyUpdate(roster, employeeId, data));
+		      state.departmentRosters.data.forEach((roster) => applyDailyUpdate(roster, employeeId, data, rosterId));
 		    }
 		  });
 
@@ -70767,12 +70775,6 @@ canEdit: true,
   state.bulkSaveLoading = false;
   state.bulkSaveSuccess = true;
   state.bulkEditError = undefined;
-
-  // ✅ VERY IMPORTANT — keep updated roster in bulkEditRoster
-  if (action.payload?.roster) {
-    state.bulkEditRoster = action.payload;  // store full response
-    state.roster = action.payload.roster;   // optional if needed elsewhere
-  }
 
   // ✅ Update permission flags
   if (action.payload?.rosterStatus !== undefined) {

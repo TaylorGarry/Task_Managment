@@ -1,5 +1,4 @@
 
-
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { getEmployeesForUpdates, fetchAllRosters, exportAttendanceSnapshot } from '../features/slices/rosterSlice.js';
@@ -109,6 +108,109 @@ const getDisplayWeeksForMonth = (weeks = [], month, year) => {
         displayWeekNumber: getWeekNumberForMonth(clippedStartKey, parsedMonth, parsedYear),
       };
     });
+};
+
+const getWeekStartTime = (week) => {
+  const startValue = week?.startDate || week?.displayStartDate || 0;
+  const startTime = new Date(startValue).getTime();
+  return Number.isFinite(startTime) ? startTime : 0;
+};
+
+const getEmployeeRosterKey = (employee) =>
+  String(
+    employee?.userId?._id ||
+      employee?.userId ||
+      employee?._id ||
+      employee?.empId ||
+      `${employee?.name || ""}|${employee?.department || ""}`
+  ).trim();
+
+const buildRosterMapForMonth = (rosterList = [], month, year) => {
+  const monthKey = `${month}-${year}`;
+  const monthStartKey = getMonthStartDateKey(month, year);
+  if (!monthStartKey) return {};
+
+  const normalizedRosters = (Array.isArray(rosterList) ? rosterList : [])
+    .map((roster) => {
+      const visibleWeeks = getDisplayWeeksForMonth(roster?.weeks || [], month, year);
+      if (!visibleWeeks.length) return null;
+      return {
+        ...roster,
+        weeks: visibleWeeks,
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => {
+      const aStart = getWeekStartTime(a?.weeks?.[0]) || new Date(a?.rosterStartDate || 0).getTime();
+      const bStart = getWeekStartTime(b?.weeks?.[0]) || new Date(b?.rosterStartDate || 0).getTime();
+      return aStart - bStart;
+    });
+
+  if (!normalizedRosters.length) return {};
+
+  const primaryRoster =
+    normalizedRosters.find((roster) =>
+      (roster.weeks || []).some((week) => {
+        const startKey = toDateKeyLocal(week?.startDate);
+        const endKey = toDateKeyLocal(week?.endDate);
+        if (!startKey || !endKey) return false;
+        return monthStartKey >= startKey && monthStartKey <= endKey;
+      })
+    ) || normalizedRosters[0];
+
+  const mergedWeeksMap = new Map();
+  const uniqueEmployeeKeys = new Set();
+
+  normalizedRosters.forEach((roster) => {
+    (roster.weeks || []).forEach((week) => {
+      const startKey = toDateKeyLocal(week?.startDate);
+      const endKey = toDateKeyLocal(week?.endDate);
+      if (!startKey || !endKey) return;
+
+      const weekKey = `${startKey}|${endKey}`;
+      if (!mergedWeeksMap.has(weekKey)) {
+        mergedWeeksMap.set(weekKey, {
+          ...week,
+          employees: [],
+        });
+      }
+
+      const mergedWeek = mergedWeeksMap.get(weekKey);
+      const existingWeekEmployeeKeys = new Set(
+        (mergedWeek.employees || [])
+          .map((employee) => getEmployeeRosterKey(employee))
+          .filter(Boolean)
+      );
+
+      (Array.isArray(week?.employees) ? week.employees : []).forEach((employee) => {
+        if (!employee) return;
+        const employeeKey = getEmployeeRosterKey(employee);
+        if (!employeeKey || existingWeekEmployeeKeys.has(employeeKey)) return;
+
+        existingWeekEmployeeKeys.add(employeeKey);
+        mergedWeek.employees.push(employee);
+        uniqueEmployeeKeys.add(employeeKey);
+      });
+
+      mergedWeek.employeeCount = mergedWeek.employees.length;
+    });
+  });
+
+  const mergedWeeks = Array.from(mergedWeeksMap.values()).sort((a, b) => getWeekStartTime(a) - getWeekStartTime(b));
+  if (!mergedWeeks.length) return {};
+
+  return {
+    [monthKey]: {
+      ...primaryRoster,
+      month: Number.parseInt(month, 10),
+      year: Number.parseInt(year, 10),
+      weeks: mergedWeeks,
+      totalWeeks: mergedWeeks.length,
+      totalEmployees: uniqueEmployeeKeys.size,
+      rosterStartDate: mergedWeeks[0]?.startDate || primaryRoster?.rosterStartDate,
+      rosterEndDate: mergedWeeks[mergedWeeks.length - 1]?.endDate || primaryRoster?.rosterEndDate,
+    },
+  };
 };
 
 const formatPrettyDate = (dateKey) => {
@@ -288,13 +390,7 @@ const formatPrettyDate = (dateKey) => {
         ? allRosters
         : [];
 
-    // Create a map of rosters by month/year
-    const rosterMap = {};
-
-    rosterList.forEach(roster => {
-        const key = `${roster.month}-${roster.year}`;
-        rosterMap[key] = roster;
-      });
+    const rosterMap = buildRosterMapForMonth(rosterList, selectedMonth, selectedYear);
 
     setRostersByMonth(rosterMap);
 
@@ -305,11 +401,14 @@ const formatPrettyDate = (dateKey) => {
 	    if (currentRoster) {
 		      setSelectedRoster(currentRoster._id);
 
-			      const weeks = currentRoster.weeks || [];
+			      const weeks = [...(currentRoster.weeks || [])].sort((a, b) => getWeekStartTime(a) - getWeekStartTime(b));
 	      let requestDate = selectedDate;
 	      let resolvedWeekNumber = null;
 	      if (Array.isArray(weeks) && weeks.length > 0) {
-	        const displayWeeks = getDisplayWeeksForMonth(weeks, selectedMonth, selectedYear);
+	        const displayWeeks = weeks.map((week) => ({
+            ...week,
+            employeeCount: week.employeeCount || week.employees?.length || 0,
+          }));
 	        setAvailableWeeks(displayWeeks.map(w => ({
 	          weekNumber: w.weekNumber,
 	          displayWeekNumber: w.displayWeekNumber || w.weekNumber,
