@@ -460,10 +460,22 @@ export const updateAttendance = createAsyncThunk(
 // 22. Employees for Updates
 export const getEmployeesForUpdates = createAsyncThunk(
   'roster/getEmployeesForUpdates',
-  async ({ rosterId, weekNumber, date }, { rejectWithValue }) => {
+  async ({ rosterId, weekNumber, date, page, limit, q, searchBy, month, year, delegatedFrom }, { rejectWithValue }) => {
     try {
       const token = getToken();
-      const res = await axios.get(`${API_URL}/updates/${rosterId}/${weekNumber}/${date}`, {
+      const params = new URLSearchParams();
+      if (page) params.append('page', page);
+      if (limit) params.append('limit', limit);
+      if (q) params.append('q', q);
+      if (searchBy) params.append('searchBy', searchBy);
+      if (month) params.append('month', month);
+      if (year) params.append('year', year);
+      if (delegatedFrom) params.append('delegatedFrom', delegatedFrom);
+      
+      const queryString = params.toString();
+      const url = `${API_URL}/updates/${rosterId}/${weekNumber}/${date}${queryString ? '?' + queryString : ''}`;
+      
+      const res = await axios.get(url, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
