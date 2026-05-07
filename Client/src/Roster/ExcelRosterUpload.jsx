@@ -648,7 +648,7 @@ const ExcelRosterUpload = () => {
   const normalizedDepartment = normalizeDepartment(user.department);
   const isSuperAdmin = roleType === 'superAdmin';
   const isAdmin = accountType === 'admin' || accountType === 'hr';
-  const allowedRosterDepartments = ['Operations', 'Marketing', 'Customer Service', 'Developer', 'Ticketing', 'SEO'];
+  const allowedRosterDepartments = ['Operations', 'Marketing', 'Customer Service', 'Developer', 'Ticketing', 'SEO', "Accounts"];
   const isAllowedDepartmentEmployee =
     (roleType === 'agent' || roleType === 'supervisor') &&
     allowedRosterDepartments.includes(normalizedDepartment);

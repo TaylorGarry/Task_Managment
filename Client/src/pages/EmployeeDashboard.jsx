@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import axios from "axios";
 import { fetchTasks, fetchCoreTasks, updateTaskStatus, updateTaskStatusCoreTeam } from "../features/slices/taskSlice";
 import { fetchRemarks, addRemark, updateRemark } from "../features/slices/remarkSlice";
 import { fetchEmployeeDashboardSummary } from "../features/slices/authSlice";
@@ -10,6 +11,8 @@ import { Toaster, toast } from "react-hot-toast";
 import { MessageCircle } from "lucide-react";
 import { FiX, FiSend, FiEdit2, FiCheck, FiXCircle } from "react-icons/fi";
 import { subscribeUserToPush } from "../utils/pushNotifications";
+import { getRoleType } from "../utils/roleAccess.js";
+import AgentDashboard from "../components/punchx/AgentDashboard";
 
 const STATIC_POLICY_DOCS = [
   "/policies/Leave Policy.pdf",
@@ -40,9 +43,15 @@ const EmployeeDashboard = () => {
   const { remarks, loading: remarksLoading } = useSelector((state) => state.remarks);
   const { employeeDashboardSummary } = useSelector((state) => state.auth);
   const user = JSON.parse(localStorage.getItem("user"));
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
   const currentUserId = user?._id || user?.id;
+  const roleType = getRoleType(user || {});
+  const isSupervisorUser = roleType === "supervisor";
+  const isAgentUser = roleType === "agent";
   const isCoreTeam = user?.isCoreTeam;
   const employeeDepartment = user?.department || "";
+  const [punchSession, setPunchSession] = useState(null);
+  const [attendanceScore, setAttendanceScore] = useState(null);
 
   const [filters, setFilters] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -55,6 +64,8 @@ const EmployeeDashboard = () => {
   const [newMessage, setNewMessage] = useState("");
   const [editingRemarkId, setEditingRemarkId] = useState(null);
   const [editingMessage, setEditingMessage] = useState("");
+  const activityInFlightRef = useRef(false);
+  const lastActivitySentAtRef = useRef(0);
   const [policyPreviewText, setPolicyPreviewText] = useState("");
   const [showPolicyModal, setShowPolicyModal] = useState(false);
   const [activePolicyUrl, setActivePolicyUrl] = useState("");
@@ -107,6 +118,118 @@ useEffect(() => {
     };
     loadPolicyText();
   }, []);
+
+  const authHeaders = () => {
+    const token = user?.token;
+    if (!token) throw new Error("Missing auth token for PunchX request");
+    return { headers: { Authorization: `Bearer ${token}` } };
+  };
+
+  const syncPunchSession = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/punchx/session/today`, authHeaders());
+      setPunchSession(res.data?.session || null);
+      setAttendanceScore(res.data?.attendanceScore || null);
+    } catch (err) {
+      console.error("PunchX session sync failed:", err?.response?.data || err.message);
+    }
+  };
+
+
+  const callPunchAction = async (path, body = {}) => {
+    const res = await axios.post(`${API_URL}/punchx${path}`, body, authHeaders());
+    setPunchSession(res.data?.session || null);
+    setAttendanceScore(res.data?.attendanceScore || null);
+    return res;
+  };
+
+  const handleStartShift = async () => {
+    await callPunchAction("/shift/start");
+  };
+
+  const handleEndShift = async () => {
+    await callPunchAction("/shift/end");
+  };
+
+  const handleStartBreak = async (type = "manual") => {
+    await callPunchAction("/break/start", { type });
+  };
+
+  const handleEndBreak = async () => {
+    await callPunchAction("/break/end");
+  };
+
+  useEffect(() => {
+    if (!user?.token) return;
+    syncPunchSession();
+  }, [user?.token]);
+
+  useEffect(() => {
+    if (!user?.token) return;
+
+    let lastActivityAt = Date.now();
+    let autoBreakSent = false;
+
+    const sendActivity = async (eventType) => {
+      const nowMs = Date.now();
+      const throttleMs = eventType === "heartbeat" ? 2 * 60 * 1000 : 30 * 1000;
+      if (nowMs - lastActivitySentAtRef.current < throttleMs) return;
+      if (activityInFlightRef.current) return;
+
+      activityInFlightRef.current = true;
+      try {
+        await callPunchAction("/activity", { eventType, occurredAt: new Date().toISOString() });
+        lastActivitySentAtRef.current = Date.now();
+      } catch (err) {
+        console.error("PunchX activity failed:", err?.response?.data || err.message);
+      } finally {
+        activityInFlightRef.current = false;
+      }
+    };
+
+    const markActivity = () => {
+      const now = Date.now();
+      lastActivityAt = now;
+      if (autoBreakSent) autoBreakSent = false;
+      sendActivity("activity");
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        markActivity();
+      }
+    };
+
+    const idleTicker = setInterval(async () => {
+      const idleMs = Date.now() - lastActivityAt;
+      if (idleMs >= 30 * 60 * 1000 && !autoBreakSent) {
+        autoBreakSent = true;
+        try {
+          await callPunchAction("/break/start", { type: "auto_idle", reason: "30m inactivity" });
+        } catch (err) {
+          console.error("Auto idle start failed:", err?.response?.data || err.message);
+        }
+      }
+    }, 60 * 1000);
+
+    const interval = setInterval(() => {
+      sendActivity("heartbeat");
+    }, 2 * 60 * 1000);
+
+    window.addEventListener("mousemove", markActivity);
+    window.addEventListener("keydown", markActivity);
+    window.addEventListener("click", markActivity);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(idleTicker);
+      window.removeEventListener("mousemove", markActivity);
+      window.removeEventListener("keydown", markActivity);
+      window.removeEventListener("click", markActivity);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user?.token]);
 
 
   useEffect(() => {
@@ -446,6 +569,20 @@ useEffect(() => {
       <Toaster position="top-right" reverseOrder={false} />
       <Navbar />
       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen relative">
+        {(isAgentUser || isSupervisorUser) && (
+          <>
+            <AgentDashboard
+              session={punchSession}
+              attendanceScore={attendanceScore}
+              employeeDashboardSummary={employeeDashboardSummary}
+              onStartShift={handleStartShift}
+              onEndShift={handleEndShift}
+              onStartBreak={handleStartBreak}
+              onEndBreak={handleEndBreak}
+            />
+          </>
+        )}
+
         {profile && (
           <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-2">
@@ -639,7 +776,7 @@ useEffect(() => {
           </div>
         )}
 
-        {!isCoreTeam && (
+        {isSupervisorUser && !isCoreTeam && (
           <div className="bg-white p-6 rounded-2xl shadow-sm border border-[#EAEAEA] mb-8 grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="flex flex-col w-full">
               <label className="text-gray-700 font-semibold mb-2">Date</label>
@@ -685,7 +822,7 @@ useEffect(() => {
           </div>
         )}
 
-        {loading && (
+        {isSupervisorUser && loading && (
           <div className="flex justify-center items-center py-8">
             <div className="flex space-x-2">
               <div className="w-4 h-4 bg-gradient-to-r from-blue-500 to-blue-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
@@ -695,19 +832,19 @@ useEffect(() => {
           </div>
         )}
 
-        {error && (
+        {isSupervisorUser && error && (
           <p className="text-red-500">
             {typeof error === "string" ? error : error.message || "Something went wrong"}
           </p>
         )}
 
-        {delegatedFromUserId && (
+        {isSupervisorUser && delegatedFromUserId && (
           <div className="mb-4 rounded-xl border border-cyan-200 bg-cyan-50 px-4 py-3 text-cyan-800">
             Showing only delegated tasks for selected team leader.
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {isSupervisorUser && <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {visibleTasks.length === 0 && !loading ? (
             <div className="col-span-full text-center py-12">
               <div className="mx-auto w-20 h-20 bg-gradient-to-br from-gray-100 to-gray-200 rounded-full flex items-center justify-center mb-4">
@@ -736,9 +873,9 @@ useEffect(() => {
               </div>
             ))
           )}
-        </div>
+        </div>}
 
-        {isChatOpen && (
+        {isSupervisorUser && isChatOpen && (
           <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50 p-4">
             <div className="bg-white w-full max-w-[480px] h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden">
               <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white">

@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
 import { Menu, X, AlertCircle, Clock, Camera } from "lucide-react";
 import toast, { Toaster } from "react-hot-toast";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { fetchMyDelegations, selectMyDelegations } from "../features/slices/delegationSlice.js";
+import { socket } from "../socket.js";
 import {
   canManageAdminPanels,
   getRoleType,
@@ -19,6 +20,7 @@ const ROSTER_ALLOWED_DEPARTMENTS = [
   "Developer",
   "Ticketing",
   "SEO",
+  "Accounts"
 ];
 
 const Navbar = () => {
@@ -31,6 +33,7 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const processedMessageIdsRef = useRef(new Set());
 
   const handleLogout = async () => {
     toast.dismiss("auth-login-success");
@@ -42,6 +45,7 @@ const Navbar = () => {
   const roleType = getRoleType(user);
   const normalizedDepartment = normalizeDepartment(user?.department);
   const isEmployee = roleType === "agent" || roleType === "supervisor";
+  const isSupervisor = roleType === "supervisor";
   const isTransportDepartment = normalizedDepartment === "Transport";
 
   const canAccessAttendanceUpdate =
@@ -64,6 +68,83 @@ const Navbar = () => {
       dispatch(fetchMyDelegations());
     }
   }, [dispatch, isEmployee]);
+
+  useEffect(() => {
+    if (!user || !("Notification" in window)) return;
+    if (Notification.permission === "default") {
+      Notification.requestPermission().catch(() => {});
+    }
+  }, [user?._id, user?.id]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const currentUserId = String(user?._id || user?.id || "");
+    if (!currentUserId) return;
+
+    const handleNewMessageNotification = (payload) => {
+      const message = payload?.message;
+      if (!message) return;
+
+      const messageId =
+        message._id ||
+        `${payload.chatId || message.chatId}-${message.createdAt || ""}-${message.sender?._id || message.sender?.id || message.sender || ""}-${message.content?.text || ""}`;
+
+      if (processedMessageIdsRef.current.has(messageId)) return;
+      processedMessageIdsRef.current.add(messageId);
+      setTimeout(() => {
+        processedMessageIdsRef.current.delete(messageId);
+      }, 15000);
+
+      const senderId = String(
+        message.sender?._id || message.sender?.id || message.sender || ""
+      );
+      if (!senderId || senderId === currentUserId) return;
+
+      const senderName =
+        message.sender?.username ||
+        message.sender?.name ||
+        "New message";
+      const messageText =
+        message.content?.text?.trim() ||
+        (message.content?.media?.length ? "Sent an attachment" : "You received a new message");
+
+      const shouldNotify = document.hidden || !document.hasFocus();
+      if (!shouldNotify) return;
+
+      if (!("Notification" in window)) return;
+
+      const showBrowserNotification = () => {
+        const notification = new Notification(`Message from ${senderName}`, {
+          body: messageText,
+          icon: "/favicon.ico",
+          tag: `chat-${payload.chatId || message.chatId || "general"}`,
+        });
+        notification.onclick = () => {
+          window.focus();
+          navigate("/chat");
+        };
+      };
+
+      if (Notification.permission === "granted") {
+        showBrowserNotification();
+      } else if (Notification.permission === "default") {
+        Notification.requestPermission()
+          .then((permission) => {
+            if (permission === "granted") {
+              showBrowserNotification();
+            }
+          })
+          .catch(() => {});
+      }
+    };
+
+    socket.on("new_message", handleNewMessageNotification);
+    return () => {
+      socket.off("new_message", handleNewMessageNotification);
+      processedMessageIdsRef.current.clear();
+    };
+  }, [user?._id, user?.id, location.pathname, navigate, user]);
 
   useEffect(() => {
     document.body.classList.add("employee-sidebar-layout");
@@ -129,7 +210,7 @@ const Navbar = () => {
     <>
       <Toaster position="top-right" />
 
-      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen h-dvh w-[232px] border-r border-[#d4e2dd] bg-white/96 z-50">
+      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen w-[232px] border-r border-[#d4e2dd] bg-white/96 z-50">
         <div className="h-full w-full px-5 py-6 flex flex-col">
           <h1
             className="text-[34px] leading-none font-bold text-sky-700 tracking-tight cursor-pointer"
@@ -149,7 +230,7 @@ const Navbar = () => {
                 </button>
               )}
 
-              {isEmployee && !isTransportDepartment && (
+              {isSupervisor && !isTransportDepartment && (
                 <button
                   onClick={() => navigate("/my-defaults")}
                   className={sideBtn(location.pathname === "/my-defaults", "rose")}
@@ -176,7 +257,7 @@ const Navbar = () => {
                 </button>
               )}
 
-              {canAccessAttendanceUpdate && (
+              {isSupervisor && canAccessAttendanceUpdate && (
                 <button
                   onClick={() => navigate("/attendance-update")}
                   className={sideBtn(location.pathname.startsWith("/attendance-update"), "indigo")}
@@ -185,7 +266,7 @@ const Navbar = () => {
                 </button>
               )}
 
-              {canAccessAttendanceSnapshot && (
+              {isSupervisor && canAccessAttendanceSnapshot && (
                 <button
                   onClick={goToAttendanceSnapshot}
                   className={sideBtn(location.pathname === "/attendance-snapshot", "indigo")}
@@ -209,6 +290,15 @@ const Navbar = () => {
                   className={sideBtn(location.pathname === "/delegations", "indigo")}
                 >
                   Manage Delegation
+                </button>
+              )}
+
+              {isEmployee && (
+                <button
+                  onClick={() => navigate("/chat")}
+                  className={sideBtn(location.pathname === "/chat", "indigo")}
+                >
+                  Chat
                 </button>
               )}
 
@@ -285,14 +375,17 @@ const Navbar = () => {
           {isMenuOpen && (
             <div className="mt-3 space-y-2 border-t border-[#d7e6e1] pt-3">
               <button onClick={() => { navigate("/dashboard"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-[#d7e6e1] bg-white px-4 py-2 text-left">Today</button>
-              {isEmployee && !isTransportDepartment && (
+              {isSupervisor && !isTransportDepartment && (
                 <button onClick={() => { navigate("/my-defaults"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-left text-rose-700">My Defaulters</button>
               )}
-              {canAccessAttendanceUpdate && (
+              {isSupervisor && canAccessAttendanceUpdate && (
                 <button onClick={() => { navigate("/attendance-update"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Attendance Update</button>
               )}
-              {canAccessAttendanceSnapshot && (
+              {isSupervisor && canAccessAttendanceSnapshot && (
                 <button onClick={() => { goToAttendanceSnapshot(); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Attendance Snapshot</button>
+              )}
+              {isEmployee && (
+                <button onClick={() => { navigate("/chat"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Chat</button>
               )}
               <button onClick={() => { navigate("/leave-management"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-[#d7e6e1] bg-white px-4 py-2 text-left">Leave</button>
               <button onClick={() => { handleLogout(); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-rose-200 bg-white px-4 py-2 text-left text-rose-700">

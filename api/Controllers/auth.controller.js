@@ -1824,6 +1824,122 @@ export const getEmployeeDashboardSummary = async (req, res) => {
   }
 };
 
+export const getEmployeeAttendanceByMonth = async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+    const month = Number.parseInt(req.query?.month, 10);
+    const year = Number.parseInt(req.query?.year, 10);
+    if (!Number.isFinite(month) || !Number.isFinite(year) || month < 1 || month > 12) {
+      return res.status(400).json({ message: "Valid month and year are required" });
+    }
+
+    const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+    const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+    const rosters = await Roster.find({
+      rosterStartDate: { $lte: monthEnd },
+      rosterEndDate: { $gte: monthStart },
+    })
+      .select("_id month year rosterStartDate rosterEndDate weeks")
+      .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
+      .lean();
+
+    const toDateKey = (value) => {
+      if (!value) return null;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      const yyyy = d.getUTCFullYear();
+      const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+      const dd = String(d.getUTCDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const monthStartKey = `${year}-${String(month).padStart(2, "0")}-01`;
+    const monthEndKey = `${year}-${String(month).padStart(2, "0")}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+    const updaterIds = new Set();
+    const byDate = {};
+
+    const collectUpdaterId = (candidate) => {
+      if (!candidate) return;
+      if (typeof candidate === "string") updaterIds.add(candidate);
+      else if (candidate?._id) updaterIds.add(String(candidate._id));
+    };
+
+    rosters.forEach((roster) => {
+      (roster?.weeks || []).forEach((week) => {
+        const emp = findEmployeeInWeek(week, user);
+        if (!emp || !Array.isArray(emp.dailyStatus)) return;
+
+        emp.dailyStatus.forEach((day) => {
+          const dateKey = toDateKey(day?.date);
+          if (!dateKey || dateKey < monthStartKey || dateKey > monthEndKey) return;
+
+          collectUpdaterId(day?.departmentStatusUpdatedBy);
+          collectUpdaterId(day?.transportStatusUpdatedBy);
+          collectUpdaterId(day?.departmentUpdatedBy);
+          collectUpdaterId(day?.transportUpdatedBy);
+
+          byDate[dateKey] = {
+            date: dateKey,
+            status: day?.departmentStatus || day?.transportStatus || day?.status || "",
+            departmentStatus: day?.departmentStatus || "",
+            transportStatus: day?.transportStatus || "",
+            punchIn: day?.punchIn || null,
+            punchOut: day?.punchOut || null,
+            totalHours: day?.totalHours ?? null,
+            departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || null,
+            transportStatusUpdatedBy: day?.transportStatusUpdatedBy || null,
+            departmentUpdatedBy: day?.departmentUpdatedBy || null,
+            transportUpdatedBy: day?.transportUpdatedBy || null,
+          };
+        });
+      });
+    });
+
+    const updaterIdList = Array.from(updaterIds);
+    const updaterUsers = updaterIdList.length
+      ? await User.find({ _id: { $in: updaterIdList } }).select("_id username").lean()
+      : [];
+    const updaterNameById = updaterUsers.reduce((acc, u) => {
+      acc[String(u._id)] = u.username || "";
+      return acc;
+    }, {});
+
+    const resolveUpdaterName = (entry) => {
+      const preferred =
+        entry.departmentStatusUpdatedBy ||
+        entry.transportStatusUpdatedBy ||
+        entry.departmentUpdatedBy ||
+        entry.transportUpdatedBy;
+      if (!preferred) return "";
+      if (typeof preferred === "string") return updaterNameById[preferred] || "";
+      if (preferred?.username) return preferred.username;
+      if (preferred?._id) return updaterNameById[String(preferred._id)] || "";
+      return "";
+    };
+
+    const attendance = Object.values(byDate)
+      .map((entry) => ({
+        date: entry.date,
+        status: entry.status,
+        departmentStatus: entry.departmentStatus,
+        transportStatus: entry.transportStatus,
+        punchIn: entry.punchIn,
+        punchOut: entry.punchOut,
+        totalHours: entry.totalHours,
+        updatedByDepartment: resolveUpdaterName(entry),
+      }))
+      .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+    return res.status(200).json({ month, year, attendance });
+  } catch (error) {
+    console.error("Get employee attendance by month error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
 export const acceptPolicyAgreement = async (req, res) => {
   try {
     const userId = req.user?._id;
