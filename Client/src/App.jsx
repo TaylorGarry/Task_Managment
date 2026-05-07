@@ -428,6 +428,7 @@ import AttendanceSnapshot from "./Roster/AttendanceSnapshot.jsx";
 import DelegationPage from "./pages/DelegationPage.jsx";
 import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
 import LeaveManagement from "./pages/LeaveManagement.jsx";
+import Navbar from "./pages/Navbar.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import {
@@ -447,6 +448,7 @@ const ALLOWED_ROSTER_DEPARTMENTS = [
   "Developer",
   "Ticketing",
   "SEO",
+  "Accounts",
 ];
 
 const ProtectedRoute = ({ children, adminOnly }) => {
@@ -720,19 +722,30 @@ function App() {
           
           <Route index element={<Navigate to="tasks" replace />} />
 	        </Route>
-		        <Route
-		          path="/dashboard"
-		          element={
-		            <ProtectedRoute>
-		              <EmployeeDashboard />
-	            </ProtectedRoute>
-	          }
-	        />
-	        <Route
-	          path="/leave-management"
-	          element={
-	            <ProtectedRoute>
-	              <LeaveManagement />
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute>
+              <EmployeeDashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat"
+          element={
+            <EmployeeOnlyRoute>
+              <>
+                <Navbar />
+                <ChatUI />
+              </>
+            </EmployeeOnlyRoute>
+          }
+        />
+        <Route
+          path="/leave-management"
+          element={
+            <ProtectedRoute>
+              <LeaveManagement />
 	            </ProtectedRoute>
 	          }
 	        />

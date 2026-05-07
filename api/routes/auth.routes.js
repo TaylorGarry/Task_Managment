@@ -9,6 +9,7 @@ import {
   updateUserByAdmin,
   getReportingManagers,
   getEmployeeDashboardSummary,
+  getEmployeeAttendanceByMonth,
   acceptPolicyAgreement,
   uploadEmployeeAsset,
   signPolicyDocumentByEmployee,
@@ -31,6 +32,7 @@ router.post("/update-profile", authMiddleware, updateProfile);
 router.post("/createcoreUser", authMiddleware, createCoreTeamUser);
 router.put("/update/:id", authMiddleware, updateUserByAdmin);
 router.get("/employee/dashboard-summary", authMiddleware, getEmployeeDashboardSummary);
+router.get("/employee/attendance-month", authMiddleware, getEmployeeAttendanceByMonth);
 router.post("/employee/policy-accept", authMiddleware, acceptPolicyAgreement);
 router.post("/employee/policy-sign", authMiddleware, signPolicyDocumentByEmployee);
 router.post("/employee/:id/policy-sign-hr", authMiddleware, signPolicyDocumentByHR);
