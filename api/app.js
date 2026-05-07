@@ -381,6 +381,7 @@ import pushRoutes from "./routes/push.routes.js";
 import delegationRoutes from "./routes/delegation.routes.js";  // ← ADD THIS
 import leaveRoutes from "./routes/leave.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
+import punchxRoutes from "./routes/punchx.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isPrivilegedUser } from "./utils/roleAccess.js";
 
@@ -639,6 +640,7 @@ app.use("/api/v1/push", pushRoutes);
 app.use("/api/v1/delegations", delegationRoutes);  // ← ADD THIS LINE
 app.use("/api/v1/leaves", leaveRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
+app.use("/api/v1/punchx", punchxRoutes);
 
 
 app.get("/", (req, res) => {
