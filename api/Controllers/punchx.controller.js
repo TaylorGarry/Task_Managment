@@ -4,6 +4,7 @@ import User from "../Modals/User.modal.js";
 const NY_TZ = "America/New_York";
 const AUTO_BREAK_MS = 30 * 60 * 1000;
 const IDLE_WARN_MS = 25 * 60 * 1000;
+const SHIFT_AUTO_END_MS = 9 * 60 * 60 * 1000;
 
 const getNow = () => new Date();
 
@@ -63,6 +64,28 @@ const closeOpenBreak = (session, now, type = null) => {
   return br;
 };
 
+const autoEndShiftIfDue = (session, now = getNow()) => {
+  if (!session?.shiftStartAt) return false;
+  if (session.shiftEndAt || session.status === "ended") return false;
+
+  const startMs = new Date(session.shiftStartAt).getTime();
+  const nowMs = new Date(now).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(nowMs)) return false;
+  if (nowMs - startMs < SHIFT_AUTO_END_MS) return false;
+
+  const autoEndAt = new Date(startMs + SHIFT_AUTO_END_MS);
+  closeOpenBreak(session, autoEndAt);
+  session.shiftEndAt = autoEndAt;
+  session.status = "ended";
+  session.activityStatus = "no_activity";
+  session.alerts.push({
+    type: "auto_shift_end",
+    message: "Shift auto-ended after 9 hours",
+    at: autoEndAt,
+  });
+  return true;
+};
+
 const ensureSession = async (userId, dateKey) => {
   const existing = await PunchSession.findOne({ userId, dateKey });
   if (existing) return existing;
@@ -103,6 +126,9 @@ export const getTodaySession = async (req, res) => {
 
     const dateKey = getNyDateKey(getNow());
     const session = await ensureSession(userId, dateKey);
+    if (autoEndShiftIfDue(session)) {
+      await session.save();
+    }
 
     return res.status(200).json({
       session,
@@ -165,6 +191,11 @@ export const startBreak = async (req, res) => {
     const dateKey = getNyDateKey(now);
     const session = await ensureSession(userId, dateKey);
 
+    if (autoEndShiftIfDue(session, now)) {
+      await session.save();
+      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+    }
+
     if (session.status === "not_started") {
       session.shiftStartAt = now;
       session.status = "active";
@@ -188,6 +219,11 @@ export const endBreak = async (req, res) => {
     const dateKey = getNyDateKey(now);
     const session = await ensureSession(userId, dateKey);
 
+    if (autoEndShiftIfDue(session, now)) {
+      await session.save();
+      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+    }
+
     const closed = closeOpenBreak(session, now, type || null);
     if (!closed) return res.status(404).json({ message: "No active break found", session });
 
@@ -205,6 +241,15 @@ export const postActivity = async (req, res) => {
     const now = getNow();
     const dateKey = getNyDateKey(now);
     const session = await ensureSession(userId, dateKey);
+
+    if (autoEndShiftIfDue(session, now)) {
+      await session.save();
+      return res.status(200).json({
+        message: "Shift already auto-ended after 9 hours",
+        session,
+        attendanceScore: scoreSession(session),
+      });
+    }
 
     const { eventType = "mousemove", occurredAt } = req.body || {};
     const eventAt = occurredAt ? new Date(occurredAt) : now;
@@ -274,8 +319,13 @@ export const getManagerTeamStatus = async (req, res) => {
       .lean();
 
     const ids = teamMembers.map((u) => u._id);
-    const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey }).lean();
-    const byUser = new Map(sessions.map((s) => [String(s.userId), s]));
+    const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey });
+    for (const s of sessions) {
+      if (autoEndShiftIfDue(s)) {
+        await s.save();
+      }
+    }
+    const byUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
 
     const rows = teamMembers.map((member) => {
       const session = byUser.get(String(member._id));
@@ -324,8 +374,13 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       .lean();
 
     const employeeIds = employees.map((e) => e._id);
-    const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey }).lean();
-    const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s]));
+    const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey });
+    for (const s of sessions) {
+      if (autoEndShiftIfDue(s)) {
+        await s.save();
+      }
+    }
+    const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
     const now = new Date();
 
     const rows = employees.map((emp) => {
