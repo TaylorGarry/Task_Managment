@@ -429,6 +429,7 @@ import DelegationPage from "./pages/DelegationPage.jsx";
 import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
 import LeaveManagement from "./pages/LeaveManagement.jsx";
 import Navbar from "./pages/Navbar.jsx";
+import SuperAdminLoginStatus from "./pages/SuperAdminLoginStatus.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import {
@@ -555,6 +556,12 @@ const DelegationAccessRoute = ({ children }) => {
     return <Navigate to={(isAgent(user) || getRoleType(user) === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
   }
   return children;
+};
+
+const AdminHomeRedirect = () => {
+  const { user } = useSelector((state) => state.auth);
+  const shouldAvoidTasksLanding = isHrDepartment(user) || isSuperAdmin(user);
+  return <Navigate to={shouldAvoidTasksLanding ? "/admin/admintask" : "/admin/tasks"} replace />;
 };
 
 function App() {
@@ -705,8 +712,9 @@ function App() {
           <Route path="tasks" element={<TaskStatus />} />
           <Route path="defaulter" element={<Defaulter />} />
           <Route path="manage-employee" element={<ManageEmployee />} />
-          <Route path="adminDashboard" element={<AdminDashboard />} />
-          <Route path="roster" element={<RosterForm />} />
+	          <Route path="adminDashboard" element={<AdminDashboard />} />
+          <Route path="employee-login-status" element={<SuperAdminLoginStatus />} />
+	          <Route path="roster" element={<RosterForm />} />
 	          <Route path="admintask" element={<AdminTask />} />
 	          <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
 	          <Route path="chat" element={<ChatUI />} />
@@ -720,7 +728,7 @@ function App() {
           />
           <Route path="delegation" element={<Navigate to="delegations" replace />} />
           
-          <Route index element={<Navigate to="tasks" replace />} />
+          <Route index element={<AdminHomeRedirect />} />
 	        </Route>
         <Route
           path="/dashboard"
@@ -765,7 +773,9 @@ function App() {
             <Navigate
               to={(isAgent(user) || getRoleType(user) === "supervisor")
                 ? "/dashboard"
-                : "/admin/tasks"}
+                : (isHrDepartment(user) || isSuperAdmin(user))
+                  ? "/admin/admintask"
+                  : "/admin/tasks"}
               replace
             />
           }

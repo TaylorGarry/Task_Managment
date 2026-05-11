@@ -16,6 +16,7 @@ import AdminNavbar from "../components/AdminNavbar.jsx";
 import { Clock, CheckCircle, AlertCircle, Truck, Users, ChevronLeft, ChevronRight, Sun, Moon, Coffee } from "lucide-react";
 import { toast } from "react-toastify";
 import html2canvas from "html2canvas";
+import { canManageAdminPanels } from "../utils/roleAccess.js";
 
 // 🔹 Get current user safely
 const getCurrentUser = () => {
@@ -242,7 +243,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const dispatch = useDispatch();
   const location = useLocation();
   const currentUser = useMemo(() => getCurrentUser(), []);
-  const isAdminNavbarUser = useMemo(() => ["superAdmin", "HR"].includes(currentUser?.accountType), [currentUser]);
+  const isAdminNavbarUser = useMemo(() => canManageAdminPanels(currentUser), [currentUser]);
   const { updateEmployeesData, loading, error } = useSelector((state) => state.roster);
   
   const initialFetchDone = useRef(false);

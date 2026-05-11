@@ -137,7 +137,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   const disconnectBreakMs = (session?.breaks || [])
     .filter((b) => b.type === "system_disconnect")
     .reduce((sum, b) => sum + (b.durationMs || 0), 0);
-  const remainingMs = Math.max(0, 8 * 60 * 60 * 1000 - totalHoursMs);
+  const remainingMs = Math.max(0, 9 * 60 * 60 * 1000 - totalHoursMs);
   const summaryAttendanceByDate = buildAttendanceByDate(employeeDashboardSummary || {});
   const attendanceByDate = { ...summaryAttendanceByDate, ...monthAttendanceByDate };
   const selectedAttendance = attendanceByDate[selectedDateKey] || null;
@@ -167,7 +167,8 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
         const user = JSON.parse(localStorage.getItem("user") || "{}");
         const token = user?.token;
         if (!token) return;
-        const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+        // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+        const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
         const month = activeMonth.getMonth() + 1;
         const year = activeMonth.getFullYear();
         const res = await axios.get(`${API_URL}/employee/attendance-month`, {

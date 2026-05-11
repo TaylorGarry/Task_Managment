@@ -18,5 +18,7 @@ export const DESIGNATION_OPTIONS = [
   "Travel Sales Trainee",
   "Operations Manager - Sales",
   "Quality Analyst",
+  "Executive-HR",
+  "Manager-HR",
 ];
 

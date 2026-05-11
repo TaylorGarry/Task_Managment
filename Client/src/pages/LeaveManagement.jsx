@@ -84,6 +84,8 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   const [requestFilter, setRequestFilter] = useState("pending");
   const [search, setSearch] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [employeePage, setEmployeePage] = useState(1);
+  const [employeePageSize, setEmployeePageSize] = useState(10);
 
   useEffect(() => {
     if (isAdminView) {
@@ -110,6 +112,10 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
       dispatch(clearLeaveMessage());
     }
   }, [dispatch, error, message]);
+
+  useEffect(() => {
+    setEmployeePage(1);
+  }, [employeeSearch, employeePageSize]);
 
   const summaryStats = mySummary?.stats || {};
   const config = mySummary?.config || adminDashboard?.config || {};
@@ -328,12 +334,16 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
         (emp.username && emp.username.toLowerCase().includes(searchTerm))
       );
     });
+    const employeeTotalPages = Math.max(1, Math.ceil(filteredEmployees.length / employeePageSize));
+    const safeEmployeePage = Math.min(employeePage, employeeTotalPages);
+    const employeeStart = (safeEmployeePage - 1) * employeePageSize;
+    const paginatedEmployees = filteredEmployees.slice(employeeStart, employeeStart + employeePageSize);
 
     return (
       <div className="crm-page min-h-screen">
         <div className="pt-6 px-4 md:px-6 pb-10">
           <div className="max-w-[1400px] mx-auto space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-10">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="crm-card p-4">
                 <p className="text-xs uppercase tracking-wide crm-muted">Total Employees</p>
                 <p className="text-3xl font-semibold mt-1">{stats.totalEmployees ?? 0}</p>
@@ -459,8 +469,8 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                   />
                 </div>
               </div>
-              <div className="overflow-x-auto">
-                <table className="crm-table text-sm">
+	              <div className="overflow-x-auto">
+	                <table className="crm-table text-sm">
                   <thead>
                     <tr className="text-left text-slate-500 border-b">
                       <th className="py-2 pr-4">Employee</th>
@@ -472,9 +482,9 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                       <th className="py-2 pr-4">ML</th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {filteredEmployees.map((row) => (
-                      <tr key={row.userId} className="border-b border-slate-100">
+	                  <tbody>
+	                    {paginatedEmployees.map((row) => (
+	                      <tr key={row.userId} className="border-b border-slate-100">
                         <td className="py-2 pr-4">
                           <div className="font-medium text-slate-800">{row.name}</div>
                           <div className="text-xs text-slate-500">{row.empId || row.username}</div>
@@ -497,13 +507,51 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                         <td className="py-2 pr-4 text-slate-700">{row.balance?.available?.ML ?? 0}</td>
                       </tr>
                     ))}
-                  </tbody>
-                </table>
-                {filteredEmployees.length === 0 && employeeSearch && (
-                  <p className="text-sm crm-muted py-4 text-center">No employees found matching "{employeeSearch}"</p>
-                )}
-              </div>
-            </div>
+	                  </tbody>
+	                </table>
+                  {filteredEmployees.length === 0 ? (
+                    <p className="text-sm crm-muted py-4 text-center">
+                      {employeeSearch ? `No employees found matching "${employeeSearch}"` : "No employee leave bucket data found."}
+                    </p>
+                  ) : (
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm crm-muted">
+                        Showing {employeeStart + 1}-
+                        {Math.min(employeeStart + employeePageSize, filteredEmployees.length)} of {filteredEmployees.length}
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={employeePageSize}
+                          onChange={(e) => setEmployeePageSize(Number(e.target.value))}
+                          className="crm-select text-sm !w-auto"
+                        >
+                          <option value={10}>10 / page</option>
+                          <option value={20}>20 / page</option>
+                          <option value={30}>30 / page</option>
+                          <option value={50}>50 / page</option>
+                        </select>
+                        <button
+                          onClick={() => setEmployeePage((p) => Math.max(1, p - 1))}
+                          disabled={safeEmployeePage <= 1}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Prev
+                        </button>
+                        <span className="text-sm text-slate-700">
+                          Page {safeEmployeePage} / {employeeTotalPages}
+                        </span>
+                        <button
+                          onClick={() => setEmployeePage((p) => Math.min(employeeTotalPages, p + 1))}
+                          disabled={safeEmployeePage >= employeeTotalPages}
+                          className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          Next
+                        </button>
+                      </div>
+                    </div>
+                  )}
+	              </div>
+	            </div>
           </div>
         </div>
       </div>

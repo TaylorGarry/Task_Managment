@@ -8,6 +8,7 @@ import Navbar from "../pages/Navbar.jsx";
 import html2canvas from "html2canvas";
 import { useLocation } from "react-router-dom";
 import { fetchMyDelegations, selectMyDelegations } from "../features/slices/delegationSlice.js";
+import { canManageAdminPanels } from "../utils/roleAccess.js";
 
 const toDateKeyLocal = (value) => {
   const date = value instanceof Date ? value : new Date(value);
@@ -230,6 +231,7 @@ const formatPrettyDate = (dateKey) => {
 			  const myDelegations = useSelector(selectMyDelegations);
 			  const currentUser = user || JSON.parse(localStorage.getItem("user") || "null");
 			  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
+			  const isAdminNavbarUser = canManageAdminPanels(currentUser);
 			  const isEmployeeUser = currentUser?.accountType === "employee";
 			  const isEmployeeTransportUser = isEmployeeUser && currentUser?.department === "Transport";
 			  const isEmployeeNonTransportUser = isEmployeeUser && currentUser?.department !== "Transport";
@@ -1123,7 +1125,7 @@ const formatPrettyDate = (dateKey) => {
 
 	  return (
 	    <div className="min-h-screen bg-gray-50 p-6">
-	      {isAdminUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
+		      {isAdminNavbarUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
 	      <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-6">

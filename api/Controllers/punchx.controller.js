@@ -298,3 +298,100 @@ export const getManagerTeamStatus = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch team status", error: error.message });
   }
 };
+
+const getShiftStartDateFromDateKey = (dateKey, shiftStartHour) => {
+  if (!dateKey || !Number.isFinite(Number(shiftStartHour))) return null;
+  const [year, month, day] = String(dateKey).split("-").map(Number);
+  if (!year || !month || !day) return null;
+  return new Date(Date.UTC(year, month - 1, day, Number(shiftStartHour), 0, 0, 0));
+};
+
+const getOpenBreak = (session) => (session?.breaks || []).find((b) => !b.endAt) || null;
+
+export const getSuperAdminDailyStatus = async (req, res) => {
+  try {
+    const role = String(req.user?.accountType || req.user?.roleType || "").toLowerCase();
+    if (role !== "superadmin") {
+      return res.status(403).json({ message: "Only superAdmin can access this dashboard" });
+    }
+
+    const dateKey = String(req.query?.dateKey || getNyDateKey(getNow()));
+    const employees = await User.find({
+      accountType: { $in: ["employee", "agent", "supervisor"] },
+      isActive: { $ne: false },
+    })
+      .select("_id username realName department accountType shiftStartHour shiftEndHour isTeamLeader")
+      .lean();
+
+    const employeeIds = employees.map((e) => e._id);
+    const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey }).lean();
+    const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s]));
+    const now = new Date();
+
+    const rows = employees.map((emp) => {
+      const session = sessionsByUser.get(String(emp._id)) || null;
+      const openBreak = getOpenBreak(session);
+      const shiftStartPlanned = getShiftStartDateFromDateKey(dateKey, emp.shiftStartHour);
+      const actualLoginAt = session?.shiftStartAt ? new Date(session.shiftStartAt) : null;
+      const lateByMs =
+        shiftStartPlanned && actualLoginAt && actualLoginAt.getTime() > shiftStartPlanned.getTime()
+          ? actualLoginAt.getTime() - shiftStartPlanned.getTime()
+          : 0;
+      const totalWorkedMs = session?.shiftStartAt
+        ? (session?.shiftEndAt
+            ? new Date(session.shiftEndAt).getTime() - new Date(session.shiftStartAt).getTime()
+            : now.getTime() - new Date(session.shiftStartAt).getTime())
+        : 0;
+      const remainingForNineHoursMs = Math.max(0, 9 * 60 * 60 * 1000 - totalWorkedMs);
+      const inactiveSinceMs = session?.lastActivityAt
+        ? Math.max(0, now.getTime() - new Date(session.lastActivityAt).getTime())
+        : 0;
+
+      return {
+        userId: emp._id,
+        username: emp.username || "",
+        name: emp.realName || emp.username || "",
+        department: emp.department || "",
+        accountType: emp.accountType || "employee",
+        isTeamLeader: Boolean(emp.isTeamLeader),
+        shiftStartHour: Number.isFinite(Number(emp.shiftStartHour)) ? Number(emp.shiftStartHour) : null,
+        shiftEndHour: Number.isFinite(Number(emp.shiftEndHour)) ? Number(emp.shiftEndHour) : null,
+        loginTime: session?.shiftStartAt || null,
+        logoutTime: session?.shiftEndAt || null,
+        isOnBreak: Boolean(openBreak),
+        breakType: openBreak?.type || "",
+        breakStartAt: openBreak?.startAt || null,
+        totalBreakMs: session?.totalBreakMs || 0,
+        totalIdleMs: session?.totalIdleMs || 0,
+        status: session?.status || "not_started",
+        activityStatus: session?.activityStatus || "no_activity",
+        lastActivityAt: session?.lastActivityAt || null,
+        inactiveSinceMs,
+        lateByMs,
+        totalWorkedMs: Math.max(0, totalWorkedMs),
+        remainingForNineHoursMs,
+        hasCompletedNineHours: totalWorkedMs >= 9 * 60 * 60 * 1000,
+      };
+    });
+
+    const summary = {
+      totalEmployees: rows.length,
+      loggedInCount: rows.filter((r) => Boolean(r.loginTime)).length,
+      onBreakCount: rows.filter((r) => r.isOnBreak).length,
+      notCompletedNineHoursCount: rows.filter((r) => r.loginTime && !r.hasCompletedNineHours).length,
+      lateLoginCount: rows.filter((r) => r.lateByMs > 0).length,
+    };
+
+    return res.status(200).json({
+      dateKey,
+      timezone: NY_TZ,
+      summary,
+      rows,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch superAdmin daily login status",
+      error: error.message,
+    });
+  }
+};

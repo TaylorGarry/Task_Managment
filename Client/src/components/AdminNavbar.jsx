@@ -50,6 +50,8 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const titleResetTimerRef = useRef(null);
   const defaultTitleRef = useRef(document.title);
   const processedMessageIdsRef = useRef(new Set());
+  const knownBreakUsersRef = useRef(new Set());
+  const breakWatcherInitializedRef = useRef(false);
 
   const allowedAttendanceDepartments = ["Operations", "Transport"];
   const roleType = getRoleType(user);
@@ -77,6 +79,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
   const canUploadExcel = 
     (isEmployeeFlow && normalizedDepartment === "Operations") ||
     canManageAdminPanels(user);
+  const canAccessTaskStatus = !isHrDepartment(user);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -191,6 +194,80 @@ const AdminNavbar = ({ showOutlet = true }) => {
       socket.off("system_notification", handleSystemNotification);
     };
   }, [user?.accountType, user?.roleType]);
+
+  useEffect(() => {
+    if (!isSuperAdmin(user)) return;
+    const token = user?.token;
+    if (!token) return;
+
+    const getTodayDateKey = () => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const checkBreakStatus = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/punchx/superadmin/daily-status`, {
+          params: { dateKey: getTodayDateKey() },
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const rows = Array.isArray(res?.data?.rows) ? res.data.rows : [];
+        const currentlyOnBreak = rows
+          .filter((r) => r?.isOnBreak)
+          .map((r) => ({
+            id: String(r.userId || ""),
+            name: r.name || r.username || "Employee",
+            breakType: r.breakType || "manual",
+          }))
+          .filter((r) => r.id);
+
+        const currentSet = new Set(currentlyOnBreak.map((r) => r.id));
+
+        if (!breakWatcherInitializedRef.current) {
+          knownBreakUsersRef.current = currentSet;
+          breakWatcherInitializedRef.current = true;
+          return;
+        }
+
+        const newBreakEntries = currentlyOnBreak.filter((u) => !knownBreakUsersRef.current.has(u.id));
+
+        newBreakEntries.forEach((u) => {
+          const msg = `${u.name} is on ${u.breakType.replace("_", " ")} break`;
+          toast(msg, { icon: "⏸️", duration: 5000 });
+
+          if ("Notification" in window) {
+            const showBrowserNotification = () => {
+              new Notification("Break Alert", {
+                body: msg,
+                icon: "/favicon.ico",
+                tag: `break-${u.id}`,
+              });
+            };
+
+            if (Notification.permission === "granted") {
+              showBrowserNotification();
+            } else if (Notification.permission === "default") {
+              Notification.requestPermission().then((permission) => {
+                if (permission === "granted") showBrowserNotification();
+              });
+            }
+          }
+        });
+
+        knownBreakUsersRef.current = currentSet;
+      } catch (err) {
+        // Keep silent to avoid interrupting admin flow.
+      }
+    };
+
+    checkBreakStatus();
+    const id = setInterval(checkBreakStatus, 30000);
+    return () => clearInterval(id);
+  }, [user?.token, user?.accountType, user?.roleType]);
 
   const markSystemNotificationRead = async (id) => {
     if (!id || !user?.token) return;
@@ -422,6 +499,15 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 <FiCalendar className="text-lg text-blue-600" />
                 Roster
               </Link>
+              {isSuperAdmin(user) && (
+                <Link
+                  to="/admin/employee-login-status"
+                  className={`flex items-center gap-2 ${navLinkClass("/admin/employee-login-status")}`}
+                >
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  Employee Login Status
+                </Link>
+              )}
               
               {/* 🔥 FIXED: Attendance Update Dropdown with clickable main button */}
               {canAccessAttendanceUpdate && (
@@ -577,9 +663,11 @@ const AdminNavbar = ({ showOutlet = true }) => {
                   <Link to="/admin/assign-task" className={navLinkClass("/admin/assign-task")}>
                     Assign Task
                   </Link>
-                  <Link to="/admin/tasks" className={navLinkClass("/admin/tasks")}>
-                    Task Status
-                  </Link>
+                  {canAccessTaskStatus && (
+                    <Link to="/admin/tasks" className={navLinkClass("/admin/tasks")}>
+                      Task Status
+                    </Link>
+                  )}
                   <Link to="/admin/defaulter" className={navLinkClass("/admin/defaulter")}>
                     Defaulter  
                   </Link>
@@ -770,6 +858,16 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 <FiCalendar className="text-lg text-blue-600" />
                 Roster
               </Link>
+              {isSuperAdmin(user) && (
+                <Link
+                  to="/admin/employee-login-status"
+                  className="flex items-center gap-2 text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  <Clock className="w-4 h-4 text-indigo-600" />
+                  Employee Login Status
+                </Link>
+              )}
 
               {/* 🔥 FIXED: Attendance Update Section in Mobile Menu */}
               {canAccessAttendanceUpdate && (
@@ -893,13 +991,15 @@ const AdminNavbar = ({ showOutlet = true }) => {
                   </span>
                 )}
               </Link>
-              <Link
-                to="/admin/tasks"
-                className="text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
-                onClick={() => setShowMobileMenu(false)}
-              >
-                Task Status
-              </Link>
+              {canAccessTaskStatus && (
+                <Link
+                  to="/admin/tasks"
+                  className="text-slate-700 font-semibold hover:text-slate-900 py-2 px-3 rounded-xl hover:bg-slate-100 transition-colors"
+                  onClick={() => setShowMobileMenu(false)}
+                >
+                  Task Status
+                </Link>
+              )}
 
               <Link
                 to="/admin/defaulter"
