@@ -43,7 +43,8 @@ const EmployeeDashboard = () => {
   const { remarks, loading: remarksLoading } = useSelector((state) => state.remarks);
   const { employeeDashboardSummary } = useSelector((state) => state.auth);
   const user = JSON.parse(localStorage.getItem("user"));
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+  // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+  const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
   const currentUserId = user?._id || user?.id;
   const roleType = getRoleType(user || {});
   const isSupervisorUser = roleType === "supervisor";
@@ -52,6 +53,7 @@ const EmployeeDashboard = () => {
   const employeeDepartment = user?.department || "";
   const [punchSession, setPunchSession] = useState(null);
   const [attendanceScore, setAttendanceScore] = useState(null);
+  const [breakNowMs, setBreakNowMs] = useState(Date.now());
 
   const [filters, setFilters] = useState({
     date: new Date().toISOString().split("T")[0],
@@ -163,6 +165,11 @@ useEffect(() => {
     if (!user?.token) return;
     syncPunchSession();
   }, [user?.token]);
+
+  useEffect(() => {
+    const id = setInterval(() => setBreakNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     if (!user?.token) return;
@@ -515,6 +522,16 @@ useEffect(() => {
     return `${hour12} ${suffix}`;
   };
 
+  const openBreak = punchSession?.breaks?.find((b) => !b.endAt) || null;
+  const liveBreakMs = openBreak?.startAt ? Math.max(0, breakNowMs - new Date(openBreak.startAt).getTime()) : 0;
+  const liveBreakTimer = (() => {
+    const totalSec = Math.floor(liveBreakMs / 1000);
+    const hh = String(Math.floor(totalSec / 3600)).padStart(2, "0");
+    const mm = String(Math.floor((totalSec % 3600) / 60)).padStart(2, "0");
+    const ss = String(totalSec % 60).padStart(2, "0");
+    return `${hh}:${mm}:${ss}`;
+  })();
+
   const getPolicySignatureStatus = (docUrl, profileData) => {
     const signatures = Array.isArray(profileData?.policySignatures) ? profileData.policySignatures : [];
     const target = normalizePolicyKey(docUrl);
@@ -568,6 +585,27 @@ useEffect(() => {
     <>
       <Toaster position="top-right" reverseOrder={false} />
       <Navbar />
+      {(isAgentUser || isSupervisorUser) && openBreak && (
+        <div className="fixed inset-x-0 top-3 z-[9999] flex justify-center px-3">
+          <div className="w-full max-w-3xl rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-4 py-3 shadow-2xl">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">Break Alert</p>
+                <p className="text-2xl font-extrabold text-rose-700">ON BREAK</p>
+                <p className="text-sm font-semibold text-slate-700">
+                  Live Break Time: <span className="font-mono text-base">{liveBreakTimer}</span>
+                </p>
+              </div>
+              <button
+                onClick={handleEndBreak}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow hover:bg-rose-700"
+              >
+                End Break
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen relative">
         {(isAgentUser || isSupervisorUser) && (
           <>

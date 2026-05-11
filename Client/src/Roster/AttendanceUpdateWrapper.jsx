@@ -7,6 +7,7 @@ import ArrivalAttendanceUpdate from "./ArrivalAttendanceUpdate.jsx";
 import Navbar from "../pages/Navbar.jsx";
 import AdminNavbar from "../components/AdminNavbar.jsx";
 import { Calendar, AlertCircle, Clock } from "lucide-react";
+import { canManageAdminPanels } from "../utils/roleAccess.js";
 
 const getWeekNumberForMonth = (dateValue, month, year) => {
   const date =
@@ -59,7 +60,7 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
     }
   };
 	  const currentUser = getCurrentUser();
-	  const isAdminNavbarUser = ["superAdmin", "HR"].includes(currentUser?.accountType);
+	  const isAdminNavbarUser = canManageAdminPanels(currentUser);
 	  const isAdminUser = ["admin", "superAdmin", "HR", "Operations", "AM"].includes(currentUser?.accountType);
 	  const delegatedFromUserId = new URLSearchParams(location.search).get("delegatedFrom") || "";
 
