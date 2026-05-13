@@ -403,7 +403,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                     {(adminRequests || []).map((row) => (
                       <tr key={row._id} className="border-b border-slate-100">
                         <td className="py-2 pr-4">
-                          <div className="font-medium text-slate-800">{row.userId?.realName || row.userId?.username}</div>
+                          <div className="font-medium text-slate-800">{row.userId?.pseudoName || row.userId?.username}</div>
                           <div className="text-xs text-slate-500">{row.userId?.empId || row.userId?.username}</div>
                         </td>
                         <td className="py-2 pr-4 text-slate-700">{row.leaveType}</td>

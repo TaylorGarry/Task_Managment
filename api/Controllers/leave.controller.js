@@ -280,7 +280,7 @@ export const getMyLeaveRequests = async (req, res) => {
   try {
     const requests = await LeaveRequest.find({ userId: req.user._id })
       .sort({ createdAt: -1 })
-      .populate("reviewedBy", "username realName");
+      .populate("reviewedBy", "username pseudoName realName");
     return res.status(200).json({ success: true, requests });
   } catch (error) {
     console.error("getMyLeaveRequests error:", error);
@@ -398,7 +398,7 @@ export const getAdminLeaveRequests = async (req, res) => {
     if (normalizedSearch) {
       const regex = new RegExp(normalizedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       const users = await User.find({
-        $or: [{ username: regex }, { realName: regex }, { empId: regex }],
+        $or: [{ username: regex }, { pseudoName: regex }, { realName: regex }, { empId: regex }],
       })
         .select("_id")
         .lean();
@@ -411,8 +411,8 @@ export const getAdminLeaveRequests = async (req, res) => {
 
     const requests = await LeaveRequest.find(query)
       .sort({ createdAt: -1 })
-      .populate("userId", "username realName empId department dateOfJoining")
-      .populate("reviewedBy", "username realName");
+      .populate("userId", "username pseudoName realName empId department dateOfJoining")
+      .populate("reviewedBy", "username pseudoName realName");
 
     return res.status(200).json({ success: true, requests });
   } catch (error) {
@@ -487,7 +487,7 @@ export const getAdminLeaveDashboard = async (req, res) => {
     }
 
     const employees = await User.find({ accountType: "employee" })
-      .select("_id username realName empId dateOfJoining department")
+      .select("_id username pseudoName realName empId dateOfJoining department")
       .lean();
 
     const employeeIds = employees.map((e) => e._id);
@@ -503,7 +503,7 @@ export const getAdminLeaveDashboard = async (req, res) => {
       const probationCompleted = probationEnd ? new Date() >= probationEnd : true;
       return {
         userId: emp._id,
-        name: emp.realName || emp.username,
+        name: emp.pseudoName || emp.username,
         username: emp.username,
         empId: emp.empId || "",
         department: emp.department || "",
