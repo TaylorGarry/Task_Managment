@@ -221,10 +221,23 @@ export const getTasks = async (req, res) => {
       const employeeScopeIds = [userId, ...delegatedDelegatorIds];
       filter.assignedTo = { $in: employeeScopeIds };
       if (shift) filter.shift = shift;
-    } else {
-      if (shift) filter.shift = shift;
-      if (department) filter.department = department;
-      if (employeeId) filter.assignedTo = employeeId;
+	    } else {
+	      if (shift) filter.shift = shift;
+	      if (department) {
+	        if (req.user.accountType === "superAdmin") {
+	          const superAdminUsers = await User.find({ accountType: "superAdmin" })
+	            .select("_id")
+	            .lean();
+	          const superAdminIds = superAdminUsers.map((u) => u._id);
+	          filter.$or = [
+	            { department },
+	            ...(superAdminIds.length ? [{ assignedTo: { $in: superAdminIds } }] : []),
+	          ];
+	        } else {
+	          filter.department = department;
+	        }
+	      }
+	      if (employeeId) filter.assignedTo = employeeId;
 
       // HR should not see tasks meant for superAdmin accounts.
       if (req.user.accountType === "HR") {

@@ -94,10 +94,24 @@ const messageSchema = new mongoose.Schema({
       default: Date.now
     },
     _id: false
-  }]
+  }],
+
+  // For ephemeral chats (employee/agent/supervisor only), auto-delete message after 40 minutes.
+  expiresAt: {
+    type: Date,
+    default: null
+  }
 }, { 
   timestamps: true 
 });
+
+messageSchema.index(
+  { expiresAt: 1 },
+  {
+    expireAfterSeconds: 0,
+    partialFilterExpression: { expiresAt: { $type: "date" } }
+  }
+);
 
 export const Message = mongoose.model("Message", messageSchema);
 

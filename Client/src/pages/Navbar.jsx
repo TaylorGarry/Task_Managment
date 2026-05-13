@@ -295,6 +295,15 @@ const Navbar = () => {
 
               {isEmployee && (
                 <button
+                  onClick={() => navigate("/my-profile")}
+                  className={sideBtn(location.pathname === "/my-profile")}
+                >
+                  My Profile
+                </button>
+              )}
+
+              {isEmployee && (
+                <button
                   onClick={() => navigate("/chat")}
                   className={sideBtn(location.pathname === "/chat", "indigo")}
                 >
@@ -383,6 +392,9 @@ const Navbar = () => {
               )}
               {isSupervisor && canAccessAttendanceSnapshot && (
                 <button onClick={() => { goToAttendanceSnapshot(); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Attendance Snapshot</button>
+              )}
+              {isEmployee && (
+                <button onClick={() => { navigate("/my-profile"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-[#d7e6e1] bg-white px-4 py-2 text-left">My Profile</button>
               )}
               {isEmployee && (
                 <button onClick={() => { navigate("/chat"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Chat</button>

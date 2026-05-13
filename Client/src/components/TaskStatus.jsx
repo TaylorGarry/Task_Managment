@@ -123,7 +123,17 @@ const TaskStatus = () => {
     }
   };
 
-  const departments = [...new Set(employees.map((e) => e.department).filter(Boolean))];
+  const departments = [
+    ...new Set([
+      ...employees.map((e) => e.department).filter(Boolean),
+      ...tasks.map((t) => t.department).filter(Boolean),
+      ...tasks.flatMap((t) =>
+        Array.isArray(t?.assignedTo)
+          ? t.assignedTo.map((a) => a?.department).filter(Boolean)
+          : [t?.assignedTo?.department].filter(Boolean)
+      ),
+    ]),
+  ];
   const filteredEmployees = filters.department
     ? employees.filter((e) => e.department === filters.department)
     : employees;
