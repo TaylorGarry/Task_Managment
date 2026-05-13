@@ -16,6 +16,10 @@ export const getUserChats = async (req, res) => {
     const currentUserId = req.user._id || req.user.id;  
     console.log("🔍 Current user ID:", currentUserId);
 
+    await Message.deleteMany({
+      expiresAt: { $lte: new Date() },
+    });
+
     const chats = await Chat.find({ participants: currentUserId })
       .populate({
         path: "participants",

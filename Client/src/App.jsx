@@ -430,6 +430,7 @@ import DelegatedActionsPage from "./pages/DelegatedActionsPage.jsx";
 import LeaveManagement from "./pages/LeaveManagement.jsx";
 import Navbar from "./pages/Navbar.jsx";
 import SuperAdminLoginStatus from "./pages/SuperAdminLoginStatus.jsx";
+import MyProfile from "./pages/MyProfile.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import {
@@ -746,6 +747,14 @@ function App() {
                 <Navbar />
                 <ChatUI />
               </>
+            </EmployeeOnlyRoute>
+          }
+        />
+        <Route
+          path="/my-profile"
+          element={
+            <EmployeeOnlyRoute>
+              <MyProfile />
             </EmployeeOnlyRoute>
           }
         />

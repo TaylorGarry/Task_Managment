@@ -401,6 +401,7 @@ import { Message } from "../Modals/Message.modal.js";
 import { Chat } from "../Modals/Chat.modal.js";
 import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
+import User from "../Modals/User.modal.js";
            
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -408,6 +409,28 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
   secure: true
 });
+
+const EPHEMERAL_ACCOUNT_TYPES = new Set(["employee", "agent", "supervisor"]);
+const MESSAGE_TTL_MS = 40 * 60 * 1000;
+
+const shouldUseEphemeralMessages = async (chat) => {
+  const participantIds = Array.isArray(chat?.participants) ? chat.participants : [];
+  if (!participantIds.length) return false;
+
+  const users = await User.find({ _id: { $in: participantIds } })
+    .select("accountType")
+    .lean();
+
+  if (!users.length) return false;
+  return users.every((u) => EPHEMERAL_ACCOUNT_TYPES.has(String(u?.accountType || "").toLowerCase()));
+};
+
+const purgeExpiredChatMessages = async (chatId) => {
+  await Message.deleteMany({
+    chatId,
+    expiresAt: { $lte: new Date() },
+  });
+};
 
 // export const uploadFile = async (req, res) => {
 //   try {
@@ -668,6 +691,9 @@ export const sendOneToOneMessage = async (req, res) => {
       // If we have media but no text, it's already media type
     }
 
+    const useEphemeralMessages = await shouldUseEphemeralMessages(chat);
+    const expiresAt = useEphemeralMessages ? new Date(Date.now() + MESSAGE_TTL_MS) : null;
+
     const newMessage = await Message.create({
       chatId,
       sender: senderId,
@@ -678,6 +704,7 @@ export const sendOneToOneMessage = async (req, res) => {
       messageType: messageType,
       repliedTo: repliedTo || null,
       readBy: [{ userId: senderId, readAt: new Date() }],
+      expiresAt,
     });
 
     console.log("✅ Message created:", newMessage._id, "Type:", messageType);
@@ -1048,6 +1075,8 @@ export const getChatMessages = async (req, res) => {
       return res.status(403).json({ error: 'Not a participant in this chat' });
     }
     
+    await purgeExpiredChatMessages(chatId);
+
     const messages = await Message.find({ chatId })
       .populate('sender', 'username department')
       .populate('repliedTo')
