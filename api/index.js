@@ -4,6 +4,7 @@ import connectDB from "./DB/connnection.js";
 import "./jobs/shiftNotification.job.js"; 
 import Task from "./Modals/Task.modal.js";
 import TaskStatus from "./Modals/TaskStatus.modal.js";
+import { Message } from "./Modals/Message.modal.js";
 
 // Disable noisy debug logs across the API.
 // Set `DISABLE_CONSOLE_LOG=false` to re-enable.
@@ -18,6 +19,7 @@ connectDB()
     try {
       await Task.syncIndexes();
       await TaskStatus.syncIndexes();
+      await Message.syncIndexes();
     } catch (err) {
       console.error("❌ Error syncing indexes:", err);
     }
