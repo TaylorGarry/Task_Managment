@@ -401,7 +401,6 @@ import { Message } from "../Modals/Message.modal.js";
 import { Chat } from "../Modals/Chat.modal.js";
 import { v2 as cloudinary } from 'cloudinary';
 import { v4 as uuidv4 } from 'uuid';
-import User from "../Modals/User.modal.js";
            
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -410,20 +409,7 @@ cloudinary.config({
   secure: true
 });
 
-const EPHEMERAL_ACCOUNT_TYPES = new Set(["employee", "agent", "supervisor"]);
 const MESSAGE_TTL_MS = 40 * 60 * 1000;
-
-const shouldUseEphemeralMessages = async (chat) => {
-  const participantIds = Array.isArray(chat?.participants) ? chat.participants : [];
-  if (!participantIds.length) return false;
-
-  const users = await User.find({ _id: { $in: participantIds } })
-    .select("accountType")
-    .lean();
-
-  if (!users.length) return false;
-  return users.every((u) => EPHEMERAL_ACCOUNT_TYPES.has(String(u?.accountType || "").toLowerCase()));
-};
 
 const purgeExpiredChatMessages = async (chatId) => {
   await Message.deleteMany({
@@ -691,7 +677,8 @@ export const sendOneToOneMessage = async (req, res) => {
       // If we have media but no text, it's already media type
     }
 
-    const useEphemeralMessages = await shouldUseEphemeralMessages(chat);
+    const senderAccountType = String(req.user?.accountType || "").toLowerCase();
+    const useEphemeralMessages = senderAccountType !== "superadmin";
     const expiresAt = useEphemeralMessages ? new Date(Date.now() + MESSAGE_TTL_MS) : null;
 
     const newMessage = await Message.create({
