@@ -89,7 +89,7 @@ const SuperAdminLoginStatus = () => {
       if (status === "Late" && !(r.loginTime && r.lateByMs > 0)) return false;
       if (status === "9h Incomplete" && !(r.loginTime && !r.hasCompletedNineHours)) return false;
       if (!q) return true;
-      const hay = `${r.name || ""} ${r.username || ""} ${r.department || ""} ${r.accountType || ""}`.toLowerCase();
+      const hay = `${r.pseudoName || ""} ${r.username || ""} ${r.department || ""} ${r.accountType || ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [rows, query, dept, status]);
@@ -103,7 +103,7 @@ const SuperAdminLoginStatus = () => {
   }, [query, dept, status, pageSize, dateKey]);
 
   const onBreakNames = useMemo(
-    () => filteredRows.filter((r) => r.isOnBreak).slice(0, 4).map((r) => r.name || r.username),
+    () => filteredRows.filter((r) => r.isOnBreak).slice(0, 4).map((r) => r.pseudoName || r.username),
     [filteredRows]
   );
 
@@ -189,8 +189,7 @@ const SuperAdminLoginStatus = () => {
                   {paginatedRows.map((row) => (
                     <tr key={row.userId} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <p className="font-semibold text-slate-900">{row.name || row.username}</p>
-                        <p className="text-xs text-slate-500">{row.accountType}</p>
+                        <p className="font-semibold text-slate-900">{row.pseudoName || row.username}</p>
                       </td>
                       <td className="px-3 py-2">{row.department || "--"}</td>
                       <td className="px-3 py-2">

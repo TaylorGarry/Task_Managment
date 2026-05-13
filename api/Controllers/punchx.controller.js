@@ -370,7 +370,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       accountType: { $in: ["employee", "agent", "supervisor"] },
       isActive: { $ne: false },
     })
-      .select("_id username realName department accountType shiftStartHour shiftEndHour isTeamLeader")
+      .select("_id username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
       .lean();
 
     const employeeIds = employees.map((e) => e._id);
@@ -405,7 +405,8 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       return {
         userId: emp._id,
         username: emp.username || "",
-        name: emp.realName || emp.username || "",
+        pseudoName: emp.pseudoName || "",
+        name: emp.pseudoName || emp.username || "",
         department: emp.department || "",
         accountType: emp.accountType || "employee",
         isTeamLeader: Boolean(emp.isTeamLeader),
