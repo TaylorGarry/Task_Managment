@@ -325,6 +325,14 @@ export const applyLeaveRequest = async (req, res) => {
       });
     }
 
+    const applicantRemark = String(reason || "").trim();
+    if (applicantRemark.length < 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Please provide a clear leave reason",
+      });
+    }
+
     const { balance, user } = await ensureLeaveBalanceForUser(req.user._id, from);
 
     if (normalizedType !== "LWP") {
@@ -372,8 +380,17 @@ export const applyLeaveRequest = async (req, res) => {
       requestedDays: leaveDays.chargedDays,
       sandwichDays: leaveDays.sandwichDays,
       chargedDays: leaveDays.chargedDays,
-      reason: String(reason || "").trim(),
+      reason: applicantRemark,
       status: "pending",
+      reviewTrail: [
+        {
+          action: "applied",
+          remark: applicantRemark,
+          actorId: req.user._id,
+          actorName: req.user?.pseudoName || req.user?.realName || req.user?.username || "",
+          at: new Date(),
+        },
+      ],
     });
 
     return res.status(201).json({ success: true, request: requestDoc });
@@ -430,8 +447,15 @@ export const reviewLeaveRequest = async (req, res) => {
     const requestId = req.params.id;
     const { action, comment } = req.body || {};
     const normalizedAction = String(action || "").trim().toLowerCase();
+    const reviewRemark = String(comment || "").trim();
     if (!["approve", "reject"].includes(normalizedAction)) {
       return res.status(400).json({ success: false, message: "Action must be approve or reject" });
+    }
+    if (reviewRemark.length < 5) {
+      return res.status(400).json({
+        success: false,
+        message: "Please add a clear remark for approving/rejecting (minimum 5 characters)",
+      });
     }
 
     const leaveRequest = await LeaveRequest.findById(requestId);
@@ -454,7 +478,17 @@ export const reviewLeaveRequest = async (req, res) => {
       leaveRequest.status = "rejected";
       leaveRequest.reviewedBy = req.user._id;
       leaveRequest.reviewedAt = new Date();
-      leaveRequest.reviewComment = String(comment || "").trim();
+      leaveRequest.reviewComment = reviewRemark;
+      leaveRequest.reviewTrail = [
+        ...(Array.isArray(leaveRequest.reviewTrail) ? leaveRequest.reviewTrail : []),
+        {
+          action: "rejected",
+          remark: reviewRemark,
+          actorId: req.user._id,
+          actorName: req.user?.pseudoName || req.user?.realName || req.user?.username || "",
+          at: new Date(),
+        },
+      ];
       await leaveRequest.save();
       return res.status(200).json({ success: true, request: leaveRequest });
     }
@@ -466,7 +500,17 @@ export const reviewLeaveRequest = async (req, res) => {
     if (!result.ok) {
       return res.status(400).json({ success: false, message: result.message });
     }
-    leaveRequest.reviewComment = String(comment || "").trim();
+    leaveRequest.reviewComment = reviewRemark;
+    leaveRequest.reviewTrail = [
+      ...(Array.isArray(leaveRequest.reviewTrail) ? leaveRequest.reviewTrail : []),
+      {
+        action: "approved",
+        remark: reviewRemark,
+        actorId: req.user._id,
+        actorName: req.user?.pseudoName || req.user?.realName || req.user?.username || "",
+        at: new Date(),
+      },
+    ];
     await leaveRequest.save();
 
     return res.status(200).json({

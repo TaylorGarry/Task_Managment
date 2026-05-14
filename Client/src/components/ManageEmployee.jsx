@@ -40,11 +40,16 @@ import { isHrDepartment, isSuperAdmin } from "../utils/roleAccess.js";
 
 const shiftOptions = [
   { label: "1am-10am", value: "1am-10am" },
+  { label: "2am-11am", value: "2am-11am" },
   { label: "4pm-1am", value: "4pm-1am" },
   { label: "5pm-2am", value: "5pm-2am" },
   { label: "6pm-3am", value: "6pm-3am" },
+  { label: "7pm-4am", value: "7pm-4am" },
   { label: "8pm-5am", value: "8pm-5am" },
-  { label: "11pm-8am", value: "11pm-8am"}
+  { label: "9pm-6am", value: "9pm-6am" },
+  { label: "10pm-7am", value: "10pm-7am" },
+  { label: "11pm-8am", value: "11pm-8am" },
+  { label: "12am-9am", value: "12am-9am" },
 ];
 
 const SHIFT_LABEL_VALUES = new Set(shiftOptions.map((s) => s.value));
@@ -519,71 +524,112 @@ const ManageEmployee = () => {
     const employeeName = formData.realName || selectedUser?.realName || selectedUser?.username || "Employee";
     const designation = formData.designation || selectedUser?.designation || "";
     const empId = formData.empId || selectedUser?.empId || "";
+    const bloodGroup = formData.bloodGroup || selectedUser?.bloodGroup || "N/A";
+    const contactNumber = formData.phone || selectedUser?.phone || "N/A";
+    const emergencyContact = formData.emergencyPhone || selectedUser?.emergencyPhone || "N/A";
     const photoUrl = formData.profilePhotoUrl || selectedUser?.profilePhotoUrl || "";
 
-    const canvas = document.createElement("canvas");
-    canvas.width = 1000;
-    canvas.height = 620;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) {
+    const createCardCanvas = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 768;
+      canvas.height = 1280;
+      const ctx = canvas.getContext("2d");
+      return { canvas, ctx };
+    };
+
+    const frontCard = createCardCanvas();
+    const backCard = createCardCanvas();
+    if (!frontCard.ctx || !backCard.ctx) {
       toast.error("Unable to generate ID card");
       return;
     }
+    const frontCtx = frontCard.ctx;
+    const backCtx = backCard.ctx;
 
-    ctx.fillStyle = "#f9fbff";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    const drawTemplate = (ctx) => {
+      const w = 768;
+      const h = 1280;
+      const edgeInset = 24;
+      const topBlueHeight = 150;
+      const topWaveY = 126;
+      const topWaveAmp = 20;
+      const yellowThickness = 12;
+      const bottomBlueHeight = 150;
+      const bottomWaveY = h - 154;
+      const bottomWaveAmp = 18;
+      ctx.fillStyle = "#f2f2f2";
+      ctx.fillRect(0, 0, w, h);
 
-    ctx.fillStyle = "#022b68";
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, 120);
-    ctx.quadraticCurveTo(180, 95, 250, 0);
-    ctx.closePath();
-    ctx.fill();
+      // Top blue header with curved bottom edge
+      ctx.fillStyle = "#1f4e79";
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(w, 0);
+      ctx.lineTo(w, topBlueHeight - 6);
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp, w * 0.47, topWaveY);
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp, 0, topWaveY - 2);
+      ctx.closePath();
+      ctx.fill();
 
-    ctx.fillStyle = "#f2b318";
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.lineTo(0, 80);
-    ctx.quadraticCurveTo(145, 62, 220, 0);
-    ctx.closePath();
-    ctx.fill();
+      // Yellow line connected to top blue curve
+      ctx.fillStyle = "#f2cf00";
+      ctx.beginPath();
+      ctx.moveTo(edgeInset, topWaveY + 3);
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + 2, w * 0.47, topWaveY + 3);
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + 2, w - edgeInset, topWaveY + 1);
+      ctx.lineTo(w - edgeInset, topWaveY + yellowThickness);
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness + 1, w * 0.47, topWaveY + yellowThickness + 2);
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness + 1, edgeInset, topWaveY + yellowThickness);
+      ctx.closePath();
+      ctx.fill();
 
-    ctx.fillStyle = "#022b68";
-    ctx.beginPath();
-    ctx.moveTo(canvas.width, canvas.height);
-    ctx.lineTo(canvas.width, canvas.height - 140);
-    ctx.quadraticCurveTo(canvas.width - 260, canvas.height - 122, canvas.width - 360, canvas.height);
-    ctx.closePath();
-    ctx.fill();
+      // Bottom blue footer with curved top edge
+      ctx.fillStyle = "#1f4e79";
+      ctx.beginPath();
+      ctx.moveTo(0, h);
+      ctx.lineTo(w, h);
+      ctx.lineTo(w, h - bottomBlueHeight + 8);
+      ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp, w * 0.52, bottomWaveY + 2);
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp, 0, bottomWaveY + 2);
+      ctx.closePath();
+      ctx.fill();
 
-    ctx.fillStyle = "#f2b318";
-    ctx.beginPath();
-    ctx.moveTo(canvas.width, canvas.height);
-    ctx.lineTo(canvas.width, canvas.height - 95);
-    ctx.quadraticCurveTo(canvas.width - 210, canvas.height - 85, canvas.width - 320, canvas.height);
-    ctx.closePath();
-    ctx.fill();
+      // Yellow line connected to bottom blue curve
+      ctx.fillStyle = "#f2cf00";
+      ctx.beginPath();
+      ctx.moveTo(edgeInset, bottomWaveY - 1);
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - 1, w * 0.52, bottomWaveY + 1);
+      ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp - 1, w - edgeInset, bottomWaveY - 1);
+      ctx.lineTo(w - edgeInset, bottomWaveY - yellowThickness);
+      ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp - yellowThickness - 1, w * 0.52, bottomWaveY - yellowThickness + 1);
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - yellowThickness - 1, edgeInset, bottomWaveY - yellowThickness);
+      ctx.closePath();
+      ctx.fill();
+    };
 
-    ctx.fillStyle = "#f2b318";
-    ctx.fillRect(72, 185, 86, 56);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 40px Arial";
-    ctx.fillText("FD", 82, 226);
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 56px Arial";
-    ctx.fillText("BUSINESS", 172, 231);
-    ctx.fillStyle = "#b8860b";
-    ctx.font = "700 42px Arial";
-    ctx.fillText("Service Private Limited", 174, 278);
+    drawTemplate(frontCtx);
+    drawTemplate(backCtx);
 
-    const photoX = 95;
-    const photoY = 315;
-    const photoSize = 230;
-    ctx.fillStyle = "#dbe4f0";
-    ctx.beginPath();
-    ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2 + 10, 0, Math.PI * 2);
-    ctx.fill();
+    frontCtx.fillStyle = "#f2cf00";
+    frontCtx.fillRect(102, 268, 90, 64);
+    frontCtx.fillStyle = "#ffffff";
+    frontCtx.font = "700 58px Arial";
+    frontCtx.fillText("FD", 114, 318);
+    frontCtx.fillStyle = "#0f3f69";
+    frontCtx.font = "700 84px Arial";
+    frontCtx.fillText("BUSINESS", 192, 318);
+    frontCtx.fillStyle = "#f2cf00";
+    frontCtx.font = "700 62px Arial";
+    frontCtx.fillText("Service Private Limited", 288, 376);
+
+    const photoX = 224;
+    const photoY = 460;
+    const photoSize = 320;
+    frontCtx.strokeStyle = "#1f4e79";
+    frontCtx.lineWidth = 5;
+    frontCtx.beginPath();
+    frontCtx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2 + 3, 0, Math.PI * 2);
+    frontCtx.stroke();
 
     if (photoUrl) {
       try {
@@ -594,39 +640,76 @@ const ManageEmployee = () => {
           img.onerror = reject;
           img.src = photoUrl;
         });
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
-        ctx.clip();
-        ctx.drawImage(photo, photoX, photoY, photoSize, photoSize);
-        ctx.restore();
+        const srcSize = Math.min(photo.width, photo.height);
+        const sx = (photo.width - srcSize) / 2;
+        const sy = (photo.height - srcSize) / 2;
+        frontCtx.save();
+        frontCtx.beginPath();
+        frontCtx.arc(photoX + photoSize / 2, photoY + photoSize / 2, photoSize / 2, 0, Math.PI * 2);
+        frontCtx.clip();
+        frontCtx.drawImage(photo, sx, sy, srcSize, srcSize, photoX, photoY, photoSize, photoSize);
+        frontCtx.restore();
       } catch {
-        // fallback text when image loading fails
+        // ignore image load failures
       }
     }
 
-    if (!photoUrl) {
-      ctx.fillStyle = "#64748b";
-      ctx.font = "600 24px Arial";
-      ctx.fillText("No Photo", photoX + 55, photoY + 125);
+    frontCtx.fillStyle = "#1f4e79";
+    frontCtx.textAlign = "center";
+    frontCtx.font = "500 60px Arial";
+    frontCtx.fillText(employeeName, 384, 845);
+    frontCtx.font = "500 52px Arial";
+    frontCtx.fillText(designation || "Employee", 384, 920);
+    frontCtx.font = "500 42px Arial";
+    frontCtx.fillText(`Emp ID        : ${empId || "N/A"}`, 384, 1020);
+    frontCtx.fillText(`Blood Group   : ${bloodGroup}`, 384, 1082);
+
+    backCtx.fillStyle = "#1f4e79";
+    backCtx.textAlign = "left";
+    backCtx.font = "500 36px Arial";
+    backCtx.fillText(`Contact         : ${contactNumber}`, 130, 290);
+    backCtx.fillText(`Emg Contact: ${emergencyContact}`, 130, 350);
+
+    backCtx.textAlign = "center";
+    backCtx.font = "500 38px Arial";
+    backCtx.fillText("INSTRUCTION", 384, 510);
+    backCtx.font = "500 34px Arial";
+    backCtx.fillText("1.This ID Card is NonTransferable", 384, 572);
+    backCtx.fillText("2.It is mandatory to display the ID", 384, 616);
+    backCtx.fillText("card while on duty.", 384, 660);
+    backCtx.fillText("3.Loss ofthis ID Card Should be", 384, 704);
+    backCtx.fillText("reported to the issuing authority", 384, 748);
+    backCtx.fillText("4.Duplicate ID Card would be", 384, 792);
+    backCtx.fillText("Issued at a cost ofRs.200/-", 384, 836);
+
+    backCtx.textAlign = "left";
+    backCtx.font = "500 30px Arial";
+    backCtx.fillText("FD Business Service Private Limited", 124, 950);
+    backCtx.font = "500 27px Arial";
+    backCtx.fillText("Unit no 118,119,120,", 124, 995);
+    backCtx.fillText("Suncity Success Tower", 124, 1032);
+    backCtx.fillText("Golf Course Extn. Road", 124, 1069);
+    backCtx.fillText("Sector -65, Gurugram 122018", 124, 1106);
+
+    const combinedCanvas = document.createElement("canvas");
+    combinedCanvas.width = frontCard.canvas.width * 2 + 36;
+    combinedCanvas.height = frontCard.canvas.height;
+    const combinedCtx = combinedCanvas.getContext("2d");
+    if (!combinedCtx) {
+      toast.error("Unable to combine ID card sides");
+      return;
     }
+    combinedCtx.fillStyle = "#ffffff";
+    combinedCtx.fillRect(0, 0, combinedCanvas.width, combinedCanvas.height);
+    combinedCtx.drawImage(frontCard.canvas, 0, 0);
+    combinedCtx.fillStyle = "#e2e8f0";
+    combinedCtx.fillRect(frontCard.canvas.width, 0, 36, combinedCanvas.height);
+    combinedCtx.drawImage(backCard.canvas, frontCard.canvas.width + 36, 0);
 
-    ctx.fillStyle = "#0f172a";
-    ctx.font = "700 58px Arial";
-    ctx.fillText(employeeName, 370, 400);
-
-    ctx.fillStyle = "#111827";
-    ctx.font = "600 46px Arial";
-    ctx.fillText(designation || "Employee", 370, 462);
-
-    ctx.fillStyle = "#1f2937";
-    ctx.font = "600 42px Arial";
-    ctx.fillText(`Emp ID : ${empId || "N/A"}`, 370, 528);
-
-    const link = document.createElement("a");
     const safeName = String(employeeName || "employee").replace(/[^a-z0-9_-]+/gi, "_");
-    link.download = `${safeName}_id_card.png`;
-    link.href = canvas.toDataURL("image/png");
+    const link = document.createElement("a");
+    link.download = `${safeName}_id_card_front_back.png`;
+    link.href = combinedCanvas.toDataURL("image/png");
     link.click();
   };
 

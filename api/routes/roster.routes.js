@@ -129,11 +129,51 @@ import {
 		  searchBulkEditEmployees,
       updatePunchTimes,
       bulkUpdatePunchTimes,
-			} from "../Controllers/roster.controller.js";
+      uploadAttendanceOverrideFromExcel,
+				} from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
-import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
 import multer from "multer"; 
 const router = express.Router();
+
+const uploadAttendanceOverrideExcel = (req, res, next) => {
+  const upload = multer({
+    storage: multer.memoryStorage(),
+    fileFilter: (_req, file, cb) => {
+      const isExcelMime = [
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+      ].includes(file.mimetype);
+      const isExcelName = /\.(xlsx|xls)$/i.test(file.originalname || "");
+      if (isExcelMime || isExcelName) return cb(null, true);
+      return cb(new Error("Only Excel files are allowed (.xlsx, .xls)"), false);
+    },
+    limits: { fileSize: 10 * 1024 * 1024 },
+  }).fields([
+    { name: "file", maxCount: 1 },
+    { name: "excelFile", maxCount: 1 },
+  ]);
+
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: err.message || "Error uploading Excel file",
+      });
+    }
+    const uploaded =
+      (Array.isArray(req.files?.file) && req.files.file[0]) ||
+      (Array.isArray(req.files?.excelFile) && req.files.excelFile[0]) ||
+      null;
+    if (!uploaded) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel file is required in 'file' or 'excelFile' field.",
+      });
+    }
+    req.file = uploaded;
+    next();
+  });
+};
 
 // Add a new roster week
 router.post("/add-week", authMiddleware, validateRosterWeek, addRosterWeek);
@@ -262,5 +302,12 @@ router.put(
   "/update-punch-times/bulk",
   authMiddleware,
   bulkUpdatePunchTimes  // Bulk update
+);
+
+router.post(
+  "/attendance-override/upload",
+  authMiddleware,
+  uploadAttendanceOverrideExcel,
+  uploadAttendanceOverrideFromExcel
 );
 export default router;

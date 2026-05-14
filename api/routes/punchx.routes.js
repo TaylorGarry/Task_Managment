@@ -4,6 +4,7 @@ import {
   endBreak,
   endShift,
   getManagerTeamStatus,
+  exportSuperAdminDailyStatusExcel,
   getSuperAdminDailyStatus,
   getTodaySession,
   postActivity,
@@ -23,5 +24,6 @@ router.post("/break/end", endBreak);
 router.post("/activity", postActivity);
 router.get("/manager/team-status", getManagerTeamStatus);
 router.get("/superadmin/daily-status", getSuperAdminDailyStatus);
+router.get("/superadmin/daily-status/export", exportSuperAdminDailyStatusExcel);
 
 export default router;

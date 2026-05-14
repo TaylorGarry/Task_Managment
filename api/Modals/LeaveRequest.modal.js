@@ -43,6 +43,26 @@ const leaveRequestSchema = new mongoose.Schema(
     },
     reviewedAt: { type: Date, default: null },
     reviewComment: { type: String, trim: true, default: "" },
+    reviewTrail: {
+      type: [
+        {
+          action: {
+            type: String,
+            enum: ["applied", "approved", "rejected", "cancelled"],
+            required: true,
+          },
+          remark: { type: String, trim: true, default: "" },
+          actorId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+            default: null,
+          },
+          actorName: { type: String, trim: true, default: "" },
+          at: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );

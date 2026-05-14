@@ -9,9 +9,12 @@ import { socket } from "../socket.js";
 import {
   canManageAdminPanels,
   getRoleType,
+  isAccountsDepartment,
   isTeamLeaderUser,
   normalizeDepartment,
 } from "../utils/roleAccess.js";
+
+const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const ROSTER_ALLOWED_DEPARTMENTS = [
   "Operations",
@@ -34,6 +37,8 @@ const Navbar = () => {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
   const processedMessageIdsRef = useRef(new Set());
+  const knownBreakUsersRef = useRef(new Set());
+  const breakWatcherInitializedRef = useRef(false);
 
   const handleLogout = async () => {
     toast.dismiss("auth-login-success");
@@ -62,6 +67,8 @@ const Navbar = () => {
   const canUploadExcel =
     (isEmployee && ROSTER_ALLOWED_DEPARTMENTS.includes(normalizedDepartment)) ||
     canManageAdminPanels(user);
+  const canUploadAttendanceOverride =
+    roleType === "superAdmin" || isAccountsDepartment(user);
 
   useEffect(() => {
     if (isEmployee) {
@@ -75,6 +82,61 @@ const Navbar = () => {
       Notification.requestPermission().catch(() => {});
     }
   }, [user?._id, user?.id]);
+
+  useEffect(() => {
+    if (!isSupervisor) return;
+    const token = user?.token;
+    if (!token) return;
+
+    const getTodayDateKey = () => {
+      const d = new Date();
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, "0");
+      const dd = String(d.getDate()).padStart(2, "0");
+      return `${yyyy}-${mm}-${dd}`;
+    };
+
+    const checkBreakStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/punchx/superadmin/daily-status?dateKey=${getTodayDateKey()}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        const currentlyOnBreak = rows
+          .filter((r) => r?.isOnBreak)
+          .map((r) => ({
+            id: String(r.userId || ""),
+            name: r.name || r.username || "Employee",
+            breakType: r.breakType || "manual",
+          }))
+          .filter((r) => r.id);
+        const currentSet = new Set(currentlyOnBreak.map((r) => r.id));
+
+        if (!breakWatcherInitializedRef.current) {
+          knownBreakUsersRef.current = currentSet;
+          breakWatcherInitializedRef.current = true;
+          return;
+        }
+
+        const newBreakEntries = currentlyOnBreak.filter((u) => !knownBreakUsersRef.current.has(u.id));
+        newBreakEntries.forEach((u) => {
+          const msg = `${u.name} is on ${u.breakType.replace("_", " ")} break`;
+          toast(msg, { duration: 5000 });
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Break Alert", { body: msg, icon: "/favicon.ico", tag: `break-${u.id}` });
+          }
+        });
+        knownBreakUsersRef.current = currentSet;
+      } catch {
+      }
+    };
+
+    checkBreakStatus();
+    const id = setInterval(checkBreakStatus, 30000);
+    return () => clearInterval(id);
+  }, [isSupervisor, user?.token]);
 
   useEffect(() => {
     if (!user) return;
@@ -247,6 +309,14 @@ const Navbar = () => {
                   Upload Roster
                 </button>
               )}
+              {canUploadAttendanceOverride && (
+                <button
+                  onClick={() => navigate("/attendance-override-upload")}
+                  className={sideBtn(location.pathname === "/attendance-override-upload", "indigo")}
+                >
+                  Attendance Override
+                </button>
+              )}
 
               {isAllowedRosterDepartmentEmployee && (
                 <button
@@ -272,6 +342,14 @@ const Navbar = () => {
                   className={sideBtn(location.pathname === "/attendance-snapshot", "indigo")}
                 >
                   Attendance Snapshot
+                </button>
+              )}
+              {isSupervisor && (
+                <button
+                  onClick={() => navigate("/employee-login-status")}
+                  className={sideBtn(location.pathname === "/employee-login-status", "indigo")}
+                >
+                  Team Login Status
                 </button>
               )}
 
@@ -392,6 +470,12 @@ const Navbar = () => {
               )}
               {isSupervisor && canAccessAttendanceSnapshot && (
                 <button onClick={() => { goToAttendanceSnapshot(); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Attendance Snapshot</button>
+              )}
+              {canUploadAttendanceOverride && (
+                <button onClick={() => { navigate("/attendance-override-upload"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-cyan-200 bg-cyan-50 px-4 py-2 text-left text-cyan-700">Attendance Override</button>
+              )}
+              {isSupervisor && (
+                <button onClick={() => { navigate("/employee-login-status"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Team Login Status</button>
               )}
               {isEmployee && (
                 <button onClick={() => { navigate("/my-profile"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-[#d7e6e1] bg-white px-4 py-2 text-left">My Profile</button>

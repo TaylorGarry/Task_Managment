@@ -218,6 +218,43 @@ const getWeekNumberForMonth = (dateValue, month, year) => {
   return Math.max(1, Math.ceil((firstDayOfMonth.getUTCDay() + dayOfMonth) / 7));
 };
 
+const normalizeKeyText = (value) =>
+  String(value || "")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase();
+
+const parseYmdRangeDate = (value) => {
+  const parsed = parseYmdToUtcDate(value);
+  if (!parsed || Number.isNaN(parsed.getTime())) return null;
+  parsed.setUTCHours(12, 0, 0, 0);
+  return parsed;
+};
+
+const getIsoDateKeyFromExcelHeaderCell = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") {
+    const parts = XLSX.SSF.parse_date_code(value);
+    if (!parts || !Number.isFinite(parts.y) || !Number.isFinite(parts.m) || !Number.isFinite(parts.d)) return null;
+    const d = new Date(Date.UTC(parts.y, parts.m - 1, parts.d, 12, 0, 0, 0));
+    return toIstDateKey(d);
+  }
+  const raw = String(value).trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return null;
+  return toIstDateKey(date);
+};
+
+const parseStatusCode = (value) => {
+  const raw = String(value ?? "").trim().toUpperCase();
+  if (!raw) return null;
+  if (raw === "WOP") return "WO";
+  const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD"]);
+  return valid.has(raw) ? raw : null;
+};
+
 const clipWeekToMonthContext = (week, month, year) => {
   if (!week?.startDate || !week?.endDate) return null;
   const parsedMonth = Number.parseInt(month, 10);
@@ -6648,6 +6685,215 @@ export const rosterUploadFromExcel = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to upload roster from Excel"
+    });
+  }
+};
+
+export const uploadAttendanceOverrideFromExcel = async (req, res) => {
+  try {
+    const user = req.user || {};
+    const roleType = getRoleType(user);
+    const departmentNorm = normalizeDepartment(user?.department);
+    const isSuperAdmin = roleType === "superAdmin";
+    const isAccountDepartment = departmentNorm === "Account" || departmentNorm === "Accounts";
+
+    if (!isSuperAdmin && !isAccountDepartment) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Only superAdmin and account department can upload attendance override.",
+      });
+    }
+
+    const { startDate, endDate } = req.body || {};
+    const start = parseYmdRangeDate(startDate);
+    const end = parseYmdRangeDate(endDate);
+    if (!start || !end) {
+      return res.status(400).json({
+        success: false,
+        message: "startDate and endDate are required in YYYY-MM-DD format.",
+      });
+    }
+    if (start > end) {
+      return res.status(400).json({ success: false, message: "startDate cannot be after endDate." });
+    }
+    if (!req.file?.buffer) {
+      return res.status(400).json({ success: false, message: "Excel file is required." });
+    }
+
+    const startKey = toIstDateKey(start);
+    const endKey = toIstDateKey(end);
+    const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames?.[0];
+    if (!sheetName) return res.status(400).json({ success: false, message: "Excel has no worksheet." });
+    const worksheet = workbook.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: "" });
+    if (!Array.isArray(rows) || rows.length < 3) {
+      return res.status(400).json({ success: false, message: "Excel must include header rows and data rows." });
+    }
+
+    const headerRow = rows[0] || [];
+    const dataRows = rows.slice(2);
+    const findColIndex = (names = []) => {
+      const wanted = new Set(names.map((n) => normalizeKeyText(n)));
+      for (let i = 0; i < headerRow.length; i += 1) {
+        if (wanted.has(normalizeKeyText(headerRow[i]))) return i;
+      }
+      return -1;
+    };
+
+    const agentColIndex = findColIndex(["AGENT", "Agent", "Pseudo Name", "PseudoName"]);
+    const employeeIdColIndex = findColIndex(["Employee ID", "Emp ID", "EmpId", "EMPID"]);
+    if (agentColIndex === -1 && employeeIdColIndex === -1) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel must contain either AGENT (pseudo name) or Employee ID column.",
+      });
+    }
+
+    const dateColumns = [];
+    for (let col = 0; col < headerRow.length; col += 1) {
+      const dateKey = getIsoDateKeyFromExcelHeaderCell(headerRow[col]);
+      if (!dateKey) continue;
+      if (dateKey < startKey || dateKey > endKey) continue;
+      dateColumns.push({ col, dateKey });
+    }
+    if (dateColumns.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: `No date columns found within selected range ${startKey} to ${endKey}.`,
+      });
+    }
+
+    const uniqueEmpIds = new Set();
+    const uniqueAgents = new Set();
+    for (const row of dataRows) {
+      const empId = employeeIdColIndex >= 0 ? String(row[employeeIdColIndex] || "").trim() : "";
+      const agent = agentColIndex >= 0 ? String(row[agentColIndex] || "").trim() : "";
+      if (empId) uniqueEmpIds.add(empId);
+      if (agent) uniqueAgents.add(normalizeKeyText(agent));
+    }
+
+    const [usersByEmpIdRaw, usersByPseudoRaw] = await Promise.all([
+      uniqueEmpIds.size
+        ? User.find({ empId: { $in: Array.from(uniqueEmpIds) } }).select("_id empId pseudoName").lean()
+        : Promise.resolve([]),
+      uniqueAgents.size
+        ? User.find({ pseudoName: { $in: Array.from(uniqueAgents).map((v) => new RegExp(`^${String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")) } })
+            .select("_id empId pseudoName")
+            .lean()
+        : Promise.resolve([]),
+    ]);
+
+    const userByEmpId = new Map(usersByEmpIdRaw.map((u) => [String(u.empId || "").trim(), u]));
+    const userByPseudo = new Map(usersByPseudoRaw.map((u) => [normalizeKeyText(u.pseudoName), u]));
+
+    const updatesByUser = new Map();
+    const updatesByEmpId = new Map();
+    const updatesByAgent = new Map();
+    const unmatchedRows = [];
+    let invalidStatusCells = 0;
+    let parsedStatusCells = 0;
+
+    dataRows.forEach((row, idx) => {
+      const rowNo = idx + 3;
+      const empId = employeeIdColIndex >= 0 ? String(row[employeeIdColIndex] || "").trim() : "";
+      const agent = agentColIndex >= 0 ? String(row[agentColIndex] || "").trim() : "";
+      const userMatch = (empId ? userByEmpId.get(empId) : null) || (agent ? userByPseudo.get(normalizeKeyText(agent)) : null);
+      if (!userMatch) {
+        unmatchedRows.push({ rowNo, empId, agent });
+        return;
+      }
+      const uid = String(userMatch._id);
+      const normalizedAgent = normalizeKeyText(agent);
+      const perDate = updatesByUser.get(uid) || updatesByEmpId.get(empId) || updatesByAgent.get(normalizedAgent) || new Map();
+
+      dateColumns.forEach(({ col, dateKey }) => {
+        const status = parseStatusCode(row[col]);
+        if (!status) {
+          const hasRaw = String(row[col] ?? "").trim() !== "";
+          if (hasRaw) invalidStatusCells += 1;
+          return;
+        }
+        perDate.set(dateKey, status);
+        parsedStatusCells += 1;
+      });
+
+      updatesByUser.set(uid, perDate);
+      if (empId) updatesByEmpId.set(empId, perDate);
+      if (normalizedAgent) updatesByAgent.set(normalizedAgent, perDate);
+    });
+
+    const rosters = await Roster.find({
+      rosterStartDate: { $lte: end },
+      rosterEndDate: { $gte: start },
+    });
+
+    let updatedEmployees = 0;
+    let updatedDays = 0;
+    let touchedRosters = 0;
+
+    for (const roster of rosters) {
+      let rosterChanged = false;
+      for (const week of roster.weeks || []) {
+        for (const employee of week.employees || []) {
+          const empUserId = employee?.userId ? String(employee.userId) : "";
+          const empId = String(employee?.empId || "").trim();
+          const empNameKey = normalizeKeyText(employee?.name || "");
+          const perDate =
+            (empUserId ? updatesByUser.get(empUserId) : null) ||
+            (empId ? updatesByEmpId.get(empId) : null) ||
+            (empNameKey ? updatesByAgent.get(empNameKey) : null);
+          if (!perDate || perDate.size === 0) continue;
+
+          let employeeChanged = false;
+          for (const [dateKey, status] of perDate.entries()) {
+            let day = (employee.dailyStatus || []).find((d) => toIstDateKey(d?.date) === dateKey);
+            if (!day) {
+              const createdDate = parseYmdRangeDate(dateKey);
+              if (!createdDate) continue;
+              employee.dailyStatus.push({ date: createdDate, status });
+              employeeChanged = true;
+              updatedDays += 1;
+              continue;
+            }
+            if (String(day.status || "") !== status) {
+              day.status = status;
+              employeeChanged = true;
+              updatedDays += 1;
+            }
+          }
+
+          if (employeeChanged) {
+            updatedEmployees += 1;
+            rosterChanged = true;
+          }
+        }
+      }
+      if (rosterChanged) {
+        roster.markModified("weeks");
+        await roster.save();
+        touchedRosters += 1;
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Attendance daily status override uploaded successfully.",
+      data: {
+        dateRange: { startDate: startKey, endDate: endKey },
+        touchedRosters,
+        updatedEmployees,
+        updatedDays,
+        parsedStatusCells,
+        invalidStatusCells,
+        unmatchedRows: unmatchedRows.slice(0, 50),
+      },
+    });
+  } catch (error) {
+    console.error("Error uploading attendance override from Excel:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to upload attendance override from Excel.",
     });
   }
 };
