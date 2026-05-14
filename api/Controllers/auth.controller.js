@@ -1713,9 +1713,18 @@ const findWeekContainingDate = (rosters = [], date) => {
 
 const findEmployeeInWeek = (week, user) => {
   if (!week?.employees?.length) return null;
+  const userId = String(user?._id || "").trim();
+  const userUsername = String(user?.username || "").trim().toLowerCase();
+  const userPseudo = String(user?.pseudoName || "").trim().toLowerCase();
+  const userReal = String(user?.realName || "").trim().toLowerCase();
+  const userEmpId = String(user?.empId || "").trim();
+
   return (
-    week.employees.find((emp) => emp?.userId && String(emp.userId) === String(user._id)) ||
-    week.employees.find((emp) => String(emp?.name || "").toLowerCase() === String(user.username || "").toLowerCase()) ||
+    week.employees.find((emp) => emp?.userId && String(emp.userId) === userId) ||
+    week.employees.find((emp) => userEmpId && String(emp?.empId || "").trim() === userEmpId) ||
+    week.employees.find((emp) => String(emp?.name || "").trim().toLowerCase() === userPseudo) ||
+    week.employees.find((emp) => String(emp?.name || "").trim().toLowerCase() === userUsername) ||
+    week.employees.find((emp) => String(emp?.name || "").trim().toLowerCase() === userReal) ||
     null
   );
 };
@@ -1881,18 +1890,25 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
           collectUpdaterId(day?.departmentUpdatedBy);
           collectUpdaterId(day?.transportUpdatedBy);
 
+          const previous = byDate[dateKey] || null;
+          const departmentStatus = day?.departmentStatus || "";
+          const transportStatus = day?.transportStatus || "";
+          const rosterStatus = day?.status || "";
+          const incomingStatus = departmentStatus || transportStatus || rosterStatus || "";
+          const resolvedStatus = incomingStatus || previous?.status || "";
+
           byDate[dateKey] = {
             date: dateKey,
-            status: day?.departmentStatus || day?.transportStatus || day?.status || "",
-            departmentStatus: day?.departmentStatus || "",
-            transportStatus: day?.transportStatus || "",
-            punchIn: day?.punchIn || null,
-            punchOut: day?.punchOut || null,
-            totalHours: day?.totalHours ?? null,
-            departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || null,
-            transportStatusUpdatedBy: day?.transportStatusUpdatedBy || null,
-            departmentUpdatedBy: day?.departmentUpdatedBy || null,
-            transportUpdatedBy: day?.transportUpdatedBy || null,
+            status: resolvedStatus,
+            departmentStatus: departmentStatus || previous?.departmentStatus || "",
+            transportStatus: transportStatus || previous?.transportStatus || "",
+            punchIn: day?.punchIn || previous?.punchIn || null,
+            punchOut: day?.punchOut || previous?.punchOut || null,
+            totalHours: day?.totalHours ?? previous?.totalHours ?? null,
+            departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || previous?.departmentStatusUpdatedBy || null,
+            transportStatusUpdatedBy: day?.transportStatusUpdatedBy || previous?.transportStatusUpdatedBy || null,
+            departmentUpdatedBy: day?.departmentUpdatedBy || previous?.departmentUpdatedBy || null,
+            transportUpdatedBy: day?.transportUpdatedBy || previous?.transportUpdatedBy || null,
           };
         });
       });

@@ -18,11 +18,16 @@ import {
 
 const shiftOptions = [
   { label: "1 AM - 10 AM", shiftLabel: "1am-10am" },
+  { label: "2 AM - 11 AM", shiftLabel: "2am-11am" },
   { label: "4 PM - 1 AM", shiftLabel: "4pm-1am" },
   { label: "5 PM - 2 AM", shiftLabel: "5pm-2am" },
   { label: "6 PM - 3 AM", shiftLabel: "6pm-3am" },
+  { label: "7 PM - 4 AM", shiftLabel: "7pm-4am" },
   { label: "8 PM - 5 AM", shiftLabel: "8pm-5am" },
+  { label: "9 PM - 6 AM", shiftLabel: "9pm-6am" },
+  { label: "10 PM - 7 AM", shiftLabel: "10pm-7am" },
   { label: "11 PM - 8 AM", shiftLabel: "11pm-8am" },
+  { label: "12 AM - 9 AM", shiftLabel: "12am-9am" },
 ];
 
 const departmentOptions = DEPARTMENT_OPTIONS;

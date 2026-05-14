@@ -68,6 +68,12 @@ export const isHrDepartment = (userLike = {}) => {
   return normalizedDepartment === "HR" || String(userLike?.accountType || "").trim().toLowerCase() === "hr";
 };
 
+export const isAccountsDepartment = (userLike = {}) => {
+  const normalizedDepartment = normalizeDepartment(userLike?.department);
+  const dep = String(normalizedDepartment || userLike?.department || "").trim().toLowerCase();
+  return dep === "account" || dep === "accounts";
+};
+
 export const isPrivilegedUser = (userLike = {}) => isSuperAdmin(userLike) || isHrDepartment(userLike);
 
 export const canManageAdminPanels = (userLike = {}) => isPrivilegedUser(userLike);

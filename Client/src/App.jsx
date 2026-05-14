@@ -431,6 +431,7 @@ import LeaveManagement from "./pages/LeaveManagement.jsx";
 import Navbar from "./pages/Navbar.jsx";
 import SuperAdminLoginStatus from "./pages/SuperAdminLoginStatus.jsx";
 import MyProfile from "./pages/MyProfile.jsx";
+import AttendanceOverrideUpload from "./pages/AttendanceOverrideUpload.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import {
@@ -438,6 +439,7 @@ import {
   getRoleType,
   isAgent,
   isHrDepartment,
+  isAccountsDepartment,
   isSuperAdmin,
   isTeamLeaderUser,
   normalizeDepartment,
@@ -503,6 +505,15 @@ const EmployeeOnlyRoute = ({ children }) => {
   return children;
 };
 
+const SupervisorOnlyRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+  if (!user) return <Navigate to="/login" replace />;
+  if (getRoleType(user) !== "supervisor") {
+    return <Navigate to="/dashboard" replace />;
+  }
+  return children;
+};
+
 const OpsMetaUploadRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
 
@@ -557,6 +568,35 @@ const DelegationAccessRoute = ({ children }) => {
     return <Navigate to={(isAgent(user) || getRoleType(user) === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
   }
   return children;
+};
+
+const AttendanceOverrideUploadRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+  if (!user) return <Navigate to="/login" replace />;
+  const roleType = getRoleType(user);
+  const isAllowed = roleType === "superAdmin" || isAccountsDepartment(user);
+  if (!isAllowed) {
+    return <Navigate to={(isAgent(user) || roleType === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
+  }
+  return children;
+};
+
+const AttendanceOverrideUploadShell = () => {
+  const { user } = useSelector((state) => state.auth);
+  if (canManageAdminPanels(user)) {
+    return (
+      <>
+        <AdminNavbar showOutlet={false} />
+        <AttendanceOverrideUpload />
+      </>
+    );
+  }
+  return (
+    <>
+      <Navbar />
+      <AttendanceOverrideUpload />
+    </>
+  );
 };
 
 const AdminHomeRedirect = () => {
@@ -668,11 +708,30 @@ function App() {
           }
         />
         <Route
+          path="/attendance-override-upload"
+          element={
+            <AttendanceOverrideUploadRoute>
+              <AttendanceOverrideUploadShell />
+            </AttendanceOverrideUploadRoute>
+          }
+        />
+        <Route
           path="/my-defaults"
           element={
             <EmployeeOnlyRoute>
               <MyDefaults />
             </EmployeeOnlyRoute>
+          }
+        />
+        <Route
+          path="/employee-login-status"
+          element={
+            <SupervisorOnlyRoute>
+              <>
+                <Navbar />
+                <SuperAdminLoginStatus />
+              </>
+            </SupervisorOnlyRoute>
           }
         />
         <Route
@@ -719,6 +778,14 @@ function App() {
 	          <Route path="admintask" element={<AdminTask />} />
 	          <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
 	          <Route path="chat" element={<ChatUI />} />
+            <Route
+              path="attendance-override-upload"
+              element={
+                <AttendanceOverrideUploadRoute>
+                  <AttendanceOverrideUpload />
+                </AttendanceOverrideUploadRoute>
+              }
+            />
           
           {/* ✅ MOVED: Delegation route inside admin parent */}
           <Route 

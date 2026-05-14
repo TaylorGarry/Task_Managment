@@ -6,10 +6,8 @@ import { toast } from 'react-toastify';
 const resolveApiBaseUrl = () => {
   const envUrl = import.meta?.env?.VITE_API_URL;
   if (envUrl) return String(envUrl).replace(/\/+$/, '');
-
-  const hostname = window?.location?.hostname;
-  const isLocalhost = hostname === 'localhost' || hostname === '127.0.0.1';
-  return isLocalhost ? 'http://localhost:4000' : 'https://fdbs-server-a9gqg.ondigitalocean.app';
+  // return 'http://localhost:4000';
+  return 'https://fdbs-server-a9gqg.ondigitalocean.app';
 };
 
 const API_URL = `${resolveApiBaseUrl()}/api/v1/roster`;

@@ -86,6 +86,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [employeePage, setEmployeePage] = useState(1);
   const [employeePageSize, setEmployeePageSize] = useState(10);
+  const [reviewRemarks, setReviewRemarks] = useState({});
 
   useEffect(() => {
     if (isAdminView) {
@@ -126,6 +127,10 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
       toast.error("Please select start and end dates");
       return;
     }
+    if (!String(leaveForm.reason || "").trim() || String(leaveForm.reason || "").trim().length < 5) {
+      toast.error("Please enter your leave reason ");
+      return;
+    }
     const result = await dispatch(applyLeave(leaveForm));
     if (applyLeave.fulfilled.match(result)) {
       setLeaveForm((prev) => ({
@@ -142,14 +147,20 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   };
 
   const handleReview = async (row, action) => {
+    const rowRemark = String(reviewRemarks[row._id] || "").trim();
+    if (rowRemark.length < 5) {
+      toast.error("Please enter approval/rejection remark");
+      return;
+    }
     const result = await dispatch(
       reviewLeaveRequest({
         requestId: row._id,
         action,
-        comment: "",
+        comment: rowRemark,
       })
     );
     if (reviewLeaveRequest.fulfilled.match(result)) {
+      setReviewRemarks((prev) => ({ ...prev, [row._id]: "" }));
       dispatch(fetchAdminLeaveDashboard());
       dispatch(fetchAdminLeaveRequests({ status: requestFilter, search }));
     }
@@ -176,7 +187,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                   >
                     <option value="EL">EL</option>
                     <option value="CL">CL</option>
-                    <option value="ML">ML</option>
+                    <option value="ML">SL</option>
                     <option value="LWP">LWP</option>
                   </select>
                 </div>
@@ -230,7 +241,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                     type="text"
                     value={leaveForm.reason}
                     onChange={(e) => setLeaveForm((p) => ({ ...p, reason: e.target.value }))}
-                    placeholder="Short reason for leave"
+                    placeholder="Clearly mention reason for leave"
                     className="mt-1 crm-input"
                   />
                 </div>
@@ -279,15 +290,18 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
             <div className="overflow-x-auto">
               <table className="crm-table text-sm">
                 <thead>
-                  <tr className="text-left text-slate-500 border-b">
-                    <th className="py-2 pr-4">Type</th>
-                    <th className="py-2 pr-4">Session</th>
-                    <th className="py-2 pr-4">Date Range</th>
-                    <th className="py-2 pr-4">Requested</th>
-                    <th className="py-2 pr-4">Sandwich</th>
-                    <th className="py-2 pr-4">Charged</th>
-                    <th className="py-2 pr-4">Status</th>
-                  </tr>
+	                    <tr className="text-left text-slate-500 border-b">
+	                      <th className="py-2 pr-4">Type</th>
+	                      <th className="py-2 pr-4">Session</th>
+	                      <th className="py-2 pr-4">Date Range</th>
+                      <th className="py-2 pr-4">Leave Reason</th>
+	                      <th className="py-2 pr-4">Requested</th>
+	                      <th className="py-2 pr-4">Sandwich</th>
+	                      <th className="py-2 pr-4">Charged</th>
+	                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Reviewed By</th>
+                      <th className="py-2 pr-4">Decision Remark</th>
+	                    </tr>
                 </thead>
                 <tbody>
                   {(myRequests || []).map((row) => (
@@ -296,19 +310,31 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                       <td className="py-2 pr-4 text-slate-600">
                         {String(row.startSession || "full").replace("_", " ")} → {String(row.endSession || "full").replace("_", " ")}
                       </td>
-                      <td className="py-2 pr-4 text-slate-600">
-                        {formatDate(row.startDate)} - {formatDate(row.endDate)}
-                      </td>
-                      <td className="py-2 pr-4 text-slate-700">{row.requestedDays}</td>
-                      <td className="py-2 pr-4 text-slate-700">{row.sandwichDays}</td>
-                      <td className="py-2 pr-4 text-slate-700">{row.chargedDays}</td>
+	                      <td className="py-2 pr-4 text-slate-600">
+	                        {formatDate(row.startDate)} - {formatDate(row.endDate)}
+	                      </td>
+                        <td className="py-2 pr-4 text-slate-700 max-w-[240px] truncate" title={row.reason || "-"}>
+                          {row.reason || "-"}
+                        </td>
+	                      <td className="py-2 pr-4 text-slate-700">{row.requestedDays}</td>
+	                      <td className="py-2 pr-4 text-slate-700">{row.sandwichDays}</td>
+	                      <td className="py-2 pr-4 text-slate-700">{row.chargedDays}</td>
                       <td className="py-2 pr-4">
                         <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusChipClass(row.status)}`}>
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
+	                          {row.status}
+	                        </span>
+	                      </td>
+                        <td className="py-2 pr-4 text-slate-600">
+                          {row.reviewedBy?.pseudoName || row.reviewedBy?.realName || row.reviewedBy?.username || "-"}
+                          {row.reviewedAt ? (
+                            <div className="text-xs text-slate-500">{formatDate(row.reviewedAt)}</div>
+                          ) : null}
+                        </td>
+                        <td className="py-2 pr-4 text-slate-700 max-w-[240px] truncate" title={row.reviewComment || "-"}>
+                          {row.reviewComment || "-"}
+                        </td>
+	                    </tr>
+	                  ))}
                 </tbody>
               </table>
               {!loadingRequests && (myRequests || []).length === 0 ? (
@@ -389,15 +415,18 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
               <div className="overflow-x-auto mt-4">
                 <table className="crm-table text-sm">
                   <thead>
-                    <tr className="text-left text-slate-500 border-b"> 
-                      <th className="py-2 pr-4">Employee</th>
-                      <th className="py-2 pr-4">Type</th>
-                      <th className="py-2 pr-4">Session</th>
-                      <th className="py-2 pr-4">Date Range</th>
-                      <th className="py-2 pr-4">Charged</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4">Actions</th>
-                    </tr>
+	                    <tr className="text-left text-slate-500 border-b"> 
+	                      <th className="py-2 pr-4">Employee</th>
+	                      <th className="py-2 pr-4">Type</th>
+	                      <th className="py-2 pr-4">Session</th>
+	                      <th className="py-2 pr-4">Date Range</th>
+                      <th className="py-2 pr-4">Leave Reason</th>
+	                      <th className="py-2 pr-4">Charged</th>
+	                      <th className="py-2 pr-4">Status</th>
+                      <th className="py-2 pr-4">Reviewed By</th>
+                      <th className="py-2 pr-4">Decision Remark</th>
+	                      <th className="py-2 pr-4">Actions</th>
+	                    </tr>
                   </thead>
                   <tbody>
                     {(adminRequests || []).map((row) => (
@@ -410,21 +439,42 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                         <td className="py-2 pr-4 text-slate-600">
                           {String(row.startSession || "full").replace("_", " ")} → {String(row.endSession || "full").replace("_", " ")}
                         </td>
-                        <td className="py-2 pr-4 text-slate-600">
-                          {formatDate(row.startDate)} - {formatDate(row.endDate)}
-                        </td>
-                        <td className="py-2 pr-4 text-slate-700">{row.chargedDays}</td>
-                        <td className="py-2 pr-4">
+	                        <td className="py-2 pr-4 text-slate-600">
+	                          {formatDate(row.startDate)} - {formatDate(row.endDate)}
+	                        </td>
+                          <td className="py-2 pr-4 text-slate-700 max-w-[240px] truncate" title={row.reason || "-"}>
+                            {row.reason || "-"}
+                          </td>
+	                        <td className="py-2 pr-4 text-slate-700">{row.chargedDays}</td>
+	                        <td className="py-2 pr-4">
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${getStatusChipClass(row.status)}`}>
-                            {row.status}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4">
-                          {row.status === "pending" ? (
-                            <div className="flex items-center gap-2">
-                              <button
-                                onClick={() => handleReview(row, "approve")}
-                                disabled={reviewing}
+	                            {row.status}
+	                          </span>
+	                        </td>
+                          <td className="py-2 pr-4 text-slate-600">
+                            {row.reviewedBy?.pseudoName || row.reviewedBy?.realName || row.reviewedBy?.username || "-"}
+                            {row.reviewedAt ? (
+                              <div className="text-xs text-slate-500">{formatDate(row.reviewedAt)}</div>
+                            ) : null}
+                          </td>
+                          <td className="py-2 pr-4 text-slate-700 max-w-[240px] truncate" title={row.reviewComment || "-"}>
+                            {row.reviewComment || "-"}
+                          </td>
+	                        <td className="py-2 pr-4">
+	                          {row.status === "pending" ? (
+	                            <div className="flex flex-col gap-2 min-w-[240px]">
+                                <input
+                                  value={reviewRemarks[row._id] || ""}
+                                  onChange={(e) =>
+                                    setReviewRemarks((prev) => ({ ...prev, [row._id]: e.target.value }))
+                                  }
+                                  placeholder="Remark for approve/reject"
+                                  className="crm-input py-1.5 text-xs"
+                                />
+                                <div className="flex items-center gap-2">
+	                              <button
+	                                onClick={() => handleReview(row, "approve")}
+	                                disabled={reviewing}
                                 className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 text-white px-2.5 py-1.5 text-xs hover:bg-emerald-700 disabled:opacity-50"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -435,12 +485,13 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                                 disabled={reviewing}
                                 className="inline-flex items-center gap-1 rounded-lg bg-rose-600 text-white px-2.5 py-1.5 text-xs hover:bg-rose-700 disabled:opacity-50"
                               >
-                                <XCircle className="w-3.5 h-3.5" />
-                                Reject
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-xs text-slate-400">Reviewed</span>
+	                                <XCircle className="w-3.5 h-3.5" />
+	                                Reject
+	                              </button>
+                                </div>
+	                            </div>
+	                          ) : (
+	                            <span className="text-xs text-slate-400">Reviewed</span>
                           )}
                         </td>
                       </tr>
@@ -479,7 +530,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                       <th className="py-2 pr-4">Probation</th>
                       <th className="py-2 pr-4">EL</th>
                       <th className="py-2 pr-4">CL</th>
-                      <th className="py-2 pr-4">ML</th>
+                      <th className="py-2 pr-4">SL</th>
                     </tr>
                   </thead>
 	                  <tbody>

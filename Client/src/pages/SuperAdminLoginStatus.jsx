@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { getRoleType } from "../utils/roleAccess.js";
 
 // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
 const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
+const IST_TIME_ZONE = "Asia/Kolkata";
 
 const toDateKey = (date) => {
   const d = new Date(date);
@@ -18,7 +20,16 @@ const formatDateTime = (value) => {
   if (!value) return "--";
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return "--";
-  return d.toLocaleString("en-US", { hour12: true });
+  return d.toLocaleString("en-IN", {
+    timeZone: IST_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
 };
 
 const formatDuration = (ms = 0) => {
@@ -29,7 +40,36 @@ const formatDuration = (ms = 0) => {
   return `${h}h ${m}m`;
 };
 
+const getLateByFallbackMs = (loginTime, shiftStartHour) => {
+  if (!loginTime) return 0;
+  const shiftHourNum = Number(shiftStartHour);
+  if (!Number.isFinite(shiftHourNum)) return 0;
+  const login = new Date(loginTime);
+  if (Number.isNaN(login.getTime())) return 0;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(login);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
+  const second = Number(parts.find((p) => p.type === "second")?.value || 0);
+  const loginClockMs = hour * 60 * 60 * 1000 + minute * 60 * 1000 + second * 1000;
+  const expectedClockMs = shiftHourNum * 60 * 60 * 1000;
+  return loginClockMs > expectedClockMs ? loginClockMs - expectedClockMs : 0;
+};
+
 const SuperAdminLoginStatus = () => {
+  const currentUser = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
+  const isSuperAdminView = getRoleType(currentUser) === "superAdmin";
   const [dateKey, setDateKey] = useState(toDateKey(new Date()));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -40,6 +80,7 @@ const SuperAdminLoginStatus = () => {
   const [status, setStatus] = useState("All");
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
+  const [exporting, setExporting] = useState(false);
 
   const token = useMemo(() => {
     try {
@@ -55,12 +96,57 @@ const SuperAdminLoginStatus = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await axios.get(`${API_URL}/punchx/superadmin/daily-status`, {
+      const endpoint = isSuperAdminView
+        ? `${API_URL}/punchx/superadmin/daily-status`
+        : `${API_URL}/punchx/manager/team-status`;
+      const res = await axios.get(endpoint, {
         params: { dateKey },
         headers: { Authorization: `Bearer ${token}` },
       });
-      setSummary(res?.data?.summary || null);
-      setRows(Array.isArray(res?.data?.rows) ? res.data.rows : []);
+      const rawRows = Array.isArray(res?.data?.rows) ? res.data.rows : [];
+      const normalizedRows = rawRows.map((r) => {
+        const loginTime = r.loginTime || r.shiftStartedAt || null;
+        const serverLateByMs = Number(r.lateByMs || 0);
+        const fallbackLateByMs = getLateByFallbackMs(loginTime, r.shiftStartHour);
+        const explicitManualBreakMs = Number(r.manualBreakMs);
+        const explicitAutoIdleBreakMs = Number(r.autoIdleBreakMs);
+        const hasExplicitSplit = Number.isFinite(explicitManualBreakMs) && Number.isFinite(explicitAutoIdleBreakMs);
+        const totalBreakMs = Number(r.totalBreakMs || 0);
+        const autoIdleBreakMs = hasExplicitSplit ? explicitAutoIdleBreakMs : Number(r.totalIdleMs ?? r.idleTimeMs ?? 0);
+        const manualBreakMs = hasExplicitSplit ? explicitManualBreakMs : Math.max(0, totalBreakMs - autoIdleBreakMs);
+        return {
+          ...r,
+          loginTime,
+          logoutTime: r.logoutTime || null,
+          isOnBreak:
+            typeof r.isOnBreak === "boolean"
+              ? r.isOnBreak
+              : Boolean(r.breakType) || ["manual_break", "auto_break"].includes(r.activityStatus),
+          lateByMs: serverLateByMs > 0 ? serverLateByMs : fallbackLateByMs,
+          totalWorkedMs: Number(r.totalWorkedMs || 0),
+          totalBreakMs,
+          autoIdleBreakMs,
+          manualBreakMs,
+          hasCompletedNineHours:
+            typeof r.hasCompletedNineHours === "boolean"
+              ? r.hasCompletedNineHours
+              : Number(r.totalWorkedMs || 0) >= 9 * 60 * 60 * 1000,
+          remainingForNineHoursMs:
+            typeof r.remainingForNineHoursMs === "number"
+              ? r.remainingForNineHoursMs
+              : Math.max(0, 9 * 60 * 60 * 1000 - Number(r.totalWorkedMs || 0)),
+        };
+      });
+      setRows(normalizedRows);
+      setSummary(
+        res?.data?.summary || {
+          totalEmployees: normalizedRows.length,
+          loggedInCount: normalizedRows.filter((r) => Boolean(r.loginTime)).length,
+          onBreakCount: normalizedRows.filter((r) => r.isOnBreak).length,
+          notCompletedNineHoursCount: normalizedRows.filter((r) => r.loginTime && !r.hasCompletedNineHours).length,
+          lateLoginCount: normalizedRows.filter((r) => r.lateByMs > 0).length,
+        }
+      );
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load login status");
     } finally {
@@ -68,11 +154,38 @@ const SuperAdminLoginStatus = () => {
     }
   };
 
+  const exportExcel = async () => {
+    if (!token || !isSuperAdminView) return;
+    try {
+      setExporting(true);
+      const res = await axios.get(`${API_URL}/punchx/superadmin/daily-status/export`, {
+        params: { dateKey },
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: "blob",
+      });
+      const disposition = res.headers?.["content-disposition"] || "";
+      const fileNameMatch = disposition.match(/filename="?([^"]+)"?/i);
+      const fileName = fileNameMatch?.[1] || `superadmin-login-status-${dateKey}.xlsx`;
+      const url = window.URL.createObjectURL(res.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      setError(err?.response?.data?.message || "Failed to export login status");
+    } finally {
+      setExporting(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
     const id = setInterval(loadData, 30000);
     return () => clearInterval(id);
-  }, [dateKey]);
+  }, [dateKey, isSuperAdminView]);
 
   const departments = useMemo(() => {
     const set = new Set(rows.map((r) => r.department).filter(Boolean));
@@ -89,7 +202,7 @@ const SuperAdminLoginStatus = () => {
       if (status === "Late" && !(r.loginTime && r.lateByMs > 0)) return false;
       if (status === "9h Incomplete" && !(r.loginTime && !r.hasCompletedNineHours)) return false;
       if (!q) return true;
-      const hay = `${r.pseudoName || ""} ${r.username || ""} ${r.department || ""} ${r.accountType || ""}`.toLowerCase();
+      const hay = `${r.pseudoName || ""} ${r.name || ""} ${r.username || ""} ${r.department || ""} ${r.accountType || ""}`.toLowerCase();
       return hay.includes(q);
     });
   }, [rows, query, dept, status]);
@@ -103,7 +216,7 @@ const SuperAdminLoginStatus = () => {
   }, [query, dept, status, pageSize, dateKey]);
 
   const onBreakNames = useMemo(
-    () => filteredRows.filter((r) => r.isOnBreak).slice(0, 4).map((r) => r.pseudoName || r.username),
+    () => filteredRows.filter((r) => r.isOnBreak).slice(0, 4).map((r) => r.pseudoName || r.name || r.username || "Employee"),
     [filteredRows]
   );
 
@@ -113,8 +226,12 @@ const SuperAdminLoginStatus = () => {
         <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-[#0F2C78] to-[#1D4ED8] p-4 text-white md:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-blue-100">SuperAdmin View</p>
-              <h1 className="text-2xl font-semibold">Employee Login Monitoring Dashboard</h1>
+              <p className="text-xs uppercase tracking-[0.2em] text-blue-100">
+                {isSuperAdminView ? "SuperAdmin View" : "Supervisor View"}
+              </p>
+              <h1 className="text-2xl font-semibold">
+                {isSuperAdminView ? "Employee Login Monitoring Dashboard" : "Team Login Monitoring Dashboard"}
+              </h1>
               <p className="text-sm text-blue-100">Real-time attendance and break intelligence</p>
             </div>
             <div className="flex items-center gap-2">
@@ -124,6 +241,15 @@ const SuperAdminLoginStatus = () => {
                 onChange={(e) => setDateKey(e.target.value)}
                 className="rounded-lg border border-blue-200 bg-white/95 px-3 py-2 text-sm text-slate-800"
               />
+              {isSuperAdminView && (
+                <button
+                  onClick={exportExcel}
+                  disabled={exporting}
+                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {exporting ? "Exporting..." : "Export Excel"}
+                </button>
+              )}
               <button
                 onClick={loadData}
                 className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
@@ -182,14 +308,14 @@ const SuperAdminLoginStatus = () => {
                     <th className="px-3 py-2">Late By</th>
                     <th className="px-3 py-2">Worked</th>
                     <th className="px-3 py-2">9h Progress</th>
-                    <th className="px-3 py-2">Last Activity</th>
+                    <th className="px-3 py-2">Break Used</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedRows.map((row) => (
                     <tr key={row.userId} className="border-t border-slate-100">
                       <td className="px-3 py-2">
-                        <p className="font-semibold text-slate-900">{row.pseudoName || row.username}</p>
+                        <p className="font-semibold text-slate-900">{row.pseudoName || row.name || row.username || "--"}</p>
                       </td>
                       <td className="px-3 py-2">{row.department || "--"}</td>
                       <td className="px-3 py-2">
@@ -217,8 +343,16 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
                       <td className="px-3 py-2">
-                        <p>{row.loginTime ? formatDateTime(row.lastActivityAt) : "--"}</p>
-                        <p className="text-xs text-slate-500">{row.loginTime ? `Idle: ${formatDuration(row.inactiveSinceMs || 0)}` : "Idle: --"}</p>
+                        {!row.loginTime ? (
+                          "--"
+                        ) : (
+                          <>
+                            <p>{formatDuration(row.totalBreakMs || 0)}</p>
+                            <p className="text-xs text-slate-500">
+                              {`Manual: ${formatDuration(row.manualBreakMs || 0)} | Auto: ${formatDuration(row.autoIdleBreakMs || 0)}`}
+                            </p>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}

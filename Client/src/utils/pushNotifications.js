@@ -72,11 +72,8 @@ export const subscribeUserToPush = async () => {
       return subscription;
     }
 
-    const isLocalhost = window.location.hostname === 'localhost' || 
-                        window.location.hostname === '127.0.0.1';
-	    const apiBaseUrl = isLocalhost 
-	      ? 'http://localhost:4000/api/v1' 
-	      : 'https://crm.fdbs.in/api/v1';
+    // const apiBaseUrl = 'http://localhost:4000/api/v1';
+	    const apiBaseUrl = import.meta?.env?.VITE_API_URL || 'https://fdbs-server-a9gqg.ondigitalocean.app/api/v1';
 	    
 	    const response = await fetch(`${apiBaseUrl}/push/subscribe`, {
 	      method: "POST",
@@ -116,10 +113,8 @@ export const unsubscribeFromPush = async () => {
 	      await subscription.unsubscribe();
 	      const user = JSON.parse(localStorage.getItem("user"));
 	      if (user?.token) {
-        const isLocalhost = window.location.hostname === 'localhost';
-        const apiBaseUrl = isLocalhost 
-          ? 'http://localhost:4000/api/v1' 
-          : 'https://crm.fdbs.in/api/v1';
+        // const apiBaseUrl = 'http://localhost:4000/api/v1';
+        const apiBaseUrl = import.meta?.env?.VITE_API_URL || 'https://fdbs-server-a9gqg.ondigitalocean.app/api/v1';
         
         await fetch(`${apiBaseUrl}/push/unsubscribe`, {
           method: "POST",
