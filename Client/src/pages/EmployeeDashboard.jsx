@@ -458,14 +458,48 @@ useEffect(() => {
   const weeklyAnniversaries = Array.isArray(employeeDashboardSummary?.workAnniversaries?.weekly)
     ? employeeDashboardSummary.workAnniversaries.weekly
     : [];
-  const anniversaryWeekStart = employeeDashboardSummary?.workAnniversaries?.weekStart || null;
-  const anniversaryWeekEnd = employeeDashboardSummary?.workAnniversaries?.weekEnd || null;
+  const toIstDateKey = (value) => {
+    const d = value ? new Date(value) : new Date();
+    if (Number.isNaN(d.getTime())) return "";
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const year = parts.find((p) => p.type === "year")?.value;
+    const month = parts.find((p) => p.type === "month")?.value;
+    const day = parts.find((p) => p.type === "day")?.value;
+    return year && month && day ? `${year}-${month}-${day}` : "";
+  };
+  const getEffectiveIstDate = () => {
+    const now = new Date();
+    const istHourRaw = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Kolkata",
+      hour: "2-digit",
+      hour12: false,
+    }).format(now);
+    const istHour = Number.parseInt(istHourRaw, 10);
+    if (Number.isNaN(istHour)) return now;
+    if (istHour < 11) {
+      const prev = new Date(now);
+      prev.setUTCDate(prev.getUTCDate() - 1);
+      return prev;
+    }
+    return now;
+  };
+  const effectiveIstDate = getEffectiveIstDate();
+  const todayIstKey = toIstDateKey(effectiveIstDate);
+  const todayAnniversaries = weeklyAnniversaries.filter(
+    (item) => toIstDateKey(item?.anniversaryDate) === todayIstKey
+  );
 
   const formatAnniversaryDate = (value) => {
     if (!value) return "--";
     const d = new Date(value);
     if (Number.isNaN(d.getTime())) return "--";
     return d.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
       weekday: "short",
       day: "2-digit",
       month: "short",
@@ -506,26 +540,24 @@ useEffect(() => {
         </div>
       )}
       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen relative">
-        <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-            <h2 className="text-sm font-semibold text-violet-700 md:text-base">Work Anniversary Celebration!</h2>
-            <p className="text-xs text-slate-500">
-              {anniversaryWeekStart && anniversaryWeekEnd
-                ? `${formatAnniversaryDate(anniversaryWeekStart)} - ${formatAnniversaryDate(anniversaryWeekEnd)}`
-                : "This week"}
-            </p>
-          </div>
-
-          {weeklyAnniversaries.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-10 text-center text-sm font-medium text-violet-700">
-              No work anniversary this week.
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {weeklyAnniversaries.map((item) => (
-                <div
-                  key={`${item.userId}-${item.anniversaryDate}`}
-                  className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-r from-[#efe9ff] via-[#f4efff] to-[#ecebff] p-4 md:p-6"
+	        <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
+	          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+	            <h2 className="text-sm font-semibold text-violet-700 md:text-base">Work Anniversary Celebration!</h2>
+	            <p className="text-xs text-slate-500">
+	              {formatAnniversaryDate(effectiveIstDate)}
+	            </p>
+	          </div>
+	
+	          {todayAnniversaries.length === 0 ? (
+	            <div className="rounded-2xl border border-dashed border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-10 text-center text-sm font-medium text-violet-700">
+	              No work anniversary today.
+	            </div>
+	          ) : (
+	            <div className="space-y-4">
+	              {todayAnniversaries.map((item) => (
+	                <div
+	                  key={`${item.userId}-${item.anniversaryDate}`}
+	                  className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-r from-[#efe9ff] via-[#f4efff] to-[#ecebff] p-4 md:p-6"
                 >
                   <div className="pointer-events-none absolute -left-3 top-10 h-20 w-14 rounded-full bg-violet-300/40" />
                   <div className="pointer-events-none absolute left-8 top-16 h-14 w-10 rounded-full bg-amber-300/50" />
