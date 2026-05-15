@@ -136,6 +136,16 @@ const ensureSession = async (userId, dateKey) => {
   const existing = await PunchSession.findOne({ userId, dateKey });
   if (existing) return existing;
 
+  // Keep continuity across refresh/timezone/date-key edge cases:
+  // if an active shift exists recently, reuse it instead of creating a fresh empty session.
+  const activeRecent = await PunchSession.findOne({
+    userId,
+    shiftStartAt: { $ne: null },
+    shiftEndAt: null,
+    status: { $in: ["active", "on_break"] },
+  }).sort({ shiftStartAt: -1 });
+  if (activeRecent) return activeRecent;
+
   return PunchSession.create({ userId, dateKey });
 };
 

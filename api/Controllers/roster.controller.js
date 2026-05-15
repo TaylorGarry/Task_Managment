@@ -491,7 +491,9 @@ export const deleteEmployeeFromRoster = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId);
+    const roster = await Roster.findById(rosterId)
+      .select("month year rosterStartDate rosterEndDate weeks.weekNumber weeks.startDate weeks.endDate weeks.employees")
+      .lean();
     if (!roster) {
       return res.status(404).json({
         success: false,
@@ -2927,6 +2929,9 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 export const getAllRosters = async (req, res) => {
   try {
     const { month, year, page = 1, limit = 10 } = req.query;
+    const includeDailyStatus =
+      String(req.query?.includeDailyStatus || "").toLowerCase() === "true" ||
+      String(req.query?.includeDailyStatus || "") === "1";
 
     console.log("📡 getAllRosters called with:", { month, year, page, limit });
 
@@ -2956,18 +2961,21 @@ export const getAllRosters = async (req, res) => {
       if (year) filter.year = parsedYear;
     }
 
-    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const pageNum = Math.max(1, Number.parseInt(page, 10) || 1);
+    const requestedLimit = Number.parseInt(limit, 10) || 10;
+    const safeLimit = Math.min(Math.max(requestedLimit, 1), 20);
+    const skip = (pageNum - 1) * safeLimit;
 
     const total = await Roster.countDocuments(filter);
 
     // 🔥 FIX: Add population to get user details
     const rosters = await Roster.find(filter)
+      .select("month year rosterStartDate rosterEndDate weeks createdBy updatedBy createdAt updatedAt __v")
       .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
       .skip(skip)
-      .limit(parseInt(limit))
+      .limit(safeLimit)
       .populate('createdBy', 'username email')
       .populate('updatedBy', 'username email')
-      .populate('weeks.employees.userId', 'username email department') // Add this line!
       .lean();
 
     console.log("📦 Raw rosters count:", rosters.length);
@@ -3032,16 +3040,18 @@ export const getAllRosters = async (req, res) => {
             teamLeader: emp.teamLeader || '',
             shiftStartHour: emp.shiftStartHour || 0,
             shiftEndHour: emp.shiftEndHour || 0,
-            dailyStatus: (emp.dailyStatus || []).map(ds => ({
-              date: ds.date,
-              status: ds.status,
-              transportArrivalTime: ds.transportArrivalTime,
-              transportUpdatedBy: ds.transportUpdatedBy,
-              transportUpdatedAt: ds.transportUpdatedAt,
-              departmentArrivalTime: ds.departmentArrivalTime,
-              departmentUpdatedBy: ds.departmentUpdatedBy,
-              departmentUpdatedAt: ds.departmentUpdatedAt
-            }))
+            dailyStatus: includeDailyStatus
+              ? (emp.dailyStatus || []).map(ds => ({
+                  date: ds.date,
+                  status: ds.status,
+                  transportArrivalTime: ds.transportArrivalTime,
+                  transportUpdatedBy: ds.transportUpdatedBy,
+                  transportUpdatedAt: ds.transportUpdatedAt,
+                  departmentArrivalTime: ds.departmentArrivalTime,
+                  departmentUpdatedBy: ds.departmentUpdatedBy,
+                  departmentUpdatedAt: ds.departmentUpdatedAt
+                }))
+              : []
           };
         });
 
@@ -3054,12 +3064,14 @@ export const getAllRosters = async (req, res) => {
         };
 
         processedEmployees.forEach(emp => {
-          (emp.dailyStatus || []).forEach(ds => {
-            if (ds.status === 'WO') totals.totalWO++;
-            else if (ds.status === 'L') totals.totalL++;
-            else if (ds.status === 'P') totals.totalP++;
-            else if (ds.status === 'H') totals.totalH++;
-          });
+          if (includeDailyStatus) {
+            (emp.dailyStatus || []).forEach(ds => {
+              if (ds.status === 'WO') totals.totalWO++;
+              else if (ds.status === 'L') totals.totalL++;
+              else if (ds.status === 'P') totals.totalP++;
+              else if (ds.status === 'H') totals.totalH++;
+            });
+          }
         });
 
         return {
@@ -3109,10 +3121,10 @@ export const getAllRosters = async (req, res) => {
       message: "Rosters retrieved successfully",
       data: formattedRosters,
       pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / parseInt(limit)),
+        currentPage: pageNum,
+        totalPages: Math.ceil(total / safeLimit),
         totalItems: total,
-        itemsPerPage: parseInt(limit)
+        itemsPerPage: safeLimit
       }
     });
 
@@ -9427,33 +9439,6 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
     let contextualRosters = [roster];
-    if (hasMonthContext) {
-      const monthStart = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0));
-      const monthEnd = new Date(Date.UTC(parsedYear, parsedMonth, 0, 23, 59, 59, 999));
-      const overlappingRosters = await Roster.find({
-        $or: [
-          {
-            rosterStartDate: { $lte: monthEnd },
-            rosterEndDate: { $gte: monthStart },
-          },
-          {
-            weeks: {
-              $elemMatch: {
-                startDate: { $lte: monthEnd },
-                endDate: { $gte: monthStart },
-              },
-            },
-          },
-        ],
-      });
-      const seen = new Set();
-      contextualRosters = [roster, ...(overlappingRosters || [])].filter((r) => {
-        const id = String(r?._id || "");
-        if (!id || seen.has(id)) return false;
-        seen.add(id);
-        return true;
-      });
-    }
 
     const resolveWeekGroupInRoster = (targetRoster) => {
       if (!targetRoster) return null;
@@ -9493,6 +9478,35 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       selectedWeekGroup = primaryResolution.weekGroup;
       resolvedByDate = primaryResolution.resolvedByDate;
     } else {
+      if (hasMonthContext) {
+        const monthStart = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0));
+        const monthEnd = new Date(Date.UTC(parsedYear, parsedMonth, 0, 23, 59, 59, 999));
+        const overlappingRosters = await Roster.find({
+          $or: [
+            {
+              rosterStartDate: { $lte: monthEnd },
+              rosterEndDate: { $gte: monthStart },
+            },
+            {
+              weeks: {
+                $elemMatch: {
+                  startDate: { $lte: monthEnd },
+                  endDate: { $gte: monthStart },
+                },
+              },
+            },
+          ],
+        })
+          .select("month year rosterStartDate rosterEndDate weeks.weekNumber weeks.startDate weeks.endDate weeks.employees")
+          .lean();
+        const seen = new Set();
+        contextualRosters = [roster, ...(overlappingRosters || [])].filter((r) => {
+          const id = String(r?._id || "");
+          if (!id || seen.has(id)) return false;
+          seen.add(id);
+          return true;
+        });
+      }
       for (const candidateRoster of contextualRosters) {
         const resolution = resolveWeekGroupInRoster(candidateRoster);
         if (!resolution) continue;
@@ -9799,7 +9813,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       teamLeader: emp.teamLeader || '',
       shiftStartHour: emp.shiftStartHour || 0,
       shiftEndHour: emp.shiftEndHour || 0,
-      dailyStatus: (emp.dailyStatus || []).map(ds => ({
+      dailyStatus: (emp.dailyStatus || [])
+        .filter((ds) => toIstDateKey(ds?.date) === requestedDateKey)
+        .map(ds => ({
         date: ds.date,
         status: ds.status || '',
         // 🔥 NEW PUNCH FIELDS
