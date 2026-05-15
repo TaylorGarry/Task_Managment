@@ -7104,23 +7104,13 @@ export const exportRosterTemplate = async (req, res) => {
     const canPrefillAllEmployees = ["superAdmin", "HR", "admin"].includes(req.user?.accountType);
     const currentTl = String(req.user?.username || "").trim();
     const shouldPrefillByTl = canPrefillAllEmployees || Boolean(currentTl);
+    const exportMonth = fromDate.getMonth() + 1;
+    const exportYear = fromDate.getFullYear();
     
     if (shouldPrefillByTl) {
       const previousRosters = await Roster.find({
-        $or: [
-          {
-            rosterStartDate: { $lte: toDate },
-            rosterEndDate: { $gte: fromDate }
-          },
-          {
-            weeks: {
-              $elemMatch: {
-                startDate: { $lte: toDate },
-                endDate: { $gte: fromDate }
-              }
-            }
-          }
-        ]
+        month: exportMonth,
+        year: exportYear
       })
         .sort({ rosterEndDate: -1, rosterStartDate: -1, updatedAt: -1, createdAt: -1 })
         .lean();
@@ -7128,6 +7118,7 @@ export const exportRosterTemplate = async (req, res) => {
       // Collect all unique userIds to fetch empId from User collection
       const userIds = new Set();
       const tempEmployeeData = [];
+      let latestPreviousWeek = null;
 
       for (const roster of previousRosters) {
         const weeks = Array.isArray(roster?.weeks) ? [...roster.weeks] : [];
@@ -7139,30 +7130,42 @@ export const exportRosterTemplate = async (req, res) => {
           if (
             Number.isNaN(weekStart.getTime()) ||
             Number.isNaN(weekEnd.getTime()) ||
-            weekEnd < fromDate ||
-            weekStart > toDate
+            weekEnd >= fromDate
           ) continue;
 
-          const employees = Array.isArray(week?.employees) ? week.employees : [];
-          for (const emp of employees) {
-            if (!canPrefillAllEmployees && normalize(emp?.teamLeader) !== normalize(currentTl)) continue;
-
-            const key =
-              String(emp?.userId || "").trim() ||
-              `${normalize(emp?.name)}__${normalize(emp?.department)}__${normalize(emp?.teamLeader)}`;
-            
-            if (!key || tempEmployeeData.some(item => item.key === key)) continue;
-
-            if (emp?.userId) {
-              userIds.add(emp.userId.toString());
-            }
-
-            tempEmployeeData.push({
-              key,
-              emp,
-              userId: emp?.userId?.toString()
-            });
+          if (
+            !latestPreviousWeek ||
+            weekEnd.getTime() > latestPreviousWeek.endDate.getTime()
+          ) {
+            latestPreviousWeek = {
+              startDate: weekStart,
+              endDate: weekEnd,
+              employees: Array.isArray(week?.employees) ? week.employees : []
+            };
           }
+          break;
+        }
+      }
+
+      if (latestPreviousWeek) {
+        for (const emp of latestPreviousWeek.employees) {
+          if (!canPrefillAllEmployees && normalize(emp?.teamLeader) !== normalize(currentTl)) continue;
+
+          const key =
+            String(emp?.userId || "").trim() ||
+            `${normalize(emp?.name)}__${normalize(emp?.department)}__${normalize(emp?.teamLeader)}`;
+          
+          if (!key || tempEmployeeData.some(item => item.key === key)) continue;
+
+          if (emp?.userId) {
+            userIds.add(emp.userId.toString());
+          }
+
+          tempEmployeeData.push({
+            key,
+            emp,
+            userId: emp?.userId?.toString()
+          });
         }
       }
 
@@ -7203,13 +7206,9 @@ export const exportRosterTemplate = async (req, res) => {
           return aTime - bTime;
         });
 
-        const mappedStatuses = dates.map(date => {
-          const statusEntry = sourceDailyStatus.find(s => {
-            const sDate = new Date(s.date);
-            return sDate.toDateString() === date.toDateString();
-          });
-          return statusEntry ? normalizeStatus(statusEntry) : "";
-        });
+        const mappedStatuses = dates.map((_, idx) =>
+          normalizeStatus(sourceDailyStatus[idx] || "")
+        );
 
         // Get empId from User collection
         const employeeId = userId ? (userMap.get(userId) || "") : "";
@@ -7315,243 +7314,6 @@ export const exportRosterTemplate = async (req, res) => {
   }
 };
 
-// export const exportRosterTemplate = async (req, res) => {
-//   try {
-//     const { startDate, endDate } = req.query;
-
-//     if (!startDate || !endDate) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Start date and end date are required"
-//       });
-//     }
-
-//     const parseLocalDate = (value, endOfDay = false) => {
-//       const raw = String(value || "").trim();
-//       const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-//       if (match) {
-//         const year = Number(match[1]);
-//         const month = Number(match[2]);
-//         const day = Number(match[3]);
-//         return endOfDay
-//           ? new Date(year, month - 1, day, 23, 59, 59, 999)
-//           : new Date(year, month - 1, day, 0, 0, 0, 0);
-//       }
-//       const parsed = new Date(raw);
-//       if (endOfDay) parsed.setHours(23, 59, 59, 999);
-//       else parsed.setHours(0, 0, 0, 0);
-//       return parsed;
-//     };
-
-//     const fromDate = parseLocalDate(startDate, false);
-//     const toDate = parseLocalDate(endDate, true);
-//     if (Number.isNaN(fromDate.getTime()) || Number.isNaN(toDate.getTime())) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid startDate or endDate"
-//       });
-//     }
-//     if (fromDate > toDate) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Start date must be before or equal to end date"
-//       });
-//     }
-
-//     const dateHeaders = [];
-//     const currentDate = new Date(fromDate);
-
-//     while (currentDate <= toDate) {
-//       const day = currentDate.getDate().toString().padStart(2, '0');
-//       const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
-//       const weekday = currentDate.toLocaleDateString('en-US', { weekday: 'short' });
-//       dateHeaders.push(`${day}/${month} ${weekday}`);
-//       currentDate.setDate(currentDate.getDate() + 1);
-//     }
-
-//     // ✅ Add Department to required columns
-//     const baseRequiredColumns = [
-//       'Name',
-//       'Department',      //  Department column added
-//       'Transport',
-//       'CAB Route',
-//       'Team Leader',
-//       'Shift Start Hour',
-//       'Shift End Hour'
-//     ];
-
-//     const dateColumns = [...dateHeaders];
-//     const optionalSummaryColumns = [
-//       'Total Present',
-//       'Total Week Off',
-//       'Total Leave',
-//       'Total No Call No Show',
-//       'Total Unpaid Leave',
-//       'Total Leave Without Pay',
-//       'Total Bereavement Leave',
-//       'Total Holiday',
-//       'Total Last Working Day'
-//     ];
-
-//     const headers = [
-//       ...baseRequiredColumns,
-//       ...dateColumns,
-//       ...optionalSummaryColumns
-//     ];
-
-//     const workbook = XLSX.utils.book_new();
-//     workbook.Props = {
-//       Title: `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1)}-${fromDate.getDate()}`,
-//       Author: "Task Management CRM",
-//       CreatedDate: new Date()
-//     };
-
-//     const data = [headers];
-
-//     // Prefill employee details from latest previous roster rows for current TL.
-//     // Daily status values are mapped into the selected export date columns by order.
-//     const normalize = (v) => String(v || "").trim().toLowerCase();
-//     const canPrefillAllEmployees = ["superAdmin", "HR", "admin"].includes(req.user?.accountType);
-//     const currentTl = String(req.user?.username || "").trim();
-//     const shouldPrefillByTl = canPrefillAllEmployees || Boolean(currentTl);
-//     if (shouldPrefillByTl) {
-//       const previousRosters = await Roster.find({
-//         rosterEndDate: { $lt: fromDate }
-//       })
-//         .sort({ rosterEndDate: -1, rosterStartDate: -1, updatedAt: -1, createdAt: -1 })
-//         .lean();
-
-//       const employeeMap = new Map();
-//       const normalizeStatus = (entry) =>
-//         typeof entry === "string"
-//           ? String(entry || "").trim()
-//           : String(entry?.status || "").trim();
-//       const isValidDate = (d) => d instanceof Date && !Number.isNaN(d.getTime());
-//       for (const roster of previousRosters) {
-//         const weeks = Array.isArray(roster?.weeks) ? [...roster.weeks] : [];
-//         weeks.sort((a, b) => new Date(b?.endDate || 0).getTime() - new Date(a?.endDate || 0).getTime());
-
-//         for (const week of weeks) {
-//           const weekEnd = new Date(week?.endDate);
-//           if (Number.isNaN(weekEnd.getTime()) || weekEnd >= fromDate) continue;
-
-//           const employees = Array.isArray(week?.employees) ? week.employees : [];
-//           for (const emp of employees) {
-//             if (!canPrefillAllEmployees && normalize(emp?.teamLeader) !== normalize(currentTl)) continue;
-
-//             const key =
-//               String(emp?.userId || "").trim() ||
-//               `${normalize(emp?.name)}__${normalize(emp?.department)}__${normalize(emp?.teamLeader)}`;
-//             if (!key || employeeMap.has(key)) continue;
-
-//             const sourceDailyStatus = Array.isArray(emp?.dailyStatus) ? [...emp.dailyStatus] : [];
-//             sourceDailyStatus.sort((a, b) => {
-//               const aDate = new Date(a?.date || 0);
-//               const bDate = new Date(b?.date || 0);
-//               const aTime = isValidDate(aDate) ? aDate.getTime() : Number.MAX_SAFE_INTEGER;
-//               const bTime = isValidDate(bDate) ? bDate.getTime() : Number.MAX_SAFE_INTEGER;
-//               return aTime - bTime;
-//             });
-
-//             const mappedStatuses = Array.from({ length: dateColumns.length }, (_, idx) =>
-//               normalizeStatus(sourceDailyStatus[idx] || "")
-//             );
-
-//             employeeMap.set(key, [
-//               emp?.name || "",
-//               emp?.department || "",
-//               emp?.transport || "",
-//               emp?.cabRoute || "",
-//               emp?.teamLeader || currentTl,
-//               emp?.shiftStartHour ?? "",
-//               emp?.shiftEndHour ?? "",
-//               ...mappedStatuses,
-//               ...Array(optionalSummaryColumns.length).fill("")
-//             ]);
-//           }
-//         }
-//       }
-
-//       if (employeeMap.size > 0) {
-//         data.push(...Array.from(employeeMap.values()));
-//       }
-//     }
-
-//     const worksheet = XLSX.utils.aoa_to_sheet(data);
-
-//     const range = XLSX.utils.decode_range(worksheet['!ref']);
-
-//     for (let C = range.s.c; C <= range.e.c; C++) {
-//       const cellAddress = XLSX.utils.encode_cell({ r: 0, c: C });
-//       const columnName = headers[C] || "";
-
-//       if (!worksheet[cellAddress]) {
-//         worksheet[cellAddress] = { v: columnName };
-//       }
-
-//       worksheet[cellAddress].s = {
-//         font: { 
-//           bold: true, 
-//           color: { rgb: "FFFFFF" },
-//           name: "Arial",
-//           sz: 11 
-//         },
-//         fill: { 
-//           fgColor: { rgb: "4472C4" }  
-//         },
-//         alignment: { 
-//           horizontal: "center", 
-//           vertical: "center",
-//           wrapText: false
-//         },
-//         border: {
-//           top: { style: "thin", color: { rgb: "000000" } },
-//           bottom: { style: "thin", color: { rgb: "000000" } },
-//           left: { style: "thin", color: { rgb: "000000" } },
-//           right: { style: "thin", color: { rgb: "000000" } }
-//         }
-//       };
-//     }
-
-//     //  Update column widths for Department
-//     const colWidths = [
-//       { wch: 25 },   // Name
-//       { wch: 15 },   // Department  
-//       { wch: 15 },   // Transport
-//       { wch: 15 },   // CAB Route
-//       { wch: 15 },   // Team Leader
-//       { wch: 15 },   // Shift Start Hour
-//       { wch: 15 },   // Shift End Hour
-//       ...Array(dateColumns.length).fill({ wch: 12 }),  // Date columns
-//       ...Array(optionalSummaryColumns.length).fill({ wch: 12 })  // Summary columns
-//     ];
-
-//     worksheet['!cols'] = colWidths;
-
-//     // Set row height for header
-//     worksheet['!rows'] = [{ hpt: 25 }, ...Array(Math.max(data.length - 1, 0)).fill({ hpt: 20 })];
-
-//     // Append the roster sheet
-//     XLSX.utils.book_append_sheet(workbook, worksheet, 'Roster Template');
-
-//     const fileName = `Roster_Template_${fromDate.getFullYear()}-${(fromDate.getMonth()+1).toString().padStart(2,'0')}-${fromDate.getDate().toString().padStart(2,'0')}_to_${toDate.getFullYear()}-${(toDate.getMonth()+1).toString().padStart(2,'0')}-${toDate.getDate().toString().padStart(2,'0')}.xlsx`;
-
-//     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-
-//     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-//     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-
-//     res.send(buffer);
-
-//   } catch (error) {
-//     console.error('Export Roster Template Error:', error);
-//     res.status(500).json({
-//       success: false,
-//       message: 'Error exporting roster template',
-//       error: error.message
-//     });
-//   }
-// };
 
 export const addRosterWeek = async (req, res) => {
   try {
@@ -11250,253 +11012,6 @@ export const getDepartmentWiseAttendance = async (req, res) => {
     });
   }
 };
-// export const updatePunchTimes = async (req, res) => {
-//   try {
-//     const { 
-//       rosterId, 
-//       weekNumber, 
-//       employeeId, 
-//       date, 
-//       punchIn, 
-//       punchOut 
-//     } = req.body;
-
-//     const user = req.user;
-
-//     // Validation
-//     if (!rosterId || !weekNumber || !employeeId || !date) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Missing required fields: rosterId, weekNumber, employeeId, date"
-//       });
-//     }
-
-//     // Only HR and Super Admin can update punch times
-//     if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Only HR and Super Admin can update punch in/out times"
-//       });
-//     }
-
-//     // Find roster
-//     const roster = await Roster.findById(rosterId);
-//     if (!roster) {
-//       return res.status(404).json({ success: false, message: "Roster not found" });
-//     }
-
-//     // Find week
-//     const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-//     if (!week) {
-//       return res.status(404).json({ success: false, message: "Week not found" });
-//     }
-
-//     // Find employee
-//     const employee = week.employees.id(employeeId);
-//     if (!employee) {
-//       return res.status(404).json({ success: false, message: "Employee not found" });
-//     }
-
-//     // Process date
-//     const selectedDate = new Date(date);
-//     if (isNaN(selectedDate.getTime())) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid date format"
-//       });
-//     }
-//     selectedDate.setHours(0, 0, 0, 0);
-
-//     // Find or create daily status
-//     let daily = employee.dailyStatus.find(d => {
-//       const dDate = new Date(d.date);
-//       dDate.setHours(0, 0, 0, 0);
-//       return dDate.getTime() === selectedDate.getTime();
-//     });
-
-//     const changes = [];
-//     const isNewDay = !daily;
-
-//     if (isNewDay) {
-//       daily = { 
-//         date: selectedDate,
-//         status: employee.dailyStatus?.[0]?.status || "P",
-//         punchIn: null,
-//         punchOut: null,
-//         totalHours: null,
-//         punchUpdatedBy: null,
-//         punchUpdatedAt: null,
-//         isPunchCalculated: false,
-//         transportStatus: "",
-//         departmentStatus: "",
-//         transportStatusUpdatedBy: null,
-//         transportStatusUpdatedAt: null,
-//         departmentStatusUpdatedBy: null,
-//         departmentStatusUpdatedAt: null,
-//         transportArrivalTime: null,
-//         departmentArrivalTime: null,
-//         transportUpdatedBy: null,
-//         transportUpdatedAt: null,
-//         departmentUpdatedBy: null,
-//         departmentUpdatedAt: null
-//       };
-//       employee.dailyStatus.push(daily);
-//       daily = employee.dailyStatus[employee.dailyStatus.length - 1];
-//     }
-
-//     // Track old values for edit history
-//     const oldPunchIn = daily.punchIn;
-//     const oldPunchOut = daily.punchOut;
-//     const oldTotalHours = daily.totalHours;
-
-//     // Update punch times
-//     if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
-//       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-//       if (!timeRegex.test(punchIn)) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid punch in time format. Please use HH:MM format (e.g., 09:30)"
-//         });
-//       }
-
-//       const [hours, minutes] = punchIn.split(':').map(Number);
-//       const newPunchIn = new Date(selectedDate);
-//       newPunchIn.setHours(hours, minutes, 0, 0);
-
-//       if (isNaN(newPunchIn.getTime())) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid punch in time"
-//         });
-//       }
-
-//       daily.punchIn = newPunchIn;
-//     }
-
-//     if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
-//       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-//       if (!timeRegex.test(punchOut)) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid punch out time format. Please use HH:MM format (e.g., 18:30)"
-//         });
-//       }
-
-//       const [hours, minutes] = punchOut.split(':').map(Number);
-//       const newPunchOut = new Date(selectedDate);
-//       newPunchOut.setHours(hours, minutes, 0, 0);
-
-//       // FIXED: Only add a day if it's an overnight shift AND the time is actually less
-//       // For early morning shifts (1 AM to 9 AM), both times are on the same day
-//       if (daily.punchIn) {
-//         // Check if it's an overnight shift (punch out time is less than punch in time)
-//         // This means it crosses midnight (e.g., 10 PM to 6 AM)
-//         if (newPunchOut < daily.punchIn) {
-//           newPunchOut.setDate(newPunchOut.getDate() + 1);
-//         }
-//       }
-
-//       if (isNaN(newPunchOut.getTime())) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid punch out time"
-//         });
-//       }
-
-//       daily.punchOut = newPunchOut;
-//     }
-
-//     // Calculate total hours if both punch in and out are present
-//     if (daily.punchIn && daily.punchOut) {
-//       const punchInTime = daily.punchIn.getTime();
-//       const punchOutTime = daily.punchOut.getTime();
-
-//       const hoursWorked = (punchOutTime - punchInTime) / (1000 * 60 * 60);
-//       daily.totalHours = Math.round(hoursWorked * 10) / 10;
-
-//       // Validate that hours are within reasonable range (max 24 hours)
-//       if (daily.totalHours > 24) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Punch times cannot span more than 24 hours"
-//         });
-//       }
-
-//       // Set isPunchCalculated to true to indicate punches exist
-//       daily.isPunchCalculated = true;
-//     } else {
-//       daily.totalHours = null;
-//       daily.isPunchCalculated = false;
-//     }
-
-//     // Track changes for edit history
-//     if (oldPunchIn?.getTime() !== daily.punchIn?.getTime()) {
-//       changes.push({
-//         field: `punchIn (${date})`,
-//         oldValue: oldPunchIn || null,
-//         newValue: daily.punchIn || null
-//       });
-//     }
-
-//     if (oldPunchOut?.getTime() !== daily.punchOut?.getTime()) {
-//       changes.push({
-//         field: `punchOut (${date})`,
-//         oldValue: oldPunchOut || null,
-//         newValue: daily.punchOut || null
-//       });
-//     }
-
-//     if (oldTotalHours !== daily.totalHours) {
-//       changes.push({
-//         field: `totalHours (${date})`,
-//         oldValue: oldTotalHours || null,
-//         newValue: daily.totalHours || null
-//       });
-//     }
-
-//     // Update tracking info
-//     daily.punchUpdatedBy = user._id;
-//     daily.punchUpdatedAt = new Date();
-
-//     // Add edit history if there are changes
-//     if (changes.length > 0) {
-//       roster.editHistory.push({
-//         editedBy: user._id,
-//         editedByName: user.username,
-//         accountType: user.accountType,
-//         actionType: "punch-update",
-//         weekNumber,
-//         employeeId: employee._id,
-//         employeeName: employee.name,
-//         changes
-//       });
-//     }
-
-//     // Mark as modified and save
-//     employee.markModified('dailyStatus');
-//     await roster.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: "Punch times updated successfully",
-//       data: {
-//         punchIn: daily.punchIn,
-//         punchOut: daily.punchOut,
-//         totalHours: daily.totalHours,
-//         departmentStatus: daily.departmentStatus,
-//         isPunchCalculated: daily.isPunchCalculated
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("Punch Update Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//       error: error.message
-//     });
-//   }
-// };
 
 export const updatePunchTimes = async (req, res) => {
   try {
@@ -11842,271 +11357,6 @@ export const updatePunchTimes = async (req, res) => {
     });
   }
 };
-
-// export const bulkUpdatePunchTimes = async (req, res) => {
-//   try {
-//     const { 
-//       rosterId, 
-//       weekNumber, 
-//       employeeIds, 
-//       date, 
-//       punchIn, 
-//       punchOut 
-//     } = req.body;
-
-//     const user = req.user;
-
-//     // Validation
-//     if (!rosterId || !weekNumber || !employeeIds || !date || !Array.isArray(employeeIds) || employeeIds.length === 0) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Missing required fields: rosterId, weekNumber, employeeIds (non-empty array), date"
-//       });
-//     }
-
-//     // Only HR and Super Admin can update punch times
-//     if (user.accountType !== "HR" && user.accountType !== "superAdmin") {
-//       return res.status(403).json({
-//         success: false,
-//         message: "Only HR and Super Admin can update punch in/out times"
-//       });
-//     }
-
-//     // Find roster
-//     const roster = await Roster.findById(rosterId);
-//     if (!roster) {
-//       return res.status(404).json({ success: false, message: "Roster not found" });
-//     }
-
-//     // Find week
-//     const week = roster.weeks.find(w => w.weekNumber === weekNumber);
-//     if (!week) {
-//       return res.status(404).json({ success: false, message: "Week not found" });
-//     }
-
-//     // Process date
-//     const selectedDate = new Date(date);
-//     if (isNaN(selectedDate.getTime())) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid date format"
-//       });
-//     }
-//     selectedDate.setHours(0, 0, 0, 0);
-
-//     // Validate time formats if provided
-//     if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
-//       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-//       if (!timeRegex.test(punchIn)) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid punch in time format. Please use HH:MM format (e.g., 09:30)"
-//         });
-//       }
-//     }
-
-//     if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
-//       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
-//       if (!timeRegex.test(punchOut)) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid punch out time format. Please use HH:MM format (e.g., 18:30)"
-//         });
-//       }
-//     }
-
-//     // Results tracking
-//     const results = [];
-//     const errors = [];
-
-//     // Process each employee
-//     for (const employeeId of employeeIds) {
-//       try {
-//         // Find employee
-//         const employee = week.employees.id(employeeId);
-//         if (!employee) {
-//           errors.push({ employeeId, error: "Employee not found" });
-//           continue;
-//         }
-
-//         // Find or create daily status
-//         let daily = employee.dailyStatus.find(d => {
-//           const dDate = new Date(d.date);
-//           dDate.setHours(0, 0, 0, 0);
-//           return dDate.getTime() === selectedDate.getTime();
-//         });
-
-//         const changes = [];
-//         const isNewDay = !daily;
-
-//         if (isNewDay) {
-//           daily = { 
-//             date: selectedDate,
-//             status: employee.dailyStatus?.[0]?.status || "P",
-//             punchIn: null,
-//             punchOut: null,
-//             totalHours: null,
-//             punchUpdatedBy: null,
-//             punchUpdatedAt: null,
-//             isPunchCalculated: false,
-//             transportStatus: "",
-//             departmentStatus: "",
-//             transportStatusUpdatedBy: null,
-//             transportStatusUpdatedAt: null,
-//             departmentStatusUpdatedBy: null,
-//             departmentStatusUpdatedAt: null,
-//             transportArrivalTime: null,
-//             departmentArrivalTime: null,
-//             transportUpdatedBy: null,
-//             transportUpdatedAt: null,
-//             departmentUpdatedBy: null,
-//             departmentUpdatedAt: null
-//           };
-//           employee.dailyStatus.push(daily);
-//           daily = employee.dailyStatus[employee.dailyStatus.length - 1];
-//         }
-
-//         // Track old values
-//         const oldPunchIn = daily.punchIn;
-//         const oldPunchOut = daily.punchOut;
-//         const oldTotalHours = daily.totalHours;
-
-//         // Update punch times if provided
-//         if (punchIn !== undefined && punchIn !== null && punchIn !== "") {
-//           const [hours, minutes] = punchIn.split(':').map(Number);
-//           const newPunchIn = new Date(selectedDate);
-//           newPunchIn.setHours(hours, minutes, 0, 0);
-//           daily.punchIn = newPunchIn;
-//         }
-
-//         // FIXED: Update punch out with proper overnight shift detection
-//         if (punchOut !== undefined && punchOut !== null && punchOut !== "") {
-//           const [hours, minutes] = punchOut.split(':').map(Number);
-//           const newPunchOut = new Date(selectedDate);
-//           newPunchOut.setHours(hours, minutes, 0, 0);
-
-//           // FIXED: Only add a day if it's an overnight shift AND the time is actually less
-//           // For early morning shifts (1 AM to 9 AM), both times are on the same day
-//           if (daily.punchIn) {
-//             // Check if it's an overnight shift (punch out time is less than punch in time)
-//             // This means it crosses midnight (e.g., 10 PM to 6 AM)
-//             if (newPunchOut < daily.punchIn) {
-//               newPunchOut.setDate(newPunchOut.getDate() + 1);
-//             }
-//           }
-
-//           daily.punchOut = newPunchOut;
-//         }
-
-//         // Calculate total hours if both punches present
-//         if (daily.punchIn && daily.punchOut) {
-//           const punchInTime = daily.punchIn.getTime();
-//           const punchOutTime = daily.punchOut.getTime();
-
-//           const hoursWorked = (punchOutTime - punchInTime) / (1000 * 60 * 60);
-//           daily.totalHours = Math.round(hoursWorked * 10) / 10;
-
-//           // Validate that hours are within reasonable range (max 24 hours)
-//           if (daily.totalHours > 24) {
-//             errors.push({ employeeId, error: "Punch times cannot span more than 24 hours" });
-//             continue;
-//           }
-
-//           // Set isPunchCalculated to true to indicate punches exist
-//           daily.isPunchCalculated = true;
-
-//         } else {
-//           daily.totalHours = null;
-//           daily.isPunchCalculated = false;
-//         }
-
-//         // Track changes for edit history
-//         if (oldPunchIn?.getTime() !== daily.punchIn?.getTime()) {
-//           changes.push({
-//             field: `punchIn (${date})`,
-//             oldValue: oldPunchIn || null,
-//             newValue: daily.punchIn || null
-//           });
-//         }
-
-//         if (oldPunchOut?.getTime() !== daily.punchOut?.getTime()) {
-//           changes.push({
-//             field: `punchOut (${date})`,
-//             oldValue: oldPunchOut || null,
-//             newValue: daily.punchOut || null
-//           });
-//         }
-
-//         if (oldTotalHours !== daily.totalHours) {
-//           changes.push({
-//             field: `totalHours (${date})`,
-//             oldValue: oldTotalHours || null,
-//             newValue: daily.totalHours || null
-//           });
-//         }
-
-//         // Update tracking info
-//         daily.punchUpdatedBy = user._id;
-//         daily.punchUpdatedAt = new Date();
-
-//         // Add edit history if there are changes
-//         if (changes.length > 0) {
-//           roster.editHistory.push({
-//             editedBy: user._id,
-//             editedByName: user.username,
-//             accountType: user.accountType,
-//             actionType: "bulk-punch-update",
-//             weekNumber,
-//             employeeId: employee._id,
-//             employeeName: employee.name,
-//             changes
-//           });
-//         }
-
-//         // Mark as modified
-//         employee.markModified('dailyStatus');
-
-//         results.push({
-//           employeeId,
-//           success: true,
-//           data: {
-//             punchIn: daily.punchIn,
-//             punchOut: daily.punchOut,
-//             totalHours: daily.totalHours,
-//             departmentStatus: daily.departmentStatus,
-//             isPunchCalculated: daily.isPunchCalculated
-//           }
-//         });
-
-//       } catch (err) {
-//         console.error(`Error updating employee ${employeeId}:`, err);
-//         errors.push({ employeeId, error: err.message });
-//       }
-//     }
-
-//     // Save the roster with all updates
-//     await roster.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       message: `Bulk punch update completed. Updated: ${results.length}, Failed: ${errors.length}`,
-//       data: {
-//         results,
-//         errors,
-//         updatedCount: results.length,
-//         failedCount: errors.length
-//       }
-//     });
-
-//   } catch (error) {
-//     console.error("Bulk Punch Update Error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//       error: error.message
-//     });
-//   }
-// };
 
 export const bulkUpdatePunchTimes = async (req, res) => {
   try {

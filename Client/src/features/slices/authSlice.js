@@ -3,9 +3,9 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { getRoleType, normalizeDepartment } from "../../utils/roleAccess.js";
 
-const API_URL = "http://localhost:4000/api/v1";
+// const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 const EMPLOYEE_SEARCH_THROTTLE_MS = 1200;
 
 const normalizeEmployeeSearch = (value = "") =>

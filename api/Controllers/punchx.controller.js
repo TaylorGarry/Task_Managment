@@ -2,7 +2,7 @@ import PunchSession from "../Modals/PunchSession.modal.js";
 import User from "../Modals/User.modal.js";
 import XLSX from "xlsx-js-style";
 
-const NY_TZ = "America/New_York";
+const APP_TZ = "Asia/Kolkata";
 const IDLE_WARN_MS = 25 * 60 * 1000;
 const SHIFT_AUTO_END_MS = 9 * 60 * 60 * 1000;
 const MIDNIGHT_SHIFT_MAX_START_HOUR = 6;
@@ -11,7 +11,7 @@ const getNow = () => new Date();
 
 const getNyDateKey = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat("en-CA", {
-    timeZone: NY_TZ,
+    timeZone: APP_TZ,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -23,7 +23,7 @@ const getNyDateKey = (date = new Date()) => {
 
 const getNyHour = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: NY_TZ,
+    timeZone: APP_TZ,
     hour12: false,
     hour: "2-digit",
   }).formatToParts(date);
@@ -180,7 +180,7 @@ export const getTodaySession = async (req, res) => {
 
     return res.status(200).json({
       session,
-      timezone: NY_TZ,
+      timezone: APP_TZ,
       dateKey,
       attendanceScore: scoreSession(session),
     });
@@ -387,7 +387,7 @@ export const getManagerTeamStatus = async (req, res) => {
       const openBreak = session?.breaks?.find((b) => !b.endAt) || null;
       const shiftStartHour = Number(member.shiftStartHour);
       const expectedLoginMs = Number.isFinite(shiftStartHour) ? shiftStartHour * 60 * 60 * 1000 : null;
-      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, NY_TZ) : null;
+      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, APP_TZ) : null;
       const lateByMs =
         expectedLoginMs !== null && actualLoginMs !== null && actualLoginMs > expectedLoginMs
           ? actualLoginMs - expectedLoginMs
@@ -414,13 +414,13 @@ export const getManagerTeamStatus = async (req, res) => {
       };
     });
 
-    return res.status(200).json({ dateKey, timezone: NY_TZ, rows });
+    return res.status(200).json({ dateKey, timezone: APP_TZ, rows });
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch team status", error: error.message });
   }
 };
 
-const getTimeOfDayMsInTz = (dateValue, timeZone = NY_TZ) => {
+const getTimeOfDayMsInTz = (dateValue, timeZone = APP_TZ) => {
   const date = dateValue ? new Date(dateValue) : null;
   if (!date || Number.isNaN(date.getTime())) return null;
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -481,7 +481,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       const openBreak = getOpenBreak(session);
       const shiftStartHour = Number(emp.shiftStartHour);
       const expectedLoginMs = Number.isFinite(shiftStartHour) ? shiftStartHour * 60 * 60 * 1000 : null;
-      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, NY_TZ) : null;
+      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, APP_TZ) : null;
       const lateByMs =
         expectedLoginMs !== null && actualLoginMs !== null && actualLoginMs > expectedLoginMs
           ? actualLoginMs - expectedLoginMs
@@ -536,7 +536,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
 
     return res.status(200).json({
       dateKey,
-      timezone: NY_TZ,
+      timezone: APP_TZ,
       summary,
       rows,
     });
@@ -598,7 +598,7 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
       const breakUsage = getBreakUsage(session, now);
       const shiftStartHour = Number(emp.shiftStartHour);
       const expectedLoginMs = Number.isFinite(shiftStartHour) ? shiftStartHour * 60 * 60 * 1000 : null;
-      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, NY_TZ) : null;
+      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, APP_TZ) : null;
       const lateByMs =
         expectedLoginMs !== null && actualLoginMs !== null && actualLoginMs > expectedLoginMs
           ? actualLoginMs - expectedLoginMs

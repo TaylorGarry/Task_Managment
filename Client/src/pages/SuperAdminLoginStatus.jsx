@@ -10,10 +10,16 @@ const IST_TIME_ZONE = "Asia/Kolkata";
 
 const toDateKey = (date) => {
   const d = new Date(date);
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: IST_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(d);
+  const yyyy = parts.find((p) => p.type === "year")?.value;
+  const mm = parts.find((p) => p.type === "month")?.value;
+  const dd = parts.find((p) => p.type === "day")?.value;
+  return yyyy && mm && dd ? `${yyyy}-${mm}-${dd}` : "";
 };
 
 const formatDateTime = (value) => {
