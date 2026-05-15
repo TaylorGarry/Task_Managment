@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
 import IdleMonitor from "./IdleMonitor";
@@ -114,11 +114,23 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   const user = useMemo(() => JSON.parse(localStorage.getItem("user") || "{}"), []);
   const [nowMs, setNowMs] = useState(Date.now());
   const [monthAttendanceByDate, setMonthAttendanceByDate] = useState({});
+  const monthLoadRequestIdRef = useRef(0);
+  const monthAttendanceCacheRef = useRef(new Map());
   const [activeMonth, setActiveMonth] = useState(() => {
     const d = new Date();
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toIsoDateKey(new Date()));
+  const getCurrentIstYearMonth = () => {
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+    }).formatToParts(new Date());
+    const year = Number(parts.find((p) => p.type === "year")?.value || 0);
+    const month = Number(parts.find((p) => p.type === "month")?.value || 0);
+    return { year, month };
+  };
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState(() => {
@@ -186,13 +198,25 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
 
   useEffect(() => {
     const loadMonthAttendance = async () => {
+      const month = activeMonth.getMonth() + 1;
+      const year = activeMonth.getFullYear();
+      const cacheKey = `${year}-${String(month).padStart(2, "0")}`;
+
+      const cached = monthAttendanceCacheRef.current.get(cacheKey);
+      if (cached) {
+        setMonthAttendanceByDate(cached);
+        return;
+      }
+
+      const requestId = ++monthLoadRequestIdRef.current;
       try {
         const user = JSON.parse(localStorage.getItem("user") || "{}");
         const token = user?.token;
         if (!token) return;
         const API_URL = getApiBaseUrl();
-        const month = activeMonth.getMonth() + 1;
-        const year = activeMonth.getFullYear();
+        const { year: currentIstYear, month: currentIstMonth } = getCurrentIstYearMonth();
+        const isPastMonth =
+          year < currentIstYear || (year === currentIstYear && month < currentIstMonth);
         const res = await axios.get(`${API_URL}/employee/attendance-month`, {
           params: { month, year },
           headers: { Authorization: `Bearer ${token}` },
@@ -205,16 +229,20 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
           nextMap[key] = {
             ...item,
             date: key,
-            status: item?.departmentStatus || item?.transportStatus || item?.status || "",
+            status: isPastMonth
+              ? item?.status || item?.departmentStatus || item?.transportStatus || ""
+              : item?.departmentStatus || item?.transportStatus || "",
             checkIn: item?.checkIn || item?.punchIn || "",
             checkOut: item?.checkOut || item?.punchOut || "",
             hoursWorked: item?.hoursWorked ?? item?.totalHours ?? "",
             updatedBy: item?.updatedByDepartment || "",
           };
         });
+        if (requestId !== monthLoadRequestIdRef.current) return;
+        monthAttendanceCacheRef.current.set(cacheKey, nextMap);
         setMonthAttendanceByDate(nextMap);
       } catch (err) {
-        setMonthAttendanceByDate({});
+        // Keep previous month data on transient API failures.
       }
     };
     loadMonthAttendance();

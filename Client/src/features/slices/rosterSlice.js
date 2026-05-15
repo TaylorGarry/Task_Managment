@@ -380,10 +380,11 @@ export const fetchAllRosters = createAsyncThunk(
       const token = getToken();
       const query = new URLSearchParams();
       
-      if (month) query.append('month', month);
-      if (year) query.append('year', year);
-      query.append('page', page);
-      query.append('limit', limit);
+	      if (month) query.append('month', month);
+	      if (year) query.append('year', year);
+	      query.append('page', page);
+	      query.append('limit', limit);
+	      query.append('includeDailyStatus', '0');
 
       const res = await axios.get(`${API_URL}/rosterdetail?${query}`, {
         headers: { Authorization: `Bearer ${token}` },

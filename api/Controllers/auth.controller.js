@@ -1915,13 +1915,27 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
     const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
     const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
 
-    const rosters = await Roster.find({
+    const baseRosterFilter = {
       rosterStartDate: { $lte: monthEnd },
       rosterEndDate: { $gte: monthStart },
+    };
+
+    // Fast path: only pull rosters where this employee is present by userId.
+    let rosters = await Roster.find({
+      ...baseRosterFilter,
+      "weeks.employees.userId": user._id,
     })
       .select("_id month year rosterStartDate rosterEndDate weeks")
       .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
       .lean();
+
+    // Fallback for legacy rows where userId might be missing and matching relies on name/empId.
+    if (!Array.isArray(rosters) || rosters.length === 0) {
+      rosters = await Roster.find(baseRosterFilter)
+        .select("_id month year rosterStartDate rosterEndDate weeks")
+        .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
+        .lean();
+    }
 
     const toDateKey = (value) => {
       if (!value) return null;
@@ -1946,6 +1960,11 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
 
     rosters.forEach((roster) => {
       (roster?.weeks || []).forEach((week) => {
+        const weekStart = new Date(week?.startDate);
+        const weekEnd = new Date(week?.endDate);
+        if (Number.isNaN(weekStart.getTime()) || Number.isNaN(weekEnd.getTime())) return;
+        if (weekStart > monthEnd || weekEnd < monthStart) return;
+
         const emp = findEmployeeInWeek(week, user);
         if (!emp || !Array.isArray(emp.dailyStatus)) return;
 
