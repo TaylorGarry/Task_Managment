@@ -1729,6 +1729,65 @@ const findEmployeeInWeek = (week, user) => {
   );
 };
 
+const getWeekBounds = (dateLike = new Date()) => {
+  const date = startOfDay(dateLike);
+  const day = date.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const weekStart = new Date(date);
+  weekStart.setDate(date.getDate() - diffToMonday);
+  const weekEnd = endOfDay(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6));
+  return { weekStart, weekEnd };
+};
+
+const normalizeAnniversaryDateForYear = (joiningDate, year) => {
+  const source = new Date(joiningDate);
+  if (Number.isNaN(source.getTime())) return null;
+  const month = source.getMonth();
+  const day = source.getDate();
+  const candidate = new Date(year, month, day);
+  if (month === 1 && day === 29 && candidate.getMonth() !== 1) {
+    return new Date(year, 2, 1);
+  }
+  return candidate;
+};
+
+const buildWeeklyWorkAnniversaries = (employees = [], referenceDate = new Date()) => {
+  const { weekStart, weekEnd } = getWeekBounds(referenceDate);
+  const year = weekStart.getFullYear();
+
+  const weekly = employees
+    .map((emp) => {
+      const joiningDate = emp?.dateOfJoining ? new Date(emp.dateOfJoining) : null;
+      if (!joiningDate || Number.isNaN(joiningDate.getTime())) return null;
+      const anniversaryDate = normalizeAnniversaryDateForYear(joiningDate, year);
+      if (!anniversaryDate) return null;
+      if (anniversaryDate < weekStart || anniversaryDate > weekEnd) return null;
+      const yearsCompleted = year - joiningDate.getFullYear();
+      if (!Number.isFinite(yearsCompleted) || yearsCompleted < 1) return null;
+
+      return {
+        userId: emp._id,
+        name: emp.pseudoName || emp.realName || emp.username || "Employee",
+        username: emp.username || "",
+        designation: emp.designation || "",
+        department: emp.department || "",
+        dateOfJoining: joiningDate,
+        anniversaryDate,
+        yearsCompleted,
+        profilePhotoUrl: emp.profilePhotoUrl || "",
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => new Date(a.anniversaryDate).getTime() - new Date(b.anniversaryDate).getTime());
+
+  return {
+    weekStart,
+    weekEnd,
+    total: weekly.length,
+    weekly,
+  };
+};
+
 export const getEmployeeDashboardSummary = async (req, res) => {
   try {
     const user = req.user;
@@ -1793,6 +1852,14 @@ export const getEmployeeDashboardSummary = async (req, res) => {
     }));
 
     const effectivePolicyDocuments = resolvePolicyDocuments(user.policyDocuments);
+    const anniversaryUsers = await User.find({
+      accountType: { $in: ["employee", "agent", "supervisor"] },
+      isActive: { $ne: false },
+      dateOfJoining: { $ne: null },
+    })
+      .select("_id username realName pseudoName designation department dateOfJoining profilePhotoUrl")
+      .lean();
+    const workAnniversaries = buildWeeklyWorkAnniversaries(anniversaryUsers, now);
 
     return res.status(200).json({
       profile: {
@@ -1826,6 +1893,7 @@ export const getEmployeeDashboardSummary = async (req, res) => {
       attendance: {
         currentWeek: currentWeekAttendance,
       },
+      workAnniversaries,
     });
   } catch (error) {
     console.error("Get employee dashboard summary error:", error);

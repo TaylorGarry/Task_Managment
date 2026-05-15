@@ -13,8 +13,9 @@ import {
   isTeamLeaderUser,
   normalizeDepartment,
 } from "../utils/roleAccess.js";
+import { getApiBaseUrl } from "../utils/apiUrl";
 
-const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_URL = getApiBaseUrl();
 
 const ROSTER_ALLOWED_DEPARTMENTS = [
   "Operations",
@@ -272,8 +273,8 @@ const Navbar = () => {
     <>
       <Toaster position="top-right" />
 
-      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen w-[232px] border-r border-[#d4e2dd] bg-white/96 z-50">
-        <div className="h-full w-full px-5 py-6 flex flex-col">
+      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen w-[232px] border-r border-[#d4e2dd] bg-white/96 z-50 overflow-hidden">
+        <div className="h-full w-full px-5 py-6 flex flex-col min-h-0">
           <h1
             className="text-[34px] leading-none font-bold text-sky-700 tracking-tight cursor-pointer"
             onClick={() => navigate("/dashboard")}
@@ -281,8 +282,9 @@ const Navbar = () => {
             FDBS
           </h1>
 
-          <div className="mt-6 flex-1 min-h-0 rounded-[42px] border border-[#cfe3db] bg-[#f9fcfb] p-2.5 flex flex-col">
-            <div className="flex flex-col gap-2">
+          <div className="mt-6 flex-1 min-h-0 rounded-[42px] border border-[#cfe3db] bg-[#f9fcfb] p-2.5 flex flex-col overflow-hidden">
+            <div className="no-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1">
+              <div className="flex flex-col gap-2">
               {!isTransportDepartment && (
                 <button
                   onClick={() => navigate("/dashboard")}
@@ -395,6 +397,7 @@ const Navbar = () => {
               >
                 Leave
               </button>
+              </div>
             </div>
 
             <button

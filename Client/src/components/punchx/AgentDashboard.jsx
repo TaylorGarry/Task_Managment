@@ -1,9 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import toast from "react-hot-toast";
 import IdleMonitor from "./IdleMonitor";
 import BreakTracker from "./BreakTracker";
 import AlertsPanel from "./AlertsPanel";
 import { formatDuration } from "./utils";
+import { getApiBaseUrl } from "../../utils/apiUrl";
 
 const toIsoDateKey = (value) => {
   if (!value) return "";
@@ -109,6 +111,7 @@ const buildAttendanceByDate = (summary) => {
 };
 
 const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, onStartShift, onEndShift, onStartBreak, onEndBreak }) => {
+  const user = useMemo(() => JSON.parse(localStorage.getItem("user") || "{}"), []);
   const [nowMs, setNowMs] = useState(Date.now());
   const [monthAttendanceByDate, setMonthAttendanceByDate] = useState({});
   const [activeMonth, setActiveMonth] = useState(() => {
@@ -116,6 +119,29 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toIsoDateKey(new Date()));
+  const [showExportPopup, setShowExportPopup] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportRange, setExportRange] = useState(() => {
+    const d = new Date();
+    const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+    return {
+      startDate: toIsoDateKey(firstDay),
+      endDate: toIsoDateKey(d),
+    };
+  });
+  const normalizedUserDepartment = String(user?.department || "").trim().toLowerCase();
+  const isAccountsUser =
+    normalizedUserDepartment === "account" ||
+    normalizedUserDepartment === "accounts" ||
+    normalizedUserDepartment.includes("account");
+  const resetExportRange = () => {
+    const d = new Date();
+    const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
+    setExportRange({
+      startDate: toIsoDateKey(firstDay),
+      endDate: toIsoDateKey(d),
+    });
+  };
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
@@ -130,9 +156,6 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   const breakMs = session?.totalBreakMs || 0;
   const manualBreakMs = (session?.breaks || [])
     .filter((b) => b.type === "manual")
-    .reduce((sum, b) => sum + (b.durationMs || 0), 0);
-  const autoBreakMs = (session?.breaks || [])
-    .filter((b) => b.type === "auto_idle")
     .reduce((sum, b) => sum + (b.durationMs || 0), 0);
   const disconnectBreakMs = (session?.breaks || [])
     .filter((b) => b.type === "system_disconnect")
@@ -167,8 +190,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
         const user = JSON.parse(localStorage.getItem("user") || "{}");
         const token = user?.token;
         if (!token) return;
-        // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-        const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+        const API_URL = getApiBaseUrl();
         const month = activeMonth.getMonth() + 1;
         const year = activeMonth.getFullYear();
         const res = await axios.get(`${API_URL}/employee/attendance-month`, {
@@ -198,6 +220,63 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
     loadMonthAttendance();
   }, [activeMonth]);
 
+  const handleExportAttendance = async () => {
+    const token = user?.token;
+    if (!token) {
+      toast.error("Missing auth token. Please login again.");
+      return;
+    }
+    if (!exportRange.startDate || !exportRange.endDate) {
+      toast.error("Please select both start and end dates.");
+      return;
+    }
+    if (exportRange.startDate > exportRange.endDate) {
+      toast.error("Start date cannot be after end date.");
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const API_URL = getApiBaseUrl();
+      const queryParams = new URLSearchParams({
+        startDate: exportRange.startDate,
+        endDate: exportRange.endDate,
+      });
+      if (user?.department && !isAccountsUser) {
+        queryParams.append("department", String(user.department));
+      }
+      const response = await fetch(`${API_URL}/roster/export-attendance-snapshot?${queryParams.toString()}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}));
+        throw new Error(err?.message || `Failed to export (${response.status})`);
+      }
+
+      const blob = await response.blob();
+      const contentDisposition = response.headers.get("Content-Disposition") || "";
+      const fileNameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+      const fileName = fileNameMatch?.[1] || `attendance_snapshot_${exportRange.startDate}_to_${exportRange.endDate}.xlsx`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Attendance exported successfully.");
+      setShowExportPopup(false);
+      resetExportRange();
+    } catch (error) {
+      toast.error(error?.message || "Failed to export attendance.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <section className="mb-8 rounded-[14px] border border-[#E2E8F0] bg-white p-4 md:p-6">
       <div className="mb-4 rounded-xl bg-[#0B2A6F] px-4 py-2 text-white">
@@ -210,13 +289,73 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
           <button onClick={onEndShift} className="rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-semibold text-[#B91C1C]">End Shift</button>
           <button onClick={() => onStartBreak("manual")} className="rounded-lg border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-xs font-semibold text-[#B45309]">Pause</button>
         </div>
+        {isAccountsUser ? (
+          <button
+            onClick={() => setShowExportPopup(true)}
+            className="rounded-lg border border-[#BFDBFE] bg-gradient-to-r from-[#EFF6FF] to-[#DBEAFE] px-3 py-2 text-xs font-semibold text-[#1D4ED8] hover:from-[#DBEAFE] hover:to-[#BFDBFE]"
+          >
+            Export Attendance
+          </button>
+        ) : null}
       </div>
+
+      {showExportPopup ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-[#0F172A]/50 p-4 backdrop-blur-[2px]">
+          <div className="w-full max-w-md overflow-hidden rounded-2xl border border-[#DBEAFE] bg-white shadow-2xl">
+            <div className="bg-gradient-to-r from-[#1D4ED8] via-[#2563EB] to-[#0EA5E9] px-5 py-4 text-white">
+              <h3 className="text-lg font-semibold">Export Attendance Range</h3>
+              <p className="mt-1 text-xs text-blue-100">Select a date range to download attendance in Excel.</p>
+            </div>
+            <div className="space-y-4 p-5">
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">Start Date</label>
+                <input
+                  type="date"
+                  value={exportRange.startDate}
+                  onChange={(e) => setExportRange((prev) => ({ ...prev, startDate: e.target.value }))}
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-[#60A5FA] focus:ring-2 focus:ring-[#BFDBFE]"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-600">End Date</label>
+                <input
+                  type="date"
+                  value={exportRange.endDate}
+                  onChange={(e) => setExportRange((prev) => ({ ...prev, endDate: e.target.value }))}
+                  className="w-full rounded-xl border border-[#CBD5E1] bg-[#F8FAFC] px-3 py-2 text-sm text-slate-800 outline-none transition focus:border-[#60A5FA] focus:ring-2 focus:ring-[#BFDBFE]"
+                />
+              </div>
+              <div className="rounded-xl border border-blue-100 bg-blue-50 px-3 py-2 text-xs text-blue-700">
+                Department filter: <span className="font-semibold">{String(user?.department || "Accounts")}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3">
+              <button
+                onClick={() => {
+                  setShowExportPopup(false);
+                  resetExportRange();
+                }}
+                disabled={isExporting}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleExportAttendance}
+                disabled={isExporting}
+                className="rounded-lg border border-[#1D4ED8] bg-[#2563EB] px-3 py-2 text-xs font-semibold text-white hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isExporting ? "Exporting..." : "Export Excel"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <IdleMonitor
           activityStatus={session?.activityStatus}
           lastActivityAt={session?.lastActivityAt}
-          autoBreakStartedAt={session?.autoBreakStartedAt}
         />
         <div className="rounded-[14px] border border-[#E2E8F0] bg-white p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-[#0F172A]">Today&apos;s Snapshot</h3>
@@ -238,7 +377,6 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
           <div className="mt-3 space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-[#64748B]">Total Break</span><span className="font-semibold">{formatDuration(breakMs)}</span></div>
             <div className="flex justify-between"><span className="text-[#64748B]">Manual Break</span><span className="font-semibold">{formatDuration(manualBreakMs)}</span></div>
-            <div className="flex justify-between"><span className="text-[#64748B]">Auto Idle Break</span><span className="font-semibold">{formatDuration(autoBreakMs)}</span></div>
             <div className="flex justify-between"><span className="text-[#64748B]">Disconnect Break</span><span className="font-semibold">{formatDuration(disconnectBreakMs)}</span></div>
           </div>
         </div>

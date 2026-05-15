@@ -1967,8 +1967,18 @@ export const exportRosterToExcel = async (req, res) => {
 export const exportAttendanceSnapshotToExcel = async (req, res) => {
   try {
     const user = req.user;
-    const isHrOrSuperAdmin = ["superAdmin", "HR"].includes(user?.accountType);
-    const isEmployee = user?.accountType === "employee";
+    const normalizedAccountType = String(user?.accountType || "").trim().toLowerCase();
+    const isHrOrSuperAdmin = ["superadmin", "hr"].includes(normalizedAccountType);
+    const isEmployee = normalizedAccountType === "employee";
+    const normalizedDepartmentValue = normalizeDepartment(
+      user?.normalizedDepartment || user?.department || ""
+    );
+    const normalizedDepartment = String(normalizedDepartmentValue || "").trim().toLowerCase();
+    const isAccountsEmployee =
+      isEmployee &&
+      (normalizedDepartment === "account" ||
+        normalizedDepartment === "accounts" ||
+        normalizedDepartment.includes("account"));
     if (!isHrOrSuperAdmin && !isEmployee) {
       return res.status(403).json({
         success: false,
@@ -2030,7 +2040,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 
     let delegatedAccessEmployeeIds = new Set();
     let delegatedTeamLeaderNames = new Set();
-    if (isEmployee) {
+    if (isEmployee && !isAccountsEmployee) {
       const delegatedFromId = String(delegatedFrom || "").trim();
       if (!delegatedFromId) {
         return res.status(403).json({
@@ -2100,7 +2110,25 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       });
     }
 
-    const normalizeDepartment = (value) => String(value || "").trim().toLowerCase();
+    const employeeUserIds = new Set();
+    rosters.forEach((roster) => {
+      (roster?.weeks || []).forEach((week) => {
+        (week?.employees || []).forEach((emp) => {
+          const id = String(emp?.userId?._id || emp?.userId || "").trim();
+          if (id && /^[a-f\d]{24}$/i.test(id)) employeeUserIds.add(id);
+        });
+      });
+    });
+    const userProfiles = employeeUserIds.size
+      ? await User.find({ _id: { $in: Array.from(employeeUserIds) } })
+        .select("_id realName pseudoName username")
+        .lean()
+      : [];
+    const userProfileMap = new Map(
+      userProfiles.map((u) => [String(u?._id || ""), u])
+    );
+
+    const normalizeDepartmentFilter = (value) => String(value || "").trim().toLowerCase();
     const normalizeTeamLeader = (value) => String(value || "").trim().toLowerCase();
     const toArrayParam = (value) => {
       if (Array.isArray(value)) return value;
@@ -2110,7 +2138,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       return value ? [value] : [];
     };
     const deptFilters = new Set(
-      toArrayParam(department).map((v) => normalizeDepartment(v)).filter(Boolean)
+      toArrayParam(department).map((v) => normalizeDepartmentFilter(v)).filter(Boolean)
     );
     const teamLeaderFilters = new Set(
       toArrayParam(teamLeader).map((v) => normalizeTeamLeader(v)).filter(Boolean)
@@ -2203,8 +2231,14 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
           emp?.teamLeader
         )}`;
       if (!employeeMap.has(key)) {
+        const profile = userProfileMap.get(employeeUserId) || null;
+        const realName = String(profile?.realName || "").trim();
+        const pseudoName = String(profile?.pseudoName || "").trim();
+        const username = String(profile?.username || "").trim();
+        const fallbackName = String(emp?.name || "").trim();
         employeeMap.set(key, {
-          name: emp?.name || "",
+          name: realName || username || fallbackName || "",
+          pseudoName: pseudoName || username || realName || fallbackName || "",
           department: emp?.department || "General",
           transport: emp?.transport || "",
           cabRoute: emp?.cabRoute || "",
@@ -2229,7 +2263,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
           (week.employees || [])
             .filter(Boolean)
             .forEach((emp) => {
-              if (isEmployee) {
+              if (isEmployee && !isAccountsEmployee) {
                 const employeeUserId = String(emp?.userId || "").trim();
                 const employeeTeamLeader = String(emp?.teamLeader || "").trim().toLowerCase();
                 const userUsername = String(user?.username || "").trim().toLowerCase();
@@ -2240,7 +2274,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
               }
 
               if (deptFilters.size > 0) {
-                const empDept = normalizeDepartment(emp.department);
+                const empDept = normalizeDepartmentFilter(emp.department);
                 if (!deptFilters.has(empDept)) return;
               }
 
@@ -2262,7 +2296,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
                 if (!dateKey) return;
 
                 rowRef.dailyByDateKey.set(dateKey, {
-                  status: ds.status || "",
+                  status: ds.departmentStatus || "",
                   transportStatus: ds.transportStatus || "",
                   departmentStatus: ds.departmentStatus || "",
                   transportArrivalTime: ds.transportArrivalTime || null,
@@ -2295,9 +2329,15 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       return totals;
     };
 
-    const employees = Array.from(employeeMap.values()).sort((a, b) =>
-      String(a.name).localeCompare(String(b.name))
-    );
+    const employees = Array.from(employeeMap.values())
+      .filter((emp) => {
+        for (const k of dateKeys) {
+          const ds = emp?.dailyByDateKey?.get(k);
+          if (String(ds?.departmentStatus || "").trim()) return true;
+        }
+        return false;
+      })
+      .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
     if (employees.length === 0) {
       return res.status(404).json({
@@ -2340,90 +2380,156 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
     };
 
     const buildSnapshotSheet = () => {
-      const header = [
-        "Name",
-        "Department",
-        "Transport",
-        "CAB Route",
-        "Team Leader",
-        "Shift Start Hour",
-        "Shift End Hour",
-      ];
+      const summaryHeaders = ["P", "WO", "HD", "BL", "L", "WOP", "UL", "NCNS", "LWP", "Total", "SS"];
+      const firstHeader = ["AGENT", "Employee Name", "Department"];
+      const secondHeader = ["AGENT", "Employee Name", "Department"];
 
-      // Keep "1 employee = 1 row" format; add per-day grouped columns so
-      // the export mirrors the roster sheet style while still showing what
-      // Transport and Department updated.
-      dateLabels.forEach((label) => {
-        header.push(
-          `${label} Status`,
-          `${label} Transport Status`,
-          `${label} Department Status`,
-          `${label} Transport Arrival`,
-          `${label} Department Arrival`
+      dateKeys.forEach((k) => {
+        const dt = new Date(`${k}T12:00:00.000+05:30`);
+        const dayMonth = new Intl.DateTimeFormat("en-GB", {
+          timeZone: IST_TIME_ZONE,
+          day: "2-digit",
+          month: "short",
+        }).format(dt);
+        firstHeader.push(dayMonth);
+        secondHeader.push(
+          new Intl.DateTimeFormat("en-US", {
+            timeZone: IST_TIME_ZONE,
+            weekday: "short",
+          }).format(dt)
         );
       });
 
-      header.push(
-        "Total Present",
-        "Total Week Off",
-        "Total Leave",
-        "Total No Call No Show",
-        "Total Unpaid Leave",
-        "Total Leave Without Pay",
-        "Total Bereavement Leave",
-        "Total Holiday",
-        "Total Last Working Day"
-      );
+      firstHeader.push("Summary", ...Array(summaryHeaders.length - 1).fill(""));
+      secondHeader.push(...summaryHeaders);
 
-      const rows = [header];
+      const rows = [firstHeader, secondHeader];
+
+      const compactTotals = (statusList) => {
+        const totals = { P: 0, WO: 0, HD: 0, BL: 0, L: 0, WOP: 0, UL: 0, NCNS: 0, LWP: 0 };
+        statusList.forEach((raw) => {
+          const status = String(raw || "").trim().toUpperCase();
+          if (totals[status] !== undefined) totals[status] += 1;
+        });
+        const total = Object.values(totals).reduce((sum, n) => sum + n, 0);
+        return { ...totals, total };
+      };
+
       employees.forEach((emp) => {
         const effectiveStatuses = [];
         const dayCells = [];
-
         dateKeys.forEach((k) => {
           const daily = emp.dailyByDateKey.get(k);
-          const status = daily?.status || daily?.departmentStatus || daily?.transportStatus || "";
+          const status = String(daily?.departmentStatus || "").trim();
           effectiveStatuses.push(status);
-
-          dayCells.push(
-            status,
-            daily?.transportStatus || "",
-            daily?.departmentStatus || "",
-            formatTime(daily?.transportArrivalTime || null),
-            formatTime(daily?.departmentArrivalTime || null)
-          );
+          dayCells.push(status || "");
         });
 
-        const totals = statusTotals(effectiveStatuses);
-
+        const totals = compactTotals(effectiveStatuses);
         rows.push([
-          emp.name,
-          emp.department,
-          emp.transport,
-          emp.cabRoute,
-          emp.teamLeader,
-          shiftHourToString(emp.shiftStartHour),
-          shiftHourToString(emp.shiftEndHour),
+          emp.pseudoName || "",
+          emp.name || "",
+          emp.department || "",
           ...dayCells,
           totals.P,
           totals.WO,
-          totals.L,
-          totals.NCNS,
-          totals.UL,
-          totals.LWP,
+          totals.HD,
           totals.BL,
-          totals.H,
-          totals.LWD,
+          totals.L,
+          totals.WOP,
+          totals.UL,
+          totals.NCNS,
+          totals.LWP,
+          totals.total,
+          emp.name || "",
         ]);
       });
 
-      const perDayCols = dateKeys.length * 5;
       const ws = XLSX.utils.aoa_to_sheet(rows);
-      ws["!cols"] = [
-        ...commonCols,
-        ...Array(perDayCols).fill({ wch: 14 }),
-        ...totalsCols,
+      const firstDateCol = 3;
+      const lastDateCol = firstDateCol + dateKeys.length - 1;
+      const summaryStartCol = lastDateCol + 1;
+      const summaryEndCol = summaryStartCol + summaryHeaders.length - 1;
+
+      ws["!merges"] = [
+        { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
+        { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+        { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
+        { s: { r: 0, c: summaryStartCol }, e: { r: 0, c: summaryEndCol } },
       ];
+
+      ws["!cols"] = [
+        { wch: 18 },
+        { wch: 24 },
+        { wch: 16 },
+        ...Array(dateKeys.length).fill({ wch: 9 }),
+        ...Array(summaryHeaders.length).fill({ wch: 8 }),
+      ];
+
+      const toCell = (r, c) => XLSX.utils.encode_cell({ r, c });
+      const border = {
+        top: { style: "thin", color: { rgb: "D1D5DB" } },
+        bottom: { style: "thin", color: { rgb: "D1D5DB" } },
+        left: { style: "thin", color: { rgb: "D1D5DB" } },
+        right: { style: "thin", color: { rgb: "D1D5DB" } },
+      };
+      const centerStyle = { horizontal: "center", vertical: "center" };
+      const headerTopStyle = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { patternType: "solid", fgColor: { rgb: "0F3D8C" } },
+        border,
+        alignment: centerStyle,
+      };
+      const headerSecondStyle = {
+        font: { bold: true, color: { rgb: "1F2937" } },
+        fill: { patternType: "solid", fgColor: { rgb: "E5EDFF" } },
+        border,
+        alignment: centerStyle,
+      };
+      const statusStyleMap = {
+        P: { fill: { patternType: "solid", fgColor: { rgb: "DCFCE7" } }, font: { color: { rgb: "166534" }, bold: true } },
+        WO: { fill: { patternType: "solid", fgColor: { rgb: "DBEAFE" } }, font: { color: { rgb: "1D4ED8" }, bold: true } },
+        HD: { fill: { patternType: "solid", fgColor: { rgb: "FFEDD5" } }, font: { color: { rgb: "9A3412" }, bold: true } },
+        BL: { fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } }, font: { color: { rgb: "334155" }, bold: true } },
+        L: { fill: { patternType: "solid", fgColor: { rgb: "FEF3C7" } }, font: { color: { rgb: "92400E" }, bold: true } },
+        WOP: { fill: { patternType: "solid", fgColor: { rgb: "F3E8FF" } }, font: { color: { rgb: "6B21A8" }, bold: true } },
+        UL: { fill: { patternType: "solid", fgColor: { rgb: "FCE7F3" } }, font: { color: { rgb: "9D174D" }, bold: true } },
+        NCNS: { fill: { patternType: "solid", fgColor: { rgb: "FEE2E2" } }, font: { color: { rgb: "991B1B" }, bold: true } },
+        LWP: { fill: { patternType: "solid", fgColor: { rgb: "FDE68A" } }, font: { color: { rgb: "7C2D12" }, bold: true } },
+      };
+
+      const totalCols = 3 + dateKeys.length + summaryHeaders.length;
+      for (let c = 0; c < totalCols; c += 1) {
+        const topCell = toCell(0, c);
+        if (ws[topCell]) ws[topCell].s = headerTopStyle;
+        const secondCell = toCell(1, c);
+        if (ws[secondCell]) ws[secondCell].s = headerSecondStyle;
+      }
+
+      for (let r = 2; r < rows.length; r += 1) {
+        for (let c = 0; c < totalCols; c += 1) {
+          const addr = toCell(r, c);
+          if (!ws[addr]) continue;
+          ws[addr].s = {
+            ...(ws[addr].s || {}),
+            border,
+            alignment: c >= 3 ? centerStyle : { horizontal: "left", vertical: "center" },
+          };
+        }
+
+        for (let c = 3; c < 3 + dateKeys.length; c += 1) {
+          const addr = toCell(r, c);
+          const status = String(ws[addr]?.v || "").trim().toUpperCase();
+          if (!statusStyleMap[status]) continue;
+          ws[addr].s = {
+            ...ws[addr].s,
+            ...statusStyleMap[status],
+            border,
+            alignment: centerStyle,
+          };
+        }
+      }
+
       XLSX.utils.book_append_sheet(workbook, ws, "Attendance Snapshot");
     };
 

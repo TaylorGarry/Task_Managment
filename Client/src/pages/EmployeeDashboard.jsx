@@ -13,6 +13,7 @@ import { FiX, FiSend, FiEdit2, FiCheck, FiXCircle } from "react-icons/fi";
 import { subscribeUserToPush } from "../utils/pushNotifications";
 import { getRoleType } from "../utils/roleAccess.js";
 import AgentDashboard from "../components/punchx/AgentDashboard";
+import { getApiBaseUrl } from "../utils/apiUrl";
 
 const EmployeeDashboard = () => {
   const dispatch = useDispatch();
@@ -21,8 +22,7 @@ const EmployeeDashboard = () => {
   const { remarks, loading: remarksLoading } = useSelector((state) => state.remarks);
   const { employeeDashboardSummary } = useSelector((state) => state.auth);
   const user = JSON.parse(localStorage.getItem("user"));
-  // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-  const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+  const API_URL = getApiBaseUrl();
   const currentUserId = user?._id || user?.id;
   const roleType = getRoleType(user || {});
   const isSupervisorUser = roleType === "supervisor";
@@ -455,6 +455,23 @@ useEffect(() => {
 
   const openBreak = punchSession?.breaks?.find((b) => !b.endAt) || null;
   const liveBreakMs = openBreak?.startAt ? Math.max(0, breakNowMs - new Date(openBreak.startAt).getTime()) : 0;
+  const weeklyAnniversaries = Array.isArray(employeeDashboardSummary?.workAnniversaries?.weekly)
+    ? employeeDashboardSummary.workAnniversaries.weekly
+    : [];
+  const anniversaryWeekStart = employeeDashboardSummary?.workAnniversaries?.weekStart || null;
+  const anniversaryWeekEnd = employeeDashboardSummary?.workAnniversaries?.weekEnd || null;
+
+  const formatAnniversaryDate = (value) => {
+    if (!value) return "--";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "--";
+    return d.toLocaleDateString("en-IN", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
   const liveBreakTimer = (() => {
     const totalSec = Math.floor(liveBreakMs / 1000);
     const hh = String(Math.floor(totalSec / 3600)).padStart(2, "0");
@@ -489,6 +506,82 @@ useEffect(() => {
         </div>
       )}
       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen relative">
+        <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+            <h2 className="text-sm font-semibold text-violet-700 md:text-base">Work Anniversary Celebration!</h2>
+            <p className="text-xs text-slate-500">
+              {anniversaryWeekStart && anniversaryWeekEnd
+                ? `${formatAnniversaryDate(anniversaryWeekStart)} - ${formatAnniversaryDate(anniversaryWeekEnd)}`
+                : "This week"}
+            </p>
+          </div>
+
+          {weeklyAnniversaries.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-10 text-center text-sm font-medium text-violet-700">
+              No work anniversary this week.
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {weeklyAnniversaries.map((item) => (
+                <div
+                  key={`${item.userId}-${item.anniversaryDate}`}
+                  className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-r from-[#efe9ff] via-[#f4efff] to-[#ecebff] p-4 md:p-6"
+                >
+                  <div className="pointer-events-none absolute -left-3 top-10 h-20 w-14 rounded-full bg-violet-300/40" />
+                  <div className="pointer-events-none absolute left-8 top-16 h-14 w-10 rounded-full bg-amber-300/50" />
+
+                  <div className="grid grid-cols-1 items-center gap-5 md:grid-cols-2">
+                    <div>
+                      <p className="text-3xl font-bold italic text-violet-700">Congratulations!</p>
+                      <p className="text-3xl font-bold text-slate-800">Work Anniversary</p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Let&apos;s celebrate the dedication and contribution of our teammate.
+                      </p>
+
+                      <div className="mt-4 grid max-w-md grid-cols-2 overflow-hidden rounded-xl border border-violet-200 bg-white/80">
+                        <div className="p-3">
+                          <p className="text-lg font-bold text-violet-700">{item.name}</p>
+                          <p className="text-xs text-slate-500">{item.designation || "Employee"}</p>
+                        </div>
+                        <div className="border-l border-violet-200 p-3 text-center">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Completed</p>
+                          <p className="text-3xl font-black text-indigo-700">{item.yearsCompleted}</p>
+                          <p className="text-xs font-semibold text-slate-600">Year{item.yearsCompleted > 1 ? "s" : ""} Anniversary</p>
+                        </div>
+                      </div>
+
+                      <p className="mt-3 text-xs font-medium text-violet-700">
+                        Anniversary Date: {formatAnniversaryDate(item.anniversaryDate)}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                      <div className="relative">
+                        <div className="h-44 w-44 overflow-hidden rounded-full border-4 border-white shadow-lg">
+                          {item.profilePhotoUrl ? (
+                            <img
+                              src={item.profilePhotoUrl}
+                              alt={item.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-violet-100 text-5xl font-bold text-violet-500">
+                              {String(item.name || "E").trim().charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="absolute -bottom-3 left-1/2 w-36 -translate-x-1/2 rounded-full bg-gradient-to-r from-amber-500 to-yellow-500 px-3 py-2 text-center text-lg font-extrabold text-white shadow-md">
+                          {item.yearsCompleted} YEAR{item.yearsCompleted > 1 ? "S" : ""}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         {(isAgentUser || isSupervisorUser) && (
           <>
             <AgentDashboard
