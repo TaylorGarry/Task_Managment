@@ -3,7 +3,6 @@ import { formatDuration, formatDateTime } from "./utils";
 
 const BREAK_LABELS = {
   manual: "Manual Break",
-  auto_idle: "Auto Idle Break",
   system_disconnect: "System Disconnect Break",
 };
 
@@ -24,7 +23,7 @@ const BreakTracker = ({ session, onStartBreak, onEndBreak }) => {
       <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-3">
         <div className="rounded-xl bg-[#F8FAFC] p-3">
           <p className="text-xs text-[#64748B]">Current Break</p>
-          <p className="mt-1 text-sm font-semibold text-[#0F172A]">{openBreak ? BREAK_LABELS[openBreak.type] : "None"}</p>
+          <p className="mt-1 text-sm font-semibold text-[#0F172A]">{openBreak ? (BREAK_LABELS[openBreak.type] || "Break") : "None"}</p>
         </div>
         <div className="rounded-xl bg-[#F8FAFC] p-3">
           <p className="text-xs text-[#64748B]">Current Duration</p>
@@ -42,7 +41,7 @@ const BreakTracker = ({ session, onStartBreak, onEndBreak }) => {
           {history.length === 0 && <p className="text-xs text-[#64748B]">No breaks logged.</p>}
           {history.map((item, idx) => (
             <div key={`${item.startAt}-${idx}`} className="rounded-lg border border-[#E2E8F0] p-2 text-xs text-[#334155]">
-              <div className="font-medium">{BREAK_LABELS[item.type]}</div>
+              <div className="font-medium">{BREAK_LABELS[item.type] || "Break"}</div>
               <div>{formatDateTime(item.startAt)} - {formatDateTime(item.endAt)}</div>
               <div>Duration: {formatDuration(item.durationMs || 0)}</div>
             </div>

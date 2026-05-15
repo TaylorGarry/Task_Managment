@@ -109,11 +109,9 @@ const SuperAdminLoginStatus = () => {
         const serverLateByMs = Number(r.lateByMs || 0);
         const fallbackLateByMs = getLateByFallbackMs(loginTime, r.shiftStartHour);
         const explicitManualBreakMs = Number(r.manualBreakMs);
-        const explicitAutoIdleBreakMs = Number(r.autoIdleBreakMs);
-        const hasExplicitSplit = Number.isFinite(explicitManualBreakMs) && Number.isFinite(explicitAutoIdleBreakMs);
+        const hasExplicitSplit = Number.isFinite(explicitManualBreakMs);
         const totalBreakMs = Number(r.totalBreakMs || 0);
-        const autoIdleBreakMs = hasExplicitSplit ? explicitAutoIdleBreakMs : Number(r.totalIdleMs ?? r.idleTimeMs ?? 0);
-        const manualBreakMs = hasExplicitSplit ? explicitManualBreakMs : Math.max(0, totalBreakMs - autoIdleBreakMs);
+        const manualBreakMs = hasExplicitSplit ? explicitManualBreakMs : totalBreakMs;
         return {
           ...r,
           loginTime,
@@ -125,7 +123,6 @@ const SuperAdminLoginStatus = () => {
           lateByMs: serverLateByMs > 0 ? serverLateByMs : fallbackLateByMs,
           totalWorkedMs: Number(r.totalWorkedMs || 0),
           totalBreakMs,
-          autoIdleBreakMs,
           manualBreakMs,
           hasCompletedNineHours:
             typeof r.hasCompletedNineHours === "boolean"
@@ -349,7 +346,7 @@ const SuperAdminLoginStatus = () => {
                           <>
                             <p>{formatDuration(row.totalBreakMs || 0)}</p>
                             <p className="text-xs text-slate-500">
-                              {`Manual: ${formatDuration(row.manualBreakMs || 0)} | Auto: ${formatDuration(row.autoIdleBreakMs || 0)}`}
+                              {`Manual: ${formatDuration(row.manualBreakMs || 0)}`}
                             </p>
                           </>
                         )}

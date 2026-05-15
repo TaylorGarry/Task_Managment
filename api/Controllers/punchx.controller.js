@@ -3,7 +3,6 @@ import User from "../Modals/User.modal.js";
 import XLSX from "xlsx-js-style";
 
 const NY_TZ = "America/New_York";
-const AUTO_BREAK_MS = 30 * 60 * 1000;
 const IDLE_WARN_MS = 25 * 60 * 1000;
 const SHIFT_AUTO_END_MS = 9 * 60 * 60 * 1000;
 const MIDNIGHT_SHIFT_MAX_START_HOUR = 6;
@@ -58,20 +57,18 @@ const getBreakUsage = (session, now = getNow()) => {
   if (!session) return { manualBreakMs: 0, autoIdleBreakMs: 0, totalBreakMs: 0 };
   const breaks = Array.isArray(session.breaks) ? session.breaks : [];
   let manualBreakMs = 0;
-  let autoIdleBreakMs = 0;
 
   for (const br of breaks) {
     const baseDuration = Number(br?.durationMs || 0);
     const openDuration = !br?.endAt ? toMs(br?.startAt, now) : 0;
     const durationMs = Math.max(0, baseDuration + openDuration);
-    if (br?.type === "auto_idle") autoIdleBreakMs += durationMs;
-    else if (br?.type === "manual") manualBreakMs += durationMs;
+    if (br?.type === "manual") manualBreakMs += durationMs;
   }
 
   return {
     manualBreakMs,
-    autoIdleBreakMs,
-    totalBreakMs: manualBreakMs + autoIdleBreakMs,
+    autoIdleBreakMs: 0,
+    totalBreakMs: manualBreakMs,
   };
 };
 
@@ -236,7 +233,7 @@ export const startBreak = async (req, res) => {
   try {
     const userId = req.user?._id;
     const { type = "manual", reason = "" } = req.body || {};
-    if (!["manual", "auto_idle", "system_disconnect"].includes(type)) {
+    if (!["manual", "system_disconnect"].includes(type)) {
       return res.status(400).json({ message: "Invalid break type" });
     }
 
@@ -313,24 +310,9 @@ export const postActivity = async (req, res) => {
     const last = session.lastActivityAt ? new Date(session.lastActivityAt) : null;
     const idleMs = last ? toMs(last, eventAt) : 0;
 
-    if (idleMs >= AUTO_BREAK_MS) {
-      session.activityStatus = "auto_break";
-      if (!session.breaks.some((b) => !b.endAt && b.type === "auto_idle")) {
-        addBreak(session, "auto_idle", last || now, { reason: "auto idle 30m", source: "system" });
-      }
-    } else if (idleMs >= IDLE_WARN_MS) {
+    if (idleMs >= IDLE_WARN_MS) {
       session.activityStatus = "idle_warning";
       session.idleWarningAt = eventAt;
-    }
-
-    const autoOpen = session.breaks.find((b) => !b.endAt && b.type === "auto_idle");
-    if (autoOpen) {
-      closeOpenBreak(session, eventAt, "auto_idle");
-      session.alerts.push({
-        type: "auto_break_end",
-        message: "Auto break ended on user activity",
-        at: eventAt,
-      });
     }
 
     if (!session.shiftStartAt) {
@@ -339,7 +321,7 @@ export const postActivity = async (req, res) => {
     }
 
     session.lastActivityAt = eventAt;
-    if (!["manual_break", "auto_break"].includes(session.activityStatus)) {
+    if (!["manual_break"].includes(session.activityStatus)) {
       session.activityStatus = "active";
     }
 
