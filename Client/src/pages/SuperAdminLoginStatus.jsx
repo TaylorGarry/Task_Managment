@@ -22,6 +22,8 @@ const toDateKey = (date) => {
   return yyyy && mm && dd ? `${yyyy}-${mm}-${dd}` : "";
 };
 
+const getDefaultDateKey = () => toDateKey(new Date());
+
 const formatDateTime = (value) => {
   if (!value) return "--";
   const d = new Date(value);
@@ -46,6 +48,25 @@ const formatDuration = (ms = 0) => {
   return `${h}h ${m}m`;
 };
 
+const getRowPriorityScore = (row) => {
+  const status = String(row?.activityStatus || "").toLowerCase();
+  const liveStatuses = new Set(["active", "manual_break", "auto_break", "idle_warning"]);
+  const hasLogin = Boolean(row?.loginTime);
+  const hasLogout = Boolean(row?.logoutTime);
+  const isLive = liveStatuses.has(status) || row?.isOnBreak === true || (hasLogin && !hasLogout);
+  const incompleteNineHours = row?.hasCompletedNineHours === false;
+  const loginTs = hasLogin ? new Date(row.loginTime).getTime() : 0;
+  const logoutTs = hasLogout ? new Date(row.logoutTime).getTime() : 0;
+  const recencyTs = Math.max(loginTs || 0, logoutTs || 0);
+
+  let score = 0;
+  if (isLive) score += 1000;
+  if (incompleteNineHours) score += 200;
+  if (hasLogin && !hasLogout) score += 100;
+  score += Math.floor(recencyTs / 1000); // tie-breaker by latest record
+  return score;
+};
+
 const getLateByFallbackMs = (loginTime, shiftStartHour) => {
   if (!loginTime) return 0;
   const shiftHourNum = Number(shiftStartHour);
@@ -64,7 +85,34 @@ const getLateByFallbackMs = (loginTime, shiftStartHour) => {
   const second = Number(parts.find((p) => p.type === "second")?.value || 0);
   const loginClockMs = hour * 60 * 60 * 1000 + minute * 60 * 1000 + second * 1000;
   const expectedClockMs = shiftHourNum * 60 * 60 * 1000;
-  return loginClockMs > expectedClockMs ? loginClockMs - expectedClockMs : 0;
+  const HALF_DAY_MS = 12 * 60 * 60 * 1000;
+  const FULL_DAY_MS = 24 * 60 * 60 * 1000;
+
+  let adjustedLoginClockMs = loginClockMs;
+  const directDelta = loginClockMs - expectedClockMs;
+
+  // If delta is very large, it is likely a midnight crossover artifact.
+  // Normalize to the nearest day-window around shift start before computing late-by.
+  if (directDelta > HALF_DAY_MS) {
+    adjustedLoginClockMs -= FULL_DAY_MS;
+  } else if (directDelta < -HALF_DAY_MS) {
+    adjustedLoginClockMs += FULL_DAY_MS;
+  }
+
+  const lateBy = adjustedLoginClockMs - expectedClockMs;
+  return lateBy > 0 ? lateBy : 0;
+};
+
+const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour }) => {
+  const safeServer = Number(serverLateByMs || 0);
+  const fallback = getLateByFallbackMs(loginTime, shiftStartHour);
+  if (!(safeServer > 0)) return fallback;
+
+  const HALF_DAY_MS = 12 * 60 * 60 * 1000;
+  // Midnight rollover bug usually appears as huge lateBy (like 22h+).
+  // In those cases trust normalized fallback.
+  if (safeServer > HALF_DAY_MS) return fallback;
+  return safeServer;
 };
 
 const SuperAdminLoginStatus = () => {
@@ -76,7 +124,8 @@ const SuperAdminLoginStatus = () => {
     }
   }, []);
   const isSuperAdminView = getRoleType(currentUser) === "superAdmin";
-  const [dateKey, setDateKey] = useState(toDateKey(new Date()));
+  const [dateKey, setDateKey] = useState(getDefaultDateKey());
+  const [isDateManuallySelected, setIsDateManuallySelected] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [summary, setSummary] = useState(null);
@@ -87,6 +136,8 @@ const SuperAdminLoginStatus = () => {
   const [pageSize, setPageSize] = useState(20);
   const [page, setPage] = useState(1);
   const [exporting, setExporting] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+  const [lastSyncedAtMs, setLastSyncedAtMs] = useState(Date.now());
 
   const token = useMemo(() => {
     try {
@@ -105,15 +156,16 @@ const SuperAdminLoginStatus = () => {
       const endpoint = isSuperAdminView
         ? `${API_URL}/punchx/superadmin/daily-status`
         : `${API_URL}/punchx/manager/team-status`;
-      const res = await axios.get(endpoint, {
+      const resCurrent = await axios.get(endpoint, {
         params: { dateKey },
         headers: { Authorization: `Bearer ${token}` },
       });
-      const rawRows = Array.isArray(res?.data?.rows) ? res.data.rows : [];
-      const normalizedRows = rawRows.map((r) => {
-        const loginTime = r.loginTime || r.shiftStartedAt || null;
+
+      const merged = Array.isArray(resCurrent?.data?.rows) ? resCurrent.data.rows : [];
+
+      const normalizedRows = merged.map((r) => {
+        const loginTime = r.loginTime || r.shiftStartedAt || r.shiftStartAt || null;
         const serverLateByMs = Number(r.lateByMs || 0);
-        const fallbackLateByMs = getLateByFallbackMs(loginTime, r.shiftStartHour);
         const explicitManualBreakMs = Number(r.manualBreakMs);
         const hasExplicitSplit = Number.isFinite(explicitManualBreakMs);
         const totalBreakMs = Number(r.totalBreakMs || 0);
@@ -121,12 +173,16 @@ const SuperAdminLoginStatus = () => {
         return {
           ...r,
           loginTime,
-          logoutTime: r.logoutTime || null,
+          logoutTime: r.logoutTime || r.shiftEndedAt || r.shiftEndAt || null,
           isOnBreak:
             typeof r.isOnBreak === "boolean"
               ? r.isOnBreak
               : Boolean(r.breakType) || ["manual_break", "auto_break"].includes(r.activityStatus),
-          lateByMs: serverLateByMs > 0 ? serverLateByMs : fallbackLateByMs,
+          lateByMs: resolveLateByMs({
+            serverLateByMs,
+            loginTime,
+            shiftStartHour: r.shiftStartHour,
+          }),
           totalWorkedMs: Number(r.totalWorkedMs || 0),
           totalBreakMs,
           manualBreakMs,
@@ -140,14 +196,35 @@ const SuperAdminLoginStatus = () => {
               : Math.max(0, 9 * 60 * 60 * 1000 - Number(r.totalWorkedMs || 0)),
         };
       });
-      setRows(normalizedRows);
+
+      const byUser = new Map();
+      normalizedRows.forEach((row) => {
+        const key = String(row.userId || row.employeeId || row._id || row.username || Math.random());
+        const existing = byUser.get(key);
+        if (!existing) {
+          byUser.set(key, row);
+          return;
+        }
+        // Prefer current/live shift row, otherwise keep the most recent relevant row.
+        const existingScore = getRowPriorityScore(existing);
+        const currentScore = getRowPriorityScore(row);
+        if (currentScore > existingScore) {
+          byUser.set(key, row);
+        }
+      });
+
+      const finalRows = Array.from(byUser.values());
+      const syncedAt = Date.now();
+      setLastSyncedAtMs(syncedAt);
+      setRows(finalRows);
+      const serverSummary = resCurrent?.data?.summary;
       setSummary(
-        res?.data?.summary || {
-          totalEmployees: normalizedRows.length,
-          loggedInCount: normalizedRows.filter((r) => Boolean(r.loginTime)).length,
-          onBreakCount: normalizedRows.filter((r) => r.isOnBreak).length,
-          notCompletedNineHoursCount: normalizedRows.filter((r) => r.loginTime && !r.hasCompletedNineHours).length,
-          lateLoginCount: normalizedRows.filter((r) => r.lateByMs > 0).length,
+        serverSummary || {
+          totalEmployees: finalRows.length,
+          loggedInCount: finalRows.filter((r) => Boolean(r.loginTime)).length,
+          onBreakCount: finalRows.filter((r) => r.isOnBreak).length,
+          notCompletedNineHoursCount: finalRows.filter((r) => r.loginTime && !r.hasCompletedNineHours).length,
+          lateLoginCount: finalRows.filter((r) => r.loginTime && r.lateByMs > 0).length,
         }
       );
     } catch (err) {
@@ -189,6 +266,28 @@ const SuperAdminLoginStatus = () => {
     const id = setInterval(loadData, 30000);
     return () => clearInterval(id);
   }, [dateKey, isSuperAdminView]);
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const getLiveRemainingMs = (row) => {
+    if (!row?.loginTime || row?.hasCompletedNineHours) return 0;
+    if (row?.logoutTime) return Math.max(0, Number(row.remainingForNineHoursMs || 0));
+
+    const baseRemaining = Math.max(0, Number(row.remainingForNineHoursMs || 0));
+    const elapsedAfterSync = Math.max(0, nowMs - lastSyncedAtMs);
+    return Math.max(0, baseRemaining - elapsedAfterSync);
+  };
+
+  useEffect(() => {
+    if (isDateManuallySelected) return;
+      const syncDateKey = () => setDateKey(getDefaultDateKey());
+    syncDateKey();
+    const id = setInterval(syncDateKey, 60000);
+    return () => clearInterval(id);
+  }, [isDateManuallySelected]);
 
   const departments = useMemo(() => {
     const set = new Set(rows.map((r) => r.department).filter(Boolean));
@@ -241,7 +340,10 @@ const SuperAdminLoginStatus = () => {
               <input
                 type="date"
                 value={dateKey}
-                onChange={(e) => setDateKey(e.target.value)}
+                onChange={(e) => {
+                  setIsDateManuallySelected(true);
+                  setDateKey(e.target.value);
+                }}
                 className="rounded-lg border border-blue-200 bg-white/95 px-3 py-2 text-sm text-slate-800"
               />
               {isSuperAdminView && (
@@ -341,7 +443,7 @@ const SuperAdminLoginStatus = () => {
                           <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Completed</span>
                         ) : (
                           <span className="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
-                            Pending {formatDuration(row.remainingForNineHoursMs || 0)}
+                            Pending {formatDuration(getLiveRemainingMs(row))}
                           </span>
                         )}
                       </td>

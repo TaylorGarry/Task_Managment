@@ -6,6 +6,8 @@ const APP_TZ = "Asia/Kolkata";
 const IDLE_WARN_MS = 25 * 60 * 1000;
 const SHIFT_AUTO_END_MS = 9 * 60 * 60 * 1000;
 const MIDNIGHT_SHIFT_MAX_START_HOUR = 6;
+const SESSION_RESUME_GRACE_MS = 0;
+const OVERNIGHT_BUSINESS_DAY_END_HOUR = 15;
 
 const getNow = () => new Date();
 
@@ -31,8 +33,51 @@ const getNyHour = (date = new Date()) => {
   return Number(map.hour);
 };
 
+const parseDateKeyStartMs = (dateKey) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return null;
+  const ms = Date.parse(`${dateKey}T00:00:00+05:30`);
+  return Number.isFinite(ms) ? ms : null;
+};
+
+const addDaysToDateKey = (dateKey, days) => {
+  const startMs = parseDateKeyStartMs(dateKey);
+  if (!Number.isFinite(startMs)) return dateKey;
+  return getNyDateKey(new Date(startMs + days * 24 * 60 * 60 * 1000));
+};
+
+const getOperationalWindowForDateKey = (userLike = {}, dateKey = "") => {
+  const startHour = Number(userLike?.shiftStartHour);
+  const endHour = Number(userLike?.shiftEndHour);
+  const dayStartMs = parseDateKeyStartMs(dateKey);
+  if (!Number.isFinite(dayStartMs)) return null;
+  if (!Number.isFinite(startHour) || !Number.isFinite(endHour)) return null;
+
+  const startMs = dayStartMs + startHour * 60 * 60 * 1000;
+  let endMs = dayStartMs + endHour * 60 * 60 * 1000;
+  const isOvernight = endMs <= startMs;
+  if (isOvernight) endMs += 24 * 60 * 60 * 1000;
+  if (endMs - startMs < SHIFT_AUTO_END_MS) endMs = startMs + SHIFT_AUTO_END_MS;
+  if (isOvernight) {
+    const businessEndMs = dayStartMs + (24 + OVERNIGHT_BUSINESS_DAY_END_HOUR) * 60 * 60 * 1000;
+    if (endMs < businessEndMs) endMs = businessEndMs;
+  }
+  return { startMs, endMs };
+};
+
 const resolveOperationalDateKeyForUser = (userLike = {}, now = new Date()) => {
-  const baseDateKey = getNyDateKey(now);
+  const todayKey = getNyDateKey(now);
+  const yesterdayKey = addDaysToDateKey(todayKey, -1);
+  const nowMs = now.getTime();
+  const candidates = [yesterdayKey, todayKey];
+
+  for (const key of candidates) {
+    const window = getOperationalWindowForDateKey(userLike, key);
+    if (!window) continue;
+    if (nowMs >= window.startMs && nowMs <= window.endMs + SESSION_RESUME_GRACE_MS) {
+      return key;
+    }
+  }
+
   const shiftStartHour = Number(userLike?.shiftStartHour);
   const nyHour = getNyHour(now);
   const isPostMidnightShift =
@@ -41,10 +86,9 @@ const resolveOperationalDateKeyForUser = (userLike = {}, now = new Date()) => {
     shiftStartHour < MIDNIGHT_SHIFT_MAX_START_HOUR;
 
   if (isPostMidnightShift && Number.isFinite(nyHour) && nyHour < 12) {
-    const prevDay = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    return getNyDateKey(prevDay);
+    return yesterdayKey;
   }
-  return baseDateKey;
+  return todayKey;
 };
 
 const toMs = (start, end) => {
@@ -132,9 +176,53 @@ const autoEndShiftIfDue = (session, now = getNow()) => {
   return true;
 };
 
-const ensureSession = async (userId, dateKey) => {
+const persistAutoEndedSessions = async (sessions = [], now = getNow()) => {
+  if (!Array.isArray(sessions) || sessions.length === 0) return [];
+  const updates = [];
+  for (const session of sessions) {
+    if (!autoEndShiftIfDue(session, now)) continue;
+    updates.push({
+      updateOne: {
+        filter: { _id: session._id },
+        update: {
+          $set: {
+            shiftEndAt: session.shiftEndAt,
+            status: session.status,
+            activityStatus: session.activityStatus,
+            autoBreakStartedAt: session.autoBreakStartedAt ?? null,
+            totalBreakMs: Number(session.totalBreakMs || 0),
+            totalIdleMs: Number(session.totalIdleMs || 0),
+            breaks: Array.isArray(session.breaks) ? session.breaks : [],
+            alerts: Array.isArray(session.alerts) ? session.alerts : [],
+          },
+        },
+      },
+    });
+  }
+  if (updates.length > 0) {
+    await PunchSession.bulkWrite(updates, { ordered: false });
+  }
+  return sessions;
+};
+
+const isWithinOperationalWindow = (session, userLike = {}, now = new Date()) => {
+  const window = getOperationalWindowForDateKey(userLike, session?.dateKey || "");
+  if (!window) return false;
+  const nowMs = now.getTime();
+  return nowMs >= window.startMs && nowMs <= window.endMs + SESSION_RESUME_GRACE_MS;
+};
+
+const ensureSession = async (userId, userLike = {}, dateKey, now = new Date()) => {
   const existing = await PunchSession.findOne({ userId, dateKey });
   if (existing) return existing;
+
+  const nearby = await PunchSession.find({
+    userId,
+    dateKey: { $in: [addDaysToDateKey(dateKey, -1), dateKey, addDaysToDateKey(dateKey, 1)] },
+  }).sort({ updatedAt: -1 });
+
+  const reusable = nearby.find((s) => isWithinOperationalWindow(s, userLike, now));
+  if (reusable) return reusable;
 
   // Keep continuity across refresh/timezone/date-key edge cases:
   // if an active shift exists recently, reuse it instead of creating a fresh empty session.
@@ -175,6 +263,17 @@ const scoreSession = (session) => {
   };
 };
 
+const computeSessionLateByMs = (session, userLike = {}) => {
+  if (!session?.shiftStartAt) return 0;
+  const startHour = Number(userLike?.shiftStartHour);
+  const dayStartMs = parseDateKeyStartMs(session?.dateKey || "");
+  if (!Number.isFinite(startHour) || !Number.isFinite(dayStartMs)) return 0;
+  const expectedStartMs = dayStartMs + startHour * 60 * 60 * 1000;
+  const actualStartMs = new Date(session.shiftStartAt).getTime();
+  if (!Number.isFinite(actualStartMs)) return 0;
+  return actualStartMs > expectedStartMs ? actualStartMs - expectedStartMs : 0;
+};
+
 export const getTodaySession = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -183,7 +282,7 @@ export const getTodaySession = async (req, res) => {
     const now = getNow();
     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
-    const session = await ensureSession(userId, dateKey);
+    const session = await ensureSession(userId, userProfile || {}, dateKey, now);
     if (autoEndShiftIfDue(session)) {
       await session.save();
     }
@@ -205,7 +304,7 @@ export const startShift = async (req, res) => {
     const now = getNow();
     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
-    const session = await ensureSession(userId, dateKey);
+    const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     if (!session.shiftStartAt) session.shiftStartAt = now;
     session.status = "active";
@@ -225,7 +324,7 @@ export const endShift = async (req, res) => {
     const now = getNow();
     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
-    const session = await ensureSession(userId, dateKey);
+    const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     closeOpenBreak(session, now);
     session.shiftEndAt = now;
@@ -250,7 +349,7 @@ export const startBreak = async (req, res) => {
     const now = getNow();
     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
-    const session = await ensureSession(userId, dateKey);
+    const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
@@ -279,7 +378,7 @@ export const endBreak = async (req, res) => {
     const now = getNow();
     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
-    const session = await ensureSession(userId, dateKey);
+    const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
@@ -303,7 +402,7 @@ export const postActivity = async (req, res) => {
     const now = getNow();
     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
-    const session = await ensureSession(userId, dateKey);
+    const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
@@ -384,11 +483,7 @@ export const getManagerTeamStatus = async (req, res) => {
 
     const ids = teamMembers.map((u) => u._id);
     const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey });
-    for (const s of sessions) {
-      if (autoEndShiftIfDue(s)) {
-        await s.save();
-      }
-    }
+    await persistAutoEndedSessions(sessions, getNow());
     const byUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
 
     const rows = teamMembers.map((member) => {
@@ -396,12 +491,7 @@ export const getManagerTeamStatus = async (req, res) => {
       const breakUsage = getBreakUsage(session, getNow());
       const openBreak = session?.breaks?.find((b) => !b.endAt) || null;
       const shiftStartHour = Number(member.shiftStartHour);
-      const expectedLoginMs = Number.isFinite(shiftStartHour) ? shiftStartHour * 60 * 60 * 1000 : null;
-      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, APP_TZ) : null;
-      const lateByMs =
-        expectedLoginMs !== null && actualLoginMs !== null && actualLoginMs > expectedLoginMs
-          ? actualLoginMs - expectedLoginMs
-          : 0;
+      const lateByMs = computeSessionLateByMs(session, member);
       return {
         userId: member._id,
         username: member.username || "",
@@ -428,24 +518,6 @@ export const getManagerTeamStatus = async (req, res) => {
   } catch (error) {
     return res.status(500).json({ message: "Failed to fetch team status", error: error.message });
   }
-};
-
-const getTimeOfDayMsInTz = (dateValue, timeZone = APP_TZ) => {
-  const date = dateValue ? new Date(dateValue) : null;
-  if (!date || Number.isNaN(date.getTime())) return null;
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date);
-  const map = Object.fromEntries(parts.map((p) => [p.type, p.value]));
-  const hh = Number(map.hour);
-  const mm = Number(map.minute);
-  const ss = Number(map.second);
-  if (!Number.isFinite(hh) || !Number.isFinite(mm) || !Number.isFinite(ss)) return null;
-  return hh * 60 * 60 * 1000 + mm * 60 * 1000 + ss * 1000;
 };
 
 const getOpenBreak = (session) => (session?.breaks || []).find((b) => !b.endAt) || null;
@@ -477,11 +549,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
 
     const employeeIds = employees.map((e) => e._id);
     const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey });
-    for (const s of sessions) {
-      if (autoEndShiftIfDue(s)) {
-        await s.save();
-      }
-    }
+    await persistAutoEndedSessions(sessions, getNow());
     const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
     const now = new Date();
 
@@ -490,12 +558,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       const breakUsage = getBreakUsage(session, now);
       const openBreak = getOpenBreak(session);
       const shiftStartHour = Number(emp.shiftStartHour);
-      const expectedLoginMs = Number.isFinite(shiftStartHour) ? shiftStartHour * 60 * 60 * 1000 : null;
-      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, APP_TZ) : null;
-      const lateByMs =
-        expectedLoginMs !== null && actualLoginMs !== null && actualLoginMs > expectedLoginMs
-          ? actualLoginMs - expectedLoginMs
-          : 0;
+      const lateByMs = computeSessionLateByMs(session, emp);
       const totalWorkedMs = session?.shiftStartAt
         ? (session?.shiftEndAt
             ? new Date(session.shiftEndAt).getTime() - new Date(session.shiftStartAt).getTime()
@@ -606,13 +669,7 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
     const rows = employees.map((emp) => {
       const session = sessionsByUser.get(String(emp._id)) || null;
       const breakUsage = getBreakUsage(session, now);
-      const shiftStartHour = Number(emp.shiftStartHour);
-      const expectedLoginMs = Number.isFinite(shiftStartHour) ? shiftStartHour * 60 * 60 * 1000 : null;
-      const actualLoginMs = session?.shiftStartAt ? getTimeOfDayMsInTz(session.shiftStartAt, APP_TZ) : null;
-      const lateByMs =
-        expectedLoginMs !== null && actualLoginMs !== null && actualLoginMs > expectedLoginMs
-          ? actualLoginMs - expectedLoginMs
-          : 0;
+      const lateByMs = computeSessionLateByMs(session, emp);
       const totalWorkedMs = session?.shiftStartAt
         ? (session?.shiftEndAt
             ? new Date(session.shiftEndAt).getTime() - new Date(session.shiftStartAt).getTime()
