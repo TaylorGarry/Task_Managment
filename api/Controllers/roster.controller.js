@@ -6514,6 +6514,7 @@ export const rosterUploadFromExcel = async (req, res) => {
 
     // Department-wise overlap check - Check all months in range
     const monthsInRange = getAllMonthsInRange(selectedStartDate, selectedEndDate);
+    const isMultiMonth = monthsInRange.length > 1;
     const overlappingWeeksByDept = [];
 
     for (const dept of departments) {
@@ -6642,7 +6643,6 @@ export const rosterUploadFromExcel = async (req, res) => {
     }
 
     // Save to database - Handle multiple months if range spans across months
-    const isMultiMonth = monthsInRange.length > 1;
 
     if (isMultiMonth) {
       // Split employees data by month
