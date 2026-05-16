@@ -7,6 +7,24 @@ import AlertsPanel from "./AlertsPanel";
 import { formatDuration } from "./utils";
 import { getApiBaseUrl } from "../../utils/apiUrl";
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+const BUSINESS_DAY_RESET_HOUR_IST = 11;
+
+const getBusinessWindowStartUtcMs = (nowUtcMs = Date.now()) => {
+  const nowIstMs = nowUtcMs + IST_OFFSET_MS;
+  const ist = new Date(nowIstMs);
+  const y = ist.getUTCFullYear();
+  const m = ist.getUTCMonth();
+  const d = ist.getUTCDate();
+  const h = ist.getUTCHours();
+
+  let startIstMs = Date.UTC(y, m, d, BUSINESS_DAY_RESET_HOUR_IST, 0, 0, 0);
+  if (h < BUSINESS_DAY_RESET_HOUR_IST) {
+    startIstMs -= 24 * 60 * 60 * 1000;
+  }
+  return startIstMs - IST_OFFSET_MS;
+};
+
 const toIsoDateKey = (value) => {
   if (!value) return "";
   if (typeof value === "string") {
@@ -160,10 +178,23 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
     return () => clearInterval(id);
   }, []);
 
-  const totalHoursMs = session?.shiftStartAt
-    ? (session?.shiftEndAt
-        ? new Date(session.shiftEndAt).getTime() - new Date(session.shiftStartAt).getTime()
-        : nowMs - new Date(session.shiftStartAt).getTime())
+  const shiftStartAt = session?.shiftStartAt || session?.shiftStartedAt || null;
+  const shiftEndAt = session?.shiftEndAt || session?.shiftEndedAt || null;
+  const shiftStartMs = shiftStartAt ? new Date(shiftStartAt).getTime() : NaN;
+  const shiftEndMs = shiftEndAt ? new Date(shiftEndAt).getTime() : NaN;
+
+  const liveActivityStatuses = new Set(["active", "manual_break", "auto_break", "idle_warning"]);
+  const isLiveShift =
+    Boolean(shiftStartAt) &&
+    (liveActivityStatuses.has(String(session?.activityStatus || "").toLowerCase()) ||
+      session?.isOnBreak === true ||
+      session?.isOnShift === true ||
+      !shiftEndAt);
+
+  const totalHoursMs = Number.isFinite(shiftStartMs)
+    ? (isLiveShift
+        ? nowMs - shiftStartMs
+        : (Number.isFinite(shiftEndMs) ? shiftEndMs - shiftStartMs : nowMs - shiftStartMs))
     : 0;
   const breakMs = session?.totalBreakMs || 0;
   const manualBreakMs = (session?.breaks || [])
@@ -172,7 +203,16 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   const disconnectBreakMs = (session?.breaks || [])
     .filter((b) => b.type === "system_disconnect")
     .reduce((sum, b) => sum + (b.durationMs || 0), 0);
-  const remainingMs = Math.max(0, 9 * 60 * 60 * 1000 - totalHoursMs);
+  const businessWindowStartMs = getBusinessWindowStartUtcMs(nowMs);
+  const effectiveShiftStartMs = Number.isFinite(shiftStartMs)
+    ? Math.max(shiftStartMs, businessWindowStartMs)
+    : NaN;
+  const totalHoursMsForBusinessDay = Number.isFinite(effectiveShiftStartMs)
+    ? (isLiveShift
+        ? Math.max(0, nowMs - effectiveShiftStartMs)
+        : Math.max(0, (Number.isFinite(shiftEndMs) ? shiftEndMs : nowMs) - effectiveShiftStartMs))
+    : 0;
+  const remainingMs = Math.max(0, 9 * 60 * 60 * 1000 - totalHoursMsForBusinessDay);
   const summaryAttendanceByDate = buildAttendanceByDate(employeeDashboardSummary || {});
   const attendanceByDate = { ...summaryAttendanceByDate, ...monthAttendanceByDate };
   const selectedAttendance = attendanceByDate[selectedDateKey] || null;
@@ -388,7 +428,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
         <div className="rounded-[14px] border border-[#E2E8F0] bg-white p-4 shadow-sm">
           <h3 className="text-sm font-semibold text-[#0F172A]">Today&apos;s Snapshot</h3>
           <div className="mt-3 space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-[#64748B]">Total Working</span><span className="font-semibold">{formatDuration(totalHoursMs)}</span></div>
+            <div className="flex justify-between"><span className="text-[#64748B]">Total Working</span><span className="font-semibold">{formatDuration(totalHoursMsForBusinessDay)}</span></div>
             <div className="flex justify-between"><span className="text-[#64748B]">Break Time</span><span className="font-semibold">{formatDuration(breakMs)}</span></div>
             <div className="rounded-lg border border-[#DBEAFE] bg-[#EFF6FF] px-3 py-2">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1D4ED8]">Remaining Shift</p>

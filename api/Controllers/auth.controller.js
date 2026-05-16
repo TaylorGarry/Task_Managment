@@ -1920,23 +1920,6 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
       rosterEndDate: { $gte: monthStart },
     };
 
-    // Fast path: only pull rosters where this employee is present by userId.
-    let rosters = await Roster.find({
-      ...baseRosterFilter,
-      "weeks.employees.userId": user._id,
-    })
-      .select("_id month year rosterStartDate rosterEndDate weeks")
-      .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
-      .lean();
-
-    // Fallback for legacy rows where userId might be missing and matching relies on name/empId.
-    if (!Array.isArray(rosters) || rosters.length === 0) {
-      rosters = await Roster.find(baseRosterFilter)
-        .select("_id month year rosterStartDate rosterEndDate weeks")
-        .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
-        .lean();
-    }
-
     const toDateKey = (value) => {
       if (!value) return null;
       const d = new Date(value);
@@ -1951,6 +1934,11 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
     const monthEndKey = `${year}-${String(month).padStart(2, "0")}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
     const updaterIds = new Set();
     const byDate = {};
+    const userId = String(user?._id || "").trim();
+    const userUsername = String(user?.username || "").trim().toLowerCase();
+    const userPseudo = String(user?.pseudoName || "").trim().toLowerCase();
+    const userReal = String(user?.realName || "").trim().toLowerCase();
+    const userEmpId = String(user?.empId || "").trim();
 
     const collectUpdaterId = (candidate) => {
       if (!candidate) return;
@@ -1958,47 +1946,87 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
       else if (candidate?._id) updaterIds.add(String(candidate._id));
     };
 
-    rosters.forEach((roster) => {
-      (roster?.weeks || []).forEach((week) => {
-        const weekStart = new Date(week?.startDate);
-        const weekEnd = new Date(week?.endDate);
-        if (Number.isNaN(weekStart.getTime()) || Number.isNaN(weekEnd.getTime())) return;
-        if (weekStart > monthEnd || weekEnd < monthStart) return;
+    const employeeMatchOr = [];
+    if (userId) employeeMatchOr.push({ "weeks.employees.userId": user._id });
+    if (userEmpId) employeeMatchOr.push({ "weeks.employees.empId": userEmpId });
+    if (userPseudo) employeeMatchOr.push({ "weeks.employees.nameLower": userPseudo });
+    if (userUsername) employeeMatchOr.push({ "weeks.employees.nameLower": userUsername });
+    if (userReal) employeeMatchOr.push({ "weeks.employees.nameLower": userReal });
 
-        const emp = findEmployeeInWeek(week, user);
-        if (!emp || !Array.isArray(emp.dailyStatus)) return;
+    const dayRows = await Roster.aggregate([
+      { $match: baseRosterFilter },
+      { $unwind: "$weeks" },
+      {
+        $match: {
+          "weeks.startDate": { $lte: monthEnd },
+          "weeks.endDate": { $gte: monthStart },
+        },
+      },
+      { $unwind: "$weeks.employees" },
+      {
+        $addFields: {
+          "weeks.employees.nameLower": {
+            $toLower: { $trim: { input: { $ifNull: ["$weeks.employees.name", ""] } } },
+          },
+        },
+      },
+      {
+        $match: employeeMatchOr.length ? { $or: employeeMatchOr } : { _id: null },
+      },
+      { $unwind: "$weeks.employees.dailyStatus" },
+      {
+        $match: {
+          "weeks.employees.dailyStatus.date": { $gte: monthStart, $lte: monthEnd },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$weeks.employees.dailyStatus.date",
+          departmentStatus: "$weeks.employees.dailyStatus.departmentStatus",
+          transportStatus: "$weeks.employees.dailyStatus.transportStatus",
+          status: "$weeks.employees.dailyStatus.status",
+          punchIn: "$weeks.employees.dailyStatus.punchIn",
+          punchOut: "$weeks.employees.dailyStatus.punchOut",
+          totalHours: "$weeks.employees.dailyStatus.totalHours",
+          departmentStatusUpdatedBy: "$weeks.employees.dailyStatus.departmentStatusUpdatedBy",
+          transportStatusUpdatedBy: "$weeks.employees.dailyStatus.transportStatusUpdatedBy",
+          departmentUpdatedBy: "$weeks.employees.dailyStatus.departmentUpdatedBy",
+          transportUpdatedBy: "$weeks.employees.dailyStatus.transportUpdatedBy",
+        },
+      },
+      { $sort: { date: 1 } },
+    ]);
 
-        emp.dailyStatus.forEach((day) => {
-          const dateKey = toDateKey(day?.date);
-          if (!dateKey || dateKey < monthStartKey || dateKey > monthEndKey) return;
+    dayRows.forEach((day) => {
+      const dateKey = toDateKey(day?.date);
+      if (!dateKey || dateKey < monthStartKey || dateKey > monthEndKey) return;
 
-          collectUpdaterId(day?.departmentStatusUpdatedBy);
-          collectUpdaterId(day?.transportStatusUpdatedBy);
-          collectUpdaterId(day?.departmentUpdatedBy);
-          collectUpdaterId(day?.transportUpdatedBy);
+      collectUpdaterId(day?.departmentStatusUpdatedBy);
+      collectUpdaterId(day?.transportStatusUpdatedBy);
+      collectUpdaterId(day?.departmentUpdatedBy);
+      collectUpdaterId(day?.transportUpdatedBy);
 
-          const previous = byDate[dateKey] || null;
-          const departmentStatus = day?.departmentStatus || "";
-          const transportStatus = day?.transportStatus || "";
-          const rosterStatus = day?.status || "";
-          const incomingStatus = departmentStatus || transportStatus || rosterStatus || "";
-          const resolvedStatus = incomingStatus || previous?.status || "";
+      const previous = byDate[dateKey] || null;
+      const departmentStatus = day?.departmentStatus || "";
+      const transportStatus = day?.transportStatus || "";
+      const rosterStatus = day?.status || "";
+      const incomingStatus = departmentStatus || transportStatus || rosterStatus || "";
+      const resolvedStatus = incomingStatus || previous?.status || "";
 
-          byDate[dateKey] = {
-            date: dateKey,
-            status: resolvedStatus,
-            departmentStatus: departmentStatus || previous?.departmentStatus || "",
-            transportStatus: transportStatus || previous?.transportStatus || "",
-            punchIn: day?.punchIn || previous?.punchIn || null,
-            punchOut: day?.punchOut || previous?.punchOut || null,
-            totalHours: day?.totalHours ?? previous?.totalHours ?? null,
-            departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || previous?.departmentStatusUpdatedBy || null,
-            transportStatusUpdatedBy: day?.transportStatusUpdatedBy || previous?.transportStatusUpdatedBy || null,
-            departmentUpdatedBy: day?.departmentUpdatedBy || previous?.departmentUpdatedBy || null,
-            transportUpdatedBy: day?.transportUpdatedBy || previous?.transportUpdatedBy || null,
-          };
-        });
-      });
+      byDate[dateKey] = {
+        date: dateKey,
+        status: resolvedStatus,
+        departmentStatus: departmentStatus || previous?.departmentStatus || "",
+        transportStatus: transportStatus || previous?.transportStatus || "",
+        punchIn: day?.punchIn || previous?.punchIn || null,
+        punchOut: day?.punchOut || previous?.punchOut || null,
+        totalHours: day?.totalHours ?? previous?.totalHours ?? null,
+        departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || previous?.departmentStatusUpdatedBy || null,
+        transportStatusUpdatedBy: day?.transportStatusUpdatedBy || previous?.transportStatusUpdatedBy || null,
+        departmentUpdatedBy: day?.departmentUpdatedBy || previous?.departmentUpdatedBy || null,
+        transportUpdatedBy: day?.transportUpdatedBy || previous?.transportUpdatedBy || null,
+      };
     });
 
     const updaterIdList = Array.from(updaterIds);
