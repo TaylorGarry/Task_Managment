@@ -212,6 +212,11 @@ const AdminNavbar = ({ showOutlet = true }) => {
     };
 
     const checkBreakStatus = async () => {
+      const now = Date.now();
+      if (window.__dailyStatusPollLock) return;
+      if (now - (window.__dailyStatusPollAt || 0) < 5000) return;
+      window.__dailyStatusPollAt = now;
+      window.__dailyStatusPollLock = true;
       try {
         const res = await axios.get(`${API_URL}/punchx/superadmin/daily-status`, {
           params: { dateKey: getTodayDateKey() },
@@ -264,6 +269,8 @@ const AdminNavbar = ({ showOutlet = true }) => {
         knownBreakUsersRef.current = currentSet;
       } catch (err) {
         // Keep silent to avoid interrupting admin flow.
+      } finally {
+        window.__dailyStatusPollLock = false;
       }
     };
 

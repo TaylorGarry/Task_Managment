@@ -2,6 +2,8 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import User from "../Modals/User.modal.js";
+import EmpIdCounter from "../Modals/EmpIdCounter.modal.js";
+import EmployeeOnboardingToken from "../Modals/EmployeeOnboardingToken.modal.js";
 import Roster from "../Modals/Roster.modal.js";
 import { v2 as cloudinary } from "cloudinary";
 import path from "path";
@@ -19,6 +21,12 @@ import {
   toStorageAccountType,
   withRoleType,
 } from "../utils/roleAccess.js";
+import {
+  createEmployeeOnboardingToken,
+  getOnboardingTokenRecord,
+  markOnboardingTokenUsed,
+  sendOnboardingEmail,
+} from "../utils/onboardingEmail.js";
 
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
@@ -90,11 +98,16 @@ const __dirname = path.dirname(__filename);
 
 const shiftMapping = {
   "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+  "2am-11am": { shift: "Start", shiftStartHour: 2, shiftEndHour: 11 },
   "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
   "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
   "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+  "7pm-4am": { shift: "End", shiftStartHour: 19, shiftEndHour: 4 },
   "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+  "9pm-6am": { shift: "End", shiftStartHour: 21, shiftEndHour: 6 },
+  "10pm-7am": { shift: "Start", shiftStartHour: 22, shiftEndHour: 7 },
   "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+  "12am-9am": { shift: "Start", shiftStartHour: 0, shiftEndHour: 9 },
 };
 
 const DEFAULT_POLICY_DOCUMENTS = [
@@ -112,6 +125,63 @@ const REQUIRED_PREVIOUS_EMPLOYMENT_DOCS = new Set([
 ]);
 
 const LEGACY_POLICY_DOCS = new Set(["/policy-sample.txt", "policy-sample.txt"]);
+const EMP_ID_COUNTER_KEY = "employee_emp_id";
+const EMP_ID_BASELINE = 119461;
+const ONBOARDING_REQUIRED_DOCS = [
+  "Resume",
+  "Photo",
+  "Aadhaar Card",
+  "PAN Card",
+  "Current Address Proof",
+  "Permanent Address Proof",
+  "10th Marksheet",
+  "12th Marksheet",
+  "Graduation/Post Graduation Marksheet",
+  "Additional Certificate",
+  "Cancelled Cheque",
+  "Bank Statement (Last 3 Months)",
+  "Previous Company - Appointment Letter",
+  "Previous Company - Last 3 Months Salary Slip",
+  "Relieving/Experience Letter",
+  "Resignation Acceptance",
+  "Offer Letter",
+  "Appointment Letter",
+];
+
+const generateNextEmployeeId = async () => {
+  const existingMaxRow = await User.aggregate([
+    {
+      $match: {
+        empId: { $type: "string", $regex: "^[0-9]{1,}$" },
+      },
+    },
+    {
+      $project: {
+        empIdNum: { $toInt: "$empId" },
+      },
+    },
+    {
+      $group: {
+        _id: null,
+        maxEmpId: { $max: "$empIdNum" },
+      },
+    },
+  ]);
+  const existingMax = Number(existingMaxRow?.[0]?.maxEmpId || 0);
+  const seed = Math.max(existingMax, EMP_ID_BASELINE);
+  const counter = await EmpIdCounter.findOneAndUpdate(
+    { key: EMP_ID_COUNTER_KEY },
+    { $max: { seq: seed } },
+    { new: true, upsert: true, setDefaultsOnInsert: true }
+  ).lean();
+  const next = await EmpIdCounter.findOneAndUpdate(
+    { key: EMP_ID_COUNTER_KEY },
+    { $inc: { seq: 1 } },
+    { new: true }
+  ).lean();
+  const nextNumber = Number(next?.seq || counter?.seq || seed + 1);
+  return String(nextNumber).padStart(6, "0");
+};
 
 const resolvePolicyDocuments = (policyDocuments = []) => {
   const normalized = normalizePolicyDocuments(policyDocuments);
@@ -645,8 +715,15 @@ export const signup = async (req, res) => {
       isTeamLeader,
       realName,
       pseudoName,
-      empId,
       dateOfJoining,
+      dob,
+      permanentAddress,
+      currentAddress,
+      bloodGroup,
+      emergencyContactNumber,
+      emergencyContactName,
+      emergencyContactRelation,
+      personalEmailId,
       transportOffice,
       docsStatus,
       documents,
@@ -699,18 +776,17 @@ export const signup = async (req, res) => {
     }
 
     if (isEmployeeFlow) {
-      if (!realName || !pseudoName || !empId || !dateOfJoining || !designation) {
+      if (!realName || !dateOfJoining || !designation) {
         return res.status(400).json({
           message:
-            "Real name, pseudo name, employee ID, joining date, and designation are required for employees",
+            "Real name, joining date, and designation are required for employees",
         });
       }
     }
 
     // 🔥 Parallel DB checks (kept your optimization)
-    const [userExists, empIdExists] = await Promise.all([
+    const [userExists] = await Promise.all([
       User.exists({ username }),
-      isEmployeeFlow && empId ? User.exists({ empId: String(empId).trim() }) : Promise.resolve(false),
     ]);
 
     // 🔥 Only superAdmin can create another superAdmin (after first)
@@ -726,10 +802,6 @@ export const signup = async (req, res) => {
 
     if (userExists) {
       return res.status(400).json({ message: "User already exists" });
-    }
-
-    if (empIdExists) {
-      return res.status(400).json({ message: "Employee ID already exists" });
     }
 
     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
@@ -750,6 +822,8 @@ export const signup = async (req, res) => {
       fallback: toBooleanYesNo(docsStatus, "No"),
     });
 
+    const generatedEmpId = isEmployeeFlow ? await generateNextEmployeeId() : "";
+
     const newUserPayload = {
       username,
       password: hashedPassword,
@@ -762,8 +836,16 @@ export const signup = async (req, res) => {
       shiftEndHour: selectedShift?.shiftEndHour || null,
       realName: realName || "",
       pseudoName: pseudoName || "",
-      empId: empId ? String(empId).trim() : "",
+      empId: generatedEmpId,
       dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : null,
+      dob: dob ? new Date(dob) : null,
+      permanentAddress: String(permanentAddress || "").trim(),
+      currentAddress: String(currentAddress || "").trim(),
+      bloodGroup: String(bloodGroup || "").trim(),
+      emergencyContactNumber: String(emergencyContactNumber || "").trim(),
+      emergencyContactName: String(emergencyContactName || "").trim(),
+      emergencyContactRelation: String(emergencyContactRelation || "").trim(),
+      personalEmailId: String(personalEmailId || "").trim(),
       transportOffice: normalizedTransportOffice,
       docsStatus: normalizedDocsStatus,
       employmentType: normalizedEmploymentType,
@@ -783,16 +865,38 @@ export const signup = async (req, res) => {
         hr: { signed: false },
       })),
     };
-    if (empId) {
-      newUserPayload.empId = String(empId).trim();
-    }
-
     const newUser = await User.create(newUserPayload);
 
     const populatedUser = await User.findById(newUser._id)
       .populate("reportingManager", "username realName")
       .select("-password")
       .lean();
+
+    if (isEmployeeFlow && populatedUser?.personalEmailId) {
+      try {
+        const { rawToken } = await createEmployeeOnboardingToken(populatedUser._id);
+        const baseUrl = String(
+          process.env.EMPLOYEE_ONBOARDING_URL_BASE || "http://localhost:5173/#/employee-onboarding"
+        ).trim();
+        const uploadLink = `${baseUrl}?token=${encodeURIComponent(rawToken)}`;
+        const joiningDateText = dateOfJoining
+          ? new Date(dateOfJoining).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "long",
+              year: "numeric",
+            })
+          : "";
+        await sendOnboardingEmail({
+          to: populatedUser.personalEmailId,
+          realName: populatedUser.realName || populatedUser.username || "Candidate",
+          joiningDateText,
+          uploadLink,
+        });
+        console.log("Onboarding email sent to:", populatedUser.personalEmailId);
+      } catch (emailError) {
+        console.error("Onboarding email send failed:", emailError?.message || emailError);
+      }
+    }
 
     await notifySuperAdminsForHrAction({
       actor: req.user,
@@ -1147,7 +1251,7 @@ export const getAllEmployees = async (req, res) => {
 
     const employees = await User.find(query)
       .select(
-        "_id username department accountType isCoreTeam isTeamLeader isActive shiftStartHour shiftEndHour realName pseudoName empId dateOfJoining transportOffice docsStatus employmentType documents designation officeLocation reportingManager profilePhotoUrl profilePhotoPublicId ctc inHandSalary transportAllowance policyDocuments policySignatures policyAgreement hrDocumentOverrideUntil hrDocumentOverrideBy hrGlobalDocumentOverrideUntil hrGlobalDocumentOverrideBy createdAt"
+        "_id username department accountType isCoreTeam isTeamLeader isActive shiftStartHour shiftEndHour realName pseudoName empId dateOfJoining dob permanentAddress currentAddress bloodGroup emergencyContactNumber emergencyContactName emergencyContactRelation personalEmailId transportOffice docsStatus employmentType documents designation officeLocation reportingManager profilePhotoUrl profilePhotoPublicId ctc inHandSalary transportAllowance policyDocuments policySignatures policyAgreement hrDocumentOverrideUntil hrDocumentOverrideBy hrGlobalDocumentOverrideUntil hrGlobalDocumentOverrideBy createdAt"
       )
       .lean();
 
@@ -1244,6 +1348,14 @@ export const updateUserByAdmin = async (req, res) => {
       confirmPassword,
       empId,
       dateOfJoining,
+      dob,
+      permanentAddress,
+      currentAddress,
+      bloodGroup,
+      emergencyContactNumber,
+      emergencyContactName,
+      emergencyContactRelation,
+      personalEmailId,
       docsStatus,
       transportOffice,
       realName,
@@ -1286,6 +1398,7 @@ export const updateUserByAdmin = async (req, res) => {
     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
     if (typeof isTeamLeader !== "undefined") updateData.isTeamLeader = Boolean(isTeamLeader);
     if (dateOfJoining) updateData.dateOfJoining = new Date(dateOfJoining);
+    if (dob !== undefined) updateData.dob = dob ? new Date(dob) : null;
     if (empId !== undefined) {
       const normalizedEmpId = String(empId || "").trim();
       if (normalizedEmpId) {
@@ -1313,6 +1426,16 @@ export const updateUserByAdmin = async (req, res) => {
     if (pseudoName !== undefined) updateData.pseudoName = String(pseudoName || "").trim();
     if (designation !== undefined) updateData.designation = String(designation || "").trim();
     if (officeLocation !== undefined) updateData.officeLocation = String(officeLocation || "").trim();
+    if (permanentAddress !== undefined) updateData.permanentAddress = String(permanentAddress || "").trim();
+    if (currentAddress !== undefined) updateData.currentAddress = String(currentAddress || "").trim();
+    if (bloodGroup !== undefined) updateData.bloodGroup = String(bloodGroup || "").trim();
+    if (emergencyContactNumber !== undefined)
+      updateData.emergencyContactNumber = String(emergencyContactNumber || "").trim();
+    if (emergencyContactName !== undefined)
+      updateData.emergencyContactName = String(emergencyContactName || "").trim();
+    if (emergencyContactRelation !== undefined)
+      updateData.emergencyContactRelation = String(emergencyContactRelation || "").trim();
+    if (personalEmailId !== undefined) updateData.personalEmailId = String(personalEmailId || "").trim();
     if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = String(profilePhotoUrl || "").trim();
     if (profilePhotoPublicId !== undefined)
       updateData.profilePhotoPublicId = String(profilePhotoPublicId || "").trim();
@@ -1446,15 +1569,6 @@ export const updateUserByAdmin = async (req, res) => {
     }
 
     if (!isCoreTeam && shiftLabel) {
-      const shiftMapping = {
-        "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
-        "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
-        "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
-        "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
-        "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
-        "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
-      };
-      
       const selected = shiftMapping[shiftLabel];
       if (!selected) return res.status(400).json({ message: "Invalid shift label" });
 
@@ -1649,12 +1763,22 @@ export const getReportingManagers = async (req, res) => {
   try {
     const normalizedDepartment = normalizeDepartment(req.query?.department || "Operations");
     const storageDepartment = toStorageDepartment(normalizedDepartment);
-    const departmentRegex = new RegExp(`^\\s*${String(storageDepartment).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+    const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const departmentRegex = new RegExp(`^\\s*${escapeRegex(storageDepartment)}\\s*$`, "i");
 
-    // Only fetch team leaders (supervisors) for the department
+    const departmentFilters =
+      normalizedDepartment === "Sales"
+        ? [
+            { department: departmentRegex },
+            { department: new RegExp(`^\\s*${escapeRegex(toStorageDepartment("Operations"))}\\s*$`, "i") },
+          ]
+        : [{ department: departmentRegex }];
+
+    // Fetch team leaders for requested department.
+    // Special case: Sales employees can report to Sales TL or Operations TL.
     let managers = await User.find({
-      department: departmentRegex,
       isTeamLeader: true,
+      $or: departmentFilters,
     })
       .select("_id username realName accountType department isTeamLeader")
       .sort({ username: 1 })
@@ -2337,6 +2461,160 @@ export const uploadEmployeeAsset = async (req, res) => {
   } catch (error) {
     console.error("Upload employee asset error:", error);
     return res.status(500).json({ message: "Failed to upload asset", error: error.message });
+  }
+};
+
+export const verifyEmployeeOnboardingToken = async (req, res) => {
+  try {
+    const token = String(req.query?.token || "").trim();
+    if (!token) return res.status(400).json({ message: "Token is required" });
+    const record = await getOnboardingTokenRecord(token);
+    if (!record) return res.status(401).json({ message: "Invalid or expired onboarding token" });
+    const employee = await User.findById(record.userId)
+      .select("_id realName pseudoName username empId personalEmailId")
+      .lean();
+    if (!employee) return res.status(404).json({ message: "Employee not found" });
+    return res.status(200).json({
+      valid: true,
+      employee: {
+        id: employee._id,
+        realName: employee.realName || employee.pseudoName || employee.username,
+        empId: employee.empId || "",
+        email: employee.personalEmailId || "",
+      },
+      requiredDocs: ONBOARDING_REQUIRED_DOCS,
+    });
+  } catch (error) {
+    console.error("Verify onboarding token error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+};
+
+export const uploadEmployeeOnboardingAsset = async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const documentName = String(req.body?.documentName || "").trim();
+    const file = req.file;
+    if (!token) return res.status(400).json({ message: "Token is required" });
+    if (!documentName) return res.status(400).json({ message: "Document name is required" });
+    if (!file) return res.status(400).json({ message: "No file uploaded" });
+    if (!ONBOARDING_REQUIRED_DOCS.includes(documentName)) {
+      return res.status(400).json({ message: "Invalid document name" });
+    }
+
+    const record = await getOnboardingTokenRecord(token);
+    if (!record) return res.status(401).json({ message: "Invalid or expired onboarding token" });
+
+    const isPdf = file.mimetype === "application/pdf";
+    const maxBytes = isPdf ? 300 * 1024 : 200 * 1024;
+    if (file.size > maxBytes) {
+      return res.status(400).json({
+        message: `File too large. Max allowed is ${isPdf ? "300KB" : "200KB"}`,
+      });
+    }
+
+    const folder = documentName === "Photo"
+      ? "task_management/employee/profile_photos"
+      : "task_management/employee/onboarding_docs";
+
+    const result = await new Promise((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder,
+          resource_type: "auto",
+          use_filename: true,
+          unique_filename: true,
+          overwrite: false,
+        },
+        (error, uploadResult) => {
+          if (error) return reject(error);
+          resolve(uploadResult);
+        }
+      );
+      stream.end(file.buffer);
+    });
+
+    return res.status(200).json({
+      success: true,
+      asset: {
+        name: documentName,
+        url: result.secure_url,
+        publicId: result.public_id,
+        fileName: file.originalname,
+        mimeType: file.mimetype,
+        size: result.bytes || file.size || 0,
+        uploaded: true,
+        uploadedAt: new Date().toISOString(),
+        uploadedIp: getRequestIp(req),
+      },
+    });
+  } catch (error) {
+    console.error("Employee onboarding upload error:", error);
+    return res.status(500).json({ message: "Upload failed", error: error.message });
+  }
+};
+
+export const submitEmployeeOnboardingDocs = async (req, res) => {
+  try {
+    const token = String(req.body?.token || "").trim();
+    const documents = Array.isArray(req.body?.documents) ? req.body.documents : [];
+    if (!token) return res.status(400).json({ message: "Token is required" });
+    if (!documents.length) return res.status(400).json({ message: "Documents are required" });
+
+    const record = await getOnboardingTokenRecord(token);
+    if (!record) return res.status(401).json({ message: "Invalid or expired onboarding token" });
+
+    const validDocuments = documents
+      .map((doc) => ({
+        name: String(doc?.name || "").trim(),
+        url: String(doc?.url || "").trim(),
+        publicId: String(doc?.publicId || "").trim(),
+        fileName: String(doc?.fileName || "").trim(),
+        mimeType: String(doc?.mimeType || "").trim(),
+        size: Number(doc?.size || 0),
+        uploaded: true,
+        uploadedAt: doc?.uploadedAt ? new Date(doc.uploadedAt) : new Date(),
+        uploadedIp: String(doc?.uploadedIp || getRequestIp(req)),
+      }))
+      .filter((doc) => doc.name && doc.url && ONBOARDING_REQUIRED_DOCS.includes(doc.name));
+
+    const providedNames = new Set(validDocuments.map((d) => d.name));
+    const missingDocs = ONBOARDING_REQUIRED_DOCS.filter((name) => !providedNames.has(name));
+    if (missingDocs.length) {
+      return res.status(400).json({
+        message: "All documents are mandatory for onboarding upload",
+        missingDocs,
+      });
+    }
+
+    const photoDoc = validDocuments.find((d) => d.name === "Photo");
+    const updateData = {
+      documents: validDocuments,
+      docsStatus: "Yes",
+    };
+    if (photoDoc?.url) {
+      updateData.profilePhotoUrl = photoDoc.url;
+      updateData.profilePhotoPublicId = photoDoc.publicId || "";
+    }
+
+    const updatedUser = await User.findByIdAndUpdate(
+      record.userId,
+      { $set: updateData },
+      { new: true }
+    )
+      .select("_id username realName empId documents docsStatus profilePhotoUrl profilePhotoPublicId")
+      .lean();
+
+    await markOnboardingTokenUsed(record._id);
+
+    return res.status(200).json({
+      success: true,
+      message: "Documents submitted successfully",
+      user: updatedUser,
+    });
+  } catch (error) {
+    console.error("Submit onboarding docs error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 

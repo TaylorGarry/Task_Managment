@@ -11,19 +11,24 @@ import {
   startBreak,
   startShift,
 } from "../Controllers/punchx.controller.js";
+import { cacheGetResponse, invalidateCacheTag } from "../Middlewares/responseCache.middleware.js";
 
 const router = express.Router();
 
 router.use(authMiddleware);
 
 router.get("/session/today", getTodaySession);
-router.post("/shift/start", startShift);
-router.post("/shift/end", endShift);
-router.post("/break/start", startBreak);
-router.post("/break/end", endBreak);
-router.post("/activity", postActivity);
+router.post("/shift/start", invalidateCacheTag("attendance"), startShift);
+router.post("/shift/end", invalidateCacheTag("attendance"), endShift);
+router.post("/break/start", invalidateCacheTag("attendance"), startBreak);
+router.post("/break/end", invalidateCacheTag("attendance"), endBreak);
+router.post("/activity", invalidateCacheTag("attendance"), postActivity);
 router.get("/manager/team-status", getManagerTeamStatus);
-router.get("/superadmin/daily-status", getSuperAdminDailyStatus);
+router.get(
+  "/superadmin/daily-status",
+  cacheGetResponse({ keyPrefix: "daily-status", ttlMs: 15 * 1000, tag: "attendance" }),
+  getSuperAdminDailyStatus
+);
 router.get("/superadmin/daily-status/export", exportSuperAdminDailyStatusExcel);
 
 export default router;

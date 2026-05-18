@@ -2977,8 +2977,3 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
 };
 
 export default RosterBulkEditForm;
-
-
-
-//Keshav	Developer	Yes	1	Gaurav	18	3	P	P	P	P	P	WO	WO									
-
