@@ -450,6 +450,22 @@ const allowedIPs = [
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+const ATTENDANCE_SLOW_API_MS = Number.parseInt(process.env.ATTENDANCE_SLOW_API_MS || "800", 10);
+app.use((req, res, next) => {
+  const isAttendanceRoute = req.originalUrl?.includes("/api/v1/roster");
+  if (!isAttendanceRoute) return next();
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    const durationMs = Date.now() - startedAt;
+    if (durationMs >= ATTENDANCE_SLOW_API_MS) {
+      console.log(
+        `[SlowAPI] ${req.method} ${req.originalUrl} ${durationMs}ms status=${res.statusCode}`
+      );
+    }
+  });
+  next();
+});
+
 app.use((req, res, next) => {
   req.io = io;  
   next();

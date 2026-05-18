@@ -8,7 +8,7 @@ import { formatDuration } from "./utils";
 import { getApiBaseUrl } from "../../utils/apiUrl";
 
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
-const BUSINESS_DAY_RESET_HOUR_IST = 11;
+const BUSINESS_DAY_RESET_HOUR_IST = 14; // 2:00 PM IST operational window start
 
 const getBusinessWindowStartUtcMs = (nowUtcMs = Date.now()) => {
   const nowIstMs = nowUtcMs + IST_OFFSET_MS;
@@ -139,16 +139,6 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
     return new Date(d.getFullYear(), d.getMonth(), 1);
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toIsoDateKey(new Date()));
-  const getCurrentIstYearMonth = () => {
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-    }).formatToParts(new Date());
-    const year = Number(parts.find((p) => p.type === "year")?.value || 0);
-    const month = Number(parts.find((p) => p.type === "month")?.value || 0);
-    return { year, month };
-  };
   const [showExportPopup, setShowExportPopup] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState(() => {
@@ -191,7 +181,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
       session?.isOnShift === true ||
       !shiftEndAt);
 
-  const totalHoursMs = Number.isFinite(shiftStartMs)
+  const grossTotalHoursMs = Number.isFinite(shiftStartMs)
     ? (isLiveShift
         ? nowMs - shiftStartMs
         : (Number.isFinite(shiftEndMs) ? shiftEndMs - shiftStartMs : nowMs - shiftStartMs))
@@ -207,11 +197,13 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   const effectiveShiftStartMs = Number.isFinite(shiftStartMs)
     ? Math.max(shiftStartMs, businessWindowStartMs)
     : NaN;
-  const totalHoursMsForBusinessDay = Number.isFinite(effectiveShiftStartMs)
+  const grossBusinessDayMs = Number.isFinite(effectiveShiftStartMs)
     ? (isLiveShift
         ? Math.max(0, nowMs - effectiveShiftStartMs)
         : Math.max(0, (Number.isFinite(shiftEndMs) ? shiftEndMs : nowMs) - effectiveShiftStartMs))
     : 0;
+  const totalHoursMs = Math.max(0, grossTotalHoursMs - breakMs);
+  const totalHoursMsForBusinessDay = Math.max(0, grossBusinessDayMs - breakMs);
   const remainingMs = Math.max(0, 9 * 60 * 60 * 1000 - totalHoursMsForBusinessDay);
   const summaryAttendanceByDate = buildAttendanceByDate(employeeDashboardSummary || {});
   const attendanceByDate = { ...summaryAttendanceByDate, ...monthAttendanceByDate };
@@ -254,9 +246,6 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
         const token = user?.token;
         if (!token) return;
         const API_URL = getApiBaseUrl();
-        const { year: currentIstYear, month: currentIstMonth } = getCurrentIstYearMonth();
-        const isPastMonth =
-          year < currentIstYear || (year === currentIstYear && month < currentIstMonth);
         const res = await axios.get(`${API_URL}/employee/attendance-month`, {
           params: { month, year },
           headers: { Authorization: `Bearer ${token}` },
@@ -266,12 +255,15 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
         list.forEach((item) => {
           const key = toIsoDateKey(item?.date);
           if (!key) return;
+          const isPastDate = key < todayDateKey;
           nextMap[key] = {
             ...item,
             date: key,
-            status: isPastMonth
-              ? item?.status || item?.departmentStatus || item?.transportStatus || ""
-              : item?.departmentStatus || item?.transportStatus || "",
+            status:
+              item?.departmentStatus ||
+              item?.transportStatus ||
+              (isPastDate ? item?.status : "") ||
+              "",
             checkIn: item?.checkIn || item?.punchIn || "",
             checkOut: item?.checkOut || item?.punchOut || "",
             hoursWorked: item?.hoursWorked ?? item?.totalHours ?? "",
@@ -286,7 +278,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
       }
     };
     loadMonthAttendance();
-  }, [activeMonth]);
+  }, [activeMonth, todayDateKey]);
 
   const handleExportAttendance = async () => {
     const token = user?.token;
