@@ -64,6 +64,14 @@ const Signup = () => {
       transportOffice: "No",
       docsStatus: "No",
       shiftLabel: "1am-10am",
+      dob: "",
+      permanentAddress: "",
+      currentAddress: "",
+      bloodGroup: "",
+      emergencyContactNumber: "",
+      emergencyContactName: "",
+      emergencyContactRelation: "",
+      personalEmailId: "",
     },
   });
 
@@ -75,7 +83,6 @@ const Signup = () => {
   const password = watch("password");
   const realName = watch("realName");
   const pseudoName = watch("pseudoName");
-  const empId = watch("empId");
   const dateOfJoining = watch("dateOfJoining");
   const designation = watch("designation");
   const shiftLabel = watch("shiftLabel");
@@ -158,8 +165,6 @@ const Signup = () => {
   const isStep2Complete =
     !isEmployee ||
     (hasText(realName) &&
-      hasText(pseudoName) &&
-      hasText(empId) &&
       hasText(dateOfJoining) &&
       hasText(designation) &&
       (isCoreTeam || hasText(shiftLabel)));
@@ -186,8 +191,15 @@ const Signup = () => {
       payload.realName = data.realName;
       payload.pseudoName = data.pseudoName;
       payload.isTeamLeader = data.accountType === "supervisor" ? true : Boolean(data.isTeamLeader);
-      payload.empId = data.empId;
       payload.dateOfJoining = data.dateOfJoining;
+      payload.dob = data.dob || null;
+      payload.permanentAddress = data.permanentAddress || "";
+      payload.currentAddress = data.currentAddress || "";
+      payload.bloodGroup = data.bloodGroup || "";
+      payload.emergencyContactNumber = data.emergencyContactNumber || "";
+      payload.emergencyContactName = data.emergencyContactName || "";
+      payload.emergencyContactRelation = data.emergencyContactRelation || "";
+      payload.personalEmailId = data.personalEmailId || "";
       payload.transportOffice = data.transportOffice;
       payload.docsStatus = data.docsStatus;
       payload.documents = documents;
@@ -213,9 +225,17 @@ const Signup = () => {
       department: normalizeDepartment(data.department),
       realName: data.realName,
       pseudoName: data.pseudoName,
-      empId: data.empId,
+      empId: "Auto-generated at create time",
       dateOfJoining: data.dateOfJoining,
       designation: data.designation,
+      dob: data.dob || "-",
+      permanentAddress: data.permanentAddress || "-",
+      currentAddress: data.currentAddress || "-",
+      bloodGroup: data.bloodGroup || "-",
+      emergencyContactNumber: data.emergencyContactNumber || "-",
+      emergencyContactName: data.emergencyContactName || "-",
+      emergencyContactRelation: data.emergencyContactRelation || "-",
+      personalEmailId: data.personalEmailId || "-",
       reportingManagerLabel,
       transportOffice: data.transportOffice,
       docsStatus: data.docsStatus,
@@ -389,6 +409,97 @@ const Signup = () => {
                         </div>
                       </div>
 
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">DOB</label>
+                          <div className="mt-2">
+                            <input type="hidden" {...register("dob")} />
+                            <StyledDatePicker
+                              value={watch("dob")}
+                              onChange={(val) => setValue("dob", val)}
+                              disabled={creatingUser}
+                              placeholder="Select date of birth"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Blood Group</label>
+                          <input
+                            type="text"
+                            {...register("bloodGroup")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Personal Email ID</label>
+                          <input
+                            type="email"
+                            {...register("personalEmailId")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-3">
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Emergency Contact Name</label>
+                          <input
+                            type="text"
+                            {...register("emergencyContactName")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Emergency Contact Number</label>
+                          <input
+                            type="text"
+                            {...register("emergencyContactNumber")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Emergency Contact Relation</label>
+                          <input
+                            type="text"
+                            {...register("emergencyContactRelation")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Permanent Address</label>
+                          <input
+                            type="text"
+                            {...register("permanentAddress")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-sm font-medium text-slate-700">Current Address</label>
+                          <input
+                            type="text"
+                            {...register("currentAddress")}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
+                            disabled={creatingUser}
+                            placeholder="Optional"
+                          />
+                        </div>
+                      </div>
+
                       <div className="grid gap-4 md:grid-cols-2">
                         <div>
                           <label className="text-sm font-medium text-slate-700">Account Type</label>
@@ -458,9 +569,10 @@ const Signup = () => {
                           <label className="text-sm font-medium text-slate-700">Pseudo Name</label>
                           <input
                             type="text"
-                            {...register("pseudoName", { required: true })}
+                            {...register("pseudoName")}
                             className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
                             disabled={creatingUser}
+                            placeholder="Optional"
                           />
                         </div>
                       </div>
@@ -470,9 +582,10 @@ const Signup = () => {
                           <label className="text-sm font-medium text-slate-700">Employee ID</label>
                           <input
                             type="text"
-                            {...register("empId", { required: true })}
+                            value="Auto-generated (6-digit serial)"
+                            readOnly
                             className="mt-2 w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none transition focus:border-cyan-500 focus:bg-white"
-                            disabled={creatingUser}
+                            disabled
                           />
                         </div>
                         <div>

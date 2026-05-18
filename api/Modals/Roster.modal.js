@@ -194,6 +194,11 @@ const rosterSchema = new mongoose.Schema(
 
 rosterSchema.index({ rosterStartDate: 1, rosterEndDate: 1 });
 rosterSchema.index({ "weeks.startDate": 1, "weeks.endDate": 1 });
+rosterSchema.index({ month: 1, year: 1 });
+rosterSchema.index({ year: 1, month: 1, updatedAt: -1 });
+rosterSchema.index({ "weeks.weekNumber": 1 });
+rosterSchema.index({ "weeks.employees.userId": 1 });
+rosterSchema.index({ "weeks.employees.teamLeader": 1, "weeks.employees.department": 1 });
 
 export default mongoose.model("Roster", rosterSchema);
 

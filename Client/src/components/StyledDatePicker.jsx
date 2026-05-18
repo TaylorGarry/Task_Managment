@@ -67,6 +67,18 @@ const StyledDatePicker = ({
   const rangeEndParsed = toDate(rangeEnd);
   const [cursor, setCursor] = useState(parsed || initialParsed || minParsed || new Date());
   const wrapperRef = useRef(null);
+  const monthNames = useMemo(
+    () => ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"],
+    []
+  );
+  const yearOptions = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const startYear = minParsed ? minParsed.getFullYear() : currentYear - 70;
+    const endYear = currentYear + 10;
+    const years = [];
+    for (let y = startYear; y <= endYear; y += 1) years.push(y);
+    return years;
+  }, [minParsed]);
 
   useEffect(() => {
     const onDocClick = (e) => {
@@ -124,9 +136,34 @@ const StyledDatePicker = ({
       {open && (
         <div className="absolute z-[120] mt-2 w-[310px] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
           <div className="mb-3 flex items-center justify-between">
-            <p className="text-xs font-semibold tracking-[0.22em] text-slate-700">
-              {cursor.toLocaleDateString("en-US", { month: "long", year: "numeric" }).toUpperCase()}
-            </p>
+            <div className="flex items-center gap-2">
+              <select
+                value={cursor.getMonth()}
+                onChange={(e) =>
+                  setCursor((d) => new Date(d.getFullYear(), Number(e.target.value), 1))
+                }
+                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none"
+              >
+                {monthNames.map((month, index) => (
+                  <option key={month} value={index}>
+                    {month}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={cursor.getFullYear()}
+                onChange={(e) =>
+                  setCursor((d) => new Date(Number(e.target.value), d.getMonth(), 1))
+                }
+                className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 outline-none"
+              >
+                {yearOptions.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
             <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-white p-0.5">
             <button
               type="button"

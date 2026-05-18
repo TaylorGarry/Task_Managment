@@ -98,6 +98,11 @@ const Navbar = () => {
     };
 
     const checkBreakStatus = async () => {
+      const now = Date.now();
+      if (window.__dailyStatusPollLock) return;
+      if (now - (window.__dailyStatusPollAt || 0) < 5000) return;
+      window.__dailyStatusPollAt = now;
+      window.__dailyStatusPollLock = true;
       try {
         const res = await fetch(`${API_URL}/punchx/superadmin/daily-status?dateKey=${getTodayDateKey()}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -131,6 +136,8 @@ const Navbar = () => {
         });
         knownBreakUsersRef.current = currentSet;
       } catch {
+      } finally {
+        window.__dailyStatusPollLock = false;
       }
     };
 

@@ -432,6 +432,7 @@ import Navbar from "./pages/Navbar.jsx";
 import SuperAdminLoginStatus from "./pages/SuperAdminLoginStatus.jsx";
 import MyProfile from "./pages/MyProfile.jsx";
 import AttendanceOverrideUpload from "./pages/AttendanceOverrideUpload.jsx";
+import EmployeeOnboardingUpload from "./pages/EmployeeOnboardingUpload.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import {
@@ -698,6 +699,7 @@ function App() {
         />
 
         <Route path="/login" element={<Login />} />
+        <Route path="/employee-onboarding" element={<EmployeeOnboardingUpload />} />
 
         <Route
           path="/upload-roster"

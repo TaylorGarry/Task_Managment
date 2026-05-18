@@ -125,8 +125,8 @@ const clearEmployeesForUpdatesCache = () => {
   console.log("Employees-for-updates cache cleared");
 };
 
-const getEmployeesForUpdatesCacheKey = ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom }) =>
-  `${rosterId}-${weekNumber}-${date}-p${page ?? "all"}-l${limit ?? "all"}-q${q ?? ""}-sb${searchBy ?? ""}-df${delegatedFrom ?? ""}`;
+const getEmployeesForUpdatesCacheKey = ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year }) =>
+  `${rosterId}-${weekNumber}-${date}-m${month ?? ""}-y${year ?? ""}-p${page ?? "all"}-l${limit ?? "all"}-q${q ?? ""}-sb${searchBy ?? ""}-df${delegatedFrom ?? ""}`;
 
 const getCachedEmployeesForUpdates = (cacheKey) => {
   const cached = cache.employeesForUpdates.dataByKey[cacheKey];
@@ -201,7 +201,7 @@ export const uploadRosterFromExcel = createAsyncThunk(
       return rejectWithValue(message);
     }
   }
-); 
+);
 export const getOpsMetaCurrentWeekRoster = createAsyncThunk(
   'roster/opsMeta/getCurrentWeek',
   async (_, { rejectWithValue, getState }) => {
@@ -69630,8 +69630,8 @@ export const updateAttendanceBulk = createAsyncThunk(
 
 export const getEmployeesForUpdates = createAsyncThunk(
   "roster/getEmployeesForUpdates",
-		  async ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year }, thunkAPI) => {
-		    try {
+			  async ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year }, thunkAPI) => {
+			    try {
 		      const cacheKey = getEmployeesForUpdatesCacheKey({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year });
 	      const cached = getCachedEmployeesForUpdates(cacheKey);
 	      if (cached) {
@@ -69665,9 +69665,29 @@ export const getEmployeesForUpdates = createAsyncThunk(
       console.error("❌ Error fetching employees:", err.response?.data || err.message);
       const message = err.response?.data?.message || err.message;
       toast.error(message);
-      return thunkAPI.rejectWithValue(message);
-    }
-  }
+	      return thunkAPI.rejectWithValue(message);
+	    }
+	  },
+	  {
+	    condition: ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year }, { getState }) => {
+	      const requestKey = getEmployeesForUpdatesCacheKey({
+	        rosterId,
+	        weekNumber,
+	        date,
+	        page,
+	        limit,
+	        q,
+	        searchBy,
+	        delegatedFrom,
+	        month,
+	        year,
+	      });
+	      const state = getState()?.roster;
+	      if (!state) return true;
+	      if (state.loading && state.updateEmployeesRequestKey === requestKey) return false;
+	      return true;
+	    },
+	  }
 );
 
 export const getDepartmentWiseAttendance = createAsyncThunk(
@@ -69824,8 +69844,10 @@ const rosterSlice = createSlice({
     departmentWiseAttendanceError: null,
 
 
-    loading: false,
-    rosterStatus: null,
+	    loading: false,
+    updateEmployeesRequestKey: "",
+    updateEmployeesRequestId: null,
+	    rosterStatus: null,
 canEdit: true,
 // editHistory: [],
 
@@ -70600,21 +70622,27 @@ canEdit: true,
 	  state.error = action.payload;
 	})
 	
-	// Get Employees for Updates Cases
-	.addCase(getEmployeesForUpdates.pending, (state) => {
-	  state.loading = true;
-	  state.error = null;
-})
-.addCase(getEmployeesForUpdates.fulfilled, (state, action) => {
-  state.loading = false;
-  // Store the entire response
-  state.updateEmployeesData = action.payload;
-  console.log("✅ updateEmployeesData stored:", action.payload);
-})
-.addCase(getEmployeesForUpdates.rejected, (state, action) => {
-  state.loading = false;
-  state.error = action.payload;
-})
+		// Get Employees for Updates Cases
+			.addCase(getEmployeesForUpdates.pending, (state, action) => {
+      state.updateEmployeesRequestKey = getEmployeesForUpdatesCacheKey(action.meta.arg || {});
+      state.updateEmployeesRequestId = action.meta.requestId;
+			  state.loading = true;
+			  state.error = null;
+		})
+	.addCase(getEmployeesForUpdates.fulfilled, (state, action) => {
+    if (action.meta.requestId !== state.updateEmployeesRequestId) return;
+	  state.loading = false;
+	  state.updateEmployeesRequestKey = getEmployeesForUpdatesCacheKey(action.meta.arg || {});
+	  // Store the entire response
+	  state.updateEmployeesData = action.payload;
+	  console.log("✅ updateEmployeesData stored:", action.payload);
+	})
+	.addCase(getEmployeesForUpdates.rejected, (state, action) => {
+    if (action.meta.requestId !== state.updateEmployeesRequestId) return;
+	  state.loading = false;
+	  state.updateEmployeesRequestKey = getEmployeesForUpdatesCacheKey(action.meta.arg || {});
+	  state.error = action.payload;
+	})
 .addCase(getTransportDetailForSuperAdmin.pending, (state) => {
   state.loading = true;
   state.error = null;

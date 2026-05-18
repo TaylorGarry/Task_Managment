@@ -132,6 +132,7 @@ import {
       uploadAttendanceOverrideFromExcel,
 				} from "../Controllers/roster.controller.js";
 import { validateRosterWeek } from "../Middlewares/roster.middleware.js";
+import { cacheGetResponse, invalidateCacheTag } from "../Middlewares/responseCache.middleware.js";
 import multer from "multer"; 
 const router = express.Router();
 
@@ -176,13 +177,13 @@ const uploadAttendanceOverrideExcel = (req, res, next) => {
 };
 
 // Add a new roster week
-router.post("/add-week", authMiddleware, validateRosterWeek, addRosterWeek);
+router.post("/add-week", authMiddleware, invalidateCacheTag("attendance"), validateRosterWeek, addRosterWeek);
 
 // Get roster details (for existing CRM users only)
 router.get("/getroster", authMiddleware, getRosterForCRMUsers);
 
 // Edit roster week details
-router.put("/update-employee", authMiddleware, updateRoster);
+router.put("/update-employee", authMiddleware, invalidateCacheTag("attendance"), updateRoster);
 
 	// Export roster to Excel
 	router.get("/exportroster", authMiddleware, exportRosterToExcel);
@@ -190,32 +191,32 @@ router.put("/update-employee", authMiddleware, updateRoster);
 	// Export attendance snapshot (date range + optional department)
 	router.get("/export-attendance-snapshot", authMiddleware, exportAttendanceSnapshotToExcel);
 
-router.get("/rosterdetail", authMiddleware, getAllRosters);
+router.get("/rosterdetail", authMiddleware, cacheGetResponse({ keyPrefix: "rosterdetail", ttlMs: 60 * 1000, tag: "attendance" }), getAllRosters);
 
 router.get("/export-saved", authMiddleware, exportSavedRoster);
 
-router.post('/delete-employee', authMiddleware, deleteEmployeeFromRoster); // By employeeId
-router.post('/delete-employee-by-userid', authMiddleware, deleteEmployeeByUserId); // By CRM userId
-router.post('/delete-employee-by-name', authMiddleware, deleteEmployeeByName);
+router.post('/delete-employee', authMiddleware, invalidateCacheTag("attendance"), deleteEmployeeFromRoster); // By employeeId
+router.post('/delete-employee-by-userid', authMiddleware, invalidateCacheTag("attendance"), deleteEmployeeByUserId); // By CRM userId
+router.post('/delete-employee-by-name', authMiddleware, invalidateCacheTag("attendance"), deleteEmployeeByName);
 
-router.post("/create-range", authMiddleware, createRosterForDateRange);
+router.post("/create-range", authMiddleware, invalidateCacheTag("attendance"), createRosterForDateRange);
 
 // 2. Copy employees from one week to another week(s)
-router.post("/copy-employees", authMiddleware, copyEmployeesToWeek);
+router.post("/copy-employees", authMiddleware, invalidateCacheTag("attendance"), copyEmployeesToWeek);
 
 // 3. Bulk update multiple weeks at once
-router.post("/bulk-update", authMiddleware, bulkUpdateWeeks);
+router.post("/bulk-update", authMiddleware, invalidateCacheTag("attendance"), bulkUpdateWeeks);
 
 	router.get("/bulk-edit/:rosterId", authMiddleware, getRosterForBulkEdit);
 	router.get("/bulk-edit/:rosterId/search", authMiddleware, searchBulkEditEmployees);
 
 	// 2. Save all changes across multiple weeks at once
-	router.put("/bulk-save/:rosterId", authMiddleware, bulkUpdateRosterWeeks);
+		router.put("/bulk-save/:rosterId", authMiddleware, invalidateCacheTag("attendance"), bulkUpdateRosterWeeks);
 
 // This roster is for Ops-Meta to display only current week roster
-router.get('/current-week', authMiddleware, getOpsMetaCurrentWeekRoster);
+router.get('/current-week', authMiddleware, cacheGetResponse({ keyPrefix: "current-week", ttlMs: 30 * 1000, tag: "attendance" }), getOpsMetaCurrentWeekRoster);
 
-router.put('/update',authMiddleware, updateOpsMetaRoster);
+router.put('/update',authMiddleware, invalidateCacheTag("attendance"), updateOpsMetaRoster);
 
 router.post("/upload-excel", 
   authMiddleware, 
@@ -264,49 +265,57 @@ router.put(
   updateArrivalTime
 );
 
-	router.put(
-	  "/update-attendance",
-	  authMiddleware,
-	  updateAttendance
-	);
+		router.put(
+		  "/update-attendance",
+		  authMiddleware,
+      invalidateCacheTag("attendance"),
+		  updateAttendance
+		);
 
-	router.put(
-	  "/update-attendance/bulk",
-	  authMiddleware,
-	  updateAttendanceBulk
-	);
+		router.put(
+		  "/update-attendance/bulk",
+		  authMiddleware,
+      invalidateCacheTag("attendance"),
+		  updateAttendanceBulk
+		);
 
 router.get(
   "/updates/:rosterId/:weekNumber/:date",
   authMiddleware,
+  cacheGetResponse({ keyPrefix: "updates", ttlMs: 45 * 1000, tag: "attendance" }),
   getFilteredRosterForUpdates
 );
 router.get(
   "/superadmin/transport-details/:rosterId/:weekNumber/:date",
   authMiddleware,
+  cacheGetResponse({ keyPrefix: "transport-details", ttlMs: 45 * 1000, tag: "attendance" }),
   getTransportDetailForSuperAdmin
 );
 
 router.get(
   '/attendance/department-wise/:rosterId/:weekNumber/:date',
   authMiddleware,
+  cacheGetResponse({ keyPrefix: "department-wise", ttlMs: 45 * 1000, tag: "attendance" }),
   getDepartmentWiseAttendance
 );
 
 router.put(
   "/update-punch-times",
   authMiddleware,
+  invalidateCacheTag("attendance"),
   updatePunchTimes  // You need to import this from controller
 );
 router.put(
   "/update-punch-times/bulk",
   authMiddleware,
+  invalidateCacheTag("attendance"),
   bulkUpdatePunchTimes  // Bulk update
 );
 
 router.post(
   "/attendance-override/upload",
   authMiddleware,
+  invalidateCacheTag("attendance"),
   uploadAttendanceOverrideExcel,
   uploadAttendanceOverrideFromExcel
 );

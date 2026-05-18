@@ -185,6 +185,53 @@ const userSchema = new mongoose.Schema(
       default: null,
     },
 
+    dob: {
+      type: Date,
+      default: null,
+    },
+
+    permanentAddress: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    currentAddress: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    bloodGroup: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    emergencyContactNumber: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    emergencyContactName: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    emergencyContactRelation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
+    personalEmailId: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+
     transportOffice: {
       type: String,
       enum: ["Yes", "No", ""],
