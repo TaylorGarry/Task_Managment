@@ -275,6 +275,7 @@ const formatPrettyDate = (dateKey) => {
 		  const exportCaptureRef = useRef(null);
 		  const departmentDropdownRef = useRef(null);
 		  const teamLeaderDropdownRef = useRef(null);
+		  const lastEmployeesRequestKeyRef = useRef("");
 			  const [showColumnMenu, setShowColumnMenu] = useState(false);
 					  const [columnVisibility, setColumnVisibility] = useState({
 					    employee: true,
@@ -341,6 +342,30 @@ const formatPrettyDate = (dateKey) => {
 
     const sorted = [...weeks].sort((a, b) => Number(a?.weekNumber ?? 0) - Number(b?.weekNumber ?? 0));
     return sorted[0]?.weekNumber != null ? Number(sorted[0].weekNumber) : null;
+  };
+
+  const requestEmployeesIfNeeded = ({
+    rosterId,
+    weekNumber,
+    date,
+    month,
+    year,
+    delegatedFrom,
+    force = false,
+  }) => {
+    if (!rosterId || !weekNumber || !date) return;
+    const requestPayload = {
+      rosterId,
+      weekNumber,
+      date,
+      month,
+      year,
+      ...(delegatedFrom ? { delegatedFrom } : {}),
+    };
+    const requestKey = JSON.stringify(requestPayload);
+    if (!force && lastEmployeesRequestKeyRef.current === requestKey) return;
+    lastEmployeesRequestKeyRef.current = requestKey;
+    dispatch(getEmployeesForUpdates(requestPayload));
   };
 
   // ✅ Fetch all rosters on component mount and when month/year changes
@@ -442,14 +467,14 @@ const formatPrettyDate = (dateKey) => {
 	      if (weekNumber != null) {
 	        setSelectedWeek(weekNumber);
 	        setLoadingState('loading');
-	        dispatch(getEmployeesForUpdates({
-	          rosterId: currentRoster._id,
-	          weekNumber,
-	          date: requestDate,
+          requestEmployeesIfNeeded({
+            rosterId: currentRoster._id,
+            weekNumber,
+            date: requestDate,
             month: selectedMonth,
             year: selectedYear,
-	          ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-	        }));
+            delegatedFrom: delegatedFromParam,
+          });
 	      } else {
 	        setAllEmployees([]);
 	        setSelectedWeek(null);
@@ -630,14 +655,14 @@ const formatPrettyDate = (dateKey) => {
     setLoadingState('loading');
     
     if (selectedRoster) {
-		      dispatch(getEmployeesForUpdates({
-		        rosterId: selectedRoster,
-		        weekNumber: parseInt(weekNumber),
-		        date: newDate,
+          requestEmployeesIfNeeded({
+            rosterId: selectedRoster,
+            weekNumber: parseInt(weekNumber),
+            date: newDate,
             month: selectedMonth,
             year: selectedYear,
-		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-		      }));
+            delegatedFrom: delegatedFromParam,
+          });
     }
   };
 
@@ -656,14 +681,14 @@ const formatPrettyDate = (dateKey) => {
 
 			    if (selectedRoster && nextWeek) {
 		      setLoadingState('loading');
-				      dispatch(getEmployeesForUpdates({
-			        rosterId: selectedRoster,
-			        weekNumber: nextWeek,
-			        date: newDate,
+            requestEmployeesIfNeeded({
+              rosterId: selectedRoster,
+              weekNumber: nextWeek,
+              date: newDate,
               month: selectedMonth,
               year: selectedYear,
-			        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-			      }));
+              delegatedFrom: delegatedFromParam,
+            });
 	    }
 	  };
 
@@ -672,16 +697,17 @@ const formatPrettyDate = (dateKey) => {
 	    setLoadingState('loading');
 	    setCurrentPage(1);
 	    if (selectedRoster && selectedWeek) {
-		      dispatch(getEmployeesForUpdates({
-		        rosterId: selectedRoster,
-		        weekNumber: selectedWeek,
-		        date: selectedDate,
-            month: selectedMonth,
-            year: selectedYear,
-		        ...(delegatedFromParam ? { delegatedFrom: delegatedFromParam } : {}),
-		      }));
-    }
-  };
+      requestEmployeesIfNeeded({
+        rosterId: selectedRoster,
+        weekNumber: selectedWeek,
+        date: selectedDate,
+        month: selectedMonth,
+        year: selectedYear,
+        delegatedFrom: delegatedFromParam,
+        force: true,
+      });
+	    }
+	  };
 
   // Get status color class
   const getStatusColor = (status) => {

@@ -4,10 +4,9 @@ import XLSX from "xlsx-js-style";
 
 const APP_TZ = "Asia/Kolkata";
 const IDLE_WARN_MS = 25 * 60 * 1000;
-const SHIFT_AUTO_END_MS = 9 * 60 * 60 * 1000;
-const MIDNIGHT_SHIFT_MAX_START_HOUR = 6;
 const SESSION_RESUME_GRACE_MS = 0;
-const OVERNIGHT_BUSINESS_DAY_END_HOUR = 15;
+const OPERATIONAL_DAY_START_HOUR_IST = 14; // 2:00 PM IST
+const PUNCHX_DEBUG_TIME = process.env.PUNCHX_DEBUG_TIME === "1";
 
 const getNow = () => new Date();
 
@@ -33,6 +32,17 @@ const getNyHour = (date = new Date()) => {
   return Number(map.hour);
 };
 
+const getOperationalWindowStartForDateKeyMs = (dateKey = "") => {
+  const dayStartMs = parseDateKeyStartMs(dateKey);
+  if (!Number.isFinite(dayStartMs)) return null;
+  return dayStartMs + OPERATIONAL_DAY_START_HOUR_IST * 60 * 60 * 1000;
+};
+
+const debugTime = (label, payload = {}) => {
+  if (!PUNCHX_DEBUG_TIME) return;
+  console.log(`[PunchXTime] ${label}`, payload);
+};
+
 const parseDateKeyStartMs = (dateKey) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return null;
   const ms = Date.parse(`${dateKey}T00:00:00+05:30`);
@@ -45,49 +55,32 @@ const addDaysToDateKey = (dateKey, days) => {
   return getNyDateKey(new Date(startMs + days * 24 * 60 * 60 * 1000));
 };
 
-const getOperationalWindowForDateKey = (userLike = {}, dateKey = "") => {
-  const startHour = Number(userLike?.shiftStartHour);
-  const endHour = Number(userLike?.shiftEndHour);
-  const dayStartMs = parseDateKeyStartMs(dateKey);
-  if (!Number.isFinite(dayStartMs)) return null;
-  if (!Number.isFinite(startHour) || !Number.isFinite(endHour)) return null;
-
-  const startMs = dayStartMs + startHour * 60 * 60 * 1000;
-  let endMs = dayStartMs + endHour * 60 * 60 * 1000;
-  const isOvernight = endMs <= startMs;
-  if (isOvernight) endMs += 24 * 60 * 60 * 1000;
-  if (endMs - startMs < SHIFT_AUTO_END_MS) endMs = startMs + SHIFT_AUTO_END_MS;
-  if (isOvernight) {
-    const businessEndMs = dayStartMs + (24 + OVERNIGHT_BUSINESS_DAY_END_HOUR) * 60 * 60 * 1000;
-    if (endMs < businessEndMs) endMs = businessEndMs;
-  }
+const getOperationalWindowForDateKey = (dateKey = "") => {
+  const startMs = getOperationalWindowStartForDateKeyMs(dateKey);
+  if (!Number.isFinite(startMs)) return null;
+  const endMs = startMs + 24 * 60 * 60 * 1000 - 1;
   return { startMs, endMs };
 };
 
-const resolveOperationalDateKeyForUser = (userLike = {}, now = new Date()) => {
+const resolveOperationalDateKeyForUser = (_userLike = {}, now = new Date()) => {
   const todayKey = getNyDateKey(now);
   const yesterdayKey = addDaysToDateKey(todayKey, -1);
-  const nowMs = now.getTime();
-  const candidates = [yesterdayKey, todayKey];
-
-  for (const key of candidates) {
-    const window = getOperationalWindowForDateKey(userLike, key);
-    if (!window) continue;
-    if (nowMs >= window.startMs && nowMs <= window.endMs + SESSION_RESUME_GRACE_MS) {
-      return key;
-    }
-  }
-
-  const shiftStartHour = Number(userLike?.shiftStartHour);
   const nyHour = getNyHour(now);
-  const isPostMidnightShift =
-    Number.isFinite(shiftStartHour) &&
-    shiftStartHour >= 0 &&
-    shiftStartHour < MIDNIGHT_SHIFT_MAX_START_HOUR;
-
-  if (isPostMidnightShift && Number.isFinite(nyHour) && nyHour < 12) {
+  if (Number.isFinite(nyHour) && nyHour < OPERATIONAL_DAY_START_HOUR_IST) {
+    debugTime("resolveOperationalDateKeyForUser", {
+      nowIso: now.toISOString(),
+      nyHour,
+      resolvedDateKey: yesterdayKey,
+      rule: "before_14_ist_use_previous_day",
+    });
     return yesterdayKey;
   }
+  debugTime("resolveOperationalDateKeyForUser", {
+    nowIso: now.toISOString(),
+    nyHour,
+    resolvedDateKey: todayKey,
+    rule: "at_or_after_14_ist_use_same_day",
+  });
   return todayKey;
 };
 
@@ -158,20 +151,26 @@ const autoEndShiftIfDue = (session, now = getNow()) => {
   if (!session?.shiftStartAt) return false;
   if (session.shiftEndAt || session.status === "ended") return false;
 
-  const startMs = new Date(session.shiftStartAt).getTime();
+  const window = getOperationalWindowForDateKey(session?.dateKey || "");
   const nowMs = new Date(now).getTime();
-  if (!Number.isFinite(startMs) || !Number.isFinite(nowMs)) return false;
-  if (nowMs - startMs < SHIFT_AUTO_END_MS) return false;
+  if (!window || !Number.isFinite(nowMs)) return false;
+  if (nowMs <= window.endMs) return false;
 
-  const autoEndAt = new Date(startMs + SHIFT_AUTO_END_MS);
+  const autoEndAt = new Date(window.endMs);
   closeOpenBreak(session, autoEndAt);
   session.shiftEndAt = autoEndAt;
   session.status = "ended";
   session.activityStatus = "no_activity";
   session.alerts.push({
     type: "auto_shift_end",
-    message: "Shift auto-ended after 9 hours",
+    message: "Shift auto-ended at operational window boundary",
     at: autoEndAt,
+  });
+  debugTime("autoEndShiftIfDue", {
+    sessionId: String(session?._id || ""),
+    dateKey: session?.dateKey || "",
+    autoEndAtIso: autoEndAt.toISOString(),
+    nowIso: new Date(now).toISOString(),
   });
   return true;
 };
@@ -205,8 +204,8 @@ const persistAutoEndedSessions = async (sessions = [], now = getNow()) => {
   return sessions;
 };
 
-const isWithinOperationalWindow = (session, userLike = {}, now = new Date()) => {
-  const window = getOperationalWindowForDateKey(userLike, session?.dateKey || "");
+const isWithinOperationalWindow = (session, _userLike = {}, now = new Date()) => {
+  const window = getOperationalWindowForDateKey(session?.dateKey || "");
   if (!window) return false;
   const nowMs = now.getTime();
   return nowMs >= window.startMs && nowMs <= window.endMs + SESSION_RESUME_GRACE_MS;
@@ -224,15 +223,13 @@ const ensureSession = async (userId, userLike = {}, dateKey, now = new Date()) =
   const reusable = nearby.find((s) => isWithinOperationalWindow(s, userLike, now));
   if (reusable) return reusable;
 
-  // Keep continuity across refresh/timezone/date-key edge cases:
-  // if an active shift exists recently, reuse it instead of creating a fresh empty session.
   const activeRecent = await PunchSession.findOne({
     userId,
     shiftStartAt: { $ne: null },
     shiftEndAt: null,
     status: { $in: ["active", "on_break"] },
   }).sort({ shiftStartAt: -1 });
-  if (activeRecent) return activeRecent;
+  if (activeRecent && isWithinOperationalWindow(activeRecent, userLike, now)) return activeRecent;
 
   return PunchSession.create({ userId, dateKey });
 };
@@ -268,10 +265,23 @@ const computeSessionLateByMs = (session, userLike = {}) => {
   const startHour = Number(userLike?.shiftStartHour);
   const dayStartMs = parseDateKeyStartMs(session?.dateKey || "");
   if (!Number.isFinite(startHour) || !Number.isFinite(dayStartMs)) return 0;
-  const expectedStartMs = dayStartMs + startHour * 60 * 60 * 1000;
+  const normalizedHour = ((startHour % 24) + 24) % 24;
+  const expectedStartMs = normalizedHour >= OPERATIONAL_DAY_START_HOUR_IST
+    ? dayStartMs + normalizedHour * 60 * 60 * 1000
+    : dayStartMs + 24 * 60 * 60 * 1000 + normalizedHour * 60 * 60 * 1000;
   const actualStartMs = new Date(session.shiftStartAt).getTime();
   if (!Number.isFinite(actualStartMs)) return 0;
   return actualStartMs > expectedStartMs ? actualStartMs - expectedStartMs : 0;
+};
+
+const getSessionWorkedMs = (session, now = getNow()) => {
+  if (!session?.shiftStartAt) return 0;
+  const startMs = new Date(session.shiftStartAt).getTime();
+  const endMs = session?.shiftEndAt ? new Date(session.shiftEndAt).getTime() : new Date(now).getTime();
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0;
+  const grossMs = endMs - startMs;
+  const breakUsage = getBreakUsage(session, now);
+  return Math.max(0, grossMs - Math.max(0, Number(breakUsage.totalBreakMs || 0)));
 };
 
 export const getTodaySession = async (req, res) => {
@@ -353,7 +363,7 @@ export const startBreak = async (req, res) => {
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
-      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ message: "Shift already auto-ended at operational window boundary", session, attendanceScore: scoreSession(session) });
     }
 
     if (session.status === "not_started") {
@@ -382,7 +392,7 @@ export const endBreak = async (req, res) => {
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
-      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ message: "Shift already auto-ended at operational window boundary", session, attendanceScore: scoreSession(session) });
     }
 
     const closed = closeOpenBreak(session, now, type || null);
@@ -407,7 +417,7 @@ export const postActivity = async (req, res) => {
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
       return res.status(200).json({
-        message: "Shift already auto-ended after 9 hours",
+        message: "Shift already auto-ended at operational window boundary",
         session,
         attendanceScore: scoreSession(session),
       });
@@ -533,7 +543,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       return res.status(403).json({ message: "Only superAdmin or supervisor can access this dashboard" });
     }
 
-    const dateKey = String(req.query?.dateKey || getNyDateKey(getNow()));
+    const dateKey = String(req.query?.dateKey || resolveOperationalDateKeyForUser({}, getNow()));
     const employeeQuery = {
       accountType: { $in: ["employee", "agent", "supervisor"] },
       isActive: { $ne: false },
@@ -559,11 +569,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       const openBreak = getOpenBreak(session);
       const shiftStartHour = Number(emp.shiftStartHour);
       const lateByMs = computeSessionLateByMs(session, emp);
-      const totalWorkedMs = session?.shiftStartAt
-        ? (session?.shiftEndAt
-            ? new Date(session.shiftEndAt).getTime() - new Date(session.shiftStartAt).getTime()
-            : now.getTime() - new Date(session.shiftStartAt).getTime())
-        : 0;
+      const totalWorkedMs = getSessionWorkedMs(session, now);
       const remainingForNineHoursMs = Math.max(0, 9 * 60 * 60 * 1000 - totalWorkedMs);
       const inactiveSinceMs = session?.lastActivityAt
         ? Math.max(0, now.getTime() - new Date(session.lastActivityAt).getTime())
@@ -629,7 +635,7 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
       return res.status(403).json({ message: "Only superAdmin can export this report" });
     }
 
-    const dateKey = String(req.query?.dateKey || getNyDateKey(getNow()));
+    const dateKey = String(req.query?.dateKey || resolveOperationalDateKeyForUser({}, getNow()));
     const employees = await User.find({
       accountType: { $in: ["employee", "agent", "supervisor"] },
       isActive: { $ne: false },
@@ -670,11 +676,7 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
       const session = sessionsByUser.get(String(emp._id)) || null;
       const breakUsage = getBreakUsage(session, now);
       const lateByMs = computeSessionLateByMs(session, emp);
-      const totalWorkedMs = session?.shiftStartAt
-        ? (session?.shiftEndAt
-            ? new Date(session.shiftEndAt).getTime() - new Date(session.shiftStartAt).getTime()
-            : now.getTime() - new Date(session.shiftStartAt).getTime())
-        : 0;
+      const totalWorkedMs = getSessionWorkedMs(session, now);
 
       const breakSegments = (session?.breaks || []).map((b) => {
         const startAt = b?.startAt ? new Date(b.startAt) : null;

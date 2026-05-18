@@ -423,7 +423,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   useEffect(() => {
     if (!activeRosterId || !effectiveSelectedDate) return;
 
-    const weekNumber = Number.parseInt(selectedWeek || "1", 10);
+    if (!selectedWeek) return;
+    const weekNumber = Number.parseInt(selectedWeek, 10);
     if (!Number.isFinite(weekNumber) || weekNumber < 1) return;
 
     const requestParams = {

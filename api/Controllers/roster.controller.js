@@ -9,6 +9,17 @@ import {
 import { getRoleType, normalizeDepartment } from "../utils/roleAccess.js";
 import mongoose from 'mongoose';
 
+const ATTENDANCE_SLOW_QUERY_MS = Number.parseInt(process.env.ATTENDANCE_SLOW_QUERY_MS || "250", 10);
+const timedDb = async (label, fn, meta = {}) => {
+  const startedAt = Date.now();
+  const result = await fn();
+  const durationMs = Date.now() - startedAt;
+  if (durationMs >= ATTENDANCE_SLOW_QUERY_MS) {
+    console.log(`[SlowMongo] ${label} ${durationMs}ms`, meta);
+  }
+  return result;
+};
+
 const toIstDateKey = (value) => {
   const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
@@ -6363,8 +6374,23 @@ export const searchBulkEditEmployees = async (req, res) => {
       });
     }
 
-    // Populate only what we need for search (department can come from userId).
-    const roster = await Roster.findById(rosterId).populate("weeks.employees.userId", "department username");
+    const roster = await timedDb(
+      "searchBulkEditEmployees.findById",
+      () =>
+        Roster.findById(rosterId)
+          .select(
+            [
+              "_id",
+              "weeks.weekNumber",
+              "weeks.employees._id",
+              "weeks.employees.name",
+              "weeks.employees.department",
+              "weeks.employees.teamLeader",
+            ].join(" ")
+          )
+          .lean(),
+      { rosterId }
+    );
     if (!roster) {
       return res.status(404).json({
         success: false,
@@ -6396,7 +6422,7 @@ export const searchBulkEditEmployees = async (req, res) => {
 
         const empName = emp.name || "";
         const empTeamLeader = emp.teamLeader || "";
-        const empDepartment = emp.department || emp.userId?.department || "General";
+        const empDepartment = emp.department || "General";
 
         let matches = true;
 
@@ -6953,8 +6979,23 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid rosterId" });
     }
 
+    const requestedDayStart = new Date(Date.UTC(
+      requestedDate.getUTCFullYear(),
+      requestedDate.getUTCMonth(),
+      requestedDate.getUTCDate(),
+      0, 0, 0, 0
+    ));
+    const requestedDayEnd = new Date(Date.UTC(
+      requestedDate.getUTCFullYear(),
+      requestedDate.getUTCMonth(),
+      requestedDate.getUTCDate(),
+      23, 59, 59, 999
+    ));
+
     const fetchRosterForUpdatesById = async (targetRosterId) => {
-      const rows = await Roster.aggregate([
+      const rows = await timedDb(
+        "getFilteredRosterForUpdates.fetchRosterById",
+        () => Roster.aggregate([
         { $match: { _id: targetRosterId } },
         {
           $project: {
@@ -6986,7 +7027,18 @@ export const getFilteredRosterForUpdates = async (req, res) => {
                         teamLeader: "$$e.teamLeader",
                         shiftStartHour: "$$e.shiftStartHour",
                         shiftEndHour: "$$e.shiftEndHour",
-                        dailyStatus: { $ifNull: ["$$e.dailyStatus", []] },
+                        dailyStatus: {
+                          $filter: {
+                            input: { $ifNull: ["$$e.dailyStatus", []] },
+                            as: "ds",
+                            cond: {
+                              $and: [
+                                { $gte: ["$$ds.date", requestedDayStart] },
+                                { $lte: ["$$ds.date", requestedDayEnd] },
+                              ],
+                            },
+                          },
+                        },
                       },
                     },
                   },
@@ -6995,7 +7047,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
             },
           },
         },
-      ]);
+      ]),
+        { targetRosterId: String(targetRosterId) }
+      );
       return rows?.[0] || null;
     };
 
@@ -7048,7 +7102,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       if (hasMonthContext) {
         const monthStart = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0));
         const monthEnd = new Date(Date.UTC(parsedYear, parsedMonth, 0, 23, 59, 59, 999));
-        const overlappingRosters = await Roster.find({
+        const overlappingRosters = await timedDb(
+          "getFilteredRosterForUpdates.overlappingRosters",
+          () => Roster.find({
           $or: [
             {
               rosterStartDate: { $lte: monthEnd },
@@ -7076,7 +7132,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
               "weeks.endDate",
             ].join(" ")
           )
-          .lean();
+          .lean(),
+          { month: parsedMonth, year: parsedYear }
+        );
         const seen = new Set();
         contextualRosters = [roster, ...(overlappingRosters || [])].filter((r) => {
           const id = String(r?._id || "");
@@ -7506,7 +7564,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     if (hasMonthContext) {
       const monthStart = new Date(Date.UTC(parsedYear, parsedMonth - 1, 1, 0, 0, 0, 0));
       const monthEnd = new Date(Date.UTC(parsedYear, parsedMonth, 0, 23, 59, 59, 999));
-      const monthRosters = await Roster.aggregate([
+      const monthRosters = await timedDb(
+        "getFilteredRosterForUpdates.dropdownMonthRosters",
+        () => Roster.aggregate([
         {
           $match: {
             $or: [
@@ -7546,7 +7606,9 @@ export const getFilteredRosterForUpdates = async (req, res) => {
             },
           },
         },
-      ]);
+      ]),
+        { month: parsedMonth, year: parsedYear }
+      );
       dropdownRosters = [...dropdownRosters, ...(monthRosters || [])];
     }
 
@@ -7793,14 +7855,36 @@ export const getTransportDetailForSuperAdmin = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId)
-      .populate('createdBy', 'username email')
-      .populate('updatedBy', 'username email')
-      .populate('weeks.employees.userId', 'username email department')
-      .populate('weeks.employees.transportUpdatedBy', 'username department')
-      .populate('weeks.employees.departmentUpdatedBy', 'username department')
-      .populate('weeks.employees.transportStatusUpdatedBy', 'username department')
-      .populate('weeks.employees.departmentStatusUpdatedBy', 'username department');
+    const roster = await timedDb(
+      "getTransportDetailForSuperAdmin.findById",
+      () =>
+        Roster.findById(rosterId)
+          .select(
+            [
+              "_id",
+              "month",
+              "year",
+              "rosterStartDate",
+              "rosterEndDate",
+              "createdBy",
+              "updatedBy",
+              "weeks.weekNumber",
+              "weeks.startDate",
+              "weeks.endDate",
+              "weeks.employees._id",
+              "weeks.employees.name",
+              "weeks.employees.department",
+              "weeks.employees.transport",
+              "weeks.employees.cabRoute",
+              "weeks.employees.teamLeader",
+              "weeks.employees.shiftStartHour",
+              "weeks.employees.shiftEndHour",
+              "weeks.employees.dailyStatus",
+            ].join(" ")
+          )
+          .lean(),
+      { rosterId, weekNumber }
+    );
 
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
@@ -7814,6 +7898,28 @@ export const getTransportDetailForSuperAdmin = async (req, res) => {
       });
     }
     const allEmployees = (week.employees || []).filter(emp => emp !== null);
+    const updaterIds = new Set();
+    allEmployees.forEach((emp) => {
+      (emp.dailyStatus || []).forEach((ds) => {
+        [ds.transportUpdatedBy, ds.departmentUpdatedBy, ds.transportStatusUpdatedBy, ds.departmentStatusUpdatedBy]
+          .forEach((id) => id && updaterIds.add(String(id)));
+      });
+    });
+    const usersById = updaterIds.size
+      ? await timedDb(
+          "getTransportDetailForSuperAdmin.usersById",
+          () =>
+            User.find({ _id: { $in: Array.from(updaterIds) } })
+              .select("_id username department")
+              .lean(),
+          { userCount: updaterIds.size }
+        )
+      : [];
+    const userMap = new Map(usersById.map((u) => [String(u._id), u]));
+    const pickUser = (id) => {
+      const u = id ? userMap.get(String(id)) : null;
+      return u ? { username: u.username, department: u.department } : null;
+    };
     const formattedEmployees = allEmployees.map(emp => {
       const dailyStatus = (emp.dailyStatus || []).find(
         d => new Date(d.date).toDateString() === new Date(date).toDateString()
@@ -7828,31 +7934,19 @@ export const getTransportDetailForSuperAdmin = async (req, res) => {
         shiftEndHour: emp.shiftEndHour || 0,
 
         transportStatus: dailyStatus?.transportStatus || null,
-        transportStatusUpdatedBy: dailyStatus?.transportStatusUpdatedBy ? {
-          username: dailyStatus.transportStatusUpdatedBy.username,
-          department: dailyStatus.transportStatusUpdatedBy.department
-        } : null,
+	        transportStatusUpdatedBy: pickUser(dailyStatus?.transportStatusUpdatedBy),
         transportStatusUpdatedAt: dailyStatus?.transportStatusUpdatedAt || null,
 
         departmentStatus: dailyStatus?.departmentStatus || null,
-        departmentStatusUpdatedBy: dailyStatus?.departmentStatusUpdatedBy ? {
-          username: dailyStatus.departmentStatusUpdatedBy.username,
-          department: dailyStatus.departmentStatusUpdatedBy.department
-        } : null,
+	        departmentStatusUpdatedBy: pickUser(dailyStatus?.departmentStatusUpdatedBy),
         departmentStatusUpdatedAt: dailyStatus?.departmentStatusUpdatedAt || null,
 
         transportArrivalTime: dailyStatus?.transportArrivalTime || null,
-        transportUpdatedBy: dailyStatus?.transportUpdatedBy ? {
-          username: dailyStatus.transportUpdatedBy.username,
-          department: dailyStatus.transportUpdatedBy.department
-        } : null,
+	        transportUpdatedBy: pickUser(dailyStatus?.transportUpdatedBy),
         transportUpdatedAt: dailyStatus?.transportUpdatedAt || null,
 
         departmentArrivalTime: dailyStatus?.departmentArrivalTime || null,
-        departmentUpdatedBy: dailyStatus?.departmentUpdatedBy ? {
-          username: dailyStatus.departmentUpdatedBy.username,
-          department: dailyStatus.departmentUpdatedBy.department
-        } : null,
+	        departmentUpdatedBy: pickUser(dailyStatus?.departmentUpdatedBy),
         departmentUpdatedAt: dailyStatus?.departmentUpdatedAt || null
       };
     });
@@ -7971,7 +8065,31 @@ export const getDepartmentWiseAttendance = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId);
+    const roster = await timedDb(
+      "getDepartmentWiseAttendance.findById",
+      () =>
+        Roster.findById(rosterId)
+          .select(
+            [
+              "_id",
+              "weeks.weekNumber",
+              "weeks.startDate",
+              "weeks.endDate",
+              "weeks.employees._id",
+              "weeks.employees.userId",
+              "weeks.employees.name",
+              "weeks.employees.department",
+              "weeks.employees.transport",
+              "weeks.employees.cabRoute",
+              "weeks.employees.teamLeader",
+              "weeks.employees.shiftStartHour",
+              "weeks.employees.shiftEndHour",
+              "weeks.employees.dailyStatus",
+            ].join(" ")
+          )
+          .lean(),
+      { rosterId, weekNumber }
+    );
 
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
