@@ -1996,13 +1996,37 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       ],
     };
 
-    const rosters = await Roster.find(rosterQuery).lean();
-    if (!rosters || rosters.length === 0) {
+    const matchingRosters = await Roster.find(rosterQuery)
+      .sort({ updatedAt: -1, createdAt: -1, rosterEndDate: -1, rosterStartDate: -1 })
+      .lean();
+    if (!matchingRosters || matchingRosters.length === 0) {
       return res.status(404).json({
         success: false,
         message: "No saved roster data found for the selected date range"
       });
     }
+
+    const selectedMonthKeys = new Set();
+    const monthCursor = new Date(Date.UTC(startYmd.year, startYmd.month - 1, 1, 12, 0, 0, 0));
+    const monthCursorEnd = new Date(Date.UTC(endYmd.year, endYmd.month - 1, 1, 12, 0, 0, 0));
+    while (monthCursor <= monthCursorEnd) {
+      selectedMonthKeys.add(
+        `${monthCursor.getUTCFullYear()}-${String(monthCursor.getUTCMonth() + 1).padStart(2, "0")}`
+      );
+      monthCursor.setUTCMonth(monthCursor.getUTCMonth() + 1);
+    }
+
+    const latestRosterByMonthKey = new Map();
+    matchingRosters.forEach((roster) => {
+      const rosterMonth = Number(roster?.month);
+      const rosterYear = Number(roster?.year);
+      if (!Number.isFinite(rosterMonth) || !Number.isFinite(rosterYear)) return;
+      const monthKey = `${rosterYear}-${String(rosterMonth).padStart(2, "0")}`;
+      if (!selectedMonthKeys.has(monthKey) || latestRosterByMonthKey.has(monthKey)) return;
+      latestRosterByMonthKey.set(monthKey, roster);
+    });
+
+    const rosters = matchingRosters;
 
     const employeeUserIds = new Set();
     rosters.forEach((roster) => {
@@ -2117,6 +2141,30 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 
     const employeeMap = new Map();
     const normalizeKeyPart = (value) => String(value || "").trim().toLowerCase();
+    const getAgentName = (emp, profile = null, employeeUserId = "") =>
+      String(
+        profile?.pseudoName ||
+        emp?.name ||
+        profile?.username ||
+        profile?.realName ||
+        emp?.empId ||
+        employeeUserId ||
+        ""
+      ).trim();
+    const getAgentKey = (emp, profile = null, employeeUserId = "") =>
+      `agent:${normalizeKeyPart(getAgentName(emp, profile, employeeUserId)) || "unknown"}`;
+    const allowedAgentKeysByMonth = new Map();
+    latestRosterByMonthKey.forEach((roster, monthKey) => {
+      const allowedKeys = new Set();
+      (roster?.weeks || []).forEach((week) => {
+        (week?.employees || []).forEach((emp) => {
+          const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
+          const profile = userProfileMap.get(employeeUserId) || null;
+          allowedKeys.add(getAgentKey(emp, profile, employeeUserId));
+        });
+      });
+      allowedAgentKeysByMonth.set(monthKey, allowedKeys);
+    });
     const ensureEmployee = (emp) => {
       const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
       const profile = userProfileMap.get(employeeUserId) || null;
@@ -2124,16 +2172,8 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       const pseudoName = String(profile?.pseudoName || "").trim();
       const username = String(profile?.username || "").trim();
       const fallbackName = String(emp?.name || "").trim();
-      const agentName = String(
-        pseudoName ||
-        fallbackName ||
-        username ||
-        realName ||
-        emp?.empId ||
-        employeeUserId ||
-        ""
-      ).trim();
-      const key = `agent:${normalizeKeyPart(agentName) || "unknown"}`;
+      const agentName = getAgentName(emp, profile, employeeUserId);
+      const key = getAgentKey(emp, profile, employeeUserId);
 
       if (!employeeMap.has(key)) {
         employeeMap.set(key, {
@@ -2200,8 +2240,6 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
                 if (!matchesNone && !matchesNamedLeader) return;
               }
 
-              const rowRef = ensureEmployee(emp);
-
               (emp.dailyStatus || []).forEach((ds) => {
                 const dsDate = new Date(ds.date);
                 if (Number.isNaN(dsDate.getTime())) return;
@@ -2215,6 +2253,16 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
                   ds?.status ||
                   ""
                 ).trim();
+
+                const monthKey = dateKey.slice(0, 7);
+                const allowedAgentKeys = allowedAgentKeysByMonth.get(monthKey);
+                const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
+                const profile = userProfileMap.get(employeeUserId) || null;
+                const agentKey = getAgentKey(emp, profile, employeeUserId);
+                if (allowedAgentKeys?.size && !allowedAgentKeys.has(agentKey)) return;
+
+                const rowRef = ensureEmployee(emp);
+                if (rowRef.dailyByDateKey.has(dateKey)) return;
 
                 rowRef.dailyByDateKey.set(dateKey, {
                   status: effectiveStatus,
