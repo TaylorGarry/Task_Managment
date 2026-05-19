@@ -451,7 +451,7 @@ export const deleteEmployeeByUserId = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId);
+    let roster = await Roster.findById(rosterId);
     if (!roster) {
       return res.status(404).json({
         success: false,
@@ -531,7 +531,7 @@ export const deleteEmployeeByName = async (req, res) => {
       });
     }
 
-    const roster = await Roster.findById(rosterId);
+    let roster = await Roster.findById(rosterId);
     if (!roster) {
       return res.status(404).json({
         success: false,
@@ -2651,7 +2651,7 @@ export const copyEmployeesToWeek = async (req, res) => {
       ? targetWeekNumbers
       : [targetWeekNumbers];
 
-    const roster = await Roster.findById(rosterId);
+    let roster = await Roster.findById(rosterId);
     if (!roster) {
       return res.status(404).json({
         success: false,
@@ -3383,7 +3383,7 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
       return res.status(400).json({ success: false, message: "weeks must be an array" });
     }
 
-    const roster = await Roster.findById(rosterId);
+    let roster = await Roster.findById(rosterId);
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
@@ -6472,6 +6472,7 @@ export const searchBulkEditEmployees = async (req, res) => {
 
 export const updateAttendanceBulk = async (req, res) => {
   try {
+    const bulkStartedAt = Date.now();
     const {
       rosterId,
       weekNumber,
@@ -6535,7 +6536,9 @@ export const updateAttendanceBulk = async (req, res) => {
       }
     }
 
-    const roster = await Roster.findById(rosterId);
+    const rosterLoadStartedAt = Date.now();
+    let roster = await Roster.findById(rosterId);
+    const rosterLoadMs = Date.now() - rosterLoadStartedAt;
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
@@ -6555,25 +6558,133 @@ export const updateAttendanceBulk = async (req, res) => {
       });
     }
 
-    const parsedWeekNumber = parseInt(weekNumber);
-    const weekCandidates = resolveWeekGroupByNumberAndDate(
+    const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    let weekCandidates = resolveWeekGroupByNumberAndDate(
       roster.weeks || [],
       parsedWeekNumber,
       selectedDateKey
     );
     if (!weekCandidates.length) {
-      return res.status(404).json({ success: false, message: "Week not found" });
+      const fallbackStartedAt = Date.now();
+      const requestedDayStart = new Date(Date.UTC(
+        selectedDate.getUTCFullYear(),
+        selectedDate.getUTCMonth(),
+        selectedDate.getUTCDate(),
+        0, 0, 0, 0
+      ));
+      const requestedDayEnd = new Date(Date.UTC(
+        selectedDate.getUTCFullYear(),
+        selectedDate.getUTCMonth(),
+        selectedDate.getUTCDate(),
+        23, 59, 59, 999
+      ));
+
+      const requestedEmployeeIdSet = new Set((employeeIds || []).map((id) => String(id)));
+      const requestedEmployeeObjectIds = [...requestedEmployeeIdSet]
+        .filter((id) => mongoose.Types.ObjectId.isValid(id))
+        .map((id) => new mongoose.Types.ObjectId(id));
+
+      // Fast fallback: find one likely roster that overlaps date and contains requested employees.
+      const resolvedRoster = await Roster.findOne({
+        _id: { $ne: roster._id },
+        "weeks.employees._id": { $in: requestedEmployeeObjectIds },
+        $or: [
+          {
+            rosterStartDate: { $lte: requestedDayEnd },
+            rosterEndDate: { $gte: requestedDayStart },
+          },
+          {
+            weeks: {
+              $elemMatch: {
+                startDate: { $lte: requestedDayEnd },
+                endDate: { $gte: requestedDayStart },
+              },
+            },
+          },
+        ],
+      })
+        .select("month year rosterStartDate rosterEndDate weeks.weekNumber weeks.startDate weeks.endDate weeks.employees._id")
+        .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
+        .lean();
+
+      if (resolvedRoster) {
+        roster = await Roster.findById(resolvedRoster._id);
+        if (!roster) {
+          return res.status(404).json({ success: false, message: "Roster not found" });
+        }
+        weekCandidates = resolveWeekGroupByNumberAndDate(
+          roster?.weeks || [],
+          parsedWeekNumber,
+          selectedDateKey
+        );
+      }
+      const fallbackMs = Date.now() - fallbackStartedAt;
+      if (fallbackMs >= ATTENDANCE_SLOW_QUERY_MS) {
+        console.log("[Perf] updateAttendanceBulk.fallbackResolveMs", fallbackMs);
+      }
+    }
+    let effectiveWeekCandidates = weekCandidates;
+    if (!effectiveWeekCandidates.length && Number.isFinite(parsedWeekNumber)) {
+      effectiveWeekCandidates = (roster.weeks || []).filter(
+        (w) => Number.parseInt(w?.weekNumber, 10) === parsedWeekNumber
+      );
+    }
+    if (!effectiveWeekCandidates.length) {
+      effectiveWeekCandidates = (roster.weeks || []).filter((w) =>
+        isDateKeyWithinWeek(selectedDateKey, w)
+      );
+    }
+    if (!effectiveWeekCandidates.length) {
+      const availableWeeks = (roster.weeks || [])
+        .filter((w) => w && w.weekNumber !== undefined && w.weekNumber !== null)
+        .map((w) => ({
+          weekNumber: Number.parseInt(w.weekNumber, 10),
+          startDate: toIstDateKey(w.startDate),
+          endDate: toIstDateKey(w.endDate),
+        }))
+        .filter((w) => Number.isFinite(w.weekNumber));
+      return res.status(404).json({
+        success: false,
+        message: "Week not found",
+        debug: {
+          requestedWeekNumber: parsedWeekNumber,
+          requestedDate: selectedDateKey,
+          availableWeeks,
+        },
+      });
     }
 
     // Week edit rules (same as single update):
     // - HR/superAdmin: can update past/future/current
     // - Transport/Department: current week only
     const now = new Date();
+    const rangedWeekCandidates = effectiveWeekCandidates.filter(
+      (w) => w?.startDate && w?.endDate && !Number.isNaN(new Date(w.startDate).getTime()) && !Number.isNaN(new Date(w.endDate).getTime())
+    );
+    if (!rangedWeekCandidates.length) {
+      const availableWeeks = (roster.weeks || [])
+        .filter((w) => w && w.weekNumber !== undefined && w.weekNumber !== null)
+        .map((w) => ({
+          weekNumber: Number.parseInt(w.weekNumber, 10),
+          startDate: toIstDateKey(w.startDate),
+          endDate: toIstDateKey(w.endDate),
+        }))
+        .filter((w) => Number.isFinite(w.weekNumber));
+      return res.status(404).json({
+        success: false,
+        message: "Week not found",
+        debug: {
+          requestedWeekNumber: parsedWeekNumber,
+          requestedDate: selectedDateKey,
+          availableWeeks,
+        },
+      });
+    }
     const weekStartDate = new Date(
-      Math.min(...weekCandidates.map((w) => new Date(w.startDate).getTime()))
+      Math.min(...rangedWeekCandidates.map((w) => new Date(w.startDate).getTime()))
     );
     const weekEndDate = new Date(
-      Math.max(...weekCandidates.map((w) => new Date(w.endDate).getTime()))
+      Math.max(...rangedWeekCandidates.map((w) => new Date(w.endDate).getTime()))
     );
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
@@ -6646,26 +6757,31 @@ export const updateAttendanceBulk = async (req, res) => {
       }
     }
 
-    const delegationContext = await getDelegationContextForDate({
-      userId: user._id,
-      actionDate: date,
-    });
-
-    if (delegationContext.asDelegator) {
-      return res.status(403).json({
-        success: false,
-        message: "You cannot update attendance during your active delegation period.",
-        isDelegated: true,
-      });
-    }
-
+    const isPrivilegedUser = user.accountType === "superAdmin" || user.accountType === "HR";
+    let delegationContext = { asDelegator: null, asAssignee: null };
     let specificDelegation = null;
     let delegatedTeamLeaderName = "";
-    const delegatedTeamLeaderNames = await getDelegatedTeamLeaderNames({
-      assigneeId: user._id,
-      actionDate: date,
-    });
+    let delegatedTeamLeaderNames = new Set();
     let specificDelegatedEmployeeIds = null;
+    if (!isPrivilegedUser) {
+      delegationContext = await getDelegationContextForDate({
+        userId: user._id,
+        actionDate: date,
+      });
+
+      if (delegationContext.asDelegator) {
+        return res.status(403).json({
+          success: false,
+          message: "You cannot update attendance during your active delegation period.",
+          isDelegated: true,
+        });
+      }
+
+      delegatedTeamLeaderNames = await getDelegatedTeamLeaderNames({
+        assigneeId: user._id,
+        actionDate: date,
+      });
+    }
     if (delegatedFrom) {
       specificDelegation = await Delegation.findOne({
         assignee: user._id,
@@ -6694,13 +6810,33 @@ export const updateAttendanceBulk = async (req, res) => {
 
     const results = [];
     const failed = [];
+    const requestedEmployeeIds = new Set(employeeIds.map((id) => String(id)));
+    const weekByEmployeeId = new Map();
+    for (const week of effectiveWeekCandidates) {
+      const employees = Array.isArray(week?.employees) ? week.employees : [];
+      for (const emp of employees) {
+        const empId = String(emp?._id || "");
+        if (!empId || !requestedEmployeeIds.has(empId) || weekByEmployeeId.has(empId)) continue;
+        weekByEmployeeId.set(empId, week);
+      }
+    }
+    if (weekByEmployeeId.size !== requestedEmployeeIds.size) {
+      for (const week of (roster.weeks || [])) {
+        if (!isDateKeyWithinWeek(selectedDateKey, week)) continue;
+        const employees = Array.isArray(week?.employees) ? week.employees : [];
+        for (const emp of employees) {
+          const empId = String(emp?._id || "");
+          if (!empId || !requestedEmployeeIds.has(empId) || weekByEmployeeId.has(empId)) continue;
+          weekByEmployeeId.set(empId, week);
+        }
+      }
+    }
 
+    const loopStartedAt = Date.now();
+    const writeOps = [];
     for (const employeeId of employeeIds) {
       try {
-        const matchedWeek = weekCandidates.find((w) => w.employees?.id(employeeId))
-          || (roster.weeks || []).find(
-            (w) => isDateKeyWithinWeek(selectedDateKey, w) && w?.employees?.id(employeeId)
-          );
+        const matchedWeek = weekByEmployeeId.get(String(employeeId));
         const employee = matchedWeek?.employees?.id(employeeId);
         if (!employee) {
           failed.push({ employeeId, message: "Employee not found" });
@@ -6772,12 +6908,9 @@ export const updateAttendanceBulk = async (req, res) => {
           employee.dailyStatus.push(daily);
           daily = employee.dailyStatus[employee.dailyStatus.length - 1];
         } else {
-          // Backfill legacy fields if needed
-          let needsMarkModified = false;
           const ensure = (key, fallback) => {
             if (daily[key] === undefined) {
               daily[key] = fallback;
-              needsMarkModified = true;
             }
           };
 
@@ -6793,10 +6926,6 @@ export const updateAttendanceBulk = async (req, res) => {
           ensure("transportUpdatedAt", null);
           ensure("departmentUpdatedBy", null);
           ensure("departmentUpdatedAt", null);
-
-          if (needsMarkModified) {
-            employee.markModified("dailyStatus");
-          }
         }
 
         const changes = [];
@@ -6893,26 +7022,59 @@ export const updateAttendanceBulk = async (req, res) => {
         }
 
         if (changes.length > 0) {
-          roster.editHistory.push({
-            editedBy: user._id,
-            editedByName: user.username,
-            accountType: user.accountType,
-            actionType: "bulk-update",
-            weekNumber: parsedWeekNumber,
-            employeeId: employee._id,
-            employeeName: employee.name,
-            changes
+          writeOps.push({
+            updateOne: {
+              filter: { _id: roster._id },
+              update: {
+                $set: {
+                  "weeks.$[w].employees.$[e].dailyStatus": employee.dailyStatus,
+                },
+                $push: {
+                  editHistory: {
+                    editedBy: user._id,
+                    editedByName: user.username,
+                    accountType: user.accountType,
+                    actionType: "bulk-update",
+                    weekNumber: parsedWeekNumber,
+                    employeeId: employee._id,
+                    employeeName: employee.name,
+                    changes,
+                  },
+                },
+              },
+              arrayFilters: [
+                { "w._id": matchedWeek._id },
+                { "e._id": employee._id },
+              ],
+            },
           });
         }
 
-        employee.markModified("dailyStatus");
         results.push({ employeeId: employee._id, data: daily });
       } catch (err) {
         failed.push({ employeeId, message: err.message || "Failed to update employee" });
       }
     }
+    const loopMs = Date.now() - loopStartedAt;
 
-    await roster.save();
+    const saveStartedAt = Date.now();
+    if (writeOps.length > 0) {
+      await Roster.bulkWrite(writeOps, { ordered: false });
+    }
+    const saveMs = Date.now() - saveStartedAt;
+    const totalMs = Date.now() - bulkStartedAt;
+    console.log("[Perf] updateAttendanceBulk", {
+      rosterLoadMs,
+      loopMs,
+      saveMs,
+      totalMs,
+      employeeCount: employeeIds.length,
+      updatedCount: results.length,
+      failedCount: failed.length,
+      rosterId: String(roster?._id || rosterId),
+      weekNumber: parsedWeekNumber,
+      date: selectedDateKey,
+    });
 
     return res.status(200).json({
       success: true,
