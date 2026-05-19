@@ -1252,6 +1252,612 @@ export const exportRosterToExcel = async (req, res) => {
   }
 };
 
+// export const exportAttendanceSnapshotToExcel = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     const normalizedAccountType = String(user?.accountType || "").trim().toLowerCase();
+//     const isHrOrSuperAdmin = ["superadmin", "hr"].includes(normalizedAccountType);
+//     const isEmployee = normalizedAccountType === "employee";
+//     const normalizedDepartmentValue = normalizeDepartment(
+//       user?.normalizedDepartment || user?.department || ""
+//     );
+//     const normalizedDepartment = String(normalizedDepartmentValue || "").trim().toLowerCase();
+//     const isAccountsEmployee =
+//       isEmployee &&
+//       (normalizedDepartment === "account" ||
+//         normalizedDepartment === "accounts" ||
+//         normalizedDepartment.includes("account"));
+//     if (!isHrOrSuperAdmin && !isEmployee) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Access denied. Only HR, Super Admin, or delegated employee can export attendance snapshots."
+//       });
+//     }
+
+//     const { startDate, endDate, department, teamLeader, delegatedFrom } = req.query;
+
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "startDate and endDate are required"
+//       });
+//     }
+
+//     const IST_TIME_ZONE = "Asia/Kolkata";
+
+//     const parseYmd = (value) => {
+//       const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+//       if (!match) return null;
+//       const year = Number(match[1]);
+//       const month = Number(match[2]);
+//       const day = Number(match[3]);
+//       if (!year || month < 1 || month > 12 || day < 1 || day > 31) return null;
+//       return { year, month, day };
+//     };
+
+//     // Treat incoming YYYY-MM-DD as an IST calendar date, regardless of server timezone.
+//     // Build UTC Date boundaries that represent IST day start/end.
+//     const startYmd = parseYmd(startDate);
+//     const endYmd = parseYmd(endDate);
+//     if (!startYmd || !endYmd) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid startDate or endDate (expected YYYY-MM-DD)"
+//       });
+//     }
+
+//     const month = startYmd.month;
+//     const year = startYmd.year;
+
+//     const start = new Date(`${startDate}T00:00:00.000+05:30`);
+//     const end = new Date(`${endDate}T23:59:59.999+05:30`);
+
+//     if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid startDate or endDate"
+//       });
+//     }
+
+//     if (start > end) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "startDate must be before or equal to endDate"
+//       });
+//     }
+
+//     let delegatedAccessEmployeeIds = new Set();
+//     let delegatedTeamLeaderNames = new Set();
+//     if (isEmployee && !isAccountsEmployee) {
+//       const delegatedFromId = String(delegatedFrom || "").trim();
+//       if (!delegatedFromId) {
+//         return res.status(403).json({
+//           success: false,
+//           message: "Delegated team leader is required for employee snapshot export.",
+//         });
+//       }
+//       if (!/^[a-f\d]{24}$/i.test(delegatedFromId)) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Invalid delegated team leader identifier.",
+//         });
+//       }
+
+//       const activeDelegation = await Delegation.findOne({
+//         assignee: user._id,
+//         delegator: delegatedFromId,
+//         status: "active",
+//         startDate: { $lte: end },
+//         endDate: { $gte: start },
+//       })
+//         .populate("delegator", "username")
+//         .lean();
+
+//       if (!activeDelegation) {
+//         return res.status(403).json({
+//           success: false,
+//           message: "No active delegation found for selected team leader and date range.",
+//         });
+//       }
+
+//       delegatedAccessEmployeeIds = new Set(
+//         (activeDelegation?.affectedEmployees || []).map((id) => String(id)).filter(Boolean)
+//       );
+//       const delegatedLeaderName = String(activeDelegation?.delegator?.username || "")
+//         .trim()
+//         .toLowerCase();
+//       delegatedTeamLeaderNames = delegatedLeaderName
+//         ? new Set([delegatedLeaderName])
+//         : new Set();
+//     }
+
+//     // NOTE: Some rosters store `rosterStartDate/rosterEndDate` as the specific uploaded week range
+//     // (not the full month). Query by overlapping weeks first to ensure exports work for any week.
+//     const rosterQuery = {
+//       $or: [
+//         {
+//           weeks: {
+//             $elemMatch: {
+//               startDate: { $lte: end },
+//               endDate: { $gte: start },
+//             },
+//           },
+//         },
+//         {
+//           rosterStartDate: { $lte: end },
+//           rosterEndDate: { $gte: start },
+//         },
+//       ],
+//     };
+
+//     const rosters = await Roster.find(rosterQuery).lean();
+//     if (!rosters || rosters.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No saved roster data found for the selected date range"
+//       });
+//     }
+
+//     const employeeUserIds = new Set();
+//     rosters.forEach((roster) => {
+//       (roster?.weeks || []).forEach((week) => {
+//         (week?.employees || []).forEach((emp) => {
+//           const id = String(emp?.userId?._id || emp?.userId || "").trim();
+//           if (id && /^[a-f\d]{24}$/i.test(id)) employeeUserIds.add(id);
+//         });
+//       });
+//     });
+//     const userProfiles = employeeUserIds.size
+//       ? await User.find({ _id: { $in: Array.from(employeeUserIds) } })
+//         .select("_id realName pseudoName username")
+//         .lean()
+//       : [];
+//     const userProfileMap = new Map(
+//       userProfiles.map((u) => [String(u?._id || ""), u])
+//     );
+
+//     const normalizeDepartmentFilter = (value) => String(value || "").trim().toLowerCase();
+//     const normalizeTeamLeader = (value) => String(value || "").trim().toLowerCase();
+//     const toArrayParam = (value) => {
+//       if (Array.isArray(value)) return value;
+//       if (typeof value === "string" && value.includes(",")) {
+//         return value.split(",").map((v) => v.trim()).filter(Boolean);
+//       }
+//       return value ? [value] : [];
+//     };
+//     const deptFilters = new Set(
+//       toArrayParam(department).map((v) => normalizeDepartmentFilter(v)).filter(Boolean)
+//     );
+//     const teamLeaderFilters = new Set(
+//       toArrayParam(teamLeader).map((v) => normalizeTeamLeader(v)).filter(Boolean)
+//     );
+
+//     const toIstDateKey = (value) => {
+//       if (!value) return "";
+//       if (typeof value === "string") {
+//         const trimmed = value.trim();
+//         if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+//       }
+//       const d = value instanceof Date ? value : new Date(value);
+//       if (Number.isNaN(d.getTime())) return "";
+//       const parts = new Intl.DateTimeFormat("en-CA", {
+//         timeZone: IST_TIME_ZONE,
+//         year: "numeric",
+//         month: "2-digit",
+//         day: "2-digit",
+//       }).formatToParts(d);
+//       const year = parts.find((p) => p.type === "year")?.value;
+//       const month = parts.find((p) => p.type === "month")?.value;
+//       const day = parts.find((p) => p.type === "day")?.value;
+//       if (!year || !month || !day) return "";
+//       return `${year}-${month}-${day}`;
+//     };
+
+//     const pad2 = (num) => String(num).padStart(2, "0");
+
+//     const eachDateKeyInRange = (fromYmd, toYmd) => {
+//       const startUtcNoon = new Date(Date.UTC(fromYmd.year, fromYmd.month - 1, fromYmd.day, 12, 0, 0, 0));
+//       const endUtcNoon = new Date(Date.UTC(toYmd.year, toYmd.month - 1, toYmd.day, 12, 0, 0, 0));
+//       const keys = [];
+//       const cursor = new Date(startUtcNoon);
+//       while (cursor <= endUtcNoon) {
+//         const parts = new Intl.DateTimeFormat("en-GB", {
+//           timeZone: IST_TIME_ZONE,
+//           year: "numeric",
+//           month: "2-digit",
+//           day: "2-digit",
+//         }).formatToParts(cursor);
+//         const year = parts.find((p) => p.type === "year")?.value;
+//         const month = parts.find((p) => p.type === "month")?.value;
+//         const day = parts.find((p) => p.type === "day")?.value;
+//         if (year && month && day) keys.push(`${year}-${month}-${day}`);
+//         cursor.setUTCDate(cursor.getUTCDate() + 1);
+//       }
+//       return keys;
+//     };
+
+//     const dayLabelFromKey = (dateKey) => {
+//       const dt = new Date(`${dateKey}T12:00:00.000+05:30`);
+//       if (Number.isNaN(dt.getTime())) return dateKey;
+//       const parts = new Intl.DateTimeFormat("en-GB", {
+//         timeZone: IST_TIME_ZONE,
+//         day: "2-digit",
+//         month: "2-digit",
+//         weekday: "short",
+//       }).formatToParts(dt);
+//       const day = parts.find((p) => p.type === "day")?.value;
+//       const month = parts.find((p) => p.type === "month")?.value;
+//       const weekday = parts.find((p) => p.type === "weekday")?.value;
+//       if (!day || !month || !weekday) return dateKey;
+//       return `${day}/${month} ${weekday}`;
+//     };
+
+//     const shiftHourToString = (value) => {
+//       if (value === null || value === undefined || value === "") return "";
+//       const n = Number(value);
+//       if (Number.isNaN(n)) return String(value);
+//       return `${n}:00`;
+//     };
+
+//     const workbook = XLSX.utils.book_new();
+//     workbook.Props = {
+//       Title: "Attendance_Snapshot",
+//       Author: "Task Management CRM",
+//       CreatedDate: new Date()
+//     };
+
+//     const dateKeys = eachDateKeyInRange(startYmd, endYmd);
+//     const dateLabels = dateKeys.map((k) => dayLabelFromKey(k));
+
+//     const employeeMap = new Map();
+//     const normalizeKeyPart = (value) => String(value || "").trim().toLowerCase();
+//     const ensureEmployee = (emp) => {
+//       const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
+//       const key = employeeUserId
+//         ? `uid:${employeeUserId}`
+//         : `name:${normalizeKeyPart(emp?.name)}|dept:${normalizeKeyPart(emp?.department)}|tl:${normalizeKeyPart(
+//           emp?.teamLeader
+//         )}`;
+//       if (!employeeMap.has(key)) {
+//         const profile = userProfileMap.get(employeeUserId) || null;
+//         const realName = String(profile?.realName || "").trim();
+//         const pseudoName = String(profile?.pseudoName || "").trim();
+//         const username = String(profile?.username || "").trim();
+//         const fallbackName = String(emp?.name || "").trim();
+//         employeeMap.set(key, {
+//           name: realName || username || fallbackName || "",
+//           pseudoName: pseudoName || username || realName || fallbackName || "",
+//           department: emp?.department || "General",
+//           transport: emp?.transport || "",
+//           cabRoute: emp?.cabRoute || "",
+//           teamLeader: emp?.teamLeader || "",
+//           shiftStartHour: emp?.shiftStartHour ?? "",
+//           shiftEndHour: emp?.shiftEndHour ?? "",
+//           dailyByDateKey: new Map(),
+//         });
+//       }
+//       return employeeMap.get(key);
+//     };
+
+//     rosters.forEach((roster) => {
+//       (roster.weeks || [])
+//         .filter(Boolean)
+//         .forEach((week) => {
+//           const weekStart = new Date(week.startDate);
+//           const weekEnd = new Date(week.endDate);
+//           if (Number.isNaN(weekStart.getTime()) || Number.isNaN(weekEnd.getTime())) return;
+//           if (weekStart > end || weekEnd < start) return;
+
+//           (week.employees || [])
+//             .filter(Boolean)
+//             .forEach((emp) => {
+//               if (isEmployee && !isAccountsEmployee) {
+//                 const employeeUserId = String(emp?.userId || "").trim();
+//                 const employeeTeamLeader = String(emp?.teamLeader || "").trim().toLowerCase();
+//                 const userUsername = String(user?.username || "").trim().toLowerCase();
+//                 const inDelegatedEmployees = employeeUserId && delegatedAccessEmployeeIds.has(employeeUserId);
+//                 const inDelegatedTeam = employeeTeamLeader && delegatedTeamLeaderNames.has(employeeTeamLeader);
+//                 const isTeamLeaderForEmployee = employeeTeamLeader === userUsername;
+//                 if (!inDelegatedEmployees && !inDelegatedTeam && !isTeamLeaderForEmployee) return;
+//               }
+
+//               if (deptFilters.size > 0) {
+//                 const empDept = normalizeDepartmentFilter(emp.department);
+//                 if (!deptFilters.has(empDept)) return;
+//               }
+
+//               if (teamLeaderFilters.size > 0) {
+//                 const employeeTeamLeader = normalizeTeamLeader(emp?.teamLeader);
+//                 const matchesNone = !employeeTeamLeader && teamLeaderFilters.has("__none__");
+//                 const matchesNamedLeader = employeeTeamLeader && teamLeaderFilters.has(employeeTeamLeader);
+//                 if (!matchesNone && !matchesNamedLeader) return;
+//               }
+
+//               const rowRef = ensureEmployee(emp);
+
+//               (emp.dailyStatus || []).forEach((ds) => {
+//                 const dsDate = new Date(ds.date);
+//                 if (Number.isNaN(dsDate.getTime())) return;
+//                 if (dsDate < start || dsDate > end) return;
+
+//                 const dateKey = toIstDateKey(dsDate);
+//                 if (!dateKey) return;
+
+//                 rowRef.dailyByDateKey.set(dateKey, {
+//                   status: ds.departmentStatus || "",
+//                   transportStatus: ds.transportStatus || "",
+//                   departmentStatus: ds.departmentStatus || "",
+//                   transportArrivalTime: ds.transportArrivalTime || null,
+//                   departmentArrivalTime: ds.departmentArrivalTime || null,
+//                 });
+//               });
+//             });
+//         });
+//     });
+
+//     const statusTotals = (statusList) => {
+//       const totals = {
+//         P: 0,
+//         WO: 0,
+//         L: 0,
+//         NCNS: 0,
+//         UL: 0,
+//         LWP: 0,
+//         BL: 0,
+//         H: 0,
+//         LWD: 0,
+//       };
+
+//       statusList.forEach((raw) => {
+//         const status = String(raw || "").trim().toUpperCase();
+//         if (!status) return;
+//         if (totals[status] !== undefined) totals[status] += 1;
+//       });
+
+//       return totals;
+//     };
+
+//     const employees = Array.from(employeeMap.values())
+//       .filter((emp) => {
+//         for (const k of dateKeys) {
+//           const ds = emp?.dailyByDateKey?.get(k);
+//           if (String(ds?.departmentStatus || "").trim()) return true;
+//         }
+//         return false;
+//       })
+//       .sort((a, b) => String(a.name).localeCompare(String(b.name)));
+
+//     if (employees.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No attendance records found for the selected date range"
+//       });
+//     }
+
+//     const commonCols = [
+//       { wch: 22 }, // Name
+//       { wch: 18 }, // Department
+//       { wch: 12 }, // Transport
+//       { wch: 16 }, // Cab route
+//       { wch: 16 }, // Team leader
+//       { wch: 14 }, // Shift start
+//       { wch: 14 }, // Shift end
+//     ];
+
+//     const totalsCols = Array(9).fill({ wch: 18 });
+
+//     const formatTime = (value) => {
+//       if (!value) return "";
+//       if (typeof value === "string") {
+//         const trimmed = value.trim();
+//         const timeOnly = trimmed.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+//         if (timeOnly) return `${pad2(timeOnly[1])}:${pad2(timeOnly[2])}`;
+//       }
+//       const d = value instanceof Date ? value : new Date(value);
+//       if (Number.isNaN(d.getTime())) return "";
+//       const parts = new Intl.DateTimeFormat("en-GB", {
+//         timeZone: IST_TIME_ZONE,
+//         hour: "2-digit",
+//         minute: "2-digit",
+//         hour12: false,
+//       }).formatToParts(d);
+//       const hour = parts.find((p) => p.type === "hour")?.value;
+//       const minute = parts.find((p) => p.type === "minute")?.value;
+//       if (!hour || !minute) return "";
+//       return `${hour}:${minute}`;
+//     };
+
+//     const buildSnapshotSheet = () => {
+//       const summaryHeaders = ["P", "WO", "HD", "BL", "L", "WOP", "UL", "NCNS", "LWP", "Total", "SS"];
+//       const firstHeader = ["AGENT", "Employee Name", "Department"];
+//       const secondHeader = ["AGENT", "Employee Name", "Department"];
+
+//       dateKeys.forEach((k) => {
+//         const dt = new Date(`${k}T12:00:00.000+05:30`);
+//         const dayMonth = new Intl.DateTimeFormat("en-GB", {
+//           timeZone: IST_TIME_ZONE,
+//           day: "2-digit",
+//           month: "short",
+//         }).format(dt);
+//         firstHeader.push(dayMonth);
+//         secondHeader.push(
+//           new Intl.DateTimeFormat("en-US", {
+//             timeZone: IST_TIME_ZONE,
+//             weekday: "short",
+//           }).format(dt)
+//         );
+//       });
+
+//       firstHeader.push("Summary", ...Array(summaryHeaders.length - 1).fill(""));
+//       secondHeader.push(...summaryHeaders);
+
+//       const rows = [firstHeader, secondHeader];
+
+//       const compactTotals = (statusList) => {
+//         const totals = { P: 0, WO: 0, HD: 0, BL: 0, L: 0, WOP: 0, UL: 0, NCNS: 0, LWP: 0 };
+//         statusList.forEach((raw) => {
+//           const status = String(raw || "").trim().toUpperCase();
+//           if (totals[status] !== undefined) totals[status] += 1;
+//         });
+//         const total = Object.values(totals).reduce((sum, n) => sum + n, 0);
+//         return { ...totals, total };
+//       };
+
+//       employees.forEach((emp) => {
+//         const effectiveStatuses = [];
+//         const dayCells = [];
+//         dateKeys.forEach((k) => {
+//           const daily = emp.dailyByDateKey.get(k);
+//           const status = String(daily?.departmentStatus || "").trim();
+//           effectiveStatuses.push(status);
+//           dayCells.push(status || "");
+//         });
+
+//         const totals = compactTotals(effectiveStatuses);
+//         rows.push([
+//           emp.pseudoName || "",
+//           emp.name || "",
+//           emp.department || "",
+//           ...dayCells,
+//           totals.P,
+//           totals.WO,
+//           totals.HD,
+//           totals.BL,
+//           totals.L,
+//           totals.WOP,
+//           totals.UL,
+//           totals.NCNS,
+//           totals.LWP,
+//           totals.total,
+//           emp.name || "",
+//         ]);
+//       });
+
+//       const ws = XLSX.utils.aoa_to_sheet(rows);
+//       const firstDateCol = 3;
+//       const lastDateCol = firstDateCol + dateKeys.length - 1;
+//       const summaryStartCol = lastDateCol + 1;
+//       const summaryEndCol = summaryStartCol + summaryHeaders.length - 1;
+
+//       ws["!merges"] = [
+//         { s: { r: 0, c: 0 }, e: { r: 1, c: 0 } },
+//         { s: { r: 0, c: 1 }, e: { r: 1, c: 1 } },
+//         { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } },
+//         { s: { r: 0, c: summaryStartCol }, e: { r: 0, c: summaryEndCol } },
+//       ];
+
+//       ws["!cols"] = [
+//         { wch: 18 },
+//         { wch: 24 },
+//         { wch: 16 },
+//         ...Array(dateKeys.length).fill({ wch: 9 }),
+//         ...Array(summaryHeaders.length).fill({ wch: 8 }),
+//       ];
+
+//       const toCell = (r, c) => XLSX.utils.encode_cell({ r, c });
+//       const border = {
+//         top: { style: "thin", color: { rgb: "D1D5DB" } },
+//         bottom: { style: "thin", color: { rgb: "D1D5DB" } },
+//         left: { style: "thin", color: { rgb: "D1D5DB" } },
+//         right: { style: "thin", color: { rgb: "D1D5DB" } },
+//       };
+//       const centerStyle = { horizontal: "center", vertical: "center" };
+//       const headerTopStyle = {
+//         font: { bold: true, color: { rgb: "FFFFFF" } },
+//         fill: { patternType: "solid", fgColor: { rgb: "0F3D8C" } },
+//         border,
+//         alignment: centerStyle,
+//       };
+//       const headerSecondStyle = {
+//         font: { bold: true, color: { rgb: "1F2937" } },
+//         fill: { patternType: "solid", fgColor: { rgb: "E5EDFF" } },
+//         border,
+//         alignment: centerStyle,
+//       };
+//       const statusStyleMap = {
+//         P: { fill: { patternType: "solid", fgColor: { rgb: "DCFCE7" } }, font: { color: { rgb: "166534" }, bold: true } },
+//         WO: { fill: { patternType: "solid", fgColor: { rgb: "DBEAFE" } }, font: { color: { rgb: "1D4ED8" }, bold: true } },
+//         HD: { fill: { patternType: "solid", fgColor: { rgb: "FFEDD5" } }, font: { color: { rgb: "9A3412" }, bold: true } },
+//         BL: { fill: { patternType: "solid", fgColor: { rgb: "E2E8F0" } }, font: { color: { rgb: "334155" }, bold: true } },
+//         L: { fill: { patternType: "solid", fgColor: { rgb: "FEF3C7" } }, font: { color: { rgb: "92400E" }, bold: true } },
+//         WOP: { fill: { patternType: "solid", fgColor: { rgb: "F3E8FF" } }, font: { color: { rgb: "6B21A8" }, bold: true } },
+//         UL: { fill: { patternType: "solid", fgColor: { rgb: "FCE7F3" } }, font: { color: { rgb: "9D174D" }, bold: true } },
+//         NCNS: { fill: { patternType: "solid", fgColor: { rgb: "FEE2E2" } }, font: { color: { rgb: "991B1B" }, bold: true } },
+//         LWP: { fill: { patternType: "solid", fgColor: { rgb: "FDE68A" } }, font: { color: { rgb: "7C2D12" }, bold: true } },
+//       };
+
+//       const totalCols = 3 + dateKeys.length + summaryHeaders.length;
+//       for (let c = 0; c < totalCols; c += 1) {
+//         const topCell = toCell(0, c);
+//         if (ws[topCell]) ws[topCell].s = headerTopStyle;
+//         const secondCell = toCell(1, c);
+//         if (ws[secondCell]) ws[secondCell].s = headerSecondStyle;
+//       }
+
+//       for (let r = 2; r < rows.length; r += 1) {
+//         for (let c = 0; c < totalCols; c += 1) {
+//           const addr = toCell(r, c);
+//           if (!ws[addr]) continue;
+//           ws[addr].s = {
+//             ...(ws[addr].s || {}),
+//             border,
+//             alignment: c >= 3 ? centerStyle : { horizontal: "left", vertical: "center" },
+//           };
+//         }
+
+//         for (let c = 3; c < 3 + dateKeys.length; c += 1) {
+//           const addr = toCell(r, c);
+//           const status = String(ws[addr]?.v || "").trim().toUpperCase();
+//           if (!statusStyleMap[status]) continue;
+//           ws[addr].s = {
+//             ...ws[addr].s,
+//             ...statusStyleMap[status],
+//             border,
+//             alignment: centerStyle,
+//           };
+//         }
+//       }
+
+//       XLSX.utils.book_append_sheet(workbook, ws, "Attendance Snapshot");
+//     };
+
+//     buildSnapshotSheet();
+
+//     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+//     const startKey = startDate;
+//     const endKey = endDate;
+//     const selectedDepartmentValues = toArrayParam(department)
+//       .map((value) => String(value || "").trim())
+//       .filter(Boolean);
+//     const deptSuffix = selectedDepartmentValues.length
+//       ? `_dept_${selectedDepartmentValues
+//         .join("-")
+//         .replace(/\s+/g, "-")
+//         .replace(/[^a-zA-Z0-9_-]/g, "")}`
+//       : "";
+
+//     res.setHeader(
+//       "Content-Type",
+//       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+//     );
+//     res.setHeader(
+//       "Content-Disposition",
+//       `attachment; filename=attendance_snapshot_${startKey}_to_${endKey}${deptSuffix}.xlsx`
+//     );
+
+//     return res.send(buffer);
+//   } catch (error) {
+//     console.error("Error exporting attendance snapshot:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: error.message
+//     });
+//   }
+// };
+
+
+//By farhan
 export const exportAttendanceSnapshotToExcel = async (req, res) => {
   try {
     const user = req.user;
@@ -1513,17 +2119,23 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
     const normalizeKeyPart = (value) => String(value || "").trim().toLowerCase();
     const ensureEmployee = (emp) => {
       const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
-      const key = employeeUserId
-        ? `uid:${employeeUserId}`
-        : `name:${normalizeKeyPart(emp?.name)}|dept:${normalizeKeyPart(emp?.department)}|tl:${normalizeKeyPart(
-          emp?.teamLeader
-        )}`;
+      const profile = userProfileMap.get(employeeUserId) || null;
+      const realName = String(profile?.realName || "").trim();
+      const pseudoName = String(profile?.pseudoName || "").trim();
+      const username = String(profile?.username || "").trim();
+      const fallbackName = String(emp?.name || "").trim();
+      const agentName = String(
+        pseudoName ||
+        fallbackName ||
+        username ||
+        realName ||
+        emp?.empId ||
+        employeeUserId ||
+        ""
+      ).trim();
+      const key = `agent:${normalizeKeyPart(agentName) || "unknown"}`;
+
       if (!employeeMap.has(key)) {
-        const profile = userProfileMap.get(employeeUserId) || null;
-        const realName = String(profile?.realName || "").trim();
-        const pseudoName = String(profile?.pseudoName || "").trim();
-        const username = String(profile?.username || "").trim();
-        const fallbackName = String(emp?.name || "").trim();
         employeeMap.set(key, {
           name: realName || username || fallbackName || "",
           pseudoName: pseudoName || username || realName || fallbackName || "",
@@ -1535,7 +2147,22 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
           shiftEndHour: emp?.shiftEndHour ?? "",
           dailyByDateKey: new Map(),
         });
+      } else {
+        const existing = employeeMap.get(key);
+        if (realName) existing.name = realName;
+        if (pseudoName || fallbackName || username) existing.pseudoName = pseudoName || fallbackName || username;
+        if (!existing.department && emp?.department) existing.department = emp.department;
+        if (!existing.transport && emp?.transport) existing.transport = emp.transport;
+        if (!existing.cabRoute && emp?.cabRoute) existing.cabRoute = emp.cabRoute;
+        if (!existing.teamLeader && emp?.teamLeader) existing.teamLeader = emp.teamLeader;
+        if ((existing.shiftStartHour === "" || existing.shiftStartHour === null || existing.shiftStartHour === undefined) && emp?.shiftStartHour !== undefined) {
+          existing.shiftStartHour = emp.shiftStartHour;
+        }
+        if ((existing.shiftEndHour === "" || existing.shiftEndHour === null || existing.shiftEndHour === undefined) && emp?.shiftEndHour !== undefined) {
+          existing.shiftEndHour = emp.shiftEndHour;
+        }
       }
+
       return employeeMap.get(key);
     };
 
@@ -1582,11 +2209,18 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
 
                 const dateKey = toIstDateKey(dsDate);
                 if (!dateKey) return;
+                const effectiveStatus = String(
+                  ds?.departmentStatus ||
+                  ds?.transportStatus ||
+                  ds?.status ||
+                  ""
+                ).trim();
 
                 rowRef.dailyByDateKey.set(dateKey, {
-                  status: ds.departmentStatus || "",
+                  status: effectiveStatus,
                   transportStatus: ds.transportStatus || "",
                   departmentStatus: ds.departmentStatus || "",
+                  rosterStatus: ds.status || "",
                   transportArrivalTime: ds.transportArrivalTime || null,
                   departmentArrivalTime: ds.departmentArrivalTime || null,
                 });
@@ -1621,7 +2255,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       .filter((emp) => {
         for (const k of dateKeys) {
           const ds = emp?.dailyByDateKey?.get(k);
-          if (String(ds?.departmentStatus || "").trim()) return true;
+          if (String(ds?.status || "").trim()) return true;
         }
         return false;
       })
@@ -1708,7 +2342,7 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
         const dayCells = [];
         dateKeys.forEach((k) => {
           const daily = emp.dailyByDateKey.get(k);
-          const status = String(daily?.departmentStatus || "").trim();
+          const status = String(daily?.status || "").trim();
           effectiveStatuses.push(status);
           dayCells.push(status || "");
         });
@@ -1855,6 +2489,8 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
     });
   }
 };
+
+
 export const getAllRosters = async (req, res) => {
   try {
     const { month, year, page = 1, limit = 10 } = req.query;
