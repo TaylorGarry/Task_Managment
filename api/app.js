@@ -480,8 +480,7 @@ const ipFreeRoutes = [
   "/api/v1/push/subscribe"
 ];
 
-// Temporary toggle for testing: keep IP restriction code but bypass enforcement.
-const ENFORCE_IP_RESTRICTION = false;
+const ENFORCE_IP_RESTRICTION = true;
 
 app.use((req, res, next) => {
   if (publicRoutes.includes(req.path)) {
