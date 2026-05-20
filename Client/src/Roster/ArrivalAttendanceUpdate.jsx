@@ -1,5 +1,7 @@
 
 
+
+
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation } from "react-router-dom";
@@ -752,17 +754,17 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   const managedTeamCount = Math.max(serverManagedTeamCount, inferredManagedTeamCount);
   const hasManagedTeam = managedTeamCount > 0;
   const canTeamLeaderManageTeam = hasManagedTeam;
+  const isEmployeeTransportUser = isEmployeeUser && viewType.department === "Transport";
+  const isEmployeeNonTransportUser = isEmployeeUser && viewType.department !== "Transport";
   const canUpdateTransport =
-    (viewType.isSuperAdmin || viewType.isHR || (!isEmployeeUser && viewType.isTransport)) &&
+    (viewType.isSuperAdmin || viewType.isHR || viewType.isTransport) &&
     weekInfo?.canEdit !== false;
   const canUpdateDepartment =
-    (viewType.isSuperAdmin || viewType.isHR || canTeamLeaderManageTeam) &&
+    (viewType.isSuperAdmin || viewType.isHR || (!isEmployeeTransportUser && canTeamLeaderManageTeam)) &&
     weekInfo?.canEdit !== false;
   const canUpdatePunchTimes = (viewType.isHR || viewType.isSuperAdmin) && weekInfo?.canEdit !== false;
   const isEmployeeReadOnly = isEmployeeUser && !hasManagedTeam;
   const canBulkUpdate = canUpdateTransport || canUpdateDepartment || canUpdatePunchTimes;
-  const isEmployeeTransportUser = isEmployeeUser && viewType.department === "Transport";
-  const isEmployeeNonTransportUser = isEmployeeUser && viewType.department !== "Transport";
   const canViewPunchColumns = !isEmployeeUser;
   const canViewTotalHours = !isEmployeeUser;
   const canViewHrAttendance = !isEmployeeUser;
