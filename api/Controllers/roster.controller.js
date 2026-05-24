@@ -9197,10 +9197,16 @@ export const getFilteredRosterForUpdates = async (req, res) => {
     let canEdit = false;
     let editMessage = "";
 
-    const isAdmin = user.accountType === "superAdmin" || user.accountType === "HR";
+    const isTransportUser = normalizeDepartment(user?.department) === "Transport";
+    const isAdmin =
+      user.accountType === "superAdmin" ||
+      user.accountType === "HR" ||
+      isTransportUser;
     if (isAdmin) {
       canEdit = true;
-      editMessage = "HR/Super Admin can edit any week";
+      editMessage = isTransportUser
+        ? "Transport can edit any week"
+        : "HR/Super Admin can edit any week";
     } else if (currentDateKey < weekStartKey) {
       canEdit = false;
       editMessage = "Cannot edit before the week starts";
@@ -9242,6 +9248,7 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         q,
         searchBy,
         weekNumber: responseWeekNumber,
+        displayWeekNumber: responseWeekMeta?.displayWeekNumber || responseWeekNumber,
         startDate: weekStartKey,
         endDate: weekEndKey,
         currentDate: currentDateKey,

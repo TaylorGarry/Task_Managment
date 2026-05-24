@@ -259,7 +259,7 @@ const mergeWeeksStable = (existingWeeks = [], incomingWeeks = []) => {
 };
 
 const getWeekRequestNumber = (week) => {
-  const parsed = Number.parseInt(week?.actualWeekNumber ?? week?.weekNumber, 10);
+  const parsed = Number.parseInt(week?.weekNumber ?? week?.actualWeekNumber, 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
@@ -492,7 +492,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
         let nextWeekInfo = {
           rosterId: responseData.rosterId || activeRosterId,
           weekNumber: responseData.weekNumber,
-          displayWeekNumber: responseData.weekNumber,
+          displayWeekNumber: responseData.displayWeekNumber || responseData.weekNumber,
           startDate: responseData.startDate,
           endDate: responseData.endDate,
           canEdit: responseData.canEdit,

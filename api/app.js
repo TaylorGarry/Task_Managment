@@ -383,7 +383,7 @@ import leaveRoutes from "./routes/leave.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import punchxRoutes from "./routes/punchx.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
-import { isPrivilegedUser } from "./utils/roleAccess.js";
+import { isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 
 dotenv.config();
 const app = express();
@@ -511,6 +511,7 @@ app.use((req, res, next) => {
   }
 
   if (isPrivilegedUser(req.user || {})) return next();
+  if (normalizeDepartment(req.user?.department) === "Transport") return next();
 
   if (allowedIPs.includes(clientIp)) return next();
 
