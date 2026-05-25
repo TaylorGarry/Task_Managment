@@ -47,14 +47,12 @@ const cache = {
     filters: null,
     CACHE_DURATION: 5 * 60 * 1000,
   },
-  // Add cache for department-wise attendance
   departmentWiseAttendance: {
     data: null,
     timestamp: null,
     key: null,
     CACHE_DURATION: 2 * 60 * 1000,
   },
-  // Cache paginated "employees for updates" responses to avoid refetch + UI flicker
   employeesForUpdates: {
     dataByKey: {},
     timestampByKey: {},
