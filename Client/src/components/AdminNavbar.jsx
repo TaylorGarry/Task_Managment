@@ -80,6 +80,7 @@ const AdminNavbar = ({ showOutlet = true }) => {
   // Check if user can upload Excel (Ops-Meta employees + Admin/HR/superAdmin)
   const canUploadExcel = 
     (isEmployeeFlow && normalizedDepartment === "Operations") ||
+    (isEmployeeFlow && normalizedDepartment === "Sales") ||
     canManageAdminPanels(user);
   const canUploadAttendanceOverride = isSuperAdmin(user) || isAccountsDepartment(user);
   const canAccessTaskStatus = !isHrDepartment(user);

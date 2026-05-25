@@ -448,6 +448,7 @@ import {
 
 const ALLOWED_ROSTER_DEPARTMENTS = [
   "Operations",
+  "Sales",
   "Marketing",
   "Customer Service",
   "Developer",

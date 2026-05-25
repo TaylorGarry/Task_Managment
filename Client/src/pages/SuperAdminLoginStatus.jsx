@@ -511,8 +511,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getRoleType } from "../utils/roleAccess.js";
 
- const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-//const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+//  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 const IST_TIME_ZONE = "Asia/Kolkata";
@@ -622,6 +622,22 @@ const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour }) => {
   // In those cases trust normalized fallback.
   if (safeServer > HALF_DAY_MS) return fallback;
   return safeServer;
+};
+
+const getFloorRosterStatusClass = (status) => {
+  const key = String(status || "").trim().toUpperCase();
+
+  if (key === "P") return "bg-emerald-100 text-emerald-700";
+  if (key === "WO") return "bg-sky-100 text-sky-700";
+  if (key === "L") return "bg-rose-100 text-rose-700";
+  if (key === "NCNS") return "bg-red-100 text-red-700";
+  if (key === "UL") return "bg-orange-100 text-orange-700";
+  if (key === "LWP") return "bg-yellow-100 text-yellow-700";
+  if (key === "BL") return "bg-violet-100 text-violet-700";
+  if (key === "H") return "bg-fuchsia-100 text-fuchsia-700";
+  if (key === "HD") return "bg-amber-100 text-amber-700";
+  if (key === "LWD") return "bg-lime-100 text-lime-700";
+  return "bg-slate-100 text-slate-600";
 };
 
 const SuperAdminLoginStatus = () => {
@@ -946,7 +962,11 @@ const SuperAdminLoginStatus = () => {
                       </td>
                       <td className="px-3 py-2">{formatDateTime(row.loginTime)}</td>
                       <td className="px-3 py-2">{formatDateTime(row.logoutTime)}</td>
-                      <td className="px-3 py-2">{row.floorRosterStatus || "--"}</td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getFloorRosterStatusClass(row.floorRosterStatus)}`}>
+                          {row.floorRosterStatus || "--"}
+                        </span>
+                      </td>
                       <td className="px-3 py-2">{!row.loginTime ? "--" : row.lateByMs > 0 ? formatDuration(row.lateByMs) : "On Time"}</td>
                       <td className="px-3 py-2">{row.loginTime ? formatDuration(row.totalWorkedMs || 0) : "--"}</td>
                       <td className="px-3 py-2">
