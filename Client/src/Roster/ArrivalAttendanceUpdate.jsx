@@ -259,7 +259,20 @@ const mergeWeeksStable = (existingWeeks = [], incomingWeeks = []) => {
 };
 
 const getWeekRequestNumber = (week) => {
-  const parsed = Number.parseInt(week?.weekNumber ?? week?.actualWeekNumber, 10);
+  const parsed = Number.parseInt(week?.actualWeekNumber ?? week?.weekNumber, 10);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const getWeekOptionValue = (week) => {
+  const requestWeekNumber = getWeekRequestNumber(week);
+  const startKey = toIstDateKey(week?.startDate) || "";
+  const endKey = toIstDateKey(week?.endDate) || "";
+  return `${requestWeekNumber ?? ""}|${startKey}|${endKey}`;
+};
+
+const getWeekRequestNumberFromValue = (value) => {
+  const token = String(value || "").split("|")[0];
+  const parsed = Number.parseInt(token, 10);
   return Number.isFinite(parsed) ? parsed : null;
 };
 
@@ -324,7 +337,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   }, [monthFilterContext?.month, monthFilterContext?.year]);
   
   const selectedWeekMeta = availableWeeks.find(
-    (week) => String(getWeekRequestNumber(week)) === String(selectedWeek)
+    (week) => getWeekOptionValue(week) === String(selectedWeek)
   );
   const selectedWeekStartKey = toIstDateKey(selectedWeekMeta?.startDate || weekInfo?.startDate);
   const selectedWeekEndKey = toIstDateKey(selectedWeekMeta?.endDate || weekInfo?.endDate);
@@ -426,7 +439,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     if (!activeRosterId || !effectiveSelectedDate) return;
 
     if (!selectedWeek) return;
-    const weekNumber = Number.parseInt(selectedWeek, 10);
+    const weekNumber = getWeekRequestNumberFromValue(selectedWeek);
     if (!Number.isFinite(weekNumber) || weekNumber < 1) return;
 
     const requestParams = {
@@ -452,9 +465,9 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   useEffect(() => {
     if (availableWeeks.length > 0 && !selectedWeek && !autoSelectWeekDone.current) {
       const firstWeek = availableWeeks[0];
-      const firstWeekNumber = String(getWeekRequestNumber(firstWeek));
-      if (firstWeekNumber) {
-        setSelectedWeek(firstWeekNumber);
+      const firstWeekValue = getWeekOptionValue(firstWeek);
+      if (firstWeekValue) {
+        setSelectedWeek(firstWeekValue);
         autoSelectWeekDone.current = true;
         
         const weekStartKey = toIstDateKey(firstWeek?.startDate);
@@ -477,12 +490,15 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       .filter((n) => Number.isFinite(n));
     if (!availableWeekNumbers.length) return;
 
-    const fallbackWeek = String(availableWeekNumbers[0]);
+    const fallbackCandidate = availableWeeks.find((week) =>
+      availableWeekNumbers.includes(getWeekRequestNumber(week))
+    );
+    const fallbackWeek = fallbackCandidate ? getWeekOptionValue(fallbackCandidate) : "";
     if (String(selectedWeek) !== fallbackWeek) {
       setSelectedWeek(fallbackWeek);
       setCurrentPage(1);
     }
-  }, [error, selectedWeek]);
+  }, [error, selectedWeek, availableWeeks]);
 
   useEffect(() => {
     if (updateEmployeesData?.data) {
@@ -543,8 +559,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
               return monthStartKey >= startKey && monthStartKey <= endKey;
             }) || sortedWeeks[0];
           const firstWeekStartKey = toIstDateKey(preferredWeek?.startDate);
-              if (getWeekRequestNumber(preferredWeek) != null) {
-            setSelectedWeek(String(getWeekRequestNumber(preferredWeek)));
+          if (getWeekRequestNumber(preferredWeek) != null) {
+            setSelectedWeek(getWeekOptionValue(preferredWeek));
           }
           if (firstWeekStartKey) {
             setSelectedDate(firstWeekStartKey);
@@ -559,7 +575,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
           const firstWeek = sortedWeeks[0];
           const firstWeekStartKey = toIstDateKey(firstWeek?.startDate);
           if (getWeekRequestNumber(firstWeek) != null) {
-            setSelectedWeek(String(getWeekRequestNumber(firstWeek)));
+            setSelectedWeek(getWeekOptionValue(firstWeek));
             autoSelectWeekDone.current = true;
           }
           if (firstWeekStartKey) {
@@ -571,11 +587,11 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
         const weekForSelectedDate = sortedWeeks.find((week) => isDateWithinWeek(selectedDate, week));
         const hasSelectedWeek = sortedWeeks.some(
-          (week) => String(getWeekRequestNumber(week)) === String(selectedWeek)
+          (week) => getWeekOptionValue(week) === String(selectedWeek)
         );
         if (selectedWeek && !hasSelectedWeek) {
           const preferredWeek = weekForSelectedDate || sortedWeeks[0];
-          setSelectedWeek(String(getWeekRequestNumber(preferredWeek)));
+          setSelectedWeek(getWeekOptionValue(preferredWeek));
         }
       }
     }
@@ -586,8 +602,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     if (!selectedWeekStartKey || !selectedWeekEndKey) return;
     if (!selectedDate || selectedDate < selectedWeekStartKey || selectedDate > selectedWeekEndKey) {
       const weekForSelectedDate = availableWeeks.find((week) => isDateWithinWeek(selectedDate, week));
-      if (weekForSelectedDate && String(getWeekRequestNumber(weekForSelectedDate)) !== String(selectedWeek)) {
-        setSelectedWeek(String(getWeekRequestNumber(weekForSelectedDate)));
+      if (weekForSelectedDate && getWeekOptionValue(weekForSelectedDate) !== String(selectedWeek)) {
+        setSelectedWeek(getWeekOptionValue(weekForSelectedDate));
         setCurrentPage(1);
         return;
       }
@@ -689,7 +705,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
     dispatch(
       getEmployeesForUpdates({
         rosterId: activeRosterId,
-        weekNumber: parseInt(selectedWeek),
+        weekNumber: getWeekRequestNumberFromValue(selectedWeek),
         date: effectiveSelectedDate,
         month: monthYearForRequests?.month,
         year: monthYearForRequests?.year,
@@ -707,7 +723,10 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       return null;
     }
 
-    const selectedDateKey = toIstDateKey(selectedDate) || toLocalDateKey(selectedDate) || toUtcDateKey(selectedDate);
+    const selectedDateKey =
+      toIstDateKey(effectiveSelectedDate) ||
+      toLocalDateKey(effectiveSelectedDate) ||
+      toUtcDateKey(effectiveSelectedDate);
     if (!selectedDateKey) return null;
 
     const matches = employee.dailyStatus.filter((d) => {
@@ -845,7 +864,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
 
     const payload = {
       rosterId: activeRosterId || rosterId,
-      weekNumber: parseInt(selectedWeek),
+      weekNumber: getWeekRequestNumberFromValue(selectedWeek),
       employeeIds: filteredEmployeeIds,
         date: effectiveSelectedDate,
       delegatedFrom: delegatedFromUserId || undefined,
@@ -898,8 +917,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
       
       dispatch(getEmployeesForUpdates({
         rosterId: activeRosterId || rosterId,
-        weekNumber: parseInt(selectedWeek),
-        date: selectedDate,
+        weekNumber: getWeekRequestNumberFromValue(selectedWeek),
+        date: effectiveSelectedDate,
         month: monthYearForRequests?.month,
         year: monthYearForRequests?.year,
         page: currentPage,
@@ -1031,7 +1050,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 onChange={(e) => {
                   const nextWeekValue = String(e.target.value || "");
                   const nextWeek = availableWeeks.find(
-                    (week) => String(getWeekRequestNumber(week)) === nextWeekValue
+                    (week) => getWeekOptionValue(week) === nextWeekValue
                   );
                   setSelectedWeek(nextWeekValue);
                   const rememberedDate = weekDateMemoryRef.current[nextWeekValue];
@@ -1051,8 +1070,8 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 <option value="">-- Select Week --</option>
                 {availableWeeks.map((week) => (
                   <option
-                    key={`${getWeekRequestNumber(week)}-${toIstDateKey(week.startDate) || ""}-${toIstDateKey(week.endDate) || ""}`}
-                    value={getWeekRequestNumber(week) ?? ""}
+                    key={getWeekOptionValue(week)}
+                    value={getWeekOptionValue(week)}
                   >
                     Week {week.displayWeekNumber || week.weekNumber} ({new Date(week.startDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })} - {new Date(week.endDate).toLocaleDateString(undefined, { timeZone: "Asia/Kolkata" })}) - {week.employeeCount || 0} employees
                   </option>

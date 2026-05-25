@@ -7892,6 +7892,14 @@ export const updateAttendanceBulk = async (req, res) => {
       parsedWeekNumber,
       selectedDateKey
     );
+    // If weekNumber resolves to a range that does not include requested date,
+    // treat it as unresolved so fallback can find the correct roster/week.
+    if (
+      weekCandidates.length &&
+      !weekCandidates.some((w) => isDateKeyWithinWeek(selectedDateKey, w))
+    ) {
+      weekCandidates = [];
+    }
     if (!weekCandidates.length) {
       const fallbackStartedAt = Date.now();
       const requestedDayStart = new Date(Date.UTC(
@@ -7945,6 +7953,12 @@ export const updateAttendanceBulk = async (req, res) => {
           parsedWeekNumber,
           selectedDateKey
         );
+        if (
+          weekCandidates.length &&
+          !weekCandidates.some((w) => isDateKeyWithinWeek(selectedDateKey, w))
+        ) {
+          weekCandidates = [];
+        }
       }
       const fallbackMs = Date.now() - fallbackStartedAt;
       if (fallbackMs >= ATTENDANCE_SLOW_QUERY_MS) {
@@ -8172,6 +8186,7 @@ export const updateAttendanceBulk = async (req, res) => {
 
     const loopStartedAt = Date.now();
     const setOps = {};
+    const pushOps = {};
     const historyEntries = [];
     for (const employeeId of employeeIds) {
       try {
@@ -8227,7 +8242,9 @@ export const updateAttendanceBulk = async (req, res) => {
         }
 
         // 🔥 FIX: Find daily status using date string comparison
-        let daily = employee.dailyStatus.find((d) => toIstDateKey(d?.date) === selectedDateKey);
+        const dailyList = Array.isArray(employee.dailyStatus) ? employee.dailyStatus : [];
+        let dailyIndex = dailyList.findIndex((d) => toIstDateKey(d?.date) === selectedDateKey);
+        let daily = dailyIndex >= 0 ? dailyList[dailyIndex] : null;
 
         if (!daily) {
           daily = {
@@ -8245,8 +8262,7 @@ export const updateAttendanceBulk = async (req, res) => {
             departmentUpdatedBy: null,
             departmentUpdatedAt: null
           };
-          employee.dailyStatus.push(daily);
-          daily = employee.dailyStatus[employee.dailyStatus.length - 1];
+          dailyIndex = -1;
         } else {
           const ensure = (key, fallback) => {
             if (daily[key] === undefined) {
@@ -8362,12 +8378,41 @@ export const updateAttendanceBulk = async (req, res) => {
         }
 
         if (changes.length > 0) {
-          const serializedDailyStatus = (employee.dailyStatus || []).map((dayEntry) => (
-            typeof dayEntry?.toObject === "function"
-              ? dayEntry.toObject({ depopulate: true })
-              : { ...dayEntry }
-          ));
-          setOps[`weeks.${location.weekIndex}.employees.${location.employeeIndex}.dailyStatus`] = serializedDailyStatus;
+          const dailyPathBase =
+            dailyIndex >= 0
+              ? `weeks.${location.weekIndex}.employees.${location.employeeIndex}.dailyStatus.${dailyIndex}`
+              : null;
+          if (dailyPathBase) {
+            setOps[`${dailyPathBase}.transportStatus`] = daily.transportStatus ?? "";
+            setOps[`${dailyPathBase}.departmentStatus`] = daily.departmentStatus ?? "";
+            setOps[`${dailyPathBase}.transportStatusUpdatedBy`] = daily.transportStatusUpdatedBy ?? null;
+            setOps[`${dailyPathBase}.transportStatusUpdatedAt`] = daily.transportStatusUpdatedAt ?? null;
+            setOps[`${dailyPathBase}.departmentStatusUpdatedBy`] = daily.departmentStatusUpdatedBy ?? null;
+            setOps[`${dailyPathBase}.departmentStatusUpdatedAt`] = daily.departmentStatusUpdatedAt ?? null;
+            setOps[`${dailyPathBase}.transportArrivalTime`] = daily.transportArrivalTime ?? null;
+            setOps[`${dailyPathBase}.departmentArrivalTime`] = daily.departmentArrivalTime ?? null;
+            setOps[`${dailyPathBase}.transportUpdatedBy`] = daily.transportUpdatedBy ?? null;
+            setOps[`${dailyPathBase}.transportUpdatedAt`] = daily.transportUpdatedAt ?? null;
+            setOps[`${dailyPathBase}.departmentUpdatedBy`] = daily.departmentUpdatedBy ?? null;
+            setOps[`${dailyPathBase}.departmentUpdatedAt`] = daily.departmentUpdatedAt ?? null;
+          } else {
+            const pushPath = `weeks.${location.weekIndex}.employees.${location.employeeIndex}.dailyStatus`;
+            pushOps[pushPath] = {
+              date: daily.date,
+              transportStatus: daily.transportStatus ?? "",
+              departmentStatus: daily.departmentStatus ?? "",
+              transportStatusUpdatedBy: daily.transportStatusUpdatedBy ?? null,
+              transportStatusUpdatedAt: daily.transportStatusUpdatedAt ?? null,
+              departmentStatusUpdatedBy: daily.departmentStatusUpdatedBy ?? null,
+              departmentStatusUpdatedAt: daily.departmentStatusUpdatedAt ?? null,
+              transportArrivalTime: daily.transportArrivalTime ?? null,
+              departmentArrivalTime: daily.departmentArrivalTime ?? null,
+              transportUpdatedBy: daily.transportUpdatedBy ?? null,
+              transportUpdatedAt: daily.transportUpdatedAt ?? null,
+              departmentUpdatedBy: daily.departmentUpdatedBy ?? null,
+              departmentUpdatedAt: daily.departmentUpdatedAt ?? null,
+            };
+          }
           historyEntries.push({
             editedBy: user._id,
             editedByName: user.username,
@@ -8388,13 +8433,20 @@ export const updateAttendanceBulk = async (req, res) => {
     const loopMs = Date.now() - loopStartedAt;
 
     const saveStartedAt = Date.now();
-    if (Object.keys(setOps).length > 0 || historyEntries.length > 0) {
+    if (Object.keys(setOps).length > 0 || Object.keys(pushOps).length > 0 || historyEntries.length > 0) {
       const updateDoc = {};
       if (Object.keys(setOps).length > 0) {
         updateDoc.$set = setOps;
       }
+      if (Object.keys(pushOps).length > 0) {
+        updateDoc.$push = {
+          ...(updateDoc.$push || {}),
+          ...pushOps,
+        };
+      }
       if (historyEntries.length > 0) {
         updateDoc.$push = {
+          ...(updateDoc.$push || {}),
           editHistory: { $each: historyEntries },
         };
       }
@@ -8584,6 +8636,29 @@ export const getFilteredRosterForUpdates = async (req, res) => {
         requestedDateKey
       );
       if (!matchedGroup.length) return null;
+
+      // In month context, the client can send display week numbers that repeat
+      // across adjacent rosters. If requested date is not inside the matched
+      // range, prefer the week that actually contains requestedDate.
+      if (hasMonthContext && requestedDateKey) {
+        const matchedContainsRequestedDate = matchedGroup.some((week) =>
+          isDateKeyWithinWeek(requestedDateKey, week)
+        );
+        if (!matchedContainsRequestedDate) {
+          const byDate = weeks.find((week) => isDateKeyWithinWeek(requestedDateKey, week));
+          if (byDate) {
+            const dateMatchedGroup = (weeks || []).filter(
+              (week) => getWeekRangeKey(week) === getWeekRangeKey(byDate)
+            );
+            if (dateMatchedGroup.length) {
+              return { weekGroup: dateMatchedGroup, resolvedByDate: true };
+            }
+          }
+          // Critical: do not keep an out-of-date week just because weekNumber matched.
+          // Returning null here allows caller to try overlapping rosters for the month.
+          return null;
+        }
+      }
 
       const resolvedByDate = !matchedGroup.some(
         (week) => Number.parseInt(week?.weekNumber, 10) === parsedWeekNumber
@@ -9177,15 +9252,34 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       .sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
 
     const currentDateKey = toIstDateKey(new Date());
-    const weekStartKey = (selectedWeekGroup || [])
+    const rawWeekStartKey = (selectedWeekGroup || [])
       .map((w) => toIstDateKey(w?.startDate))
       .filter(Boolean)
       .sort()[0];
-    const weekEndKeyCandidates = (selectedWeekGroup || [])
+    const rawWeekEndKeyCandidates = (selectedWeekGroup || [])
       .map((w) => toIstDateKey(w?.endDate))
       .filter(Boolean)
       .sort();
-    const weekEndKey = weekEndKeyCandidates[weekEndKeyCandidates.length - 1];
+    const rawWeekEndKey = rawWeekEndKeyCandidates[rawWeekEndKeyCandidates.length - 1];
+
+    const responseWeekMeta = hasMonthContext
+      ? clipWeekToMonthContext(
+          {
+            weekNumber: selectedWeekGroup[0]?.weekNumber,
+            startDate: selectedWeekGroup[0]?.startDate,
+            endDate: selectedWeekGroup[0]?.endDate,
+          },
+          parsedMonth,
+          parsedYear
+        )
+      : null;
+
+    const weekStartKey = responseWeekMeta?.startDate
+      ? toIstDateKey(responseWeekMeta.startDate)
+      : rawWeekStartKey;
+    const weekEndKey = responseWeekMeta?.endDate
+      ? toIstDateKey(responseWeekMeta.endDate)
+      : rawWeekEndKey;
 
     if (!weekStartKey || !weekEndKey || !currentDateKey) {
       return res.status(500).json({
@@ -9220,18 +9314,6 @@ export const getFilteredRosterForUpdates = async (req, res) => {
 
     // Get unique departments
     const departments = [...new Set(filteredEmployees.map(e => e?.department).filter(Boolean))];
-
-    const responseWeekMeta = hasMonthContext
-      ? clipWeekToMonthContext(
-          {
-            weekNumber: selectedWeekGroup[0]?.weekNumber,
-            startDate: selectedWeekGroup[0]?.startDate,
-            endDate: selectedWeekGroup[0]?.endDate,
-          },
-          parsedMonth,
-          parsedYear
-        )
-      : null;
 
     const responseWeekNumber = hasMonthContext
       ? responseWeekMeta?.displayWeekNumber || Number.parseInt(selectedWeekGroup[0].weekNumber, 10)
