@@ -1,6 +1,7 @@
 import XLSX from "xlsx-js-style";
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
+import { syncPayrollAttendanceFromExcel } from "./payrollAttendance.controller.js";
 import Delegation from "../Modals/Delegation/delegation.modal.js";
 import {
   getDelegationContextForDate,
@@ -235,6 +236,9 @@ const normalizeKeyText = (value) =>
     .replace(/\s+/g, " ")
     .toLowerCase();
 
+const escapeRegex = (value) =>
+  String(value || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
 const parseYmdRangeDate = (value) => {
   const parsed = parseYmdToUtcDate(value);
   if (!parsed || Number.isNaN(parsed.getTime())) return null;
@@ -262,7 +266,7 @@ const parseStatusCode = (value) => {
   const raw = String(value ?? "").trim().toUpperCase();
   if (!raw) return null;
   if (raw === "WOP") return "WO";
-  const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD"]);
+  const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT"]);
   return valid.has(raw) ? raw : null;
 };
 
@@ -2016,16 +2020,6 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
       monthCursor.setUTCMonth(monthCursor.getUTCMonth() + 1);
     }
 
-    const latestRosterByMonthKey = new Map();
-    matchingRosters.forEach((roster) => {
-      const rosterMonth = Number(roster?.month);
-      const rosterYear = Number(roster?.year);
-      if (!Number.isFinite(rosterMonth) || !Number.isFinite(rosterYear)) return;
-      const monthKey = `${rosterYear}-${String(rosterMonth).padStart(2, "0")}`;
-      if (!selectedMonthKeys.has(monthKey) || latestRosterByMonthKey.has(monthKey)) return;
-      latestRosterByMonthKey.set(monthKey, roster);
-    });
-
     const rosters = matchingRosters;
 
     const employeeUserIds = new Set();
@@ -2154,7 +2148,15 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
     const getAgentKey = (emp, profile = null, employeeUserId = "") =>
       `agent:${normalizeKeyPart(getAgentName(emp, profile, employeeUserId)) || "unknown"}`;
     const allowedAgentKeysByMonth = new Map();
-    latestRosterByMonthKey.forEach((roster, monthKey) => {
+    // Build the allowlist from every roster that overlaps the requested range.
+    // This keeps the existing export filters intact while allowing attendance-bearing
+    // employees added by Accounts override into any roster document for the month.
+    rosters.forEach((roster) => {
+      const rosterMonth = Number(roster?.month);
+      const rosterYear = Number(roster?.year);
+      if (!Number.isFinite(rosterMonth) || !Number.isFinite(rosterYear)) return;
+      const monthKey = `${rosterYear}-${String(rosterMonth).padStart(2, "0")}`;
+      if (!selectedMonthKeys.has(monthKey)) return;
       const allowedKeys = new Set();
       (roster?.weeks || []).forEach((week) => {
         (week?.employees || []).forEach((emp) => {
@@ -2163,8 +2165,11 @@ export const exportAttendanceSnapshotToExcel = async (req, res) => {
           allowedKeys.add(getAgentKey(emp, profile, employeeUserId));
         });
       });
-      allowedAgentKeysByMonth.set(monthKey, allowedKeys);
+      const monthAllowlist = allowedAgentKeysByMonth.get(monthKey) || new Set();
+      allowedKeys.forEach((key) => monthAllowlist.add(key));
+      allowedAgentKeysByMonth.set(monthKey, monthAllowlist);
     });
+
     const ensureEmployee = (emp) => {
       const employeeUserId = String(emp?.userId?._id || emp?.userId || "").trim();
       const profile = userProfileMap.get(employeeUserId) || null;
@@ -5473,6 +5478,36 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
 
     const startKey = toIstDateKey(start);
     const endKey = toIstDateKey(end);
+    const [selectedStartYearText, selectedStartMonthText] = String(startKey || "").split("-");
+    const selectedStartYear = Number.parseInt(selectedStartYearText, 10);
+    const selectedStartMonth = Number.parseInt(selectedStartMonthText, 10);
+    const getOverrideDateKeyFromHeaderCell = (value) => {
+      if (typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= 31) {
+        if (Number.isFinite(selectedStartYear) && Number.isFinite(selectedStartMonth)) {
+          const inferred = new Date(Date.UTC(selectedStartYear, selectedStartMonth - 1, value, 12, 0, 0, 0));
+          const inferredKey = toIstDateKey(inferred);
+          if (inferredKey?.startsWith(`${selectedStartYear}-${String(selectedStartMonth).padStart(2, "0")}`)) {
+            return inferredKey;
+          }
+        }
+      }
+      const raw = String(value || "").trim();
+      const dayMonthMatch = raw.match(/^(\d{1,2})(?:[\/\-.](\d{1,2}))?(?:[\/\-.](\d{2,4}))?(?:\s+\w+)?$/);
+      if (dayMonthMatch && Number.isFinite(selectedStartYear) && Number.isFinite(selectedStartMonth)) {
+        const day = Number.parseInt(dayMonthMatch[1], 10);
+        const month = dayMonthMatch[2] ? Number.parseInt(dayMonthMatch[2], 10) : selectedStartMonth;
+        const yearRaw = dayMonthMatch[3] ? Number.parseInt(dayMonthMatch[3], 10) : selectedStartYear;
+        const year = yearRaw < 100 ? 2000 + yearRaw : yearRaw;
+        if (Number.isFinite(day) && Number.isFinite(month) && Number.isFinite(year)) {
+          const inferred = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+          const inferredKey = toIstDateKey(inferred);
+          if (inferredKey && inferredKey >= startKey && inferredKey <= endKey) {
+            return inferredKey;
+          }
+        }
+      }
+      return getIsoDateKeyFromExcelHeaderCell(value);
+    };
     const workbook = XLSX.read(req.file.buffer, { type: "buffer" });
     const sheetName = workbook.SheetNames?.[0];
     if (!sheetName) return res.status(400).json({ success: false, message: "Excel has no worksheet." });
@@ -5482,8 +5517,23 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
       return res.status(400).json({ success: false, message: "Excel must include header rows and data rows." });
     }
 
-    const headerRow = rows[0] || [];
-    const dataRows = rows.slice(2);
+    const normalizeHeaderRow = (row = []) => row.map((cell) => normalizeKeyText(cell));
+    const headerRowIndex = rows.findIndex((row) => {
+      const normalized = normalizeHeaderRow(row);
+      const hasAgent = normalized.some((cell) =>
+        ["agent", "pseudoname", "pseudo name", "employee name", "employee", "real name", "username", "name", "employee id", "emp id", "empid"].includes(cell)
+      );
+      const hasDates = row.some((cell) => Boolean(getOverrideDateKeyFromHeaderCell(cell)));
+      return hasAgent && hasDates;
+    });
+    if (headerRowIndex === -1) {
+      return res.status(400).json({
+        success: false,
+        message: "Excel must include a header row with AGENT and date columns.",
+      });
+    }
+
+    const headerRow = rows[headerRowIndex] || [];
     const findColIndex = (names = []) => {
       const wanted = new Set(names.map((n) => normalizeKeyText(n)));
       for (let i = 0; i < headerRow.length; i += 1) {
@@ -5492,7 +5542,18 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
       return -1;
     };
 
-    const agentColIndex = findColIndex(["AGENT", "Agent", "Pseudo Name", "PseudoName"]);
+    const agentColIndex = findColIndex([
+      "AGENT",
+      "Agent",
+      "Pseudo Name",
+      "PseudoName",
+      "Employee Name",
+      "EmployeeName",
+      "Real Name",
+      "RealName",
+      "Username",
+      "Name",
+    ]);
     const employeeIdColIndex = findColIndex(["Employee ID", "Emp ID", "EmpId", "EMPID"]);
     if (agentColIndex === -1 && employeeIdColIndex === -1) {
       return res.status(400).json({
@@ -5503,7 +5564,7 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
 
     const dateColumns = [];
     for (let col = 0; col < headerRow.length; col += 1) {
-      const dateKey = getIsoDateKeyFromExcelHeaderCell(headerRow[col]);
+      const dateKey = getOverrideDateKeyFromHeaderCell(headerRow[col]);
       if (!dateKey) continue;
       if (dateKey < startKey || dateKey > endKey) continue;
       dateColumns.push({ col, dateKey });
@@ -5515,6 +5576,17 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
       });
     }
 
+    const weekdayNames = new Set(["mon", "monday", "tue", "tuesday", "wed", "wednesday", "thu", "thursday", "fri", "friday", "sat", "saturday", "sun", "sunday"]);
+    let dataStartIndex = headerRowIndex + 1;
+    const possibleWeekdayRow = rows[dataStartIndex] || [];
+    const weekdayCellCount = dateColumns.reduce((count, { col }) => (
+      weekdayNames.has(normalizeKeyText(possibleWeekdayRow[col])) ? count + 1 : count
+    ), 0);
+    if (weekdayCellCount >= Math.max(1, Math.ceil(dateColumns.length / 2))) {
+      dataStartIndex += 1;
+    }
+    const dataRows = rows.slice(dataStartIndex);
+
     const uniqueEmpIds = new Set();
     const uniqueAgents = new Set();
     for (const row of dataRows) {
@@ -5524,39 +5596,60 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
       if (agent) uniqueAgents.add(normalizeKeyText(agent));
     }
 
-    const [usersByEmpIdRaw, usersByPseudoRaw] = await Promise.all([
+    const nameRegexes = Array.from(uniqueAgents).map((v) => new RegExp(`^${escapeRegex(v)}$`, "i"));
+    const [usersByEmpIdRaw, usersByNameRaw] = await Promise.all([
       uniqueEmpIds.size
-        ? User.find({ empId: { $in: Array.from(uniqueEmpIds) } }).select("_id empId pseudoName").lean()
+        ? User.find({ empId: { $in: Array.from(uniqueEmpIds) } })
+            .select("_id empId pseudoName username realName department shiftStartHour shiftEndHour")
+            .lean()
         : Promise.resolve([]),
-      uniqueAgents.size
-        ? User.find({ pseudoName: { $in: Array.from(uniqueAgents).map((v) => new RegExp(`^${String(v).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i")) } })
-            .select("_id empId pseudoName")
+      nameRegexes.length
+        ? User.find({
+            $or: [
+              { pseudoName: { $in: nameRegexes } },
+              { realName: { $in: nameRegexes } },
+              { username: { $in: nameRegexes } },
+            ],
+          })
+            .select("_id empId pseudoName username realName department shiftStartHour shiftEndHour")
             .lean()
         : Promise.resolve([]),
     ]);
 
     const userByEmpId = new Map(usersByEmpIdRaw.map((u) => [String(u.empId || "").trim(), u]));
-    const userByPseudo = new Map(usersByPseudoRaw.map((u) => [normalizeKeyText(u.pseudoName), u]));
+    const userByPseudo = new Map(usersByNameRaw.map((u) => [normalizeKeyText(u.pseudoName), u]));
+    const userByRealName = new Map(usersByNameRaw.map((u) => [normalizeKeyText(u.realName), u]));
+    const userByUsername = new Map(usersByNameRaw.map((u) => [normalizeKeyText(u.username), u]));
 
     const updatesByUser = new Map();
     const updatesByEmpId = new Map();
-    const updatesByAgent = new Map();
+    const updatesByIdentity = new Map();
+    const updateMetaByUser = new Map();
     const unmatchedRows = [];
     let invalidStatusCells = 0;
     let parsedStatusCells = 0;
 
     dataRows.forEach((row, idx) => {
-      const rowNo = idx + 3;
+      const rowNo = idx + dataStartIndex + 1;
       const empId = employeeIdColIndex >= 0 ? String(row[employeeIdColIndex] || "").trim() : "";
       const agent = agentColIndex >= 0 ? String(row[agentColIndex] || "").trim() : "";
-      const userMatch = (empId ? userByEmpId.get(empId) : null) || (agent ? userByPseudo.get(normalizeKeyText(agent)) : null);
+      const normalizedAgent = normalizeKeyText(agent);
+      const userMatch =
+        (empId ? userByEmpId.get(empId) : null) ||
+        (normalizedAgent ? userByPseudo.get(normalizedAgent) || userByRealName.get(normalizedAgent) || userByUsername.get(normalizedAgent) : null);
       if (!userMatch) {
         unmatchedRows.push({ rowNo, empId, agent });
         return;
       }
       const uid = String(userMatch._id);
-      const normalizedAgent = normalizeKeyText(agent);
-      const perDate = updatesByUser.get(uid) || updatesByEmpId.get(empId) || updatesByAgent.get(normalizedAgent) || new Map();
+      const matchedEmpId = String(userMatch.empId || empId || "").trim();
+      const matchedDisplayName = String(userMatch.pseudoName || userMatch.realName || userMatch.username || agent || "").trim();
+      const perDate = updatesByUser.get(uid) || updatesByEmpId.get(empId) || updatesByIdentity.get(normalizedAgent) || new Map();
+      updateMetaByUser.set(uid, {
+        user: userMatch,
+        empId: matchedEmpId,
+        agent: matchedDisplayName,
+      });
 
       dateColumns.forEach(({ col, dateKey }) => {
         const status = parseStatusCode(row[col]);
@@ -5570,18 +5663,37 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
       });
 
       updatesByUser.set(uid, perDate);
-      if (empId) updatesByEmpId.set(empId, perDate);
-      if (normalizedAgent) updatesByAgent.set(normalizedAgent, perDate);
+      if (matchedEmpId) updatesByEmpId.set(matchedEmpId, perDate);
+      if (normalizedAgent) updatesByIdentity.set(normalizedAgent, perDate);
+      if (normalizeKeyText(userMatch.empId)) updatesByIdentity.set(normalizeKeyText(userMatch.empId), perDate);
+      if (normalizeKeyText(userMatch.pseudoName)) updatesByIdentity.set(normalizeKeyText(userMatch.pseudoName), perDate);
+      if (normalizeKeyText(userMatch.realName)) updatesByIdentity.set(normalizeKeyText(userMatch.realName), perDate);
+      if (normalizeKeyText(userMatch.username)) updatesByIdentity.set(normalizeKeyText(userMatch.username), perDate);
     });
 
     const rosters = await Roster.find({
-      rosterStartDate: { $lte: end },
-      rosterEndDate: { $gte: start },
+      $or: [
+        {
+          rosterStartDate: { $lte: end },
+          rosterEndDate: { $gte: start },
+        },
+        {
+          weeks: {
+            $elemMatch: {
+              startDate: { $lte: end },
+              endDate: { $gte: start },
+            },
+          },
+        },
+      ],
     });
 
     let updatedEmployees = 0;
     let updatedDays = 0;
+    let insertedEmployees = 0;
+    let insertedDays = 0;
     let touchedRosters = 0;
+    const coveredUserIds = new Set();
 
     for (const roster of rosters) {
       let rosterChanged = false;
@@ -5593,8 +5705,21 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
           const perDate =
             (empUserId ? updatesByUser.get(empUserId) : null) ||
             (empId ? updatesByEmpId.get(empId) : null) ||
-            (empNameKey ? updatesByAgent.get(empNameKey) : null);
+            (empNameKey ? updatesByIdentity.get(empNameKey) : null);
           if (!perDate || perDate.size === 0) continue;
+          let matchedUserId = "";
+          if (empUserId && updatesByUser.has(empUserId)) {
+            matchedUserId = empUserId;
+          } else if (empId && userByEmpId.get(empId)?._id) {
+            matchedUserId = String(userByEmpId.get(empId)._id);
+          } else if (empNameKey && (userByPseudo.get(empNameKey)?._id || userByRealName.get(empNameKey)?._id || userByUsername.get(empNameKey)?._id)) {
+            matchedUserId = String(
+              userByPseudo.get(empNameKey)?._id ||
+              userByRealName.get(empNameKey)?._id ||
+              userByUsername.get(empNameKey)?._id
+            );
+          }
+          if (matchedUserId) coveredUserIds.add(matchedUserId);
 
           let employeeChanged = false;
           for (const [dateKey, status] of perDate.entries()) {
@@ -5602,13 +5727,31 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
             if (!day) {
               const createdDate = parseYmdRangeDate(dateKey);
               if (!createdDate) continue;
-              employee.dailyStatus.push({ date: createdDate, status });
+              employee.dailyStatus = employee.dailyStatus || [];
+              employee.dailyStatus.push({
+                date: createdDate,
+                status,
+                overrideStatus: status,
+                overrideStatusUpdatedBy: user._id,
+                overrideStatusUpdatedAt: new Date(),
+                transportStatus: "",
+                departmentStatus: "",
+              });
               employeeChanged = true;
               updatedDays += 1;
               continue;
             }
-            if (String(day.status || "") !== status) {
+            if (
+              String(day.status || "") !== status ||
+              String(day.departmentStatus || "") ||
+              String(day.transportStatus || "")
+            ) {
               day.status = status;
+              day.overrideStatus = status;
+              day.overrideStatusUpdatedBy = user._id;
+              day.overrideStatusUpdatedAt = new Date();
+              day.departmentStatus = "";
+              day.transportStatus = "";
               employeeChanged = true;
               updatedDays += 1;
             }
@@ -5627,18 +5770,137 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
       }
     }
 
+    const missingUserIds = Array.from(updateMetaByUser.keys()).filter((uid) => !coveredUserIds.has(uid));
+    const monthBuckets = new Map();
+    for (const uid of missingUserIds) {
+      const perDate = updatesByUser.get(uid);
+      const meta = updateMetaByUser.get(uid);
+      if (!perDate || perDate.size === 0 || !meta?.user) continue;
+
+      for (const [dateKey, status] of perDate.entries()) {
+        const [yearText, monthText] = String(dateKey).split("-");
+        const year = Number.parseInt(yearText, 10);
+        const month = Number.parseInt(monthText, 10);
+        if (!Number.isFinite(year) || !Number.isFinite(month)) continue;
+        const bucketKey = `${year}-${String(month).padStart(2, "0")}`;
+        if (!monthBuckets.has(bucketKey)) {
+          monthBuckets.set(bucketKey, { month, year, employees: new Map() });
+        }
+        const bucket = monthBuckets.get(bucketKey);
+        if (!bucket.employees.has(uid)) {
+          bucket.employees.set(uid, { meta, dailyStatus: [] });
+        }
+        const createdDate = parseYmdRangeDate(dateKey);
+        if (!createdDate) continue;
+        bucket.employees.get(uid).dailyStatus.push({ date: createdDate, status });
+      }
+    }
+
+    for (const bucket of monthBuckets.values()) {
+      const employeesToInsert = Array.from(bucket.employees.values())
+        .map(({ meta, dailyStatus }) => {
+          const sortedDailyStatus = dailyStatus.sort((a, b) => new Date(a.date) - new Date(b.date));
+          if (!sortedDailyStatus.length) return null;
+          const shiftStartHour = Number.isFinite(Number(meta.user.shiftStartHour)) ? Number(meta.user.shiftStartHour) : 0;
+          const shiftEndHour = Number.isFinite(Number(meta.user.shiftEndHour)) ? Number(meta.user.shiftEndHour) : 0;
+          return {
+            userId: meta.user._id,
+            empId: meta.empId || "",
+            name: meta.agent || meta.user.pseudoName || meta.user.username || meta.user.realName || "",
+            department: meta.user.department || "General",
+            transport: "",
+            cabRoute: "",
+            shiftStartHour,
+            shiftEndHour,
+            dailyStatus: sortedDailyStatus.map((daily) => ({
+              ...daily,
+              overrideStatus: daily.status || "",
+              overrideStatusUpdatedBy: user._id,
+              overrideStatusUpdatedAt: new Date(),
+              transportStatus: "",
+              departmentStatus: "",
+            })),
+            teamLeader: "",
+          };
+        })
+        .filter(Boolean);
+      if (!employeesToInsert.length) continue;
+
+      const bucketStart = employeesToInsert.reduce((min, emp) => {
+        const firstDate = emp.dailyStatus[0]?.date;
+        return !min || firstDate < min ? firstDate : min;
+      }, null);
+      const bucketEnd = employeesToInsert.reduce((max, emp) => {
+        const lastDate = emp.dailyStatus[emp.dailyStatus.length - 1]?.date;
+        return !max || lastDate > max ? lastDate : max;
+      }, null);
+      if (!bucketStart || !bucketEnd) continue;
+
+      let targetRoster = await Roster.findOne({ month: bucket.month, year: bucket.year }).sort({ updatedAt: -1, createdAt: -1 });
+      if (!targetRoster) {
+        targetRoster = new Roster({
+          month: bucket.month,
+          year: bucket.year,
+          rosterStartDate: bucketStart,
+          rosterEndDate: bucketEnd,
+          weeks: [],
+          createdBy: user._id,
+        });
+      } else {
+        targetRoster.updatedBy = user._id;
+      }
+
+      targetRoster.weeks = targetRoster.weeks || [];
+      targetRoster.weeks.push({
+        weekNumber: getWeekNumberForMonth(bucketStart, bucket.month, bucket.year),
+        startDate: bucketStart,
+        endDate: bucketEnd,
+        employees: employeesToInsert,
+      });
+      targetRoster.markModified("weeks");
+      await targetRoster.save();
+      touchedRosters += 1;
+      insertedEmployees += employeesToInsert.length;
+      insertedDays += employeesToInsert.reduce((sum, emp) => sum + (emp.dailyStatus?.length || 0), 0);
+    }
+
+    let payrollSync = null;
+    const warnings = [];
+    try {
+      payrollSync = await syncPayrollAttendanceFromExcel({
+        buffer: req.file.buffer,
+        startDate: startKey,
+        endDate: endKey,
+        originalFileName: req.file.originalname || "",
+        uploadedByUser: user,
+      });
+    } catch (payrollError) {
+      console.error("Payroll attendance sync failed:", payrollError);
+      warnings.push({
+        module: "payroll",
+        message: payrollError.message || "Failed to store payroll attendance.",
+        details: payrollError.details || null,
+      });
+    }
+
     return res.status(200).json({
       success: true,
-      message: "Attendance daily status override uploaded successfully.",
+      message: warnings.length
+        ? "Attendance daily status override uploaded successfully with payroll warning."
+        : "Attendance daily status override uploaded successfully.",
       data: {
         dateRange: { startDate: startKey, endDate: endKey },
         touchedRosters,
         updatedEmployees,
         updatedDays,
+        insertedEmployees,
+        insertedDays,
         parsedStatusCells,
         invalidStatusCells,
         unmatchedRows: unmatchedRows.slice(0, 50),
+        payrollSync,
       },
+      warnings,
     });
   } catch (error) {
     console.error("Error uploading attendance override from Excel:", error);
@@ -6784,6 +7046,9 @@ export const updateAttendance = async (req, res) => {
         // Status fields
         transportStatus: "",
         departmentStatus: "",
+        overrideStatus: "",
+        overrideStatusUpdatedBy: null,
+        overrideStatusUpdatedAt: null,
         // Status tracking fields
         transportStatusUpdatedBy: null,
         transportStatusUpdatedAt: null,
@@ -6810,6 +7075,18 @@ export const updateAttendance = async (req, res) => {
       }
       if (daily.departmentStatus === undefined) {
         daily.departmentStatus = "";
+        needsMarkModified = true;
+      }
+      if (daily.overrideStatus === undefined) {
+        daily.overrideStatus = "";
+        needsMarkModified = true;
+      }
+      if (daily.overrideStatusUpdatedBy === undefined) {
+        daily.overrideStatusUpdatedBy = null;
+        needsMarkModified = true;
+      }
+      if (daily.overrideStatusUpdatedAt === undefined) {
+        daily.overrideStatusUpdatedAt = null;
         needsMarkModified = true;
       }
       if (daily.transportStatusUpdatedBy === undefined) {
@@ -7784,6 +8061,23 @@ export const searchBulkEditEmployees = async (req, res) => {
 export const updateAttendanceBulk = async (req, res) => {
   try {
     const bulkStartedAt = Date.now();
+    const totalStart = bulkStartedAt;
+    let validationMs = 0;
+    let rosterLoadMs = 0;
+    let fallbackResolveMs = 0;
+    let weekResolutionMs = 0;
+    let delegationContextMs = 0;
+    let delegatedTeamLeaderNamesMs = 0;
+    let specificDelegationMs = 0;
+    let delegationMs = 0;
+    let mappingMs = 0;
+    let loopMs = 0;
+    let updateDocBuildMs = 0;
+    let saveMs = 0;
+    let responseMs = 0;
+    let employeesScanned = 0;
+    let mappingWeeksScanned = 0;
+    let mappingEmployeesScanned = 0;
     const bulkAttendanceProjection = [
       "_id",
       "month",
@@ -7814,6 +8108,7 @@ export const updateAttendanceBulk = async (req, res) => {
 
     const user = req.user;
 
+    const validationStart = Date.now();
     if (!rosterId || !weekNumber || !Array.isArray(employeeIds) || employeeIds.length === 0 || !date) {
       return res.status(400).json({
         success: false,
@@ -7859,14 +8154,63 @@ export const updateAttendanceBulk = async (req, res) => {
       if (!timeRegex.test(arrivalTime)) {
         return res.status(400).json({
           success: false,
-          message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+        message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
         });
       }
     }
+    validationMs = Date.now() - validationStart;
+    console.log("[Perf] updateAttendanceBulk.validation", {
+      durationMs: validationMs,
+      rosterId: String(rosterId || ""),
+      employeeCount: employeeIds.length,
+      hasTransportStatus: Boolean(transportStatus),
+      hasDepartmentStatus: Boolean(departmentStatus),
+      hasArrivalTime: Boolean(arrivalTime),
+    });
+
+    const lightweightRosterReadStartedAt = Date.now();
+    await Roster.findById(rosterId).select("_id").lean();
+    const lightweightRosterReadMs = Date.now() - lightweightRosterReadStartedAt;
+    console.log("[Perf] updateAttendanceBulk.lightweightRosterFetch", {
+      durationMs: lightweightRosterReadMs,
+      rosterId: String(rosterId),
+      projection: "_id",
+    });
 
     const rosterLoadStartedAt = Date.now();
     let roster = await Roster.findById(rosterId).select(bulkAttendanceProjection);
-    const rosterLoadMs = Date.now() - rosterLoadStartedAt;
+    rosterLoadMs = Date.now() - rosterLoadStartedAt;
+
+    const weeksCount = roster?.weeks?.length || 0;
+    let employeesCount = 0;
+    let totalDailyStatusCount = 0;
+    if (Array.isArray(roster?.weeks)) {
+      for (const week of roster.weeks) {
+        const employees = Array.isArray(week?.employees) ? week.employees : [];
+        employeesCount += employees.length;
+        for (const employee of employees) {
+          totalDailyStatusCount += Array.isArray(employee?.dailyStatus) ? employee.dailyStatus.length : 0;
+        }
+      }
+    }
+    const hydrationEstimateMs = Math.max(rosterLoadMs - lightweightRosterReadMs, 0);
+    let bsonSizeEstimateBytes = null;
+    try {
+      bsonSizeEstimateBytes = Buffer.byteLength(JSON.stringify(roster?.toObject ? roster.toObject() : roster));
+    } catch (error) {
+      bsonSizeEstimateBytes = null;
+    }
+    console.log("[Perf] updateAttendanceBulk.initialRosterFetch", {
+      queryDurationMs: rosterLoadMs,
+      lightweightFetchMs: lightweightRosterReadMs,
+      estimatedHydrationMs: hydrationEstimateMs,
+      rosterId: String(rosterId),
+      weeksCount,
+      employeesCount,
+      totalDailyStatusCount,
+      bsonSizeEstimateBytes,
+      projectedFieldsCount: bulkAttendanceProjection.length,
+    });
     if (!roster) {
       return res.status(404).json({ success: false, message: "Roster not found" });
     }
@@ -7887,6 +8231,7 @@ export const updateAttendanceBulk = async (req, res) => {
     }
 
     const parsedWeekNumber = Number.parseInt(weekNumber, 10);
+    const weekResolutionStartedAt = Date.now();
     let weekCandidates = resolveWeekGroupByNumberAndDate(
       roster.weeks || [],
       parsedWeekNumber,
@@ -7900,6 +8245,15 @@ export const updateAttendanceBulk = async (req, res) => {
     ) {
       weekCandidates = [];
     }
+    weekResolutionMs = Date.now() - weekResolutionStartedAt;
+    console.log("[Perf] updateAttendanceBulk.weekResolution", {
+      durationMs: weekResolutionMs,
+      rosterId: String(roster?._id || rosterId),
+      weekNumber: parsedWeekNumber,
+      selectedDate: selectedDateKey,
+      weekCandidatesCount: weekCandidates.length,
+      weeksCount: roster?.weeks?.length || 0,
+    });
     if (!weekCandidates.length) {
       const fallbackStartedAt = Date.now();
       const requestedDayStart = new Date(Date.UTC(
@@ -7942,6 +8296,14 @@ export const updateAttendanceBulk = async (req, res) => {
         .select("month year rosterStartDate rosterEndDate weeks.weekNumber weeks.startDate weeks.endDate weeks.employees._id")
         .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
         .lean();
+      fallbackResolveMs = Date.now() - fallbackStartedAt;
+      console.log("[Perf] updateAttendanceBulk.fallbackRosterResolution", {
+        durationMs: fallbackResolveMs,
+        rosterId: String(roster?._id || rosterId),
+        requestedEmployeeCount: employeeIds.length,
+        requestedEmployeeObjectIdCount: requestedEmployeeObjectIds.length,
+        resolvedRosterFound: Boolean(resolvedRoster),
+      });
 
       if (resolvedRoster) {
         roster = await Roster.findById(resolvedRoster._id).select(bulkAttendanceProjection);
@@ -8105,10 +8467,19 @@ export const updateAttendanceBulk = async (req, res) => {
     let delegatedTeamLeaderName = "";
     let delegatedTeamLeaderNames = new Set();
     let specificDelegatedEmployeeIds = null;
+    const delegationStartedAt = Date.now();
     if (!isPrivilegedUser) {
+      const delegationContextStartedAt = Date.now();
       delegationContext = await getDelegationContextForDate({
         userId: user._id,
         actionDate: date,
+      });
+      delegationContextMs = Date.now() - delegationContextStartedAt;
+      console.log("[Perf] updateAttendanceBulk.getDelegationContextForDate", {
+        durationMs: delegationContextMs,
+        userId: String(user?._id || ""),
+        actionDate: date,
+        isPrivilegedUser,
       });
 
       if (delegationContext.asDelegator) {
@@ -8119,12 +8490,21 @@ export const updateAttendanceBulk = async (req, res) => {
         });
       }
 
+      const delegatedTeamLeaderNamesStartedAt = Date.now();
       delegatedTeamLeaderNames = await getDelegatedTeamLeaderNames({
         assigneeId: user._id,
         actionDate: date,
       });
+      delegatedTeamLeaderNamesMs = Date.now() - delegatedTeamLeaderNamesStartedAt;
+      console.log("[Perf] updateAttendanceBulk.getDelegatedTeamLeaderNames", {
+        durationMs: delegatedTeamLeaderNamesMs,
+        userId: String(user?._id || ""),
+        actionDate: date,
+        delegatedTeamLeaderNamesCount: delegatedTeamLeaderNames.size,
+      });
     }
     if (delegatedFrom) {
+      const specificDelegationStartedAt = Date.now();
       specificDelegation = await Delegation.findOne({
         assignee: user._id,
         delegator: delegatedFrom,
@@ -8134,6 +8514,14 @@ export const updateAttendanceBulk = async (req, res) => {
       })
         .populate("delegator", "username")
         .lean();
+      specificDelegationMs = Date.now() - specificDelegationStartedAt;
+      console.log("[Perf] updateAttendanceBulk.Delegation.findOne", {
+        durationMs: specificDelegationMs,
+        assigneeId: String(user?._id || ""),
+        delegatedFrom: String(delegatedFrom || ""),
+        selectedDate: selectedDateKey,
+        found: Boolean(specificDelegation),
+      });
 
       if (!specificDelegation) {
         return res.status(403).json({
@@ -8149,6 +8537,15 @@ export const updateAttendanceBulk = async (req, res) => {
         (specificDelegation?.affectedEmployees || []).map((id) => String(id))
       );
     }
+    delegationMs = Date.now() - delegationStartedAt;
+    console.log("[Perf] updateAttendanceBulk.delegationLookups", {
+      durationMs: delegationMs,
+      delegationContextMs,
+      delegatedTeamLeaderNamesMs,
+      specificDelegationMs,
+      isPrivilegedUser,
+      delegatedFrom: String(delegatedFrom || ""),
+    });
 
     const results = [];
     const failed = [];
@@ -8156,8 +8553,11 @@ export const updateAttendanceBulk = async (req, res) => {
     const weekByEmployeeId = new Map();
     const employeeLocationById = new Map();
     const effectiveWeekIds = new Set((effectiveWeekCandidates || []).map((week) => String(week?._id || "")));
+    const mappingStartedAt = Date.now();
     const assignEmployeeLocation = (week, weekIndex) => {
       const employees = Array.isArray(week?.employees) ? week.employees : [];
+      mappingWeeksScanned += 1;
+      mappingEmployeesScanned += employees.length;
       for (let employeeIndex = 0; employeeIndex < employees.length; employeeIndex += 1) {
         const emp = employees[employeeIndex];
         const empId = String(emp?._id || "");
@@ -8183,17 +8583,36 @@ export const updateAttendanceBulk = async (req, res) => {
         assignEmployeeLocation(week, weekIndex);
       }
     }
+    mappingMs = Date.now() - mappingStartedAt;
+    console.log("[Perf] updateAttendanceBulk.employeeLocationMapping", {
+      durationMs: mappingMs,
+      rosterId: String(roster?._id || rosterId),
+      weeksCount: roster?.weeks?.length || 0,
+      employeeCount: employeeIds.length,
+      requestedEmployeeCount: requestedEmployeeIds.size,
+      mappingWeeksScanned,
+      mappingEmployeesScanned,
+      matchedEmployees: weekByEmployeeId.size,
+    });
 
     const loopStartedAt = Date.now();
     const setOps = {};
     const pushOps = {};
     const historyEntries = [];
     for (const employeeId of employeeIds) {
+      const perEmployeeStart = Date.now();
       try {
+        employeesScanned += 1;
         const location = employeeLocationById.get(String(employeeId));
         const matchedWeek = location?.week;
         const employee = location?.employee;
         if (!employee) {
+          console.log("[Perf] updateAttendanceBulk.perEmployee", {
+            durationMs: Date.now() - perEmployeeStart,
+            employeeId: String(employeeId),
+            found: false,
+            dailyStatusLength: 0,
+          });
           failed.push({ employeeId, message: "Employee not found" });
           continue;
         }
@@ -8243,8 +8662,16 @@ export const updateAttendanceBulk = async (req, res) => {
 
         // 🔥 FIX: Find daily status using date string comparison
         const dailyList = Array.isArray(employee.dailyStatus) ? employee.dailyStatus : [];
+        const dailyLookupStartedAt = Date.now();
         let dailyIndex = dailyList.findIndex((d) => toIstDateKey(d?.date) === selectedDateKey);
         let daily = dailyIndex >= 0 ? dailyList[dailyIndex] : null;
+        const dailyLookupMs = Date.now() - dailyLookupStartedAt;
+        console.log("[Perf] updateAttendanceBulk.dailyStatusLookup", {
+          durationMs: dailyLookupMs,
+          employeeId: String(employeeId),
+          dailyStatusLength: dailyList.length,
+          found: dailyIndex >= 0,
+        });
 
         if (!daily) {
           daily = {
@@ -8284,6 +8711,7 @@ export const updateAttendanceBulk = async (req, res) => {
           ensure("departmentUpdatedAt", null);
         }
 
+        const changeGenerationStartedAt = Date.now();
         const changes = [];
 
         if (transportStatus) {
@@ -8376,6 +8804,13 @@ export const updateAttendanceBulk = async (req, res) => {
             }
           }
         }
+        const changeGenerationMs = Date.now() - changeGenerationStartedAt;
+        console.log("[Perf] updateAttendanceBulk.changeGeneration", {
+          durationMs: changeGenerationMs,
+          employeeId: String(employeeId),
+          changesCount: changes.length,
+          foundDaily: Boolean(daily),
+        });
 
         if (changes.length > 0) {
           const dailyPathBase =
@@ -8426,13 +8861,35 @@ export const updateAttendanceBulk = async (req, res) => {
         }
 
         results.push({ employeeId: employee._id, data: daily });
+        console.log("[Perf] updateAttendanceBulk.perEmployee", {
+          durationMs: Date.now() - perEmployeeStart,
+          employeeId: String(employeeId),
+          found: true,
+          dailyStatusLength: dailyList.length,
+          changesCount: changes.length,
+        });
       } catch (err) {
+        console.log("[Perf] updateAttendanceBulk.perEmployee", {
+          durationMs: Date.now() - perEmployeeStart,
+          employeeId: String(employeeId),
+          found: false,
+          error: err.message || "Failed to update employee",
+        });
         failed.push({ employeeId, message: err.message || "Failed to update employee" });
       }
     }
-    const loopMs = Date.now() - loopStartedAt;
+    loopMs = Date.now() - loopStartedAt;
+    console.log("[Perf] updateAttendanceBulk.employeeProcessingLoop", {
+      durationMs: loopMs,
+      rosterId: String(roster?._id || rosterId),
+      employeeCount: employeeIds.length,
+      employeesScanned,
+      updatedCount: results.length,
+      failedCount: failed.length,
+    });
 
     const saveStartedAt = Date.now();
+    const updateDocBuildStartedAt = Date.now();
     if (Object.keys(setOps).length > 0 || Object.keys(pushOps).length > 0 || historyEntries.length > 0) {
       const updateDoc = {};
       if (Object.keys(setOps).length > 0) {
@@ -8450,14 +8907,59 @@ export const updateAttendanceBulk = async (req, res) => {
           editHistory: { $each: historyEntries },
         };
       }
+      updateDocBuildMs = Date.now() - updateDocBuildStartedAt;
+      console.log("[Perf] updateAttendanceBulk.updateDocBuild", {
+        durationMs: updateDocBuildMs,
+        rosterId: String(roster?._id || rosterId),
+        setOpsCount: Object.keys(setOps).length,
+        pushOpsCount: Object.keys(pushOps).length,
+        historyEntriesCount: historyEntries.length,
+      });
+      const updateOneStartedAt = Date.now();
       await Roster.updateOne({ _id: roster._id }, updateDoc);
+      saveMs = Date.now() - updateOneStartedAt;
+      console.log("[Perf] updateAttendanceBulk.Roster.updateOne", {
+        durationMs: saveMs,
+        rosterId: String(roster?._id || rosterId),
+        setOpsCount: Object.keys(setOps).length,
+        pushOpsCount: Object.keys(pushOps).length,
+        historyEntriesCount: historyEntries.length,
+      });
+    } else {
+      updateDocBuildMs = Date.now() - updateDocBuildStartedAt;
+      console.log("[Perf] updateAttendanceBulk.updateDocBuild", {
+        durationMs: updateDocBuildMs,
+        rosterId: String(roster?._id || rosterId),
+        setOpsCount: Object.keys(setOps).length,
+        pushOpsCount: Object.keys(pushOps).length,
+        historyEntriesCount: historyEntries.length,
+      });
     }
-    const saveMs = Date.now() - saveStartedAt;
-    const totalMs = Date.now() - bulkStartedAt;
-    console.log("[Perf] updateAttendanceBulk", {
+    const responseStart = Date.now();
+    const responsePayload = {
+      success: true,
+      message: "Bulk attendance updated successfully",
+      updatedCount: results.length,
+      failedCount: failed.length,
+      results,
+      failed
+    };
+    if (saveMs === 0) {
+      saveMs = Date.now() - saveStartedAt;
+    }
+    responseMs = Date.now() - responseStart;
+    const totalMs = Date.now() - totalStart;
+    console.log("[Perf] updateAttendanceBulk.summary", {
+      validationMs,
       rosterLoadMs,
+      fallbackResolveMs,
+      weekResolutionMs,
+      delegationMs,
+      mappingMs,
       loopMs,
+      updateDocBuildMs,
       saveMs,
+      responseMs,
       totalMs,
       employeeCount: employeeIds.length,
       updatedCount: results.length,
@@ -8465,16 +8967,21 @@ export const updateAttendanceBulk = async (req, res) => {
       rosterId: String(roster?._id || rosterId),
       weekNumber: parsedWeekNumber,
       date: selectedDateKey,
+      employeesScanned,
+      setOpsCount: Object.keys(setOps).length,
+      pushOpsCount: Object.keys(pushOps).length,
+      historyEntriesCount: historyEntries.length,
     });
 
-    return res.status(200).json({
-      success: true,
-      message: "Bulk attendance updated successfully",
+    console.log("[Perf] updateAttendanceBulk.responsePreparation", {
+      durationMs: responseMs,
+      rosterId: String(roster?._id || rosterId),
+      employeeCount: employeeIds.length,
       updatedCount: results.length,
       failedCount: failed.length,
-      results,
-      failed
     });
+
+    return res.status(200).json(responsePayload);
   } catch (error) {
     console.error("Bulk Attendance Update Error:", error);
     return res.status(500).json({
@@ -10040,6 +10547,9 @@ export const updatePunchTimes = async (req, res) => {
         punchUpdatedBy: null,
         punchUpdatedAt: null,
         isPunchCalculated: false,
+        overrideStatus: "",
+        overrideStatusUpdatedBy: null,
+        overrideStatusUpdatedAt: null,
         transportStatus: "",
         departmentStatus: "",
         transportStatusUpdatedBy: null,
@@ -10422,6 +10932,9 @@ export const bulkUpdatePunchTimes = async (req, res) => {
             punchUpdatedBy: null,
             punchUpdatedAt: null,
             isPunchCalculated: false,
+            overrideStatus: "",
+            overrideStatusUpdatedBy: null,
+            overrideStatusUpdatedAt: null,
             transportStatus: "",
             departmentStatus: "",
             transportStatusUpdatedBy: null,
