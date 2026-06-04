@@ -6,8 +6,24 @@ const dailyStatusSchema = new mongoose.Schema({
   // Roster Status (from weekly roster)
   status: {
     type: String,
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""],
+    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", ""],
     default: "P"
+  },
+
+  // Explicit marker for Accounts override uploads.
+  overrideStatus: {
+    type: String,
+    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", ""],
+    default: ""
+  },
+  overrideStatusUpdatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+    default: null
+  },
+  overrideStatusUpdatedAt: {
+    type: Date,
+    default: null
   },
   
   // NEW: Punch In/Out Times (entered by HR)

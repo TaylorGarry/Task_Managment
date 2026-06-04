@@ -1912,6 +1912,45 @@ const buildWeeklyWorkAnniversaries = (employees = [], referenceDate = new Date()
   };
 };
 
+const getAttendanceRowPriority = (row = {}) => {
+  if (String(row?.overrideStatus || "").trim()) return 3;
+  if (String(row?.departmentStatus || "").trim()) return 2;
+  if (String(row?.transportStatus || "").trim()) return 1;
+  if (String(row?.status || "").trim()) return 0;
+  return -1;
+};
+
+const getAttendanceRowTimestamp = (row = {}) => {
+  const candidates = [
+    row?.rosterUpdatedAt,
+    row?.updatedAt,
+    row?.rosterCreatedAt,
+    row?.createdAt,
+  ];
+  for (const value of candidates) {
+    const ms = new Date(value).getTime();
+    if (Number.isFinite(ms)) return ms;
+  }
+  return -1;
+};
+
+const isBetterAttendanceRow = (candidate, current) => {
+  if (!current) return true;
+  const candidatePriority = getAttendanceRowPriority(candidate);
+  const currentPriority = getAttendanceRowPriority(current);
+  if (candidatePriority !== currentPriority) {
+    return candidatePriority > currentPriority;
+  }
+
+  const candidateTime = getAttendanceRowTimestamp(candidate);
+  const currentTime = getAttendanceRowTimestamp(current);
+  if (candidateTime !== currentTime) {
+    return candidateTime > currentTime;
+  }
+
+  return String(candidate?.rosterId || "").localeCompare(String(current?.rosterId || "")) > 0;
+};
+
 export const getEmployeeDashboardSummary = async (req, res) => {
   try {
     const user = req.user;
@@ -1929,7 +1968,7 @@ export const getEmployeeDashboardSummary = async (req, res) => {
       rosterStartDate: { $lte: rangeEnd },
       rosterEndDate: { $gte: rangeStart },
     })
-      .select("_id month year rosterStartDate rosterEndDate weeks")
+      .select("_id month year rosterStartDate rosterEndDate weeks createdAt updatedAt")
       .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
       .lean();
 
@@ -1943,6 +1982,8 @@ export const getEmployeeDashboardSummary = async (req, res) => {
       if (!result?.week || !employee) return null;
       return {
         rosterId: result.roster._id,
+        rosterCreatedAt: result.roster.createdAt,
+        rosterUpdatedAt: result.roster.updatedAt,
         weekNumber: result.week.weekNumber,
         startDate: result.week.startDate,
         endDate: result.week.endDate,
@@ -1952,7 +1993,8 @@ export const getEmployeeDashboardSummary = async (req, res) => {
         cabRoute: employee.cabRoute || "",
         dailyStatus: (employee.dailyStatus || []).map((day) => ({
           date: day.date,
-          status: day.status || "",
+          status: day.overrideStatus || day.departmentStatus || day.transportStatus || day.status || "",
+          overrideStatus: day.overrideStatus || "",
           departmentStatus: day.departmentStatus || "",
           transportStatus: day.transportStatus || "",
           punchIn: day.punchIn || null,
@@ -1967,7 +2009,8 @@ export const getEmployeeDashboardSummary = async (req, res) => {
 
     const currentWeekAttendance = (currentWeek?.dailyStatus || []).map((day) => ({
       date: day.date,
-      status: day.status || "",
+      status: day.overrideStatus || day.departmentStatus || day.transportStatus || day.status || "",
+      overrideStatus: day.overrideStatus || "",
       departmentStatus: day.departmentStatus || "",
       transportStatus: day.transportStatus || "",
       punchIn: day.punchIn || null,
@@ -2106,7 +2149,11 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
       {
         $project: {
           _id: 0,
+          rosterId: "$_id",
+          rosterCreatedAt: "$createdAt",
+          rosterUpdatedAt: "$updatedAt",
           date: "$weeks.employees.dailyStatus.date",
+          overrideStatus: "$weeks.employees.dailyStatus.overrideStatus",
           departmentStatus: "$weeks.employees.dailyStatus.departmentStatus",
           transportStatus: "$weeks.employees.dailyStatus.transportStatus",
           status: "$weeks.employees.dailyStatus.status",
@@ -2132,25 +2179,26 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
       collectUpdaterId(day?.transportUpdatedBy);
 
       const previous = byDate[dateKey] || null;
-      const departmentStatus = day?.departmentStatus || "";
-      const transportStatus = day?.transportStatus || "";
-      const rosterStatus = day?.status || "";
-      const incomingStatus = departmentStatus || transportStatus || rosterStatus || "";
-      const resolvedStatus = incomingStatus || previous?.status || "";
-
-      byDate[dateKey] = {
+      const row = {
+        rosterId: String(day?.rosterId || ""),
+        rosterCreatedAt: day?.rosterCreatedAt || null,
+        rosterUpdatedAt: day?.rosterUpdatedAt || null,
         date: dateKey,
-        status: resolvedStatus,
-        departmentStatus: departmentStatus || previous?.departmentStatus || "",
-        transportStatus: transportStatus || previous?.transportStatus || "",
-        punchIn: day?.punchIn || previous?.punchIn || null,
-        punchOut: day?.punchOut || previous?.punchOut || null,
-        totalHours: day?.totalHours ?? previous?.totalHours ?? null,
-        departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || previous?.departmentStatusUpdatedBy || null,
-        transportStatusUpdatedBy: day?.transportStatusUpdatedBy || previous?.transportStatusUpdatedBy || null,
-        departmentUpdatedBy: day?.departmentUpdatedBy || previous?.departmentUpdatedBy || null,
-        transportUpdatedBy: day?.transportUpdatedBy || previous?.transportUpdatedBy || null,
+        overrideStatus: day?.overrideStatus || "",
+        departmentStatus: day?.departmentStatus || "",
+        transportStatus: day?.transportStatus || "",
+        status: day?.overrideStatus || day?.departmentStatus || day?.transportStatus || day?.status || "",
+        punchIn: day?.punchIn || null,
+        punchOut: day?.punchOut || null,
+        totalHours: day?.totalHours ?? null,
+        departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || null,
+        transportStatusUpdatedBy: day?.transportStatusUpdatedBy || null,
+        departmentUpdatedBy: day?.departmentUpdatedBy || null,
+        transportUpdatedBy: day?.transportUpdatedBy || null,
       };
+      if (!previous || isBetterAttendanceRow(row, previous)) {
+        byDate[dateKey] = row;
+      }
     });
 
     const updaterIdList = Array.from(updaterIds);
@@ -2179,6 +2227,7 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
       .map((entry) => ({
         date: entry.date,
         status: entry.status,
+        overrideStatus: entry.overrideStatus || "",
         departmentStatus: entry.departmentStatus,
         transportStatus: entry.transportStatus,
         punchIn: entry.punchIn,

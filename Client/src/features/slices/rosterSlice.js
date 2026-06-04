@@ -5,8 +5,8 @@ import { toast } from "react-toastify";
 const resolveApiBaseUrl = () => {
   const envUrl = import.meta?.env?.VITE_API_URL;
   if (envUrl) return String(envUrl).replace(/\/+$/, "");
-//   return "http://localhost:4000";
-  return "https://fdbs-server-a9gqg.ondigitalocean.app";
+  return "http://localhost:4000";
+//   return "https://fdbs-server-a9gqg.ondigitalocean.app";
 };
 
 const API_URL = `${resolveApiBaseUrl()}/api/v1/roster`;
@@ -47,14 +47,12 @@ const cache = {
     filters: null,
     CACHE_DURATION: 5 * 60 * 1000,
   },
-  // Add cache for department-wise attendance
   departmentWiseAttendance: {
     data: null,
     timestamp: null,
     key: null,
     CACHE_DURATION: 2 * 60 * 1000,
   },
-  // Cache paginated "employees for updates" responses to avoid refetch + UI flicker
   employeesForUpdates: {
     dataByKey: {},
     timestampByKey: {},

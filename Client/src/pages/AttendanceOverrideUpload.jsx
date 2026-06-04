@@ -3,8 +3,8 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
 
-// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+// const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const toDateInputValue = (d) => {
   const yyyy = d.getFullYear();
@@ -44,8 +44,20 @@ const AttendanceOverrideUpload = () => {
           "Content-Type": "multipart/form-data",
         },
       });
-      setResult(res?.data?.data || null);
-      toast.success("Attendance override uploaded successfully.");
+      setResult(res?.data || null);
+      const refreshToken = String(Date.now());
+      localStorage.setItem("attendanceOverride:lastUpdatedAt", refreshToken);
+      window.dispatchEvent(new Event("attendance-override-updated"));
+      const warnings = Array.isArray(res?.data?.warnings) ? res.data.warnings : [];
+      if (warnings.length > 0) {
+        toast.error(
+          warnings
+            .map((warning) => warning?.message || "Payroll sync warning")
+            .join(" | ")
+        );
+      } else {
+        toast.success("Attendance override uploaded successfully.");
+      }
     } catch (err) {
       const msg = err?.response?.data?.message || "Failed to upload attendance override.";
       toast.error(msg);
@@ -109,11 +121,24 @@ const AttendanceOverrideUpload = () => {
 
         {result && (
           <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-            <p><span className="font-medium">Updated Employees:</span> {result.updatedEmployees ?? 0}</p>
-            <p><span className="font-medium">Updated Days:</span> {result.updatedDays ?? 0}</p>
-            <p><span className="font-medium">Touched Rosters:</span> {result.touchedRosters ?? 0}</p>
-            <p><span className="font-medium">Invalid Status Cells:</span> {result.invalidStatusCells ?? 0}</p>
-            <p><span className="font-medium">Unmatched Rows (sample):</span> {(result.unmatchedRows || []).length}</p>
+            <p><span className="font-medium">Updated Employees:</span> {result?.data?.updatedEmployees ?? 0}</p>
+            <p><span className="font-medium">Updated Days:</span> {result?.data?.updatedDays ?? 0}</p>
+            <p><span className="font-medium">Touched Rosters:</span> {result?.data?.touchedRosters ?? 0}</p>
+            <p><span className="font-medium">Invalid Status Cells:</span> {result?.data?.invalidStatusCells ?? 0}</p>
+            <p><span className="font-medium">Unmatched Rows (sample):</span> {(result?.data?.unmatchedRows || []).length}</p>
+            <p><span className="font-medium">Payroll Sync:</span> {result?.data?.payrollSync?.success ? "Completed" : (Array.isArray(result?.warnings) && result.warnings.length > 0 ? "Warning" : "Not available")}</p>
+            <p><span className="font-medium">Payroll Records:</span> {result?.data?.payrollSync?.insertedOrUpdatedRecords ?? 0}</p>
+            <p><span className="font-medium">Payroll Unmatched Rows:</span> {(result?.data?.payrollSync?.unmatchedRows || []).length}</p>
+            {Array.isArray(result?.warnings) && result.warnings.length > 0 ? (
+              <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                <p className="font-semibold">Payroll warning</p>
+                <ul className="mt-1 list-disc pl-5 text-xs">
+                  {result.warnings.map((warning, index) => (
+                    <li key={`${warning?.module || "warning"}-${index}`}>{warning?.message || "Payroll sync warning"}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

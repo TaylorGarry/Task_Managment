@@ -553,6 +553,7 @@ import toast from "react-hot-toast";
 import IdleMonitor from "./IdleMonitor";
 import BreakTracker from "./BreakTracker";
 import AlertsPanel from "./AlertsPanel";
+import PayrollAttendanceModal from "./PayrollAttendanceModal";
 import { formatDuration } from "./utils";
 import { getApiBaseUrl } from "../../utils/apiUrl";
 
@@ -689,6 +690,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   });
   const [selectedDateKey, setSelectedDateKey] = useState(() => toIsoDateKey(new Date()));
   const [showExportPopup, setShowExportPopup] = useState(false);
+  const [showPayrollAttendanceModal, setShowPayrollAttendanceModal] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportRange, setExportRange] = useState(() => {
     const d = new Date();
@@ -715,6 +717,28 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const invalidateMonthCache = () => {
+      monthAttendanceCacheRef.current.clear();
+      setMonthAttendanceByDate({});
+      setActiveMonth((currentMonth) => new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
+    };
+
+    const onOverrideUpdated = () => invalidateMonthCache();
+    const onStorageUpdated = (event) => {
+      if (event?.key === "attendanceOverride:lastUpdatedAt") {
+        invalidateMonthCache();
+      }
+    };
+
+    window.addEventListener("attendance-override-updated", onOverrideUpdated);
+    window.addEventListener("storage", onStorageUpdated);
+    return () => {
+      window.removeEventListener("attendance-override-updated", onOverrideUpdated);
+      window.removeEventListener("storage", onStorageUpdated);
+    };
   }, []);
 
   const shiftStartAt = session?.shiftStartAt || session?.shiftStartedAt || null;
@@ -813,6 +837,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
             ...item,
             date: key,
             status:
+              item?.overrideStatus ||
               item?.departmentStatus ||
               item?.transportStatus ||
               (isPastDate ? item?.status : "") ||
@@ -1026,6 +1051,12 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
             <button onClick={() => setActiveMonth(new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1))} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 hover:bg-slate-50">Prev</button>
             <span className="min-w-[140px] text-center text-sm font-semibold text-slate-700">{monthLabel}</span>
             <button onClick={() => setActiveMonth(new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1))} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 hover:bg-slate-50">Next</button>
+            <button
+              onClick={() => setShowPayrollAttendanceModal(true)}
+              className="rounded-lg border border-slate-900 bg-slate-900 px-3 py-1 text-sm font-semibold text-white hover:bg-slate-800"
+            >
+              View Payroll Attendance
+            </button>
           </div>
         </div>
 
@@ -1092,6 +1123,13 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
           ) : null}
         </div>
       </div>
+
+      <PayrollAttendanceModal
+        open={showPayrollAttendanceModal}
+        onClose={() => setShowPayrollAttendanceModal(false)}
+        token={user?.token}
+        currentUser={user}
+      />
     </section>
   );
 };
