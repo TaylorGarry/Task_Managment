@@ -58,6 +58,7 @@
 //     isEmployee || canManageAdminPanels(user);
 
 //   const canAccessAttendanceSnapshot = true;
+//   const canShowAttendanceSidebarLinks = isSupervisor || isTransportDepartment;
 
 //   const isAllowedRosterDepartmentEmployee =
 //     isEmployee && ROSTER_ALLOWED_DEPARTMENTS.includes(normalizedDepartment);
@@ -336,7 +337,7 @@
 //                 </button>
 //               )}
 
-//               {isSupervisor && canAccessAttendanceUpdate && (
+//               {canShowAttendanceSidebarLinks && canAccessAttendanceUpdate && (
 //                 <button
 //                   onClick={() => navigate("/attendance-update")}
 //                   className={sideBtn(location.pathname.startsWith("/attendance-update"), "indigo")}
@@ -345,7 +346,7 @@
 //                 </button>
 //               )}
 
-//               {isSupervisor && canAccessAttendanceSnapshot && (
+//               {canShowAttendanceSidebarLinks && canAccessAttendanceSnapshot && (
 //                 <button
 //                   onClick={goToAttendanceSnapshot}
 //                   className={sideBtn(location.pathname === "/attendance-snapshot", "indigo")}
@@ -475,10 +476,10 @@
 //               {isSupervisor && !isTransportDepartment && (
 //                 <button onClick={() => { navigate("/my-defaults"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-rose-200 bg-rose-50 px-4 py-2 text-left text-rose-700">My Defaulters</button>
 //               )}
-//               {isSupervisor && canAccessAttendanceUpdate && (
+//               {canShowAttendanceSidebarLinks && canAccessAttendanceUpdate && (
 //                 <button onClick={() => { navigate("/attendance-update"); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Attendance Update</button>
 //               )}
-//               {isSupervisor && canAccessAttendanceSnapshot && (
+//               {canShowAttendanceSidebarLinks && canAccessAttendanceSnapshot && (
 //                 <button onClick={() => { goToAttendanceSnapshot(); setIsMenuOpen(false); }} className="mx-1 w-[calc(100%-0.5rem)] rounded-full border border-indigo-200 bg-indigo-50 px-4 py-2 text-left text-indigo-700">Attendance Snapshot</button>
 //               )}
 //               {canUploadAttendanceOverride && (
@@ -527,6 +528,11 @@
 
 // export default Navbar;
 
+
+
+
+
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useLocation, useNavigate } from "react-router-dom";
@@ -566,9 +572,11 @@ const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const [chatNotification, setChatNotification] = useState(null);
   const processedMessageIdsRef = useRef(new Set());
   const knownBreakUsersRef = useRef(new Set());
   const breakWatcherInitializedRef = useRef(false);
+  const chatNotificationTimerRef = useRef(null);
 
   const handleLogout = async () => {
     toast.dismiss("auth-login-success");
@@ -613,6 +621,12 @@ const Navbar = () => {
       Notification.requestPermission().catch(() => {});
     }
   }, [user?._id, user?.id]);
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/chat")) {
+      setChatNotification(null);
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     if (!isSupervisor) return;
@@ -708,6 +722,25 @@ const Navbar = () => {
       const messageText =
         message.content?.text?.trim() ||
         (message.content?.media?.length ? "Sent an attachment" : "You received a new message");
+      const targetChatId = payload.chatId || message.chatId || null;
+      const isChatRoute = location.pathname.startsWith("/chat");
+
+      if (!isChatRoute) {
+        setChatNotification({
+          id: messageId,
+          chatId: targetChatId,
+          senderName,
+          messageText,
+        });
+
+        if (chatNotificationTimerRef.current) {
+          clearTimeout(chatNotificationTimerRef.current);
+        }
+
+        chatNotificationTimerRef.current = setTimeout(() => {
+          setChatNotification(null);
+        }, 5500);
+      }
 
       const shouldNotify = document.hidden || !document.hasFocus();
       if (!shouldNotify) return;
@@ -718,11 +751,13 @@ const Navbar = () => {
         const notification = new Notification(`Message from ${senderName}`, {
           body: messageText,
           icon: "/favicon.ico",
-          tag: `chat-${payload.chatId || message.chatId || "general"}`,
+          tag: `chat-${payload.chatId || message.chatId || "general"}-${messageId}`,
         });
         notification.onclick = () => {
           window.focus();
-          navigate("/chat");
+          navigate("/chat", {
+            state: targetChatId ? { openChatId: targetChatId, openFromNotification: true } : undefined,
+          });
         };
       };
 
@@ -742,6 +777,9 @@ const Navbar = () => {
     socket.on("new_message", handleNewMessageNotification);
     return () => {
       socket.off("new_message", handleNewMessageNotification);
+      if (chatNotificationTimerRef.current) {
+        clearTimeout(chatNotificationTimerRef.current);
+      }
       processedMessageIdsRef.current.clear();
     };
   }, [user?._id, user?.id, location.pathname, navigate, user]);
@@ -1051,9 +1089,37 @@ const Navbar = () => {
           </div>
         </div>
       )}
+
+      {chatNotification && !location.pathname.startsWith("/chat") && (
+        <div className="fixed right-4 top-16 z-[80] max-w-sm w-[calc(100%-2rem)] sm:w-[26rem] rounded-2xl overflow-hidden border border-cyan-100 shadow-[0_14px_38px_rgba(14,116,144,0.22)] bg-gradient-to-br from-white via-cyan-50 to-blue-50">
+          <button
+            onClick={() => {
+              const targetChatId = chatNotification.chatId;
+              setChatNotification(null);
+              navigate("/chat", {
+                state: targetChatId ? { openChatId: targetChatId, openFromNotification: true } : undefined,
+              });
+            }}
+            className="w-full text-left p-4 hover:bg-white/70 transition-colors"
+          >
+            <div className="flex items-start gap-3">
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 text-white grid place-content-center font-semibold">
+                {chatNotification.senderName?.charAt(0)?.toUpperCase() || "M"}
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.15em] text-cyan-700 font-semibold">New Chat Message</p>
+                <p className="text-sm font-semibold text-slate-900 truncate">{chatNotification.senderName}</p>
+                <p className="text-sm text-slate-600 truncate">{chatNotification.messageText}</p>
+              </div>
+            </div>
+            <div className="mt-3 h-1.5 rounded-full bg-white/80 border border-cyan-100 overflow-hidden">
+              <div className="h-full w-full bg-gradient-to-r from-cyan-400 to-blue-500 animate-pulse" />
+            </div>
+          </button>
+        </div>
+      )}
     </>
   );
 };
 
 export default Navbar;
-

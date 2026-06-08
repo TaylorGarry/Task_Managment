@@ -3,8 +3,8 @@ import axios from "axios";
 import toast from "react-hot-toast";
 import { useSelector } from "react-redux";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-// const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const toDateInputValue = (d) => {
   const yyyy = d.getFullYear();
