@@ -43,6 +43,27 @@
 // import { socket } from "../socket.js";
 // import api from "../../api.js";
 
+// const URL_PATTERN = /((?:https?:\/\/|www\.|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,})(?:[/?#][^\s]*)?)/gi;
+// const LINK_TEXT_PATTERN = /^(?:https?:\/\/|www\.|(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,})(?:[/?#][^\s]*)?$/i;
+
+// const normalizeLinkHref = (value = "") =>
+//   /^https?:\/\//i.test(value) ? value : `https://${value}`;
+
+// const splitTrailingPunctuation = (value = "") => {
+//   const match = String(value).match(/^(.*?)([),.!?;:]*)$/);
+//   return {
+//     core: match?.[1] || value,
+//     trailing: match?.[2] || "",
+//   };
+// };
+
+// const isLinkOnlyText = (value = "") => {
+//   const text = String(value || "").trim();
+//   if (!text) return false;
+//   const { core } = splitTrailingPunctuation(text);
+//   return LINK_TEXT_PATTERN.test(core);
+// };
+
 // const ChatUI = () => {
 //   const dispatch = useDispatch();
 //   const location = useLocation();
@@ -126,21 +147,40 @@
 //     autoResizeTextarea();
 //   }, [text]);
 
-//   const handleFileSelect = (e) => {
-//     const files = Array.from(e.target.files);
-
+//   const addFilesToComposer = (files = []) => {
 //     const oversizedFiles = files.filter(file => file.size > 100 * 1024 * 1024);
 //     if (oversizedFiles.length > 0) {
 //       alert(`Some files exceed 100MB limit: ${oversizedFiles.map(f => f.name).join(', ')}`);
-//       return;
+//       return false;
 //     }
 
 //     setSelectedFiles(prev => [...prev, ...files]);
 //     setShowFilePreview(true);
+//     return files.length > 0;
+//   };
+
+//   const handleFileSelect = (e) => {
+//     const files = Array.from(e.target.files);
+//     addFilesToComposer(files);
 
 //     if (fileInputRef.current) {
 //       fileInputRef.current.value = '';
 //     }
+//   };
+
+//   const handleComposerPaste = (e) => {
+//     const clipboardItems = Array.from(e.clipboardData?.items || []);
+//     const pastedImages = clipboardItems
+//       .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+//       .map((item) => item.getAsFile())
+//       .filter(Boolean);
+
+//     if (pastedImages.length === 0) {
+//       return;
+//     }
+
+//     e.preventDefault();
+//     addFilesToComposer(pastedImages);
 //   };
 
 //   const removeSelectedFile = (index) => {
@@ -164,6 +204,31 @@
 //     const i = Math.floor(Math.log(bytes) / Math.log(k));
 //     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 //   };
+
+//   const renderTextWithLinks = (value = "", linkClassName = "underline break-all") =>
+//     String(value)
+//       .split(URL_PATTERN)
+//       .map((part, index) => {
+//         if (!part) return null;
+//         if (!LINK_TEXT_PATTERN.test(part)) {
+//           return <React.Fragment key={index}>{part}</React.Fragment>;
+//         }
+
+//         const { core, trailing } = splitTrailingPunctuation(part);
+//         return (
+//           <React.Fragment key={index}>
+//             <a
+//               href={normalizeLinkHref(core)}
+//               target="_blank"
+//               rel="noopener noreferrer"
+//               className={linkClassName}
+//             >
+//               {core}
+//             </a>
+//             {trailing}
+//           </React.Fragment>
+//         );
+//       });
 
 //   const handleSend = async () => {
 //     if (typingTimeoutRef.current) {
@@ -1311,58 +1376,75 @@
 //                               {m.sender?.username || "User"}
 //                             </p>
 //                           )}
-//                           {isEditing ? (
-//                             <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-2 md:p-3">
-//                               <textarea
-//                                 value={editingText}
-//                                 onChange={(e) => setEditingText(e.target.value)}
-//                                 className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm md:text-base"
-//                                 rows="2"
-//                                 autoFocus
-//                               />
-//                               <div className="flex justify-end space-x-2 mt-2">
-//                                 <button
-//                                   onClick={handleCancelEdit}
-//                                   className="px-2 py-1 text-xs md:text-sm bg-slate-200 rounded hover:bg-slate-300 flex items-center"
-//                                 >
-//                                   <FiX className="mr-1" /> Cancel
-//                                 </button>
-//                                 <button
-//                                   onClick={handleSaveEdit}
-//                                   className="px-2 py-1 text-xs md:text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
-//                                 >
-//                                   <FiCheck className="mr-1" /> Save
-//                                 </button>
-//                               </div>
-//                             </div>
-//                           ) : (
-//                             <div
-//                               className={`inline-block px-3 py-2 md:px-4 md:py-2 rounded-2xl ${isMyMessage
-//                                   ? "bg-blue-600 text-white rounded-br-none"
-//                                   : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
-//                                 } ${isTempMessage ? "opacity-80" : ""} ${isDeleting ? "opacity-50" : ""}`}
-//                             >
-//                               {isTempMessage && (
-//                                 <div className="flex items-center mb-1">
-//                                   <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
-//                                   <span className="text-xs opacity-90">Sending...</span>
-//                                 </div>
-//                               )}
+//                           {(() => {
+//                             const messageText = String(m.content?.text || "");
+//                             const isLinkOnlyMessage =
+//                               Boolean(messageText.trim()) &&
+//                               (!m.content?.media || m.content.media.length === 0) &&
+//                               isLinkOnlyText(messageText);
+//                             const linkClassName = isLinkOnlyMessage
+//                               ? "break-all text-blue-600 hover:text-blue-700 underline underline-offset-2 bg-transparent"
+//                               : isMyMessage
+//                                 ? "break-all text-blue-200 hover:text-blue-100 underline underline-offset-2 bg-transparent"
+//                                 : "break-all text-blue-600 hover:text-blue-700 underline underline-offset-2 bg-transparent";
 
-//                               {isDeleting && (
-//                                 <div className="flex items-center mb-1">
-//                                   <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
-//                                   <span className="text-xs opacity-90">Deleting...</span>
+//                             return isEditing ? (
+//                               <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-2 md:p-3">
+//                                 <textarea
+//                                   value={editingText}
+//                                   onChange={(e) => setEditingText(e.target.value)}
+//                                   className="w-full p-2 border border-slate-300 rounded-lg bg-white text-sm md:text-base"
+//                                   rows="2"
+//                                   autoFocus
+//                                 />
+//                                 <div className="flex justify-end space-x-2 mt-2">
+//                                   <button
+//                                     onClick={handleCancelEdit}
+//                                     className="px-2 py-1 text-xs md:text-sm bg-slate-200 rounded hover:bg-slate-300 flex items-center"
+//                                   >
+//                                     <FiX className="mr-1" /> Cancel
+//                                   </button>
+//                                   <button
+//                                     onClick={handleSaveEdit}
+//                                     className="px-2 py-1 text-xs md:text-sm bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center"
+//                                   >
+//                                     <FiCheck className="mr-1" /> Save
+//                                   </button>
 //                                 </div>
-//                               )}
-//                               {m.content?.text && (
-//                                 <p className="break-words whitespace-pre-wrap text-sm md:text-base">
-//                                   {m.content.text}
-//                                 </p>
-//                               )}
-//                               {m.content?.media?.length > 0 && renderMessageMedia(m.content.media)}
-//                             </div>
-//                           )}
+//                               </div>
+//                             ) : (
+//                               <div
+//                                 className={`inline-block ${
+//                                   isLinkOnlyMessage
+//                                     ? "bg-transparent text-slate-800 px-0 py-0 rounded-none border-0 shadow-none"
+//                                     : `px-3 py-2 md:px-4 md:py-2 rounded-2xl ${isMyMessage
+//                                         ? "bg-blue-600 text-white rounded-br-none"
+//                                         : "bg-white text-slate-800 rounded-bl-none border border-slate-200"
+//                                       }`
+//                                 } ${isTempMessage ? "opacity-80" : ""} ${isDeleting ? "opacity-50" : ""}`}
+//                               >
+//                                 {isTempMessage && (
+//                                   <div className="flex items-center mb-1">
+//                                     <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+//                                     <span className="text-xs opacity-90">Sending...</span>
+//                                   </div>
+//                                 )}
+
+//                                 {isDeleting && (
+//                                   <div className="flex items-center mb-1">
+//                                     <div className="w-2 h-2 md:w-3 md:h-3 border-2 border-current border-t-transparent rounded-full animate-spin mr-1"></div>
+//                                     <span className="text-xs opacity-90">Deleting...</span>
+//                                   </div>
+//                                 )}
+//                                 {m.content?.text && (
+//                                   <p className="break-words whitespace-pre-wrap text-sm md:text-base">
+//                                     {renderTextWithLinks(m.content.text, linkClassName)}
+//                                   </p>
+//                                 )}
+//                                 {m.content?.media?.length > 0 && renderMessageMedia(m.content.media)}
+//                               </div>
+//                             );
+//                           })()}
 //                           <div className={`mt-1 flex items-center ${isMyMessage ? "justify-end" : "justify-start"}`}>
 //                             <span className="text-xs text-slate-500 flex items-center gap-1">
 //                               {!isTempMessage && (
@@ -1438,6 +1520,7 @@
 //                     setText(e.target.value);
 //                     handleTyping();
 //                   }}
+//                   onPaste={handleComposerPaste}
 //                   onKeyDown={(e) => {
 //                     if (e.key === "Enter" && !e.shiftKey) {
 //                       e.preventDefault();
@@ -1606,9 +1689,11 @@ const ChatUI = () => {
   const messagesContainerRef = useRef(null);
   const openedFromNotificationRef = useRef(null);
   const selectedOtherUserId = selectedChat?.otherUser?._id || selectedChat?.otherUser?.id;
+  const normalizedCurrentUserId = userId ? String(userId) : "";
   const isSelectedUserOnline = selectedOtherUserId
     ? onlineUsers.has(String(selectedOtherUserId))
     : false;
+  const isCurrentUserOnline = socketConnected || (normalizedCurrentUserId ? onlineUsers.has(normalizedCurrentUserId) : false);
 
   const pushLiveNotification = useCallback((senderName, messageText, chatId) => {
     const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -2324,9 +2409,7 @@ const ChatUI = () => {
               message.content?.text?.trim() ||
               (message.content?.media?.length ? "Sent an attachment" : "You received a new message");
 
-            if (!isCurrentChatOpen || document.hidden) {
-              pushLiveNotification(senderName, messageText, chatId);
-            }
+            pushLiveNotification(senderName, messageText, chatId);
 
             if (document.hidden || !isCurrentChatOpen) {
               updateTitleWithUnreadCount();
@@ -2337,7 +2420,7 @@ const ChatUI = () => {
                 const notification = new Notification(`Message from ${senderName}`, {
                   body: messageText,
                   icon: "/favicon.ico",
-                  tag: `chat-${chatId}`,
+                  tag: `chat-${chatId}-${message._id || Date.now()}`,
                 });
                 notification.onclick = () => {
                   window.focus();
@@ -2446,7 +2529,8 @@ const ChatUI = () => {
   }, [fetchMessages, userId, dispatch, clearUnreadTitleCount]);
 
   useEffect(() => {
-    const openChatId = location.state?.openChatId;
+    const searchParams = new URLSearchParams(location.search);
+    const openChatId = location.state?.openChatId || searchParams.get("openChatId");
     if (!openChatId) return;
     if (openedFromNotificationRef.current === openChatId) return;
 
@@ -2455,8 +2539,14 @@ const ChatUI = () => {
 
     openedFromNotificationRef.current = openChatId;
     openChat(targetChat);
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [location.state, chats, openChat, navigate, location.pathname]);
+
+    searchParams.delete("openChatId");
+    const nextSearch = searchParams.toString();
+    navigate(
+      `${location.pathname}${nextSearch ? `?${nextSearch}` : ""}`,
+      { replace: true, state: {} }
+    );
+  }, [location.state, location.search, chats, openChat, navigate, location.pathname]);
 
   const handleTyping = useCallback(() => {
     if (!selectedChat || !socketConnected) return;
@@ -2664,8 +2754,8 @@ const ChatUI = () => {
               <p className="font-semibold text-sm">
                 {selectedChat.otherUser?.username || "Unknown"}
               </p>
-              <span className={`text-xs ${isSelectedUserOnline ? "text-green-600" : "text-red-600"}`}>
-                {isSelectedUserOnline ? "Online" : "Offline"}
+              <span className={`text-xs ${isCurrentUserOnline ? "text-green-600" : "text-red-600"}`}>
+                {isCurrentUserOnline ? "Online" : "Offline"}
               </span>
             </div>
           </div>
@@ -2690,8 +2780,8 @@ const ChatUI = () => {
           </div>
           <div className="hidden md:block">
             <p className="font-semibold text-sm lg:text-base">{user?.name || user?.username}</p>
-            <span className={`text-xs ${isSelectedUserOnline ? "text-green-600" : "text-red-600"}`}>
-              {isSelectedUserOnline ? "Online" : "Offline"}
+            <span className={`text-xs ${isCurrentUserOnline ? "text-green-600" : "text-red-600"}`}>
+              {isCurrentUserOnline ? "Online" : "Offline"}
             </span>
           </div>
         </div>
