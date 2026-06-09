@@ -4,6 +4,7 @@
 // import IdleMonitor from "./IdleMonitor";
 // import BreakTracker from "./BreakTracker";
 // import AlertsPanel from "./AlertsPanel";
+// import PayrollAttendanceModal from "./PayrollAttendanceModal";
 // import { formatDuration } from "./utils";
 // import { getApiBaseUrl } from "../../utils/apiUrl";
 
@@ -140,6 +141,7 @@
 //   });
 //   const [selectedDateKey, setSelectedDateKey] = useState(() => toIsoDateKey(new Date()));
 //   const [showExportPopup, setShowExportPopup] = useState(false);
+//   const [showPayrollAttendanceModal, setShowPayrollAttendanceModal] = useState(false);
 //   const [isExporting, setIsExporting] = useState(false);
 //   const [exportRange, setExportRange] = useState(() => {
 //     const d = new Date();
@@ -166,6 +168,28 @@
 //   useEffect(() => {
 //     const id = setInterval(() => setNowMs(Date.now()), 1000);
 //     return () => clearInterval(id);
+//   }, []);
+
+//   useEffect(() => {
+//     const invalidateMonthCache = () => {
+//       monthAttendanceCacheRef.current.clear();
+//       setMonthAttendanceByDate({});
+//       setActiveMonth((currentMonth) => new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1));
+//     };
+
+//     const onOverrideUpdated = () => invalidateMonthCache();
+//     const onStorageUpdated = (event) => {
+//       if (event?.key === "attendanceOverride:lastUpdatedAt") {
+//         invalidateMonthCache();
+//       }
+//     };
+
+//     window.addEventListener("attendance-override-updated", onOverrideUpdated);
+//     window.addEventListener("storage", onStorageUpdated);
+//     return () => {
+//       window.removeEventListener("attendance-override-updated", onOverrideUpdated);
+//       window.removeEventListener("storage", onStorageUpdated);
+//     };
 //   }, []);
 
 //   const shiftStartAt = session?.shiftStartAt || session?.shiftStartedAt || null;
@@ -204,7 +228,11 @@
 //     : 0;
 //   const totalHoursMs = Math.max(0, grossTotalHoursMs - breakMs);
 //   const totalHoursMsForBusinessDay = Math.max(0, grossBusinessDayMs - breakMs);
-//   const remainingMs = Math.max(0, 9 * 60 * 60 * 1000 - totalHoursMsForBusinessDay);
+//   const targetShiftMs = 9 * 60 * 60 * 1000;
+//   const remainingMs = Math.max(0, targetShiftMs - totalHoursMsForBusinessDay);
+//   const remainingShiftProgress = Number.isFinite(shiftStartMs)
+//     ? Math.max(0, Math.min(100, Math.round((remainingMs / targetShiftMs) * 100)))
+//     : 100;
 //   const summaryAttendanceByDate = buildAttendanceByDate(employeeDashboardSummary || {});
 //   const attendanceByDate = { ...summaryAttendanceByDate, ...monthAttendanceByDate };
 //   const selectedAttendance = attendanceByDate[selectedDateKey] || null;
@@ -260,6 +288,7 @@
 //             ...item,
 //             date: key,
 //             status:
+//               item?.overrideStatus ||
 //               item?.departmentStatus ||
 //               item?.transportStatus ||
 //               (isPastDate ? item?.status : "") ||
@@ -426,7 +455,7 @@
 //               <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1D4ED8]">Remaining Shift</p>
 //               <p className="font-mono text-2xl font-bold text-[#0F172A]">{formatDuration(remainingMs)}</p>
 //             </div>
-//             <div className="h-2 rounded-full bg-[#DBEAFE]"><div className="h-2 rounded-full bg-[#16A34A]" style={{ width: `${Math.min(100, Math.round(((attendanceScore?.total || 0) / 100) * 100))}%` }} /></div>
+//             <div className="h-2 rounded-full bg-[#DBEAFE]"><div className="h-2 rounded-full bg-[#16A34A]" style={{ width: `${remainingShiftProgress}%` }} /></div>
 //           </div>
 //         </div>
 //       </div>
@@ -473,6 +502,12 @@
 //             <button onClick={() => setActiveMonth(new Date(activeMonth.getFullYear(), activeMonth.getMonth() - 1, 1))} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 hover:bg-slate-50">Prev</button>
 //             <span className="min-w-[140px] text-center text-sm font-semibold text-slate-700">{monthLabel}</span>
 //             <button onClick={() => setActiveMonth(new Date(activeMonth.getFullYear(), activeMonth.getMonth() + 1, 1))} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-sm text-slate-700 hover:bg-slate-50">Next</button>
+//             <button
+//               onClick={() => setShowPayrollAttendanceModal(true)}
+//               className="rounded-lg border border-slate-900 bg-slate-900 px-3 py-1 text-sm font-semibold text-white hover:bg-slate-800"
+//             >
+//               View Payroll Attendance
+//             </button>
 //           </div>
 //         </div>
 
@@ -539,11 +574,22 @@
 //           ) : null}
 //         </div>
 //       </div>
+
+//       <PayrollAttendanceModal
+//         open={showPayrollAttendanceModal}
+//         onClose={() => setShowPayrollAttendanceModal(false)}
+//         token={user?.token}
+//         currentUser={user}
+//       />
 //     </section>
 //   );
 // };
 
 // export default AgentDashboard;
+
+
+
+
 
 
 
@@ -759,7 +805,9 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
         ? nowMs - shiftStartMs
         : (Number.isFinite(shiftEndMs) ? shiftEndMs - shiftStartMs : nowMs - shiftStartMs))
     : 0;
-  const breakMs = session?.totalBreakMs || 0;
+  const openBreak = session?.breaks?.find((b) => !b.endAt) || null;
+  const openBreakMs = openBreak?.startAt ? Math.max(0, nowMs - new Date(openBreak.startAt).getTime()) : 0;
+  const breakMs = Math.max(0, (session?.totalBreakMs || 0) + openBreakMs);
   const manualBreakMs = (session?.breaks || [])
     .filter((b) => b.type === "manual")
     .reduce((sum, b) => sum + (b.durationMs || 0), 0);
@@ -778,7 +826,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
   const totalHoursMs = Math.max(0, grossTotalHoursMs - breakMs);
   const totalHoursMsForBusinessDay = Math.max(0, grossBusinessDayMs - breakMs);
   const targetShiftMs = 9 * 60 * 60 * 1000;
-  const remainingMs = Math.max(0, targetShiftMs - totalHoursMsForBusinessDay);
+  const remainingMs = Math.max(0, targetShiftMs - grossBusinessDayMs);
   const remainingShiftProgress = Number.isFinite(shiftStartMs)
     ? Math.max(0, Math.min(100, Math.round((remainingMs / targetShiftMs) * 100)))
     : 100;
