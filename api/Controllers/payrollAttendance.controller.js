@@ -511,7 +511,7 @@ export const exportPayrollAttendanceToExcel = async (req, res) => {
       NCNS: "No Call No Show",
       UL: "Unplanned Leave",
       LWP: "Leave Without Pay",
-      BL: "Bereavement Leave",
+      BL: "Birthday Leave",
       H: "Holiday",
       LWD: "Late Working Day",
       HD: "Half Day",

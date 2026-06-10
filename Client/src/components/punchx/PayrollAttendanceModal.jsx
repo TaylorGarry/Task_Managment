@@ -10,7 +10,7 @@ const STATUS_META = {
   NCNS: { label: "No Call No Show", chip: "bg-red-100 text-red-700 border-red-200", dot: "bg-red-600" },
   UL: { label: "Unplanned Leave", chip: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200", dot: "bg-fuchsia-500" },
   LWP: { label: "Leave Without Pay", chip: "bg-yellow-100 text-yellow-700 border-yellow-200", dot: "bg-yellow-500" },
-  BL: { label: "Bereavement Leave", chip: "bg-slate-200 text-slate-700 border-slate-300", dot: "bg-slate-500" },
+  BL: { label: "Birthday Leave", chip: "bg-slate-200 text-slate-700 border-slate-300", dot: "bg-slate-500" },
   H: { label: "Holiday", chip: "bg-violet-100 text-violet-700 border-violet-200", dot: "bg-violet-500" },
   LWD: { label: "Late Working Day", chip: "bg-cyan-100 text-cyan-700 border-cyan-200", dot: "bg-cyan-500" },
   HD: { label: "Half Day", chip: "bg-orange-100 text-orange-700 border-orange-200", dot: "bg-orange-500" },

@@ -5,8 +5,8 @@ import { toast } from "react-toastify";
 const resolveApiBaseUrl = () => {
   const envUrl = import.meta?.env?.VITE_API_URL;
   if (envUrl) return String(envUrl).replace(/\/+$/, "");
-//   return "http://localhost:4000";
-  return "https://fdbs-server-a9gqg.ondigitalocean.app";
+  return "http://localhost:4000";
+//   return "https://fdbs-server-a9gqg.ondigitalocean.app";
 };
 
 const API_URL = `${resolveApiBaseUrl()}/api/v1/roster`;
@@ -61633,7 +61633,7 @@ const Ih = Xe("roster/exportTemplate", async ({startDate: t, endDate: e}, {rejec
                                             }), i.jsx("option", {
                                                 value: "BL",
                                                 className: "text-purple-600",
-                                                children: "Bereavement Leave (BL)"
+                                                children: "Birthday Leave (BL)"
                                             }), i.jsx("option", {
                                                 value: "H",
                                                 className: "text-purple-700",
@@ -66975,7 +66975,7 @@ const YQ = () => {
     color: "bg-purple-100 text-purple-800"
 }, {
     value: "BL",
-    label: "Bereavement Leave (BL)",
+    label: "Birthday Leave (BL)",
     color: "bg-indigo-100 text-indigo-800"
 }, {
     value: "H",
