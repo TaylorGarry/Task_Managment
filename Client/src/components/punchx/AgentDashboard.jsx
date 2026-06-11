@@ -64,7 +64,7 @@
 //     LWP: { label: "Leave Without Pay", chip: "bg-yellow-100 text-yellow-700 border-yellow-200", dot: "bg-yellow-500" },
 //     UL: { label: "Unplanned Leave", chip: "bg-fuchsia-100 text-fuchsia-700 border-fuchsia-200", dot: "bg-fuchsia-500" },
 //     NCNS: { label: "No Call No Show", chip: "bg-red-100 text-red-700 border-red-200", dot: "bg-red-600" },
-//     BL: { label: "Bereavement Leave", chip: "bg-slate-200 text-slate-700 border-slate-300", dot: "bg-slate-500" },
+//     BL: { label: "Birthday Leave", chip: "bg-slate-200 text-slate-700 border-slate-300", dot: "bg-slate-500" },
 //     LWD: { label: "Late Working Day", chip: "bg-cyan-100 text-cyan-700 border-cyan-200", dot: "bg-cyan-500" },
 //   };
 //   return map[status] || { label: status || "Not Marked", chip: "bg-slate-100 text-slate-700 border-slate-200", dot: "bg-slate-400" };
@@ -210,7 +210,9 @@
 //         ? nowMs - shiftStartMs
 //         : (Number.isFinite(shiftEndMs) ? shiftEndMs - shiftStartMs : nowMs - shiftStartMs))
 //     : 0;
-//   const breakMs = session?.totalBreakMs || 0;
+//   const openBreak = session?.breaks?.find((b) => !b.endAt) || null;
+//   const openBreakMs = openBreak?.startAt ? Math.max(0, nowMs - new Date(openBreak.startAt).getTime()) : 0;
+//   const breakMs = Math.max(0, (session?.totalBreakMs || 0) + openBreakMs);
 //   const manualBreakMs = (session?.breaks || [])
 //     .filter((b) => b.type === "manual")
 //     .reduce((sum, b) => sum + (b.durationMs || 0), 0);
@@ -229,7 +231,7 @@
 //   const totalHoursMs = Math.max(0, grossTotalHoursMs - breakMs);
 //   const totalHoursMsForBusinessDay = Math.max(0, grossBusinessDayMs - breakMs);
 //   const targetShiftMs = 9 * 60 * 60 * 1000;
-//   const remainingMs = Math.max(0, targetShiftMs - totalHoursMsForBusinessDay);
+//   const remainingMs = Math.max(0, targetShiftMs - grossBusinessDayMs);
 //   const remainingShiftProgress = Number.isFinite(shiftStartMs)
 //     ? Math.max(0, Math.min(100, Math.round((remainingMs / targetShiftMs) * 100)))
 //     : 100;
@@ -590,9 +592,6 @@
 
 
 
-
-
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import toast from "react-hot-toast";
@@ -724,7 +723,7 @@ const buildAttendanceByDate = (summary) => {
   return attendanceMap;
 };
 
-const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, onStartShift, onEndShift, onStartBreak, onEndBreak }) => {
+const AgentDashboard = ({ session, token, attendanceScore, employeeDashboardSummary, onStartShift, onEndShift, onStartBreak, onEndBreak }) => {
   const user = useMemo(() => JSON.parse(localStorage.getItem("user") || "{}"), []);
   const [nowMs, setNowMs] = useState(Date.now());
   const [monthAttendanceByDate, setMonthAttendanceByDate] = useState({});
@@ -1089,7 +1088,7 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <BreakTracker session={session} onStartBreak={onStartBreak} onEndBreak={onEndBreak} />
-        <AlertsPanel session={session} />
+        <AlertsPanel session={session} token={token} />
       </div>
 
       <div className="mt-4 rounded-[14px] border border-[#DCE7F3] bg-gradient-to-br from-[#F8FBFF] via-white to-[#EFF8FF] p-4 shadow-sm">
@@ -1183,3 +1182,4 @@ const AgentDashboard = ({ session, attendanceScore, employeeDashboardSummary, on
 };
 
 export default AgentDashboard;
+

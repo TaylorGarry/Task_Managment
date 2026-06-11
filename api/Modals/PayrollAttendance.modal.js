@@ -37,7 +37,7 @@ const payrollAttendanceSchema = new mongoose.Schema(
       type: String,
       trim: true,
       required: true,
-      enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT"],
+      enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO"],
     },
     uploadedBy: {
       type: mongoose.Schema.Types.ObjectId,

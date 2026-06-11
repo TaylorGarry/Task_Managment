@@ -32,6 +32,9 @@
 //   const [punchSession, setPunchSession] = useState(null);
 //   const [attendanceScore, setAttendanceScore] = useState(null);
 //   const [breakNowMs, setBreakNowMs] = useState(Date.now());
+//   const [announcements, setAnnouncements] = useState([]);
+//   const [announcementsLoading, setAnnouncementsLoading] = useState(false);
+//   const [announcementsError, setAnnouncementsError] = useState("");
 
 //   const [filters, setFilters] = useState({
 //     date: new Date().toISOString().split("T")[0],
@@ -123,6 +126,25 @@
 //     if (!user?.token) return;
 //     syncPunchSession();
 //   }, [user?.token]);
+
+//   useEffect(() => {
+//     if (!user?.token) return;
+
+//     const loadAnnouncements = async () => {
+//       try {
+//         setAnnouncementsLoading(true);
+//         setAnnouncementsError("");
+//         const res = await axios.get(`${API_URL}/announcements`, authHeaders());
+//         setAnnouncements(Array.isArray(res.data?.announcements) ? res.data.announcements : []);
+//       } catch (err) {
+//         setAnnouncementsError(err?.response?.data?.message || "Failed to load announcements");
+//       } finally {
+//         setAnnouncementsLoading(false);
+//       }
+//     };
+
+//     loadAnnouncements();
+//   }, [API_URL, user?.token]);
 
 //   useEffect(() => {
 //     const id = setInterval(() => setBreakNowMs(Date.now()), 1000);
@@ -540,6 +562,89 @@
 //         </div>
 //       )}
 //       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen relative">
+//         {announcementsLoading ? (
+//           <section className="mb-8 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm md:p-5">
+//             <div className="flex items-center gap-2 text-sky-700">
+//               <MessageCircle className="h-4 w-4" />
+//               <h2 className="text-sm font-semibold md:text-base">Announcements</h2>
+//             </div>
+//             <p className="mt-3 text-sm text-slate-500">Loading announcements...</p>
+//           </section>
+//         ) : announcementsError ? (
+//           <section className="mb-8 rounded-2xl border border-rose-100 bg-rose-50 p-4 text-sm text-rose-700 shadow-sm md:p-5">
+//             {announcementsError}
+//           </section>
+//         ) : announcements.length > 0 ? (
+//           <section className="mb-8 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm md:p-5">
+//             <div className="mb-4 flex flex-wrap items-center justify-between gap-2 px-1">
+//               <div className="flex items-center gap-2 text-sky-700">
+//                 <MessageCircle className="h-4 w-4" />
+//                 <h2 className="text-sm font-semibold md:text-base">Announcements</h2>
+//               </div>
+//               <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-sky-700">
+//                 Active only
+//               </span>
+//             </div>
+//             <div className="grid grid-cols-1 gap-4">
+//               {announcements.map((announcement) => (
+//                 <article
+//                   key={announcement._id}
+//                   className="group relative w-full overflow-hidden rounded-[28px] border border-sky-100/80 bg-gradient-to-br from-white via-sky-50/40 to-white p-5 shadow-[0_18px_45px_-30px_rgba(15,23,42,0.28)] backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:border-sky-200 hover:shadow-[0_28px_70px_-34px_rgba(15,23,42,0.34)]"
+//                 >
+//                   <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-sky-400 via-cyan-400 to-blue-500" />
+//                   <div className="absolute -right-10 -top-10 h-28 w-28 rounded-full bg-sky-100/40 blur-2xl" />
+//                   <div className="relative flex items-center justify-between gap-3">
+//                     <div className="inline-flex items-center gap-2 rounded-full border border-sky-100 bg-sky-50 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-sky-700">
+//                       <span className="h-2 w-2 rounded-full bg-sky-500 shadow-[0_0_0_4px_rgba(14,165,233,0.12)]" />
+//                       Announcement
+//                     </div>
+//                     <span className="rounded-full border border-sky-200 bg-white px-3 py-1 text-[10px] font-bold uppercase tracking-[0.25em] text-sky-600">
+//                       Active
+//                     </span>
+//                   </div>
+
+//                   <div className="relative mt-4">
+//                     <div className="overflow-hidden">
+//                       <div className="announcement-marquee flex w-max min-w-full items-center gap-14 whitespace-nowrap">
+//                         <div className="shrink-0">
+//                           <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+//                             {announcement.title}
+//                           </h3>
+//                         </div>
+//                         <div className="shrink-0">
+//                           <p className="mt-2 text-base leading-7 text-sky-500">
+//                             {announcement.description}
+//                           </p>
+//                         </div>
+//                         <div className="shrink-0" aria-hidden="true">
+//                           <h3 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">
+//                             {announcement.title}
+//                           </h3>
+//                         </div>
+//                         <div className="shrink-0" aria-hidden="true">
+//                           <p className="mt-2 text-base leading-7 text-sky-500">
+//                             {announcement.description}
+//                           </p>
+//                         </div>
+//                       </div>
+//                     </div>
+//                   </div>
+//                 </article>
+//               ))}
+//             </div>
+//           </section>
+//         ) : null}
+
+//         <style>{`
+//           @keyframes announcement-marquee {
+//             0% { transform: translateX(0); }
+//             100% { transform: translateX(-50%); }
+//           }
+//           .announcement-marquee {
+//             animation: announcement-marquee 22s linear infinite;
+//           }
+//         `}</style>
+
 // 	        <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
 // 	          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
 // 	            <h2 className="text-sm font-semibold text-violet-700 md:text-base">Work Anniversary Celebration!</h2>
@@ -1677,6 +1782,7 @@ useEffect(() => {
           <>
             <AgentDashboard
               session={punchSession}
+              token={user?.token}
               attendanceScore={attendanceScore}
               employeeDashboardSummary={employeeDashboardSummary}
               onStartShift={handleStartShift}
