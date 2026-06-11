@@ -1,6 +1,8 @@
 // import PunchSession from "../Modals/PunchSession.modal.js";
+// import Roster from "../Modals/Roster.modal.js";
 // import User from "../Modals/User.modal.js";
 // import XLSX from "xlsx-js-style";
+// import { getTeamMembersByTeamLeader } from "../utils/teamHelper.js";
 
 // const APP_TZ = "Asia/Kolkata";
 // const IDLE_WARN_MS = 25 * 60 * 1000;
@@ -47,6 +49,128 @@
 //   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return null;
 //   const ms = Date.parse(`${dateKey}T00:00:00+05:30`);
 //   return Number.isFinite(ms) ? ms : null;
+// };
+
+// const overlaps = (aStart, aEnd, bStart, bEnd) => aStart <= bEnd && aEnd >= bStart;
+
+// const normalizeRosterName = (value = "") =>
+//   String(value || "")
+//     .trim()
+//     .toLowerCase()
+//     .replace(/[._\-()/,]+/g, " ")
+//     .replace(/\s+/g, " ");
+
+// const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
+//   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
+//   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
+//   const userIdByEmpId = new Map();
+//   const userIdByName = new Map();
+
+//   for (const employee of employees || []) {
+//     const userId = String(employee?._id || "").trim();
+//     if (!userId) continue;
+
+//     const empId = String(employee?.empId || "").trim().toLowerCase();
+//     if (empId && !userIdByEmpId.has(empId)) {
+//       userIdByEmpId.set(empId, userId);
+//     }
+
+//     const nameKeys = [
+//       employee?.pseudoName,
+//       employee?.realName,
+//       employee?.username,
+//       `${employee?.pseudoName || ""} ${employee?.department || ""}`,
+//       `${employee?.realName || ""} ${employee?.department || ""}`,
+//     ]
+//       .map(normalizeRosterName)
+//       .filter(Boolean);
+
+//     for (const nameKey of nameKeys) {
+//       if (!userIdByName.has(nameKey)) {
+//         userIdByName.set(nameKey, userId);
+//       }
+//     }
+//   }
+
+//   const dayStartMs = parseDateKeyStartMs(dateKey);
+//   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) return 0;
+
+//   const dayStart = new Date(dayStartMs);
+//   const dayEnd = new Date(dayStartMs + 24 * 60 * 60 * 1000 - 1);
+//   const rosters = await Roster.find({
+//     $or: [
+//       {
+//         rosterStartDate: { $lte: dayEnd },
+//         rosterEndDate: { $gte: dayStart },
+//       },
+//       {
+//         weeks: {
+//           $elemMatch: {
+//             startDate: { $lte: dayEnd },
+//             endDate: { $gte: dayStart },
+//           },
+//         },
+//       },
+//     ],
+//   })
+//     .select("weeks.startDate weeks.endDate weeks.employees.userId weeks.employees.empId weeks.employees.name weeks.employees.dailyStatus")
+//     .lean();
+
+//   const presentIds = new Set();
+//   const rosterStatusByUserId = new Map();
+//   for (const roster of rosters || []) {
+//     for (const week of roster?.weeks || []) {
+//       const weekStart = week?.startDate ? new Date(week.startDate) : null;
+//       const weekEnd = week?.endDate ? new Date(week.endDate) : null;
+//       if (!weekStart || !weekEnd || Number.isNaN(weekStart.getTime()) || Number.isNaN(weekEnd.getTime())) continue;
+//       if (!overlaps(weekStart, weekEnd, dayStart, dayEnd)) continue;
+
+//       for (const employee of week?.employees || []) {
+//         const rosterUserId = String(employee?.userId || "").trim();
+//         const rosterEmpId = String(employee?.empId || "").trim().toLowerCase();
+//         const rosterNameKey = normalizeRosterName(employee?.name || "");
+//         const matchedUserId =
+//           (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
+//           userIdByEmpId.get(rosterEmpId) ||
+//           userIdByName.get(rosterNameKey) ||
+//           "";
+//         const presentKey = matchedUserId ||
+//           (countAllRosterEmployees
+//             ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
+//             : "");
+
+//         if (!presentKey || presentIds.has(presentKey)) continue;
+
+//         const matchingDay = (employee?.dailyStatus || []).find((dayEntry) => {
+//           if (!dayEntry?.date) return false;
+//           const dayDate = new Date(dayEntry.date);
+//           if (Number.isNaN(dayDate.getTime())) return false;
+//           return getNyDateKey(dayDate) === dateKey;
+//         });
+//         if (!matchingDay) continue;
+
+//         const effectiveStatus = String(
+//           matchingDay?.status ||
+//           matchingDay?.departmentStatus ||
+//           matchingDay?.transportStatus ||
+//           "P"
+//         ).trim().toUpperCase();
+
+//         if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
+//           rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
+//         }
+
+//         if (effectiveStatus === "P") {
+//           presentIds.add(presentKey);
+//         }
+//       }
+//     }
+//   }
+
+//   return {
+//     presentCount: presentIds.size,
+//     rosterStatusByUserId,
+//   };
 // };
 
 // const addDaysToDateKey = (dateKey, days) => {
@@ -470,38 +594,64 @@
 //     const requestedDateKey = String(req.query?.dateKey || "").trim();
 //     const dateKey = requestedDateKey || resolveOperationalDateKeyForUser(user, getNow());
 
-//     let teamMembers = await User.find({
-//       accountType: { $in: ["employee", "agent", "supervisor"] },
-//       reportingManager: supervisorId,
-//       isActive: { $ne: false },
-//       _id: { $ne: supervisorId },
-//     })
-//       .select("_id username realName pseudoName department accountType shiftStartHour")
-//       .lean();
+//     const rosterTeamMembers = await getTeamMembersByTeamLeader(supervisorId, dateKey);
+//     const rosterUserIds = rosterTeamMembers
+//       .map((member) => String(member?.userId || "").trim())
+//       .filter(Boolean);
 
-//     // Backward-compatibility fallback for legacy records where reportingManager was not mapped.
+//     let teamMembers = [];
+//     if (rosterUserIds.length > 0) {
+//       const rosterMetaByUserId = new Map(
+//         rosterTeamMembers
+//           .filter((member) => member?.userId)
+//           .map((member) => [String(member.userId), member])
+//       );
+
+//       const rosterUsers = await User.find({
+//         _id: { $in: rosterUserIds, $ne: supervisorId },
+//         accountType: { $in: ["employee", "agent", "supervisor"] },
+//         isActive: { $ne: false },
+//       })
+//         .select("_id empId username realName pseudoName department accountType shiftStartHour")
+//         .lean();
+
+//       teamMembers = rosterUsers.map((member) => {
+//         const rosterMeta = rosterMetaByUserId.get(String(member._id)) || {};
+//         return {
+//           ...member,
+//           department: member.department || rosterMeta.department || "",
+//           shiftStartHour:
+//             Number.isFinite(Number(rosterMeta.shiftStartHour)) ? Number(rosterMeta.shiftStartHour) : member.shiftStartHour,
+//         };
+//       });
+//     }
+
 //     if (teamMembers.length === 0) {
 //       teamMembers = await User.find({
 //         accountType: { $in: ["employee", "agent", "supervisor"] },
-//         department: user.department,
+//         reportingManager: supervisorId,
 //         isActive: { $ne: false },
 //         _id: { $ne: supervisorId },
 //       })
-//         .select("_id username realName pseudoName department accountType shiftStartHour")
+//         .select("_id empId username realName pseudoName department accountType shiftStartHour")
 //         .lean();
 //     }
 
 //     const ids = teamMembers.map((u) => u._id);
 //     const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey });
-//     await persistAutoEndedSessions(sessions, getNow());
+//     const now = getNow();
+//     await persistAutoEndedSessions(sessions, now);
 //     const byUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
+//     const rosterSnapshot = await getRosterPresentCountForUsers(teamMembers, dateKey);
+//     const presentCount = rosterSnapshot.presentCount;
 
 //     const rows = teamMembers.map((member) => {
 //       const session = byUser.get(String(member._id));
-//       const breakUsage = getBreakUsage(session, getNow());
+//       const breakUsage = getBreakUsage(session, now);
 //       const openBreak = session?.breaks?.find((b) => !b.endAt) || null;
 //       const shiftStartHour = Number(member.shiftStartHour);
 //       const lateByMs = computeSessionLateByMs(session, member);
+//       const totalWorkedMs = getSessionWorkedMs(session, now);
 //       return {
 //         userId: member._id,
 //         username: member.username || "",
@@ -519,12 +669,25 @@
 //         shiftStartedAt: session?.shiftStartAt || null,
 //         loginTime: session?.shiftStartAt || null,
 //         logoutTime: session?.shiftEndAt || null,
+//         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
 //         isOnBreak: Boolean(openBreak),
 //         lateByMs,
+//         totalWorkedMs: Math.max(0, totalWorkedMs),
+//         remainingForNineHoursMs: Math.max(0, 9 * 60 * 60 * 1000 - totalWorkedMs),
+//         hasCompletedNineHours: totalWorkedMs >= 9 * 60 * 60 * 1000,
 //       };
 //     });
 
-//     return res.status(200).json({ dateKey, timezone: APP_TZ, rows });
+//     const summary = {
+//       totalEmployees: rows.length,
+//       presentCount,
+//       loggedInCount: rows.filter((r) => Boolean(r.loginTime)).length,
+//       onBreakCount: rows.filter((r) => r.isOnBreak).length,
+//       notCompletedNineHoursCount: rows.filter((r) => r.loginTime && !r.hasCompletedNineHours).length,
+//       lateLoginCount: rows.filter((r) => r.loginTime && r.lateByMs > 0).length,
+//     };
+
+//     return res.status(200).json({ dateKey, timezone: APP_TZ, summary, rows });
 //   } catch (error) {
 //     return res.status(500).json({ message: "Failed to fetch team status", error: error.message });
 //   }
@@ -554,10 +717,14 @@
 //     }
 
 //     const employees = await User.find(employeeQuery)
-//       .select("_id username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
+//       .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
 //       .lean();
 
 //     const employeeIds = employees.map((e) => e._id);
+//     const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+//       countAllRosterEmployees: isSuperAdmin,
+//     });
+//     const presentCount = rosterSnapshot.presentCount;
 //     const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey });
 //     await persistAutoEndedSessions(sessions, getNow());
 //     const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
@@ -587,6 +754,7 @@
 //         shiftEndHour: Number.isFinite(Number(emp.shiftEndHour)) ? Number(emp.shiftEndHour) : null,
 //         loginTime: session?.shiftStartAt || null,
 //         logoutTime: session?.shiftEndAt || null,
+//         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
 //         isOnBreak: Boolean(openBreak),
 //         breakType: openBreak?.type || "",
 //         breakStartAt: openBreak?.startAt || null,
@@ -607,6 +775,7 @@
 
 //     const summary = {
 //       totalEmployees: rows.length,
+//       presentCount,
 //       loggedInCount: rows.filter((r) => Boolean(r.loginTime)).length,
 //       onBreakCount: rows.filter((r) => r.isOnBreak).length,
 //       notCompletedNineHoursCount: rows.filter((r) => r.loginTime && !r.hasCompletedNineHours).length,
@@ -723,8 +892,6 @@
 //     });
 //   }
 // };
-
-
 
 
 import PunchSession from "../Modals/PunchSession.modal.js";
@@ -943,6 +1110,19 @@ const toMs = (start, end) => {
   return diff > 0 ? diff : 0;
 };
 
+const NINE_HOURS_MS = 9 * 60 * 60 * 1000;
+
+const formatIstDateTime = (value) => {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-IN", {
+    timeZone: APP_TZ,
+    dateStyle: "medium",
+    timeStyle: "short",
+  });
+};
+
 const getBreakUsage = (session, now = getNow()) => {
   if (!session) return { manualBreakMs: 0, autoIdleBreakMs: 0, totalBreakMs: 0 };
   const breaks = Array.isArray(session.breaks) ? session.breaks : [];
@@ -1004,19 +1184,20 @@ const autoEndShiftIfDue = (session, now = getNow()) => {
   if (!session?.shiftStartAt) return false;
   if (session.shiftEndAt || session.status === "ended") return false;
 
-  const window = getOperationalWindowForDateKey(session?.dateKey || "");
   const nowMs = new Date(now).getTime();
-  if (!window || !Number.isFinite(nowMs)) return false;
-  if (nowMs <= window.endMs) return false;
+  const startMs = new Date(session.shiftStartAt).getTime();
+  if (!Number.isFinite(nowMs) || !Number.isFinite(startMs)) return false;
+  if (nowMs - startMs < NINE_HOURS_MS) return false;
 
-  const autoEndAt = new Date(window.endMs);
+  const autoEndAt = new Date(startMs + NINE_HOURS_MS);
   closeOpenBreak(session, autoEndAt);
   session.shiftEndAt = autoEndAt;
+  session.shiftEndReason = "auto_9h";
   session.status = "ended";
   session.activityStatus = "no_activity";
   session.alerts.push({
     type: "auto_shift_end",
-    message: "Shift auto-ended at operational window boundary",
+    message: "Shift auto-ended after 9 hours",
     at: autoEndAt,
   });
   debugTime("autoEndShiftIfDue", {
@@ -1039,6 +1220,7 @@ const persistAutoEndedSessions = async (sessions = [], now = getNow()) => {
         update: {
           $set: {
             shiftEndAt: session.shiftEndAt,
+            shiftEndReason: session.shiftEndReason ?? "",
             status: session.status,
             activityStatus: session.activityStatus,
             autoBreakStartedAt: session.autoBreakStartedAt ?? null,
@@ -1169,10 +1351,15 @@ export const startShift = async (req, res) => {
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+    if (session.status === "ended" && session.shiftStartAt && session.shiftEndAt) {
+      return res.status(409).json({ message: "Shift already ended for this session", session, attendanceScore: scoreSession(session) });
+    }
+
     if (!session.shiftStartAt) session.shiftStartAt = now;
     session.status = "active";
     session.activityStatus = "active";
     session.lastActivityAt = now;
+    session.shiftEndReason = "";
     await session.save();
 
     return res.status(200).json({ message: "Shift started", session, attendanceScore: scoreSession(session) });
@@ -1191,6 +1378,7 @@ export const endShift = async (req, res) => {
 
     closeOpenBreak(session, now);
     session.shiftEndAt = now;
+    session.shiftEndReason = "manual";
     session.status = "ended";
     session.activityStatus = "no_activity";
     await session.save();
@@ -1214,9 +1402,13 @@ export const startBreak = async (req, res) => {
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+    if (session.status === "ended" || session.shiftEndAt) {
+      return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+    }
+
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
-      return res.status(409).json({ message: "Shift already auto-ended at operational window boundary", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
     }
 
     if (session.status === "not_started") {
@@ -1243,9 +1435,13 @@ export const endBreak = async (req, res) => {
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+    if (session.status === "ended" || session.shiftEndAt) {
+      return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+    }
+
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
-      return res.status(409).json({ message: "Shift already auto-ended at operational window boundary", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
     }
 
     const closed = closeOpenBreak(session, now, type || null);
@@ -1267,10 +1463,18 @@ export const postActivity = async (req, res) => {
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+    if (session.status === "ended" || session.shiftEndAt) {
+      return res.status(409).json({
+        message: "Shift already ended",
+        session,
+        attendanceScore: scoreSession(session),
+      });
+    }
+
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
       return res.status(200).json({
-        message: "Shift already auto-ended at operational window boundary",
+        message: "Shift already auto-ended after 9 hours",
         session,
         attendanceScore: scoreSession(session),
       });
@@ -1307,6 +1511,72 @@ export const postActivity = async (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ message: "Failed to capture activity", error: error.message });
+  }
+};
+
+export const getSessionHistory = async (req, res) => {
+  try {
+    const userId = req.user?._id;
+    if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+    const now = getNow();
+    const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+    const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
+    const currentSession = await PunchSession.findOne({ userId, dateKey });
+    if (currentSession && autoEndShiftIfDue(currentSession, now)) {
+      await currentSession.save();
+    }
+
+    const page = Math.max(1, Number.parseInt(req.query?.page || "1", 10) || 1);
+    const limit = Math.min(50, Math.max(5, Number.parseInt(req.query?.limit || "5", 10) || 5));
+    const skip = (page - 1) * limit;
+
+    const query = {
+      userId,
+      shiftStartAt: { $ne: null },
+    };
+
+    const [total, sessions] = await Promise.all([
+      PunchSession.countDocuments(query),
+      PunchSession.find(query)
+        .sort({ shiftStartAt: -1, updatedAt: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const items = sessions.map((session) => {
+      const breakUsage = getBreakUsage(session);
+      const totalWorkedMs = getSessionWorkedMs(session, session?.shiftEndAt || new Date());
+      const durationMs = Number.isFinite(totalWorkedMs) ? totalWorkedMs : 0;
+      return {
+        id: String(session._id),
+        dateKey: session.dateKey || "",
+        loginTime: session.shiftStartAt || null,
+        logoutTime: session.shiftEndAt || null,
+        logoutReason: session.shiftEndReason || (session.shiftEndAt ? "manual" : ""),
+        status: session.status || "not_started",
+        activityStatus: session.activityStatus || "no_activity",
+        totalWorkedMs: durationMs,
+        totalBreakMs: Number(breakUsage.totalBreakMs || 0),
+        manualBreakMs: Number(breakUsage.manualBreakMs || 0),
+        alertCount: Array.isArray(session.alerts) ? session.alerts.length : 0,
+        latestAlert: Array.isArray(session.alerts) && session.alerts.length > 0 ? session.alerts[session.alerts.length - 1] : null,
+        hasCompletedNineHours: durationMs >= NINE_HOURS_MS,
+      };
+    });
+
+    return res.status(200).json({
+      items,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch session history", error: error.message });
   }
 };
 

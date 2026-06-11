@@ -46,7 +46,7 @@ import TaskStatus from "./Modals/TaskStatus.modal.js";
 import { Message } from "./Modals/Message.modal.js";
 import Kra from "./Modals/Kra.modal.js";
 import Announcement from "./Modals/Announcement.modal.js";
-
+import "./jobs/punchAutoLogout.job.js";
 // Disable noisy debug logs across the API.
 // Set `DISABLE_CONSOLE_LOG=false` to re-enable.
 const disableConsoleLog = String(process.env.DISABLE_CONSOLE_LOG ?? "true").toLowerCase();
@@ -63,6 +63,7 @@ connectDB()
       await Message.syncIndexes();
       await Kra.syncIndexes();
       await Announcement.syncIndexes();
+      
     } catch (err) {
       console.error("❌ Error syncing indexes:", err);
     }

@@ -6,6 +6,7 @@ import {
   getManagerTeamStatus,
   exportSuperAdminDailyStatusExcel,
   getSuperAdminDailyStatus,
+  getSessionHistory,
   getTodaySession,
   postActivity,
   startBreak,
@@ -18,6 +19,7 @@ const router = express.Router();
 router.use(authMiddleware);
 
 router.get("/session/today", getTodaySession);
+router.get("/session/history", getSessionHistory);
 router.post("/shift/start", invalidateCacheTag("attendance"), startShift);
 router.post("/shift/end", invalidateCacheTag("attendance"), endShift);
 router.post("/break/start", invalidateCacheTag("attendance"), startBreak);
