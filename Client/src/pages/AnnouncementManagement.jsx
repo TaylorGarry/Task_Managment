@@ -30,7 +30,7 @@ const AnnouncementManagement = () => {
     try {
       setLoading(true);
       setError("");
-      const res = await api.get("/api/v1/announcements");
+      const res = await api.get("/api/v1/announcements?view=history");
       setAnnouncements(Array.isArray(res.data?.announcements) ? res.data.announcements : []);
     } catch (err) {
       setError(err?.response?.data?.message || "Failed to load announcements");
@@ -55,10 +55,6 @@ const AnnouncementManagement = () => {
   );
 
   const visibleAnnouncements = useMemo(() => {
-    if (!isSuperAdmin) {
-      return announcements.filter((item) => item.status === "active");
-    }
-
     if (activeTab === "active") {
       return announcements.filter((item) => item.status === "active");
     }
