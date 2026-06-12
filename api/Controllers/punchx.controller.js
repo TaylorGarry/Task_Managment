@@ -1,3 +1,5 @@
+
+
 // import PunchSession from "../Modals/PunchSession.modal.js";
 // import Roster from "../Modals/Roster.modal.js";
 // import User from "../Modals/User.modal.js";
@@ -214,6 +216,19 @@
 //   return diff > 0 ? diff : 0;
 // };
 
+// const NINE_HOURS_MS = 9 * 60 * 60 * 1000;
+
+// const formatIstDateTime = (value) => {
+//   if (!value) return "";
+//   const date = new Date(value);
+//   if (Number.isNaN(date.getTime())) return "";
+//   return date.toLocaleString("en-IN", {
+//     timeZone: APP_TZ,
+//     dateStyle: "medium",
+//     timeStyle: "short",
+//   });
+// };
+
 // const getBreakUsage = (session, now = getNow()) => {
 //   if (!session) return { manualBreakMs: 0, autoIdleBreakMs: 0, totalBreakMs: 0 };
 //   const breaks = Array.isArray(session.breaks) ? session.breaks : [];
@@ -275,19 +290,20 @@
 //   if (!session?.shiftStartAt) return false;
 //   if (session.shiftEndAt || session.status === "ended") return false;
 
-//   const window = getOperationalWindowForDateKey(session?.dateKey || "");
 //   const nowMs = new Date(now).getTime();
-//   if (!window || !Number.isFinite(nowMs)) return false;
-//   if (nowMs <= window.endMs) return false;
+//   const startMs = new Date(session.shiftStartAt).getTime();
+//   if (!Number.isFinite(nowMs) || !Number.isFinite(startMs)) return false;
+//   if (nowMs - startMs < NINE_HOURS_MS) return false;
 
-//   const autoEndAt = new Date(window.endMs);
+//   const autoEndAt = new Date(startMs + NINE_HOURS_MS);
 //   closeOpenBreak(session, autoEndAt);
 //   session.shiftEndAt = autoEndAt;
+//   session.shiftEndReason = "auto_9h";
 //   session.status = "ended";
 //   session.activityStatus = "no_activity";
 //   session.alerts.push({
 //     type: "auto_shift_end",
-//     message: "Shift auto-ended at operational window boundary",
+//     message: "Shift auto-ended after 9 hours",
 //     at: autoEndAt,
 //   });
 //   debugTime("autoEndShiftIfDue", {
@@ -310,6 +326,7 @@
 //         update: {
 //           $set: {
 //             shiftEndAt: session.shiftEndAt,
+//             shiftEndReason: session.shiftEndReason ?? "",
 //             status: session.status,
 //             activityStatus: session.activityStatus,
 //             autoBreakStartedAt: session.autoBreakStartedAt ?? null,
@@ -440,10 +457,15 @@
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+//     if (session.status === "ended" && session.shiftStartAt && session.shiftEndAt) {
+//       return res.status(409).json({ message: "Shift already ended for this session", session, attendanceScore: scoreSession(session) });
+//     }
+
 //     if (!session.shiftStartAt) session.shiftStartAt = now;
 //     session.status = "active";
 //     session.activityStatus = "active";
 //     session.lastActivityAt = now;
+//     session.shiftEndReason = "";
 //     await session.save();
 
 //     return res.status(200).json({ message: "Shift started", session, attendanceScore: scoreSession(session) });
@@ -462,6 +484,7 @@
 
 //     closeOpenBreak(session, now);
 //     session.shiftEndAt = now;
+//     session.shiftEndReason = "manual";
 //     session.status = "ended";
 //     session.activityStatus = "no_activity";
 //     await session.save();
@@ -485,9 +508,13 @@
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+//     if (session.status === "ended" || session.shiftEndAt) {
+//       return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+//     }
+
 //     if (autoEndShiftIfDue(session, now)) {
 //       await session.save();
-//       return res.status(409).json({ message: "Shift already auto-ended at operational window boundary", session, attendanceScore: scoreSession(session) });
+//       return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
 //     }
 
 //     if (session.status === "not_started") {
@@ -514,9 +541,13 @@
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+//     if (session.status === "ended" || session.shiftEndAt) {
+//       return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+//     }
+
 //     if (autoEndShiftIfDue(session, now)) {
 //       await session.save();
-//       return res.status(409).json({ message: "Shift already auto-ended at operational window boundary", session, attendanceScore: scoreSession(session) });
+//       return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
 //     }
 
 //     const closed = closeOpenBreak(session, now, type || null);
@@ -538,10 +569,18 @@
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
+//     if (session.status === "ended" || session.shiftEndAt) {
+//       return res.status(409).json({
+//         message: "Shift already ended",
+//         session,
+//         attendanceScore: scoreSession(session),
+//       });
+//     }
+
 //     if (autoEndShiftIfDue(session, now)) {
 //       await session.save();
 //       return res.status(200).json({
-//         message: "Shift already auto-ended at operational window boundary",
+//         message: "Shift already auto-ended after 9 hours",
 //         session,
 //         attendanceScore: scoreSession(session),
 //       });
@@ -578,6 +617,72 @@
 //     });
 //   } catch (error) {
 //     return res.status(500).json({ message: "Failed to capture activity", error: error.message });
+//   }
+// };
+
+// export const getSessionHistory = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+//     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+//     const now = getNow();
+//     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+//     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
+//     const currentSession = await PunchSession.findOne({ userId, dateKey });
+//     if (currentSession && autoEndShiftIfDue(currentSession, now)) {
+//       await currentSession.save();
+//     }
+
+//     const page = Math.max(1, Number.parseInt(req.query?.page || "1", 10) || 1);
+//     const limit = Math.min(50, Math.max(5, Number.parseInt(req.query?.limit || "5", 10) || 5));
+//     const skip = (page - 1) * limit;
+
+//     const query = {
+//       userId,
+//       shiftStartAt: { $ne: null },
+//     };
+
+//     const [total, sessions] = await Promise.all([
+//       PunchSession.countDocuments(query),
+//       PunchSession.find(query)
+//         .sort({ shiftStartAt: -1, updatedAt: -1 })
+//         .skip(skip)
+//         .limit(limit)
+//         .lean(),
+//     ]);
+
+//     const items = sessions.map((session) => {
+//       const breakUsage = getBreakUsage(session);
+//       const totalWorkedMs = getSessionWorkedMs(session, session?.shiftEndAt || new Date());
+//       const durationMs = Number.isFinite(totalWorkedMs) ? totalWorkedMs : 0;
+//       return {
+//         id: String(session._id),
+//         dateKey: session.dateKey || "",
+//         loginTime: session.shiftStartAt || null,
+//         logoutTime: session.shiftEndAt || null,
+//         logoutReason: session.shiftEndReason || (session.shiftEndAt ? "manual" : ""),
+//         status: session.status || "not_started",
+//         activityStatus: session.activityStatus || "no_activity",
+//         totalWorkedMs: durationMs,
+//         totalBreakMs: Number(breakUsage.totalBreakMs || 0),
+//         manualBreakMs: Number(breakUsage.manualBreakMs || 0),
+//         alertCount: Array.isArray(session.alerts) ? session.alerts.length : 0,
+//         latestAlert: Array.isArray(session.alerts) && session.alerts.length > 0 ? session.alerts[session.alerts.length - 1] : null,
+//         hasCompletedNineHours: durationMs >= NINE_HOURS_MS,
+//       };
+//     });
+
+//     return res.status(200).json({
+//       items,
+//       pagination: {
+//         page,
+//         limit,
+//         total,
+//         totalPages: Math.max(1, Math.ceil(total / limit)),
+//       },
+//     });
+//   } catch (error) {
+//     return res.status(500).json({ message: "Failed to fetch session history", error: error.message });
 //   }
 // };
 
@@ -892,6 +997,7 @@
 //     });
 //   }
 // };
+
 
 
 import PunchSession from "../Modals/PunchSession.modal.js";
@@ -1668,6 +1774,7 @@ export const getManagerTeamStatus = async (req, res) => {
         shiftStartedAt: session?.shiftStartAt || null,
         loginTime: session?.shiftStartAt || null,
         logoutTime: session?.shiftEndAt || null,
+        logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
         isOnBreak: Boolean(openBreak),
         lateByMs,
@@ -1753,6 +1860,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
         shiftEndHour: Number.isFinite(Number(emp.shiftEndHour)) ? Number(emp.shiftEndHour) : null,
         loginTime: session?.shiftStartAt || null,
         logoutTime: session?.shiftEndAt || null,
+        logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
         isOnBreak: Boolean(openBreak),
         breakType: openBreak?.type || "",
