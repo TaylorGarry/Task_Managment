@@ -169,7 +169,7 @@ const AnnouncementManagement = () => {
               </div>
               <button
                 onClick={openCreateModal}
-                className="rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700"
+                className="rounded-2xl cursor-pointer bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700"
               >
                 <span className="inline-flex items-center gap-2">
                   <Plus className="h-4 w-4" />
@@ -181,7 +181,7 @@ const AnnouncementManagement = () => {
         ) : null}
 
         {isSuperAdmin ? (
-          <div className="mb-6 flex flex-wrap gap-3">
+          <div className="mb-6 flex flex-wrap gap-3 ">
             {[
               { key: "all", label: "All" },
               { key: "active", label: "Active" },
@@ -190,7 +190,7 @@ const AnnouncementManagement = () => {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                className={`rounded-full border px-4 py-2 cursor-pointer text-sm font-semibold transition ${
                   activeTab === tab.key
                     ? "border-sky-600 bg-sky-600 text-white shadow-md shadow-sky-200"
                     : "border-sky-100 bg-white text-slate-700 hover:bg-sky-50"
@@ -332,7 +332,7 @@ const AnnouncementManagement = () => {
                 </div>
                 <button
                   onClick={closeModal}
-                  className="rounded-full border border-sky-100 bg-white p-2 text-sky-700 transition hover:bg-sky-50"
+                  className="rounded-full border border-sky-100 bg-white p-2 cursor-pointer text-sky-700 transition hover:bg-sky-50"
                   aria-label="Close"
                   type="button"
                 >
@@ -368,7 +368,7 @@ const AnnouncementManagement = () => {
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-sky-100 pt-5">
                 <button
                   onClick={closeModal}
-                  className="rounded-2xl border border-sky-100 bg-white px-5 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
+                  className="rounded-2xl border border-sky-100 cursor-pointer bg-white px-5 py-3 text-sm font-semibold text-sky-700 transition hover:bg-sky-50"
                   disabled={saving}
                 >
                   Cancel
@@ -376,7 +376,7 @@ const AnnouncementManagement = () => {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700 disabled:opacity-60"
+                  className="rounded-2xl bg-gradient-to-r from-sky-600 cursor-pointer to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700 disabled:opacity-60"
                 >
                   {saving ? "Saving..." : editingId ? "Update Announcement" : "Create Announcement"}
                 </button>

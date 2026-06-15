@@ -267,7 +267,7 @@ const KraManagement = () => {
               </div>
               <button
                 onClick={openCreateModal}
-                className="rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700"
+                className="rounded-2xl cursor-pointer bg-gradient-to-r from-sky-600 to-blue-600 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700"
               >
                 Create KRA
               </button>
@@ -287,7 +287,7 @@ const KraManagement = () => {
             <select
               value={departmentFilter}
               onChange={(e) => setDepartmentFilter(e.target.value)}
-              className="rounded-2xl border border-sky-100 bg-white px-4 py-3 text-sm text-slate-700 outline-none shadow-sm transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+              className="rounded-2xl border border-sky-100 cursor-pointer bg-white px-4 py-3 text-sm text-slate-700 outline-none shadow-sm transition focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
             >
               <option value="">All Departments</option>
               {availableDepartments.map((department) => (
@@ -299,7 +299,7 @@ const KraManagement = () => {
 
             <button
               onClick={loadKras}
-              className="rounded-2xl border border-sky-100 bg-white px-4 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
+              className="rounded-2xl border border-sky-100 bg-white cursor-pointer px-4 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
             >
               Refresh
             </button>
@@ -488,7 +488,7 @@ const KraManagement = () => {
                 </div>
                 <button
                   onClick={closeModal}
-                  className="rounded-full border border-sky-100 bg-white px-4 py-2 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
+                  className="rounded-full border border-sky-100 bg-white px-4 cursor-pointer py-2 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
                   disabled={saving}
                 >
                   Close
@@ -513,7 +513,7 @@ const KraManagement = () => {
                   <select
                     value={form.department}
                     onChange={(e) => handleFormChange("department", e.target.value)}
-                    className="w-full rounded-2xl border border-sky-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                    className="w-full cursor-pointer rounded-2xl border border-sky-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
                   >
                     <option value="">Select department</option>
                     {availableDepartments.map((department) => (
@@ -529,7 +529,7 @@ const KraManagement = () => {
                       <button
                         type="button"
                         onClick={() => handleFormChange("assignmentScope", "department")}
-                        className={`rounded-[18px] border px-4 py-4 text-left text-sm font-semibold transition ${
+                        className={`rounded-[18px] border px-4 py-4 cursor-pointer text-left text-sm font-semibold transition ${
                           form.assignmentScope === "department"
                             ? "border-sky-600 bg-gradient-to-br from-sky-600 to-blue-600 text-white shadow-lg shadow-sky-200"
                             : "border-sky-100 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50"
@@ -543,7 +543,7 @@ const KraManagement = () => {
                       <button
                         type="button"
                         onClick={() => handleFormChange("assignmentScope", "users")}
-                        className={`rounded-[18px] border px-4 py-4 text-left text-sm font-semibold transition ${
+                        className={`rounded-[18px] border px-4 py-4 cursor-pointer text-left text-sm font-semibold transition ${
                           form.assignmentScope === "users"
                             ? "border-blue-600 bg-gradient-to-br from-blue-600 to-sky-600 text-white shadow-lg shadow-blue-200"
                             : "border-sky-100 bg-white text-slate-700 hover:border-sky-200 hover:bg-sky-50"
@@ -610,7 +610,7 @@ const KraManagement = () => {
               <div className="sticky bottom-0 mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-sky-100 bg-white/95 pt-5 backdrop-blur-sm">
                 <button
                   onClick={closeModal}
-                  className="rounded-2xl border border-sky-100 bg-white px-5 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
+                  className="rounded-2xl border border-sky-100 bg-white cursor-pointer px-5 py-3 text-sm font-semibold text-sky-700 shadow-sm transition hover:bg-sky-50"
                   disabled={saving}
                 >
                   Cancel
@@ -618,7 +618,7 @@ const KraManagement = () => {
                 <button
                   onClick={handleSave}
                   disabled={saving}
-                  className="rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700 disabled:opacity-60"
+                  className="rounded-2xl bg-gradient-to-r from-sky-600 to-blue-600 px-5 py-3 cursor-pointer text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:from-sky-700 hover:to-blue-700 disabled:opacity-60"
                 >
                   {saving ? "Saving..." : editingId ? "Update KRA" : "Create KRA"}
                 </button>

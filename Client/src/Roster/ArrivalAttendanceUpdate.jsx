@@ -2855,7 +2855,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   setCurrentPage(1);
                   setSelectedEmployeeIds([]);
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                className="w-full border border-gray-300 cursor-pointer rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
               >
                 <option value="">-- Select Week --</option>
                 {availableWeeks.map((week) => (
@@ -2882,7 +2882,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                   setSelectedDate(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                className="w-full border border-gray-300 rounded-lg  px-3 py-2 focus:outline-none cursor-pointer focus:ring-2 focus:ring-emerald-300"
               />
             </div>
 
@@ -2894,7 +2894,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                 <select
                   value={searchBy}
                   onChange={(e) => setSearchBy(e.target.value)}
-                  className="border border-gray-300 rounded-lg px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
+                  className="border border-gray-300 rounded-lg px-2 cursor-pointer py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-300"
                   title="Search by"
                 >
                   <option value="all">All</option>
@@ -3008,7 +3008,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     <select
                       value={bulkUpdate.transportStatus}
                       onChange={(e) => setBulkUpdate((p) => ({ ...p, transportStatus: e.target.value }))}
-                      className="border border-gray-300 rounded px-2 py-2 text-sm w-56"
+                      className="border border-gray-300 rounded px-2 py-2 text-sm w-56 cursor-pointer"
                       disabled={bulkUpdating}
                     >
                       <option value="">(No change)</option>
@@ -3027,7 +3027,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     <select
                       value={bulkUpdate.departmentStatus}
                       onChange={(e) => setBulkUpdate((p) => ({ ...p, departmentStatus: e.target.value }))}
-                      className="border border-gray-300 rounded px-2 py-2 text-sm w-56"
+                      className="border border-gray-300 rounded px-2 py-2 text-sm w-56 cursor-pointer"
                       disabled={bulkUpdating}
                     >
                       <option value="">(No change)</option>
@@ -3047,7 +3047,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       type="time"
                       value={bulkUpdate.arrivalTime}
                       onChange={(e) => setBulkUpdate((p) => ({ ...p, arrivalTime: e.target.value }))}
-                      className="border border-gray-300 rounded px-2 py-2 text-sm w-40"
+                      className="border border-gray-300 rounded px-2 py-2 text-sm w-40 cursor-pointer"
                       disabled={bulkUpdating}
                     />
                   </div>
@@ -3083,7 +3083,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                             punchOut: ""
                           });
                         }}
-                        className="px-3 py-2 text-sm rounded border border-gray-200  disabled:opacity-50"
+                        className="px-3 py-2 text-sm cursor-pointer rounded border border-gray-200  disabled:opacity-50"
                         disabled={bulkUpdating}
                       >
                         Clear
@@ -3091,7 +3091,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                       <button
                         type="button"
                         onClick={handleApplyBulkUpdate}
-                        className="px-4 py-2 text-sm rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="px-4 py-2 text-sm cursor-pointer rounded bg-emerald-600 text-white disabled:opacity-50 disabled:cursor-not-allowed"
                         disabled={bulkUpdating || selectedEditableCount === 0}
                       >
                         Apply to Selected
@@ -3422,7 +3422,7 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
                     }));
                   }
                 }}
-                className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg"
+                className="mt-4 px-4 py-2 bg-emerald-600 text-white cursor-pointer rounded-lg"
               >
                 Refresh Weeks
               </button>

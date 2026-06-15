@@ -1000,6 +1000,7 @@
 
 
 
+
 import PunchSession from "../Modals/PunchSession.modal.js";
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
@@ -1401,17 +1402,50 @@ const scoreSession = (session) => {
   };
 };
 
+const getIstHourFromDateLike = (dateLike) => {
+  const date = new Date(dateLike);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: APP_TZ,
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  return Number.isFinite(hour) ? hour : null;
+};
+
+const normalizeShiftStartHour = (shiftStartHour, shiftEndHour, loginHour = null) => {
+  const startHour = Number(shiftStartHour);
+  const endHour = Number(shiftEndHour);
+  if (!Number.isFinite(startHour)) return null;
+
+  const normalizedStart = ((startHour % 24) + 24) % 24;
+  const normalizedEnd = Number.isFinite(endHour) ? ((endHour % 24) + 24) % 24 : null;
+
+  const eveningLogin = Number.isFinite(loginHour) && loginHour >= OPERATIONAL_DAY_START_HOUR_IST;
+
+  if (
+    normalizedStart > 0 &&
+    normalizedStart < 12 &&
+    (normalizedEnd !== null ? normalizedEnd < normalizedStart : eveningLogin)
+  ) {
+    return normalizedStart + 12;
+  }
+
+  return normalizedStart;
+};
+
 const computeSessionLateByMs = (session, userLike = {}) => {
   if (!session?.shiftStartAt) return 0;
-  const startHour = Number(userLike?.shiftStartHour);
+  const actualStartMs = new Date(session.shiftStartAt).getTime();
+  const loginHour = getIstHourFromDateLike(session.shiftStartAt);
+  const startHour = normalizeShiftStartHour(userLike?.shiftStartHour, userLike?.shiftEndHour, loginHour);
   const dayStartMs = parseDateKeyStartMs(session?.dateKey || "");
-  if (!Number.isFinite(startHour) || !Number.isFinite(dayStartMs)) return 0;
+  if (!Number.isFinite(startHour) || !Number.isFinite(dayStartMs) || !Number.isFinite(actualStartMs)) return 0;
   const normalizedHour = ((startHour % 24) + 24) % 24;
   const expectedStartMs = normalizedHour >= OPERATIONAL_DAY_START_HOUR_IST
     ? dayStartMs + normalizedHour * 60 * 60 * 1000
     : dayStartMs + 24 * 60 * 60 * 1000 + normalizedHour * 60 * 60 * 1000;
-  const actualStartMs = new Date(session.shiftStartAt).getTime();
-  if (!Number.isFinite(actualStartMs)) return 0;
   return actualStartMs > expectedStartMs ? actualStartMs - expectedStartMs : 0;
 };
 
