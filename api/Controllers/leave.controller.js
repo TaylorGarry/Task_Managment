@@ -1,6 +1,7 @@
 // import LeaveBalance from "../Modals/LeaveBalance.modal.js";
 // import LeaveRequest from "../Modals/LeaveRequest.modal.js";
 // import User from "../Modals/User.modal.js";
+// import { getTeamMembersByTeamLeader } from "../utils/teamHelper.js";
 // import {
 //   canUsePaidLeave,
 //   computeMonthlyAccrual,
@@ -12,7 +13,9 @@
 // } from "../utils/leavePolicy.js";
 
 // const ADMIN_ROLES = new Set(["HR", "superAdmin", "admin"]);
-// const LEAVE_TYPES = new Set(["EL", "CL", "ML", "LWP"]);
+// const LEAVE_TYPES = new Set(["BL", "L", "LWP"]);
+// const PAID_LEAVE_TYPES = new Set(["L", "EL", "CL", "ML"]);
+// const JULY_2026_MONTH_START = new Date("2026-07-01T00:00:00+05:30");
 
 // const roundHalf = (value) => Math.round(Number(value || 0) * 2) / 2;
 
@@ -38,6 +41,8 @@
 
 // const isAdminUser = (user) => ADMIN_ROLES.has(user?.accountType);
 // const isSuperAdminUser = (user) => user?.accountType === "superAdmin";
+// const canViewTeamLeaveBalances = (user) =>
+//   isAdminUser(user) || user?.roleType === "supervisor" || Boolean(user?.isTeamLeader);
 // let legacyIndexChecked = false;
 
 // const ensureBucket = (obj = {}) => ({
@@ -46,6 +51,32 @@
 //   ML: roundHalf(obj?.ML || 0),
 //   LWP: roundHalf(obj?.LWP || 0),
 // });
+
+// const getLegacyPaidTotal = (bucket = {}) =>
+//   roundHalf((bucket?.EL || 0) + (bucket?.CL || 0) + (bucket?.ML || 0));
+
+// const syncCurrentBalanceFields = (balance) => {
+//   if (!balance) return;
+
+//   const legacyCredited = getLegacyPaidTotal(balance.credited);
+//   const legacyUsed = getLegacyPaidTotal(balance.used);
+//   const legacyAvailable = getLegacyPaidTotal(balance.available);
+
+//   if (
+//     roundHalf(balance.currentCredited || 0) <= 0 &&
+//     roundHalf(balance.currentUsed || 0) <= 0 &&
+//     roundHalf(balance.currentAvailable || 0) <= 0 &&
+//     legacyCredited > 0
+//   ) {
+//     balance.currentCredited = legacyCredited;
+//     balance.currentUsed = legacyUsed;
+//     balance.currentAvailable = legacyAvailable;
+//   }
+
+//   balance.currentCredited = roundHalf(balance.currentCredited || 0);
+//   balance.currentUsed = roundHalf(balance.currentUsed || 0);
+//   balance.currentAvailable = roundHalf(Math.max(0, balance.currentCredited - balance.currentUsed));
+// };
 
 // const cleanupLegacyLeaveBalanceIndexes = async () => {
 //   if (legacyIndexChecked) return;
@@ -101,10 +132,18 @@
 
 // const serializeBalance = (balanceDoc) => {
 //   if (!balanceDoc) return null;
+//   const legacyAvailable = getLegacyPaidTotal(balanceDoc.available);
+//   const currentLeaveBalance = roundHalf(
+//     balanceDoc.currentAvailable > 0 || legacyAvailable === 0 ? balanceDoc.currentAvailable || 0 : legacyAvailable
+//   );
 //   return {
 //     credited: balanceDoc.credited || { EL: 0, CL: 0, ML: 0, LWP: 0 },
 //     used: balanceDoc.used || { EL: 0, CL: 0, ML: 0, LWP: 0 },
 //     available: balanceDoc.available || { EL: 0, CL: 0, ML: 0, LWP: 0 },
+//     currentCredited: roundHalf(balanceDoc.currentCredited || 0),
+//     currentUsed: roundHalf(balanceDoc.currentUsed || 0),
+//     currentAvailable: currentLeaveBalance,
+//     currentLeaveBalance,
 //     financialYearStart: balanceDoc.financialYearStart,
 //     financialYearEnd: balanceDoc.financialYearEnd,
 //     lastAccruedMonth: balanceDoc.lastAccruedMonth,
@@ -128,6 +167,10 @@
 //       CL: 0,
 //       ML: 0,
 //     },
+//     currentCredited: 0,
+//     currentUsed: 0,
+//     currentAvailable: 0,
+//     currentLeaveBalance: 0,
 //   };
 // };
 
@@ -166,6 +209,9 @@
 //           credited: { EL: 0, CL: 0, ML: 0, LWP: 0 },
 //           used: { EL: 0, CL: 0, ML: 0, LWP: 0 },
 //           available: { EL: 0, CL: 0, ML: 0, LWP: 0 },
+//           currentCredited: 0,
+//           currentUsed: 0,
+//           currentAvailable: 0,
 //           lastAccruedMonth: null,
 //         },
 //       },
@@ -198,6 +244,7 @@
 //   balance.credited = ensureBucket(balance.credited);
 //   balance.used = ensureBucket(balance.used);
 //   balance.available = ensureBucket(balance.available);
+//   syncCurrentBalanceFields(balance);
 
 //   const accrualStartMonth = getAccrualStartMonth({
 //     dateOfJoining: user.dateOfJoining,
@@ -212,13 +259,8 @@
 //     asOfDate,
 //   });
 
-//   balance.credited.EL = roundHalf(accrual.totalCredit.EL || 0);
-//   balance.credited.CL = roundHalf(accrual.totalCredit.CL || 0);
-//   balance.credited.ML = roundHalf(accrual.totalCredit.ML || 0);
-
-//   balance.available.EL = roundHalf(Math.max(0, balance.credited.EL - (balance.used.EL || 0)));
-//   balance.available.CL = roundHalf(Math.max(0, balance.credited.CL - (balance.used.CL || 0)));
-//   balance.available.ML = roundHalf(Math.max(0, balance.credited.ML - (balance.used.ML || 0)));
+//   balance.currentCredited = roundHalf(accrual.totalCredit || 0);
+//   balance.currentAvailable = roundHalf(Math.max(0, balance.currentCredited - (balance.currentUsed || 0)));
 //   balance.available.LWP = 0;
 
 //   balance.lastAccruedMonth = accrual.lastAccruedMonth;
@@ -232,13 +274,13 @@
 //   const leaveType = request.leaveType;
 //   const charge = roundHalf(request.chargedDays);
 
-//   if (leaveType !== "LWP") {
-//     const available = roundHalf(balance.available?.[leaveType] || 0);
+//   if (PAID_LEAVE_TYPES.has(leaveType)) {
+//     const available = roundHalf(balance.currentAvailable || 0);
 //     if (available < charge) {
-//       return { ok: false, message: `Insufficient ${leaveType} balance` };
+//       return { ok: false, message: "Insufficient current leave balance" };
 //     }
-//     balance.used[leaveType] = roundHalf((balance.used[leaveType] || 0) + charge);
-//     balance.available[leaveType] = roundHalf((balance.available[leaveType] || 0) - charge);
+//     balance.currentUsed = roundHalf((balance.currentUsed || 0) + charge);
+//     balance.currentAvailable = roundHalf(Math.max(0, (balance.currentCredited || 0) - balance.currentUsed));
 //   } else {
 //     balance.used.LWP = roundHalf((balance.used.LWP || 0) + charge);
 //   }
@@ -256,11 +298,9 @@
 //   const leaveType = request.leaveType;
 //   const charge = roundHalf(request.chargedDays);
 
-//   if (leaveType !== "LWP") {
-//     balance.used[leaveType] = roundHalf(Math.max(0, (balance.used?.[leaveType] || 0) - charge));
-//     balance.available[leaveType] = roundHalf(
-//       Math.max(0, (balance.credited?.[leaveType] || 0) - (balance.used?.[leaveType] || 0))
-//     );
+//   if (PAID_LEAVE_TYPES.has(leaveType)) {
+//     balance.currentUsed = roundHalf(Math.max(0, (balance.currentUsed || 0) - charge));
+//     balance.currentAvailable = roundHalf(Math.max(0, (balance.currentCredited || 0) - balance.currentUsed));
 //   } else {
 //     balance.used.LWP = roundHalf(Math.max(0, (balance.used?.LWP || 0) - charge));
 //   }
@@ -282,6 +322,7 @@
 //     return res.status(200).json({
 //       success: true,
 //       balance: maskPaidLeavesDuringProbation(serializeBalance(balance), probationCompleted),
+//       currentLeaveBalance: maskPaidLeavesDuringProbation(serializeBalance(balance), probationCompleted)?.currentLeaveBalance || 0,
 //       stats: {
 //         pendingRequests: pendingCount,
 //         probationEndDate: probationEnd,
@@ -352,9 +393,31 @@
 //       });
 //     }
 
+//     const { start } = getFinancialYearBounds(from);
 //     const { balance, user } = await ensureLeaveBalanceForUser(req.user._id, from);
 
-//     if (normalizedType !== "LWP") {
+//     if (normalizedType === "BL") {
+//       if (leaveDays.chargedDays !== 1) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Birthday Leave can be applied only for 1 day in a financial year",
+//         });
+//       }
+//       const existingBirthdayLeave = await LeaveRequest.findOne({
+//         userId: req.user._id,
+//         leaveType: "BL",
+//         financialYearStart: start,
+//         status: { $in: ["pending", "approved"] },
+//       }).lean();
+//       if (existingBirthdayLeave) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Birthday Leave can be applied only once in a financial year",
+//         });
+//       }
+//     }
+
+//     if (normalizedType === "L") {
 //       const paidAllowed = canUsePaidLeave({
 //         dateOfJoining: user.dateOfJoining,
 //         leaveStartDate: from,
@@ -365,11 +428,28 @@
 //           message: "Paid leave is not allowed during first 90 days from joining",
 //         });
 //       }
-//       const available = roundHalf(balance.available?.[normalizedType] || 0);
-//       if (available < leaveDays.chargedDays) {
+//       const available = roundHalf(balance.currentAvailable || 0);
+//       const pendingReserved = await LeaveRequest.aggregate([
+//         {
+//           $match: {
+//             userId: req.user._id,
+//             financialYearStart: start,
+//             status: "pending",
+//             leaveType: "L",
+//           },
+//         },
+//         {
+//           $group: {
+//             _id: null,
+//             total: { $sum: "$chargedDays" },
+//           },
+//         },
+//       ]);
+//       const pendingReservedDays = roundHalf(pendingReserved?.[0]?.total || 0);
+//       if (available < pendingReservedDays + leaveDays.chargedDays) {
 //         return res.status(400).json({
 //           success: false,
-//           message: `Insufficient ${normalizedType} balance`,
+//           message: "Insufficient current leave balance",
 //         });
 //       }
 //     }
@@ -387,7 +467,6 @@
 //       });
 //     }
 
-//     const { start } = getFinancialYearBounds(from);
 //     const requestDoc = await LeaveRequest.create({
 //       userId: req.user._id,
 //       financialYearStart: start,
@@ -421,8 +500,9 @@
 
 // export const getAdminLeaveRequests = async (req, res) => {
 //   try {
-//     if (!isAdminUser(req.user)) {
-//       return res.status(403).json({ success: false, message: "Only HR/superAdmin/admin can access" });
+//     const canViewTeam = canViewTeamLeaveBalances(req.user);
+//     if (!isAdminUser(req.user) && !canViewTeam) {
+//       return res.status(403).json({ success: false, message: "Only HR/superAdmin/admin/team leaders can access" });
 //     }
 
 //     const { status = "pending", search = "" } = req.query || {};
@@ -442,6 +522,19 @@
 //       if (!userFilterIds.length) {
 //         return res.status(200).json({ success: true, requests: [] });
 //       }
+//     }
+
+//     if (!isAdminUser(req.user)) {
+//       const teamMembers = await getTeamMembersByTeamLeader(req.user._id, new Date());
+//       const teamUserIds = teamMembers.map((member) => member?.userId).filter(Boolean);
+//       const scopedUserIds = userFilterIds
+//         ? teamUserIds.filter((id) => userFilterIds.some((filteredId) => String(filteredId) === String(id)))
+//         : teamUserIds;
+//       if (!scopedUserIds.length) {
+//         return res.status(200).json({ success: true, requests: [] });
+//       }
+//       query.userId = { $in: scopedUserIds };
+//     } else if (userFilterIds) {
 //       query.userId = { $in: userFilterIds };
 //     }
 
@@ -594,25 +687,36 @@
 
 // export const getAdminLeaveDashboard = async (req, res) => {
 //   try {
-//     if (!isAdminUser(req.user)) {
-//       return res.status(403).json({ success: false, message: "Only HR/superAdmin/admin can access" });
+//     if (!canViewTeamLeaveBalances(req.user)) {
+//       return res.status(403).json({ success: false, message: "Only HR/superAdmin/admin/team leaders can access" });
 //     }
 
-//     const employees = await User.find({ accountType: "employee" })
-//       .select("_id username pseudoName realName empId dateOfJoining department")
-//       .lean();
+//     const isManagementUser = isAdminUser(req.user);
+//     const teamMembers = isManagementUser ? [] : await getTeamMembersByTeamLeader(req.user._id, new Date());
+//     const teamMemberIds = teamMembers.map((member) => member?.userId).filter(Boolean);
+//     const employees = isManagementUser
+//       ? await User.find({ accountType: "employee" })
+//           .select("_id username pseudoName realName empId dateOfJoining department")
+//           .lean()
+//       : teamMemberIds.length
+//         ? await User.find({ _id: { $in: teamMemberIds } })
+//             .select("_id username pseudoName realName empId dateOfJoining department")
+//             .lean()
+//         : [];
 
 //     const employeeIds = employees.map((e) => e._id);
-//     const balances = await Promise.all(employeeIds.map((id) => ensureLeaveBalanceForUser(id, new Date())));
-//     const balanceMap = new Map(balances.map((b) => [String(b.user._id), b.balance]));
+//     const balanceResults = employeeIds.length
+//       ? await Promise.all(employeeIds.map((id) => ensureLeaveBalanceForUser(id, new Date())))
+//       : [];
+//     const balanceMap = new Map(
+//       balanceResults.map((item) => [String(item.user._id), serializeBalance(item.balance)])
+//     );
 
-//     const pendingCount = await LeaveRequest.countDocuments({ status: "pending" });
-//     const approvedCount = await LeaveRequest.countDocuments({ status: "approved" });
+//     const pendingCount = isManagementUser ? await LeaveRequest.countDocuments({ status: "pending" }) : 0;
+//     const approvedCount = isManagementUser ? await LeaveRequest.countDocuments({ status: "approved" }) : 0;
 
 //     const employeeRows = employees.map((emp) => {
 //       const balance = balanceMap.get(String(emp._id));
-//       const probationEnd = getProbationEndDate(emp.dateOfJoining);
-//       const probationCompleted = probationEnd ? new Date() >= probationEnd : true;
 //       return {
 //         userId: emp._id,
 //         name: emp.pseudoName || emp.username,
@@ -620,9 +724,8 @@
 //         empId: emp.empId || "",
 //         department: emp.department || "",
 //         dateOfJoining: emp.dateOfJoining || null,
-//         probationEndDate: probationEnd,
-//         probationCompleted,
-//         balance: maskPaidLeavesDuringProbation(serializeBalance(balance), probationCompleted),
+//         balance,
+//         currentLeaveBalance: balance?.currentLeaveBalance || 0,
 //       };
 //     });
 
@@ -645,8 +748,11 @@
 
 
 
+
+
 import LeaveBalance from "../Modals/LeaveBalance.modal.js";
 import LeaveRequest from "../Modals/LeaveRequest.modal.js";
+import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
 import { getTeamMembersByTeamLeader } from "../utils/teamHelper.js";
 import {
@@ -661,7 +767,7 @@ import {
 
 const ADMIN_ROLES = new Set(["HR", "superAdmin", "admin"]);
 const LEAVE_TYPES = new Set(["BL", "L", "LWP"]);
-const PAID_LEAVE_TYPES = new Set(["BL", "L", "EL", "CL", "ML"]);
+const PAID_LEAVE_TYPES = new Set(["L", "EL", "CL", "ML"]);
 const JULY_2026_MONTH_START = new Date("2026-07-01T00:00:00+05:30");
 
 const roundHalf = (value) => Math.round(Number(value || 0) * 2) / 2;
@@ -686,10 +792,89 @@ const startOfDay = (date) => {
   );
 };
 
+const normalizeRosterStatus = (value = "") => String(value || "").trim().toUpperCase();
+
+const getWeekoffCountForUserInRange = async (userId, fromDate, toDate) => {
+  const from = startOfDay(fromDate);
+  const to = startOfDay(toDate);
+  if (from > to) return 0;
+
+  const rosters = await Roster.find({
+    $or: [
+      {
+        rosterStartDate: { $lte: to },
+        rosterEndDate: { $gte: from },
+      },
+      {
+        weeks: {
+          $elemMatch: {
+            startDate: { $lte: to },
+            endDate: { $gte: from },
+          },
+        },
+      },
+    ],
+  })
+    .select("weeks.startDate weeks.endDate weeks.employees.userId weeks.employees.name weeks.employees.dailyStatus")
+    .lean();
+
+  const weekoffDates = new Set();
+  const targetUserId = String(userId);
+
+  for (const roster of rosters || []) {
+    for (const week of roster?.weeks || []) {
+      for (const employee of week?.employees || []) {
+        if (String(employee?.userId || "") !== targetUserId) continue;
+        for (const dayEntry of employee?.dailyStatus || []) {
+          if (!dayEntry?.date) continue;
+          const day = startOfDay(dayEntry.date);
+          if (Number.isNaN(day.getTime())) continue;
+          if (day < from || day > to) continue;
+
+          const status = normalizeRosterStatus(
+            dayEntry?.overrideStatus ||
+              dayEntry?.status ||
+              dayEntry?.departmentStatus ||
+              dayEntry?.transportStatus ||
+              ""
+          );
+          if (WEEKOFF_STATUSES.has(status)) {
+            weekoffDates.add(day.getTime());
+          }
+        }
+      }
+    }
+  }
+
+  return weekoffDates.size;
+};
+
+const getSandwichGapWeekoffCount = async (userId, fromDate) => {
+  const previousRequest = await LeaveRequest.findOne({
+    userId,
+    status: { $in: ["pending", "approved"] },
+    endDate: { $lt: fromDate },
+  })
+    .sort({ endDate: -1 })
+    .lean();
+
+  if (!previousRequest?.endDate) return 0;
+
+  const gapStart = startOfDay(previousRequest.endDate);
+  gapStart.setDate(gapStart.getDate() + 1);
+  const gapEnd = startOfDay(fromDate);
+  gapEnd.setDate(gapEnd.getDate() - 1);
+
+  if (gapStart > gapEnd) return 0;
+
+  return getWeekoffCountForUserInRange(userId, gapStart, gapEnd);
+};
+
 const isAdminUser = (user) => ADMIN_ROLES.has(user?.accountType);
 const isSuperAdminUser = (user) => user?.accountType === "superAdmin";
 const canViewTeamLeaveBalances = (user) =>
   isAdminUser(user) || user?.roleType === "supervisor" || Boolean(user?.isTeamLeader);
+const WEEKOFF_STATUSES = new Set(["WO", "FWO"]);
 let legacyIndexChecked = false;
 
 const ensureBucket = (obj = {}) => ({
@@ -1012,12 +1197,15 @@ export const applyLeaveRequest = async (req, res) => {
       return res.status(400).json({ success: false, message: "Start date cannot be after end date" });
     }
 
+    const rangeWeekoffDays = await getWeekoffCountForUserInRange(req.user._id, from, to);
+
     const { APPROVAL_MAX_DAYS } = getLeaveConfig();
     const leaveDays = computeSandwichAndChargeDays({
       startDate: from,
       endDate: to,
       startSession,
       endSession,
+      weekoffCount: rangeWeekoffDays,
     });
     if (leaveDays.invalid) {
       return res.status(400).json({
@@ -1025,6 +1213,7 @@ export const applyLeaveRequest = async (req, res) => {
         message: leaveDays.message || "Invalid half-day combination",
       });
     }
+    const totalChargedDays = roundHalf(leaveDays.chargedDays);
     if (leaveDays.chargedDays > APPROVAL_MAX_DAYS) {
       return res.status(400).json({
         success: false,
@@ -1040,9 +1229,31 @@ export const applyLeaveRequest = async (req, res) => {
       });
     }
 
+    const { start } = getFinancialYearBounds(from);
     const { balance, user } = await ensureLeaveBalanceForUser(req.user._id, from);
 
-    if (normalizedType !== "LWP") {
+    if (normalizedType === "BL") {
+      if (leaveDays.chargedDays !== 1) {
+        return res.status(400).json({
+          success: false,
+          message: "Birthday Leave can be applied only for 1 day in a financial year",
+        });
+      }
+      const existingBirthdayLeave = await LeaveRequest.findOne({
+        userId: req.user._id,
+        leaveType: "BL",
+        financialYearStart: start,
+        status: { $in: ["pending", "approved"] },
+      }).lean();
+      if (existingBirthdayLeave) {
+        return res.status(400).json({
+          success: false,
+          message: "Birthday Leave can be applied only once in a financial year",
+        });
+      }
+    }
+
+    if (normalizedType === "L") {
       const paidAllowed = canUsePaidLeave({
         dateOfJoining: user.dateOfJoining,
         leaveStartDate: from,
@@ -1054,7 +1265,25 @@ export const applyLeaveRequest = async (req, res) => {
         });
       }
       const available = roundHalf(balance.currentAvailable || 0);
-      if (available < leaveDays.chargedDays) {
+      const pendingReserved = await LeaveRequest.aggregate([
+        {
+          $match: {
+            userId: req.user._id,
+            financialYearStart: start,
+            status: "pending",
+            leaveType: "L",
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            total: { $sum: "$chargedDays" },
+          },
+        },
+      ]);
+      const pendingReservedDays = roundHalf(pendingReserved?.[0]?.total || 0);
+      const required = roundHalf((pendingReservedDays || 0) + (totalChargedDays || 0));
+      if (available < required) {
         return res.status(400).json({
           success: false,
           message: "Insufficient current leave balance",
@@ -1075,7 +1304,6 @@ export const applyLeaveRequest = async (req, res) => {
       });
     }
 
-    const { start } = getFinancialYearBounds(from);
     const requestDoc = await LeaveRequest.create({
       userId: req.user._id,
       financialYearStart: start,
@@ -1084,9 +1312,9 @@ export const applyLeaveRequest = async (req, res) => {
       endSession: endSession || "full",
       startDate: from,
       endDate: to,
-      requestedDays: leaveDays.chargedDays,
+      requestedDays: totalChargedDays,
       sandwichDays: leaveDays.sandwichDays,
-      chargedDays: leaveDays.chargedDays,
+      chargedDays: totalChargedDays,
       reason: applicantRemark,
       status: "pending",
       reviewTrail: [
@@ -1109,8 +1337,9 @@ export const applyLeaveRequest = async (req, res) => {
 
 export const getAdminLeaveRequests = async (req, res) => {
   try {
-    if (!isAdminUser(req.user)) {
-      return res.status(403).json({ success: false, message: "Only HR/superAdmin/admin can access" });
+    const canViewTeam = canViewTeamLeaveBalances(req.user);
+    if (!isAdminUser(req.user) && !canViewTeam) {
+      return res.status(403).json({ success: false, message: "Only HR/superAdmin/admin/team leaders can access" });
     }
 
     const { status = "pending", search = "" } = req.query || {};
@@ -1130,6 +1359,19 @@ export const getAdminLeaveRequests = async (req, res) => {
       if (!userFilterIds.length) {
         return res.status(200).json({ success: true, requests: [] });
       }
+    }
+
+    if (!isAdminUser(req.user)) {
+      const teamMembers = await getTeamMembersByTeamLeader(req.user._id, new Date());
+      const teamUserIds = teamMembers.map((member) => member?.userId).filter(Boolean);
+      const scopedUserIds = userFilterIds
+        ? teamUserIds.filter((id) => userFilterIds.some((filteredId) => String(filteredId) === String(id)))
+        : teamUserIds;
+      if (!scopedUserIds.length) {
+        return res.status(200).json({ success: true, requests: [] });
+      }
+      query.userId = { $in: scopedUserIds };
+    } else if (userFilterIds) {
       query.userId = { $in: userFilterIds };
     }
 
@@ -1300,32 +1542,18 @@ export const getAdminLeaveDashboard = async (req, res) => {
         : [];
 
     const employeeIds = employees.map((e) => e._id);
-    const balanceDocs = employeeIds.length
-      ? await LeaveBalance.find({
-          userId: { $in: employeeIds },
-        })
-          .select("userId credited used available currentCredited currentUsed currentAvailable financialYearStart financialYearEnd lastAccruedMonth")
-          .lean()
+    const balanceResults = employeeIds.length
+      ? await Promise.all(employeeIds.map((id) => ensureLeaveBalanceForUser(id, new Date())))
       : [];
-    const balanceMap = new Map(balanceDocs.map((doc) => [String(doc.userId), serializeBalance(doc)]));
-    const missingEmployeeIds = employeeIds.filter((id) => !balanceMap.has(String(id)));
-    if (missingEmployeeIds.length) {
-      const fallbackBalances = await Promise.all(
-        missingEmployeeIds.map((id) => ensureLeaveBalanceForUser(id, new Date()))
-      );
-      for (const item of fallbackBalances) {
-        balanceMap.set(String(item.user._id), serializeBalance(item.balance));
-      }
-    }
+    const balanceMap = new Map(
+      balanceResults.map((item) => [String(item.user._id), serializeBalance(item.balance)])
+    );
 
     const pendingCount = isManagementUser ? await LeaveRequest.countDocuments({ status: "pending" }) : 0;
     const approvedCount = isManagementUser ? await LeaveRequest.countDocuments({ status: "approved" }) : 0;
 
     const employeeRows = employees.map((emp) => {
       const balance = balanceMap.get(String(emp._id));
-      const probationEnd = getProbationEndDate(emp.dateOfJoining);
-      const probationCompleted = probationEnd ? new Date() >= probationEnd : true;
-      const serializedBalance = maskPaidLeavesDuringProbation(balance, probationCompleted);
       return {
         userId: emp._id,
         name: emp.pseudoName || emp.username,
@@ -1333,10 +1561,8 @@ export const getAdminLeaveDashboard = async (req, res) => {
         empId: emp.empId || "",
         department: emp.department || "",
         dateOfJoining: emp.dateOfJoining || null,
-        probationEndDate: probationEnd,
-        probationCompleted,
-        balance: serializedBalance,
-        currentLeaveBalance: serializedBalance?.currentLeaveBalance || 0,
+        balance,
+        currentLeaveBalance: balance?.currentLeaveBalance || 0,
       };
     });
 

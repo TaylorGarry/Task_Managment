@@ -266,7 +266,7 @@ const DelegationPage = () => {
             {canCreateDelegation && (
               <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
-                className="flex items-center gap-2 rounded-lg bg-white/20 px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/30"
+                className="flex items-center gap-2 rounded-lg bg-white/20 cursor-pointer px-4 py-2 text-sm font-medium text-white transition-all hover:bg-white/30"
               >
                 <Plus className="h-4 w-4" />
                 {showCreateForm ? "Cancel" : "New Delegation"}
@@ -399,14 +399,14 @@ const DelegationPage = () => {
                 <button
                   type="button"
                   onClick={() => setShowCreateForm(false)}
-                  className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  className="rounded-lg border border-gray-300 cursor-pointer px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={creating || !delegatorId || !assigneeId}
-                  className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-indigo-600  cursor-pointer px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {creating ? "Creating..." : "Create Delegation"}
                 </button>
@@ -425,7 +425,7 @@ const DelegationPage = () => {
               </div>
               <button
                 onClick={() => dispatch(fetchActiveDelegations())}
-                className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-all hover:bg-gray-50"
+                className="flex items-center gap-2 cursor-pointer rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-all hover:bg-gray-50"
               >
                 <RefreshCw className="h-4 w-4" />
                 Refresh

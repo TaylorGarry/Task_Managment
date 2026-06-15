@@ -533,7 +533,7 @@ const Signup = () => {
                         <button
                           type="button"
                           onClick={goNextStep}
-                          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-cyan-700"
+                          className="inline-flex w-full items-center cursor-pointer justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-cyan-700"
                           disabled={creatingUser}
                         >
                           Next Step
@@ -685,7 +685,7 @@ const Signup = () => {
                       <button
                         type="button"
                         onClick={() => setCurrentStep(1)}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50"
+                        className="inline-flex w-full items-center justify-center cursor-pointer gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50"
                         disabled={creatingUser}
                       >
                         <ChevronLeft size={18} />
@@ -694,7 +694,7 @@ const Signup = () => {
                       <button
                         type="button"
                         onClick={goNextStep}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-cyan-700"
+                        className="inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl bg-cyan-600 px-4 py-3 text-base font-semibold text-white transition hover:bg-cyan-700"
                         disabled={creatingUser}
                       >
                         Next Step
@@ -813,7 +813,7 @@ const Signup = () => {
                       <button
                         type="button"
                         onClick={() => setCurrentStep(2)}
-                        className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50"
+                        className="inline-flex w-full items-center cursor-pointer justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-3 text-base font-semibold text-slate-700 transition hover:bg-slate-50"
                         disabled={creatingUser}
                       >
                         <ChevronLeft size={18} />
@@ -822,7 +822,7 @@ const Signup = () => {
                       <button
                         type="submit"
                         disabled={creatingUser}
-                        className={`w-full rounded-xl px-4 py-3 text-base font-semibold text-white transition ${
+                        className={`w-full rounded-xl px-4 py-3 text-base font-semibold cursor-pointer text-white transition ${
                           creatingUser ? "cursor-not-allowed bg-cyan-300" : "bg-cyan-600 hover:bg-cyan-700"
                         }`}
                       >

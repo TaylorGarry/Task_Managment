@@ -534,12 +534,13 @@
 
 
 
+
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getRoleType } from "../utils/roleAccess.js";
 
-  // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+//const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 const IST_TIME_ZONE = "Asia/Kolkata";
@@ -610,10 +611,42 @@ const getRowPriorityScore = (row) => {
   return score;
 };
 
-const getLateByFallbackMs = (loginTime, shiftStartHour) => {
+const normalizeShiftStartHour = (shiftStartHour, shiftEndHour) => {
+  const startHour = Number(shiftStartHour);
+  const endHour = Number(shiftEndHour);
+  if (!Number.isFinite(startHour)) return null;
+
+  const normalizedStart = ((startHour % 24) + 24) % 24;
+  const normalizedEnd = Number.isFinite(endHour) ? ((endHour % 24) + 24) % 24 : null;
+
+  if (normalizedStart > 0 && normalizedStart < 12 && normalizedEnd !== null && normalizedEnd < normalizedStart) {
+    return normalizedStart + 12;
+  }
+
+  return normalizedStart;
+};
+
+const getIstHourFromDateLike = (dateLike) => {
+  const date = new Date(dateLike);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIME_ZONE,
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+  return Number.isFinite(hour) ? hour : null;
+};
+
+const getLateByFallbackMs = (loginTime, shiftStartHour, shiftEndHour) => {
   if (!loginTime) return 0;
-  const shiftHourNum = Number(shiftStartHour);
-  if (!Number.isFinite(shiftHourNum)) return 0;
+  const loginHour = getIstHourFromDateLike(loginTime);
+  const shiftHourNum = normalizeShiftStartHour(shiftStartHour, shiftEndHour);
+  const inferredShiftHour =
+    Number.isFinite(shiftHourNum) && shiftHourNum < 12 && Number.isFinite(loginHour) && loginHour >= 14
+      ? shiftHourNum + 12
+      : shiftHourNum;
+  if (!Number.isFinite(inferredShiftHour)) return 0;
   const login = new Date(loginTime);
   if (Number.isNaN(login.getTime())) return 0;
   const parts = new Intl.DateTimeFormat("en-US", {
@@ -627,7 +660,7 @@ const getLateByFallbackMs = (loginTime, shiftStartHour) => {
   const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
   const second = Number(parts.find((p) => p.type === "second")?.value || 0);
   const loginClockMs = hour * 60 * 60 * 1000 + minute * 60 * 1000 + second * 1000;
-  const expectedClockMs = shiftHourNum * 60 * 60 * 1000;
+  const expectedClockMs = inferredShiftHour * 60 * 60 * 1000;
   const HALF_DAY_MS = 12 * 60 * 60 * 1000;
   const FULL_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -646,9 +679,9 @@ const getLateByFallbackMs = (loginTime, shiftStartHour) => {
   return lateBy > 0 ? lateBy : 0;
 };
 
-const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour }) => {
+const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour, shiftEndHour }) => {
   const safeServer = Number(serverLateByMs || 0);
-  const fallback = getLateByFallbackMs(loginTime, shiftStartHour);
+  const fallback = getLateByFallbackMs(loginTime, shiftStartHour, shiftEndHour);
   if (!(safeServer > 0)) return fallback;
 
   const HALF_DAY_MS = 12 * 60 * 60 * 1000;
@@ -741,6 +774,7 @@ const SuperAdminLoginStatus = () => {
             serverLateByMs,
             loginTime,
             shiftStartHour: r.shiftStartHour,
+            shiftEndHour: r.shiftEndHour,
           }),
           totalWorkedMs: Number(r.totalWorkedMs || 0),
           totalBreakMs,

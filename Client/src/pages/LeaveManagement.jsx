@@ -983,22 +983,6 @@
 
 // export default LeaveManagement;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import React, { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { CalendarDays, CheckCircle2, Clock3, Eye, Search, ShieldCheck, UserRound, XCircle } from "lucide-react";
@@ -1157,6 +1141,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
   const [reviewRemarks, setReviewRemarks] = useState({});
   const [expandedText, setExpandedText] = useState(null);
   const [statusPreview, setStatusPreview] = useState(null);
+  const [teamLeaveDateFilter, setTeamLeaveDateFilter] = useState("");
 
   useEffect(() => {
     if (isAdminView) {
@@ -1164,6 +1149,7 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
     } else if (canViewTeamBalances) {
       dispatch(fetchMyLeaveRequests());
       dispatch(fetchAdminLeaveDashboard());
+      dispatch(fetchAdminLeaveRequests({ status: "approved" }));
     } else {
       dispatch(fetchMyLeaveSummary());
       dispatch(fetchMyLeaveRequests());
@@ -1197,6 +1183,20 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
     mySummary?.balance?.currentLeaveBalance ??
     mySummary?.balance?.currentAvailable ??
     0;
+  const approvedTeamLeaves = (adminRequests || []).filter((row) => String(row.status || "").toLowerCase() === "approved");
+  const filteredTeamLeaves = teamLeaveDateFilter
+    ? approvedTeamLeaves.filter((row) => {
+        const filterDate = new Date(`${teamLeaveDateFilter}T00:00:00`);
+        if (Number.isNaN(filterDate.getTime())) return true;
+        const start = new Date(row.startDate);
+        const end = new Date(row.endDate);
+        if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return false;
+        const from = start <= end ? start : end;
+        const to = start <= end ? end : start;
+        const day = new Date(filterDate);
+        return day >= from && day <= to;
+      })
+    : approvedTeamLeaves;
 
   const handleApply = async (e) => {
     e.preventDefault();
@@ -1438,6 +1438,52 @@ const LeaveManagement = ({ embeddedAdmin = false }) => {
                 <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-xs text-indigo-900">
                   One-time approval limit: {config?.APPROVAL_MAX_DAYS ?? 6} days
                 </div>
+              </div>
+            </div>
+            ) : canViewTeamBalances ? (
+            <div className="crm-card p-5">
+              <div className="flex items-center gap-2 crm-title mb-4">
+                <UserRound className="w-5 h-5 text-violet-600" />
+                Team Approved Leaves
+              </div>
+              <div className="mb-4">
+                <label className="text-xs font-semibold crm-muted">Choose Date</label>
+                <div className="mt-1">
+                  <StyledDatePicker
+                    value={teamLeaveDateFilter}
+                    onChange={setTeamLeaveDateFilter}
+                    placeholder="Filter by approved leave date"
+                  />
+                </div>
+                {teamLeaveDateFilter ? (
+                  <button
+                    type="button"
+                    onClick={() => setTeamLeaveDateFilter("")}
+                    className="mt-2 text-xs font-medium text-blue-600 hover:underline"
+                  >
+                    Clear filter
+                  </button>
+                ) : null}
+              </div>
+              <div className="space-y-3 max-h-[320px] overflow-y-auto pr-1">
+                {filteredTeamLeaves.length ? (
+                  filteredTeamLeaves.map((row) => (
+                    <div key={row._id} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                      <p className="font-medium text-slate-800">
+                        {row.userId?.pseudoName || row.userId?.realName || row.userId?.username || "-"}
+                      </p>
+                      <p className="text-xs font-medium text-violet-600">{row.leaveType || "-"}</p>
+                      <p className="text-sm text-slate-600">
+                        {formatDate(row.startDate)}
+                        {formatDate(row.startDate) !== formatDate(row.endDate) ? ` - ${formatDate(row.endDate)}` : ""}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-sm crm-muted">
+                    {teamLeaveDateFilter ? "No approved leave found for selected date." : "No approved team leave found."}
+                  </p>
+                )}
               </div>
             </div>
             ) : null}
