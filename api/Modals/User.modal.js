@@ -184,7 +184,10 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-
+     sessionHistoryStartAt: {
+      type: Date,
+      default: null,
+    },
     dob: {
       type: Date,
       default: null,
