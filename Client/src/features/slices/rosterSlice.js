@@ -5,8 +5,8 @@ import { toast } from "react-toastify";
 const resolveApiBaseUrl = () => {
   const envUrl = import.meta?.env?.VITE_API_URL;
   if (envUrl) return String(envUrl).replace(/\/+$/, "");
-//   return "http://localhost:4000";
-  return "https://fdbs-server-a9gqg.ondigitalocean.app";
+  return "http://localhost:4000";
+//   return "https://fdbs-server-a9gqg.ondigitalocean.app";
 };
 
 const API_URL = `${resolveApiBaseUrl()}/api/v1/roster`;
@@ -14,6 +14,21 @@ const API_URL = `${resolveApiBaseUrl()}/api/v1/roster`;
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token || null;
+};
+
+const getIstDateKey = (value = new Date()) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((part) => part.type === "year")?.value;
+  const month = parts.find((part) => part.type === "month")?.value;
+  const day = parts.find((part) => part.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : null;
 };
 
 const cache = {
@@ -124,7 +139,7 @@ const clearEmployeesForUpdatesCache = () => {
 };
 
 const getEmployeesForUpdatesCacheKey = ({ rosterId, weekNumber, date, page, limit, q, searchBy, delegatedFrom, month, year }) =>
-  `${rosterId}-${weekNumber}-${date}-m${month ?? ""}-y${year ?? ""}-p${page ?? "all"}-l${limit ?? "all"}-q${q ?? ""}-sb${searchBy ?? ""}-df${delegatedFrom ?? ""}`;
+  `${rosterId}-${weekNumber}-${date}-m${month ?? ""}-y${year ?? ""}-p${page ?? "all"}-l${limit ?? "all"}-q${q ?? ""}-sb${searchBy ?? ""}-df${delegatedFrom ?? ""}-ist${getIstDateKey() ?? ""}`;
 
 const getCachedEmployeesForUpdates = (cacheKey) => {
   const cached = cache.employeesForUpdates.dataByKey[cacheKey];

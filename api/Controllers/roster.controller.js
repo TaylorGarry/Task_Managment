@@ -12327,6 +12327,27 @@ const parseYmdToUtcDate = (value) => {
   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 };
 
+const addDaysToIstDateKey = (dateKey, days) => {
+  const raw = String(dateKey || "").trim();
+  const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+
+  const year = Number.parseInt(match[1], 10);
+  const month = Number.parseInt(match[2], 10);
+  const day = Number.parseInt(match[3], 10);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+  date.setUTCDate(date.getUTCDate() + Number.parseInt(days, 10));
+  return toIstDateKey(date);
+};
+
+const getAttendanceUpdateDeadlineKey = (weekEndDate, graceDays = 2) => {
+  const weekEndKey = toIstDateKey(weekEndDate);
+  if (!weekEndKey) return null;
+  return addDaysToIstDateKey(weekEndKey, graceDays);
+};
+
 const getRosterMonthMetaFromRange = (startDate, endDate) => {
   const start = new Date(
     Date.UTC(
@@ -18988,12 +19009,26 @@ export const updateArrivalTime = async (req, res) => {
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
     const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+    const isPastWeek = now > weekEndDate;
+    const isFutureWeek = now < weekStartDate;
     const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+    const isSupervisor = String(user?.roleType || "").trim().toLowerCase() === "supervisor";
+    const attendanceEditDeadlineKey = getAttendanceUpdateDeadlineKey(weekEndDate, 2);
+    const currentIstDateKey = toIstDateKey(now);
+    const isWithinSupervisorGracePeriod =
+      isSupervisor &&
+      !canEditAnyWeek &&
+      isPastWeek &&
+      Boolean(currentIstDateKey) &&
+      Boolean(attendanceEditDeadlineKey) &&
+      currentIstDateKey <= attendanceEditDeadlineKey;
 
-    if (!isCurrentWeek && !canEditAnyWeek) {
+    if ((isFutureWeek || (isPastWeek && !isWithinSupervisorGracePeriod)) && !canEditAnyWeek) {
       return res.status(403).json({
         success: false,
-        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+        message: isFutureWeek
+          ? "Only HR and Super Admin can update future weeks. Department and Transport can update current week only."
+          : "Only HR and Super Admin can update past weeks. Supervisors can update previous week attendance until Tuesday EOD."
       });
     }
 
@@ -19283,13 +19318,32 @@ export const updateAttendance = async (req, res) => {
     const weekEndDate = new Date(week.endDate);
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
-    const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+    const currentIstDateKey = toIstDateKey(now);
+    const weekStartIstKey = toIstDateKey(weekStartDate);
+    const weekEndIstKey = toIstDateKey(weekEndDate);
+    const isCurrentWeek =
+      Boolean(currentIstDateKey && weekStartIstKey && weekEndIstKey) &&
+      currentIstDateKey >= weekStartIstKey &&
+      currentIstDateKey <= weekEndIstKey;
+    const isPastWeek = Boolean(currentIstDateKey && weekEndIstKey && currentIstDateKey > weekEndIstKey);
+    const isFutureWeek = Boolean(currentIstDateKey && weekStartIstKey && currentIstDateKey < weekStartIstKey);
     const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+    const isSupervisor = String(user?.roleType || "").trim().toLowerCase() === "supervisor";
+    const attendanceEditDeadlineKey = weekEndIstKey ? addDaysToIstDateKey(weekEndIstKey, 2) : null;
+    const isWithinSupervisorGracePeriod =
+      isSupervisor &&
+      !canEditAnyWeek &&
+      isPastWeek &&
+      Boolean(currentIstDateKey) &&
+      Boolean(attendanceEditDeadlineKey) &&
+      currentIstDateKey <= attendanceEditDeadlineKey;
 
-    if (!isCurrentWeek && !canEditAnyWeek) {
+    if ((isFutureWeek || (isPastWeek && !isWithinSupervisorGracePeriod)) && !canEditAnyWeek) {
       return res.status(403).json({
         success: false,
-        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+        message: isFutureWeek
+          ? "Only HR and Super Admin can update future weeks. Department and Transport can update current week only."
+          : "Only HR and Super Admin can update past weeks. Supervisors can update previous week attendance until Tuesday EOD."
       });
     }
 
@@ -20901,13 +20955,32 @@ export const updateAttendanceBulk = async (req, res) => {
     );
     weekStartDate.setHours(0, 0, 0, 0);
     weekEndDate.setHours(23, 59, 59, 999);
-    const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+    const currentIstDateKey = toIstDateKey(now);
+    const weekStartIstKey = toIstDateKey(weekStartDate);
+    const weekEndIstKey = toIstDateKey(weekEndDate);
+    const isCurrentWeek =
+      Boolean(currentIstDateKey && weekStartIstKey && weekEndIstKey) &&
+      currentIstDateKey >= weekStartIstKey &&
+      currentIstDateKey <= weekEndIstKey;
+    const isPastWeek = Boolean(currentIstDateKey && weekEndIstKey && currentIstDateKey > weekEndIstKey);
+    const isFutureWeek = Boolean(currentIstDateKey && weekStartIstKey && currentIstDateKey < weekStartIstKey);
     const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+    const isSupervisor = String(user?.roleType || "").trim().toLowerCase() === "supervisor";
+    const attendanceEditDeadlineKey = weekEndIstKey ? addDaysToIstDateKey(weekEndIstKey, 2) : null;
+    const isWithinSupervisorGracePeriod =
+      isSupervisor &&
+      !canEditAnyWeek &&
+      isPastWeek &&
+      Boolean(currentIstDateKey) &&
+      Boolean(attendanceEditDeadlineKey) &&
+      currentIstDateKey <= attendanceEditDeadlineKey;
 
-    if (!isCurrentWeek && !canEditAnyWeek) {
+    if ((isFutureWeek || (isPastWeek && !isWithinSupervisorGracePeriod)) && !canEditAnyWeek) {
       return res.status(403).json({
         success: false,
-        message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+        message: isFutureWeek
+          ? "Only HR and Super Admin can update future weeks. Department and Transport can update current week only."
+          : "Only HR and Super Admin can update past weeks. Supervisors can update previous week attendance until Tuesday EOD."
       });
     }
 
@@ -22337,8 +22410,22 @@ export const getFilteredRosterForUpdates = async (req, res) => {
       canEdit = false;
       editMessage = "Cannot edit before the week starts";
     } else if (currentDateKey > weekEndKey) {
-      canEdit = false;
-      editMessage = "Cannot edit after the week has ended";
+      const graceDeadlineKey = addDaysToIstDateKey(weekEndKey, 2);
+      const isSupervisorLike =
+        Boolean(user?.isTeamLeader) ||
+        normalizedRoleType === "supervisor" ||
+        normalizedAccountType === "supervisor" ||
+        normalizedDesignation.includes("supervisor") ||
+        normalizedDesignation.includes("team lead") ||
+        normalizedDesignation.includes("teamleader");
+
+      if (isSupervisorLike && graceDeadlineKey && currentDateKey <= graceDeadlineKey) {
+        canEdit = true;
+        editMessage = "Previous week can be edited until Tuesday EOD";
+      } else {
+        canEdit = false;
+        editMessage = "Cannot edit after the week has ended";
+      }
     } else {
       canEdit = true;
       editMessage = "Can edit during current week";
