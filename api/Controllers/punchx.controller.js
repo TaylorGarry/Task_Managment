@@ -1,5 +1,3 @@
-
-
 // import PunchSession from "../Modals/PunchSession.modal.js";
 // import Roster from "../Modals/Roster.modal.js";
 // import User from "../Modals/User.modal.js";
@@ -401,17 +399,50 @@
 //   };
 // };
 
+// const getIstHourFromDateLike = (dateLike) => {
+//   const date = new Date(dateLike);
+//   if (Number.isNaN(date.getTime())) return null;
+//   const parts = new Intl.DateTimeFormat("en-US", {
+//     timeZone: APP_TZ,
+//     hour: "2-digit",
+//     hour12: false,
+//   }).formatToParts(date);
+//   const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+//   return Number.isFinite(hour) ? hour : null;
+// };
+
+// const normalizeShiftStartHour = (shiftStartHour, shiftEndHour, loginHour = null) => {
+//   const startHour = Number(shiftStartHour);
+//   const endHour = Number(shiftEndHour);
+//   if (!Number.isFinite(startHour)) return null;
+
+//   const normalizedStart = ((startHour % 24) + 24) % 24;
+//   const normalizedEnd = Number.isFinite(endHour) ? ((endHour % 24) + 24) % 24 : null;
+
+//   const eveningLogin = Number.isFinite(loginHour) && loginHour >= OPERATIONAL_DAY_START_HOUR_IST;
+
+//   if (
+//     normalizedStart > 0 &&
+//     normalizedStart < 12 &&
+//     (normalizedEnd !== null ? normalizedEnd < normalizedStart : eveningLogin)
+//   ) {
+//     return normalizedStart + 12;
+//   }
+
+//   return normalizedStart;
+// };
+
 // const computeSessionLateByMs = (session, userLike = {}) => {
 //   if (!session?.shiftStartAt) return 0;
-//   const startHour = Number(userLike?.shiftStartHour);
+//   const actualStartMs = new Date(session.shiftStartAt).getTime();
+//   const loginHour = getIstHourFromDateLike(session.shiftStartAt);
+//   const startHour = normalizeShiftStartHour(userLike?.shiftStartHour, userLike?.shiftEndHour, loginHour);
 //   const dayStartMs = parseDateKeyStartMs(session?.dateKey || "");
-//   if (!Number.isFinite(startHour) || !Number.isFinite(dayStartMs)) return 0;
+//   if (!Number.isFinite(startHour) || !Number.isFinite(dayStartMs) || !Number.isFinite(actualStartMs)) return 0;
 //   const normalizedHour = ((startHour % 24) + 24) % 24;
 //   const expectedStartMs = normalizedHour >= OPERATIONAL_DAY_START_HOUR_IST
 //     ? dayStartMs + normalizedHour * 60 * 60 * 1000
 //     : dayStartMs + 24 * 60 * 60 * 1000 + normalizedHour * 60 * 60 * 1000;
-//   const actualStartMs = new Date(session.shiftStartAt).getTime();
-//   if (!Number.isFinite(actualStartMs)) return 0;
 //   return actualStartMs > expectedStartMs ? actualStartMs - expectedStartMs : 0;
 // };
 
@@ -774,6 +805,7 @@
 //         shiftStartedAt: session?.shiftStartAt || null,
 //         loginTime: session?.shiftStartAt || null,
 //         logoutTime: session?.shiftEndAt || null,
+//         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
 //         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
 //         isOnBreak: Boolean(openBreak),
 //         lateByMs,
@@ -859,6 +891,7 @@
 //         shiftEndHour: Number.isFinite(Number(emp.shiftEndHour)) ? Number(emp.shiftEndHour) : null,
 //         loginTime: session?.shiftStartAt || null,
 //         logoutTime: session?.shiftEndAt || null,
+//         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
 //         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
 //         isOnBreak: Boolean(openBreak),
 //         breakType: openBreak?.type || "",
@@ -1116,11 +1149,13 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
       },
     ],
   })
-    .select("weeks.startDate weeks.endDate weeks.employees.userId weeks.employees.empId weeks.employees.name weeks.employees.dailyStatus")
+    .select("weeks.startDate weeks.endDate weeks.employees.userId weeks.employees.empId weeks.employees.name weeks.employees.shiftStartHour weeks.employees.shiftEndHour weeks.employees.dailyStatus")
     .lean();
 
   const presentIds = new Set();
   const rosterStatusByUserId = new Map();
+  const rosterShiftStartHourByUserId = new Map();
+  const rosterShiftEndHourByUserId = new Map();
   for (const roster of rosters || []) {
     for (const week of roster?.weeks || []) {
       const weekStart = week?.startDate ? new Date(week.startDate) : null;
@@ -1162,6 +1197,16 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
         if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
           rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
         }
+        if (matchedUserId) {
+          const rosterStartHour = Number(employee?.shiftStartHour);
+          const rosterEndHour = Number(employee?.shiftEndHour);
+          if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
+            rosterShiftStartHourByUserId.set(matchedUserId, rosterStartHour);
+          }
+          if (Number.isFinite(rosterEndHour) && !rosterShiftEndHourByUserId.has(matchedUserId)) {
+            rosterShiftEndHourByUserId.set(matchedUserId, rosterEndHour);
+          }
+        }
 
         if (effectiveStatus === "P") {
           presentIds.add(presentKey);
@@ -1173,6 +1218,8 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
   return {
     presentCount: presentIds.size,
     rosterStatusByUserId,
+    rosterShiftStartHourByUserId,
+    rosterShiftEndHourByUserId,
   };
 };
 
@@ -1427,7 +1474,7 @@ const normalizeShiftStartHour = (shiftStartHour, shiftEndHour, loginHour = null)
   if (
     normalizedStart > 0 &&
     normalizedStart < 12 &&
-    (normalizedEnd !== null ? normalizedEnd < normalizedStart : eveningLogin)
+    eveningLogin
   ) {
     return normalizedStart + 12;
   }
@@ -1465,11 +1512,20 @@ export const getTodaySession = async (req, res) => {
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const now = getNow();
-    const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+    const userProfile = await User.findById(userId)
+      .select("shiftStartHour sessionHistoryStartAt username pseudoName realName")
+      .lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
     if (autoEndShiftIfDue(session)) {
       await session.save();
+    }
+
+    if (isJosephHistoryAccount(userProfile || {}) && !userProfile?.sessionHistoryStartAt && session?.shiftStartAt) {
+      await User.updateOne(
+        { _id: userId, sessionHistoryStartAt: null },
+        { $set: { sessionHistoryStartAt: session.shiftStartAt } }
+      );
     }
 
     return res.status(200).json({
@@ -1487,7 +1543,9 @@ export const startShift = async (req, res) => {
   try {
     const userId = req.user?._id;
     const now = getNow();
-    const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+    const userProfile = await User.findById(userId)
+      .select("shiftStartHour sessionHistoryStartAt username pseudoName realName")
+      .lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
@@ -1501,6 +1559,13 @@ export const startShift = async (req, res) => {
     session.lastActivityAt = now;
     session.shiftEndReason = "";
     await session.save();
+
+    if (isJosephHistoryAccount(userProfile || {}) && !userProfile?.sessionHistoryStartAt && session?.shiftStartAt) {
+      await User.updateOne(
+        { _id: userId, sessionHistoryStartAt: null },
+        { $set: { sessionHistoryStartAt: session.shiftStartAt } }
+      );
+    }
 
     return res.status(200).json({ message: "Shift started", session, attendanceScore: scoreSession(session) });
   } catch (error) {
@@ -1660,12 +1725,16 @@ export const getSessionHistory = async (req, res) => {
     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
     const now = getNow();
-    const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+    const userProfile = await User.findById(userId)
+      .select("shiftStartHour dateOfJoining createdAt sessionHistoryStartAt username pseudoName realName")
+      .lean();
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const currentSession = await PunchSession.findOne({ userId, dateKey });
     if (currentSession && autoEndShiftIfDue(currentSession, now)) {
       await currentSession.save();
     }
+
+    const historyCutoff = getSessionHistoryStartDate(userProfile || {}, currentSession);
 
     const page = Math.max(1, Number.parseInt(req.query?.page || "1", 10) || 1);
     const limit = Math.min(50, Math.max(5, Number.parseInt(req.query?.limit || "5", 10) || 5));
@@ -1675,6 +1744,10 @@ export const getSessionHistory = async (req, res) => {
       userId,
       shiftStartAt: { $ne: null },
     };
+
+    if (historyCutoff) {
+      query.shiftStartAt.$gte = historyCutoff;
+    }
 
     const [total, sessions] = await Promise.all([
       PunchSession.countDocuments(query),
@@ -1835,6 +1908,26 @@ export const getManagerTeamStatus = async (req, res) => {
 
 const getOpenBreak = (session) => (session?.breaks || []).find((b) => !b.endAt) || null;
 
+const isJosephHistoryAccount = (userLike = {}) => {
+  const tokens = [userLike?.username, userLike?.pseudoName, userLike?.realName]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  return tokens.includes("joseph");
+};
+
+const getSessionHistoryStartDate = (userLike = {}, session = null) => {
+  const candidates = [
+    userLike?.sessionHistoryStartAt,
+    isJosephHistoryAccount(userLike) ? session?.shiftStartAt : null,
+    userLike?.dateOfJoining,
+    userLike?.createdAt,
+  ]
+    .map((value) => (value ? new Date(value) : null))
+    .filter((value) => value && !Number.isNaN(value.getTime()));
+
+  return candidates.reduce((latest, current) => (!latest || current > latest ? current : latest), null);
+};
+
 export const getSuperAdminDailyStatus = async (req, res) => {
   try {
     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
@@ -1874,8 +1967,15 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       const session = sessionsByUser.get(String(emp._id)) || null;
       const breakUsage = getBreakUsage(session, now);
       const openBreak = getOpenBreak(session);
-      const shiftStartHour = Number(emp.shiftStartHour);
-      const lateByMs = computeSessionLateByMs(session, emp);
+      const rosterShiftStartHour = rosterSnapshot.rosterShiftStartHourByUserId.get(String(emp._id));
+      const rosterShiftEndHour = rosterSnapshot.rosterShiftEndHourByUserId.get(String(emp._id));
+      const shiftStartHour = Number.isFinite(rosterShiftStartHour) ? rosterShiftStartHour : Number(emp.shiftStartHour);
+      const shiftEndHour = Number.isFinite(rosterShiftEndHour) ? rosterShiftEndHour : Number(emp.shiftEndHour);
+      const lateByMs = computeSessionLateByMs(session, {
+        ...emp,
+        shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
+        shiftEndHour: Number.isFinite(shiftEndHour) ? shiftEndHour : null,
+      });
       const totalWorkedMs = getSessionWorkedMs(session, now);
       const remainingForNineHoursMs = Math.max(0, 9 * 60 * 60 * 1000 - totalWorkedMs);
       const inactiveSinceMs = session?.lastActivityAt
@@ -1890,8 +1990,8 @@ export const getSuperAdminDailyStatus = async (req, res) => {
         department: emp.department || "",
         accountType: emp.accountType || "employee",
         isTeamLeader: Boolean(emp.isTeamLeader),
-        shiftStartHour: Number.isFinite(Number(emp.shiftStartHour)) ? Number(emp.shiftStartHour) : null,
-        shiftEndHour: Number.isFinite(Number(emp.shiftEndHour)) ? Number(emp.shiftEndHour) : null,
+        shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
+        shiftEndHour: Number.isFinite(shiftEndHour) ? shiftEndHour : null,
         loginTime: session?.shiftStartAt || null,
         logoutTime: session?.shiftEndAt || null,
         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
@@ -1985,7 +2085,15 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
     const rows = employees.map((emp) => {
       const session = sessionsByUser.get(String(emp._id)) || null;
       const breakUsage = getBreakUsage(session, now);
-      const lateByMs = computeSessionLateByMs(session, emp);
+      const rosterShiftStartHour = rosterSnapshot.rosterShiftStartHourByUserId.get(String(emp._id));
+      const rosterShiftEndHour = rosterSnapshot.rosterShiftEndHourByUserId.get(String(emp._id));
+      const shiftStartHour = Number.isFinite(rosterShiftStartHour) ? rosterShiftStartHour : Number(emp.shiftStartHour);
+      const shiftEndHour = Number.isFinite(rosterShiftEndHour) ? rosterShiftEndHour : Number(emp.shiftEndHour);
+      const lateByMs = computeSessionLateByMs(session, {
+        ...emp,
+        shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
+        shiftEndHour: Number.isFinite(shiftEndHour) ? shiftEndHour : null,
+      });
       const totalWorkedMs = getSessionWorkedMs(session, now);
 
       const breakSegments = (session?.breaks || []).map((b) => {
