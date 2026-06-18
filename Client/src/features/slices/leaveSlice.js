@@ -307,6 +307,23 @@ export const fetchAdminLeaveRequests = createAsyncThunk(
   }
 );
 
+export const fetchTeamLeaveCalendarRequests = createAsyncThunk(
+  "leave/fetchTeamLeaveCalendarRequests",
+  async (_, thunkAPI) => {
+    try {
+      const state = thunkAPI.getState();
+      const res = await axios.get(`${API_URL}/admin/requests`, {
+        headers: getAuthHeaders(state),
+        params: { status: "all" },
+        signal: thunkAPI.signal,
+      });
+      return res.data;
+    } catch (err) {
+      return thunkAPI.rejectWithValue(normalizeError(err));
+    }
+  }
+);
+
 export const reviewLeaveRequest = createAsyncThunk(
   "leave/reviewLeaveRequest",
   async ({ requestId, action, comment = "" }, thunkAPI) => {
@@ -329,10 +346,12 @@ const initialState = {
   myRequests: [],
   adminDashboard: null,
   adminRequests: [],
+  teamCalendarRequests: [],
   loadingSummary: false,
   loadingRequests: false,
   loadingAdminDashboard: false,
   loadingAdminRequests: false,
+  loadingTeamCalendarRequests: false,
   applying: false,
   reviewing: false,
   error: null,
@@ -415,6 +434,22 @@ const leaveSlice = createSlice({
           return;
         }
         state.loadingAdminRequests = false;
+        state.error = action.payload;
+      })
+      .addCase(fetchTeamLeaveCalendarRequests.pending, (state) => {
+        state.loadingTeamCalendarRequests = true;
+        state.error = null;
+      })
+      .addCase(fetchTeamLeaveCalendarRequests.fulfilled, (state, action) => {
+        state.loadingTeamCalendarRequests = false;
+        state.teamCalendarRequests = action.payload?.requests || [];
+      })
+      .addCase(fetchTeamLeaveCalendarRequests.rejected, (state, action) => {
+        if (action.meta?.aborted) {
+          state.loadingTeamCalendarRequests = false;
+          return;
+        }
+        state.loadingTeamCalendarRequests = false;
         state.error = action.payload;
       })
       .addCase(reviewLeaveRequest.pending, (state) => {
