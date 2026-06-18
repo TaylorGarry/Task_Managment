@@ -5,6 +5,8 @@ import { fetchPendingLeaveRequests } from "../services/pendingLeaveService.js";
 
 const STORAGE_KEY = "hidePendingLeavePopup";
 const POLL_INTERVAL_MS = 30000;
+const getDismissStorageKey = (user = {}) =>
+  `${STORAGE_KEY}:${String(user?._id || user?.id || "unknown")}:${String(user?.token || "session")}`;
 
 const getEmployeeName = (request = {}) =>
   request?.userId?.pseudoName ||
@@ -50,13 +52,13 @@ export const usePendingLeaveNotification = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
   const currentUserId = String(user?._id || user?.id || "");
+  const dismissStorageKey = getDismissStorageKey(user);
   const previousUserIdRef = useRef(currentUserId);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
 
     if (previousUserIdRef.current !== currentUserId) {
-      sessionStorage.removeItem(STORAGE_KEY);
       previousUserIdRef.current = currentUserId;
     }
   }, [currentUserId]);
@@ -85,7 +87,7 @@ export const usePendingLeaveNotification = () => {
         if (!active) return;
 
         setPendingRequests(requests);
-        if (requests.length > 0 && !sessionStorage.getItem(STORAGE_KEY)) {
+        if (requests.length > 0 && !sessionStorage.getItem(dismissStorageKey)) {
           setIsVisible(true);
         }
         if (requests.length === 0) {
@@ -110,11 +112,11 @@ export const usePendingLeaveNotification = () => {
       controller.abort();
       window.clearInterval(intervalId);
     };
-  }, [isEligible]);
+  }, [dismissStorageKey, isEligible]);
 
   const dismiss = () => {
     if (typeof window !== "undefined") {
-      sessionStorage.setItem(STORAGE_KEY, "true");
+      sessionStorage.setItem(dismissStorageKey, "true");
     }
     setIsVisible(false);
   };

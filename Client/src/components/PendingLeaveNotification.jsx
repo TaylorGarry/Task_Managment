@@ -1,28 +1,18 @@
 import { AnimatePresence, motion } from "motion/react";
-import { CalendarDays, ArrowRight, X, Sparkles } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { CalendarDays, X, Sparkles } from "lucide-react";
 import { usePendingLeaveNotification } from "../hooks/usePendingLeaveNotification.js";
 
 const PendingLeaveNotification = () => {
-  const navigate = useNavigate();
   const {
     pendingLeaveCount,
     firstThreePendingRequests,
     isVisible,
     dismiss,
-    viewAllRequests,
   } = usePendingLeaveNotification();
-  const isDismissed =
-    typeof window !== "undefined" && sessionStorage.getItem("hidePendingLeavePopup") === "true";
-
-  const handleViewAll = () => {
-    viewAllRequests();
-    navigate("/leave-management");
-  };
 
   return (
-    <AnimatePresence>
-      {isVisible && pendingLeaveCount > 0 && !isDismissed ? (
+	    <AnimatePresence>
+	      {isVisible && pendingLeaveCount > 0 ? (
         <motion.div
           key="pending-leave-popup"
           initial={{ opacity: 0, x: 100 }}
@@ -58,22 +48,13 @@ const PendingLeaveNotification = () => {
                     <br />
                     Pending Approval
                   </h3>
-                </div>
-              </div>
+	                </div>
+	              </div>
+	            </div>
 
-              <button
-                type="button"
-                onClick={dismiss}
-                className="mt-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-slate-500 transition hover:bg-white hover:text-slate-900"
-                aria-label="Dismiss pending leave notification"
-              >
-                <X className="h-6 w-6" />
-              </button>
-            </div>
-
-            <p className="max-w-[330px] text-[18px] leading-8 text-slate-600 max-md:text-[16px] max-md:leading-7">
-              You have <span className="font-semibold text-indigo-600">{pendingLeaveCount} leave requests</span> waiting for your approval.
-            </p>
+	            <p className="max-w-[330px] text-[18px] leading-8 text-slate-600 max-md:text-[16px] max-md:leading-7">
+	              These leave requests are pending. You have <span className="font-semibold text-indigo-600">{pendingLeaveCount}</span> waiting for approval.
+	            </p>
 
             <div className="mt-4 overflow-hidden rounded-[22px] border border-slate-200/80 bg-white/75 shadow-[0_16px_45px_-30px_rgba(15,23,42,0.25)] backdrop-blur-xl">
               {firstThreePendingRequests.map((request, index) => (
