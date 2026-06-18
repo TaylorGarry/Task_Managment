@@ -1099,6 +1099,7 @@ const normalizeRosterName = (value = "") =>
 const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
+  const targetObjectIds = (employees || []).map((employee) => employee?._id).filter(Boolean);
   const userIdByEmpId = new Map();
   const userIdByName = new Map();
 
@@ -1129,11 +1130,20 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
   }
 
   const dayStartMs = parseDateKeyStartMs(dateKey);
-  if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) return 0;
+  const emptyRosterSnapshot = () => ({
+    presentCount: 0,
+    rosterStatusByUserId: new Map(),
+    rosterShiftStartHourByUserId: new Map(),
+    rosterShiftEndHourByUserId: new Map(),
+    transportArrivalTimeByUserId: new Map(),
+  });
+  if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) {
+    return emptyRosterSnapshot();
+  }
 
   const dayStart = new Date(dayStartMs);
   const dayEnd = new Date(dayStartMs + 24 * 60 * 60 * 1000 - 1);
-  const rosters = await Roster.find({
+  const rosterQuery = {
     $or: [
       {
         rosterStartDate: { $lte: dayEnd },
@@ -1148,70 +1158,115 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
         },
       },
     ],
-  })
-    .select("weeks.startDate weeks.endDate weeks.employees.userId weeks.employees.empId weeks.employees.name weeks.employees.shiftStartHour weeks.employees.shiftEndHour weeks.employees.dailyStatus")
-    .lean();
+  };
+
+  if (!countAllRosterEmployees && targetIds.size) {
+    rosterQuery["weeks.employees.userId"] = { $in: targetObjectIds };
+  }
+
+  const pipeline = [
+    { $match: rosterQuery },
+    {
+      $project: {
+        weeks: {
+          $filter: {
+            input: "$weeks",
+            as: "week",
+            cond: {
+              $and: [
+                { $lte: ["$$week.startDate", dayEnd] },
+                { $gte: ["$$week.endDate", dayStart] },
+              ],
+            },
+          },
+        },
+      },
+    },
+    { $unwind: "$weeks" },
+    { $unwind: "$weeks.employees" },
+  ];
+
+  if (!countAllRosterEmployees && targetObjectIds.length) {
+    pipeline.push({ $match: { "weeks.employees.userId": { $in: targetObjectIds } } });
+  }
+
+  pipeline.push(
+    {
+      $project: {
+        rosterUserId: "$weeks.employees.userId",
+        rosterEmpId: "$weeks.employees.empId",
+        rosterName: "$weeks.employees.name",
+        shiftStartHour: "$weeks.employees.shiftStartHour",
+        shiftEndHour: "$weeks.employees.shiftEndHour",
+        matchingDay: {
+          $first: {
+            $filter: {
+              input: "$weeks.employees.dailyStatus",
+              as: "day",
+              cond: {
+                $and: [
+                  { $gte: ["$$day.date", dayStart] },
+                  { $lte: ["$$day.date", dayEnd] },
+                ],
+              },
+            },
+          },
+        },
+      },
+    },
+    { $match: { matchingDay: { $ne: null } } }
+  );
+
+  const rosterRows = await Roster.aggregate(pipeline).allowDiskUse(true);
 
   const presentIds = new Set();
   const rosterStatusByUserId = new Map();
   const rosterShiftStartHourByUserId = new Map();
   const rosterShiftEndHourByUserId = new Map();
-  for (const roster of rosters || []) {
-    for (const week of roster?.weeks || []) {
-      const weekStart = week?.startDate ? new Date(week.startDate) : null;
-      const weekEnd = week?.endDate ? new Date(week.endDate) : null;
-      if (!weekStart || !weekEnd || Number.isNaN(weekStart.getTime()) || Number.isNaN(weekEnd.getTime())) continue;
-      if (!overlaps(weekStart, weekEnd, dayStart, dayEnd)) continue;
+  const transportArrivalTimeByUserId = new Map();
+  for (const row of rosterRows || []) {
+    const rosterUserId = String(row?.rosterUserId || "").trim();
+    const rosterEmpId = String(row?.rosterEmpId || "").trim().toLowerCase();
+    const rosterNameKey = normalizeRosterName(row?.rosterName || "");
+    const matchedUserId =
+      (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
+      userIdByEmpId.get(rosterEmpId) ||
+      userIdByName.get(rosterNameKey) ||
+      "";
+    const presentKey = matchedUserId ||
+      (countAllRosterEmployees
+        ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
+        : "");
 
-      for (const employee of week?.employees || []) {
-        const rosterUserId = String(employee?.userId || "").trim();
-        const rosterEmpId = String(employee?.empId || "").trim().toLowerCase();
-        const rosterNameKey = normalizeRosterName(employee?.name || "");
-        const matchedUserId =
-          (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
-          userIdByEmpId.get(rosterEmpId) ||
-          userIdByName.get(rosterNameKey) ||
-          "";
-        const presentKey = matchedUserId ||
-          (countAllRosterEmployees
-            ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
-            : "");
+    if (!presentKey || presentIds.has(presentKey)) continue;
 
-        if (!presentKey || presentIds.has(presentKey)) continue;
+    const matchingDay = row?.matchingDay;
+    const effectiveStatus = String(
+      matchingDay?.status ||
+      matchingDay?.departmentStatus ||
+      matchingDay?.transportStatus ||
+      "P"
+    ).trim().toUpperCase();
 
-        const matchingDay = (employee?.dailyStatus || []).find((dayEntry) => {
-          if (!dayEntry?.date) return false;
-          const dayDate = new Date(dayEntry.date);
-          if (Number.isNaN(dayDate.getTime())) return false;
-          return getNyDateKey(dayDate) === dateKey;
-        });
-        if (!matchingDay) continue;
-
-        const effectiveStatus = String(
-          matchingDay?.status ||
-          matchingDay?.departmentStatus ||
-          matchingDay?.transportStatus ||
-          "P"
-        ).trim().toUpperCase();
-
-        if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
-          rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
-        }
-        if (matchedUserId) {
-          const rosterStartHour = Number(employee?.shiftStartHour);
-          const rosterEndHour = Number(employee?.shiftEndHour);
-          if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
-            rosterShiftStartHourByUserId.set(matchedUserId, rosterStartHour);
-          }
-          if (Number.isFinite(rosterEndHour) && !rosterShiftEndHourByUserId.has(matchedUserId)) {
-            rosterShiftEndHourByUserId.set(matchedUserId, rosterEndHour);
-          }
-        }
-
-        if (effectiveStatus === "P") {
-          presentIds.add(presentKey);
-        }
+    if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
+      rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
+    }
+    if (matchedUserId) {
+      if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
+        transportArrivalTimeByUserId.set(matchedUserId, matchingDay.transportArrivalTime);
       }
+      const rosterStartHour = Number(row?.shiftStartHour);
+      const rosterEndHour = Number(row?.shiftEndHour);
+      if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
+        rosterShiftStartHourByUserId.set(matchedUserId, rosterStartHour);
+      }
+      if (Number.isFinite(rosterEndHour) && !rosterShiftEndHourByUserId.has(matchedUserId)) {
+        rosterShiftEndHourByUserId.set(matchedUserId, rosterEndHour);
+      }
+    }
+
+    if (effectiveStatus === "P") {
+      presentIds.add(presentKey);
     }
   }
 
@@ -1220,6 +1275,7 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
     rosterStatusByUserId,
     rosterShiftStartHourByUserId,
     rosterShiftEndHourByUserId,
+    transportArrivalTimeByUserId,
   };
 };
 
@@ -1850,10 +1906,10 @@ export const getManagerTeamStatus = async (req, res) => {
     }
 
     const ids = teamMembers.map((u) => u._id);
-    const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey });
+    const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey }).lean();
     const now = getNow();
     await persistAutoEndedSessions(sessions, now);
-    const byUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
+    const byUser = new Map(sessions.map((s) => [String(s.userId), s]));
     const rosterSnapshot = await getRosterPresentCountForUsers(teamMembers, dateKey);
     const presentCount = rosterSnapshot.presentCount;
 
@@ -1883,6 +1939,7 @@ export const getManagerTeamStatus = async (req, res) => {
         logoutTime: session?.shiftEndAt || null,
         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
+        transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(member._id)) || null,
         isOnBreak: Boolean(openBreak),
         lateByMs,
         totalWorkedMs: Math.max(0, totalWorkedMs),
@@ -1953,14 +2010,14 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
       .lean();
 
-    const employeeIds = employees.map((e) => e._id);
     const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
       countAllRosterEmployees: isSuperAdmin,
     });
     const presentCount = rosterSnapshot.presentCount;
-    const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey });
+    const sessionQuery = isSuperAdmin ? { dateKey } : { userId: { $in: employees.map((e) => e._id) }, dateKey };
+    const sessions = await PunchSession.find(sessionQuery).lean();
     await persistAutoEndedSessions(sessions, getNow());
-    const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
+    const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s]));
     const now = new Date();
 
     const rows = employees.map((emp) => {
@@ -1996,6 +2053,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
         logoutTime: session?.shiftEndAt || null,
         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
+        transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(emp._id)) || null,
         isOnBreak: Boolean(openBreak),
         breakType: openBreak?.type || "",
         breakStartAt: openBreak?.startAt || null,
