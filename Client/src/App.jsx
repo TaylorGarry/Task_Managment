@@ -1058,6 +1058,7 @@ import AttendanceOverrideUpload from "./pages/AttendanceOverrideUpload.jsx";
 import EmployeeOnboardingUpload from "./pages/EmployeeOnboardingUpload.jsx";
 import KraManagement from "./pages/KraManagement.jsx";
 import AnnouncementManagement from "./pages/AnnouncementManagement.jsx";
+import PendingLeaveNotification from "./components/PendingLeaveNotification.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import { subscribeUserToPush } from "./utils/pushNotifications.js";
@@ -1313,6 +1314,7 @@ function App() {
       <div className="theme-crm">
         <Toaster position="top-right" reverseOrder={false} />
         <ToastContainer position="top-right" autoClose={3000} />
+        <PendingLeaveNotification />
         <ProtectedRoute adminOnly={true}>
           <>
             <AdminNavbar showOutlet={false} />
@@ -1327,6 +1329,7 @@ function App() {
     <div className="theme-crm">
       <Toaster position="top-right" reverseOrder={false} />
       <ToastContainer position="top-right" autoClose={3000} />
+      <PendingLeaveNotification />
 
       <Routes>
         <Route
