@@ -1,12 +1,10 @@
-
-
-
 // import React, { useEffect, useMemo, useState } from "react";
 // import axios from "axios";
 // import { getRoleType } from "../utils/roleAccess.js";
+// import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
-// //  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-// const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+//   const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+// // const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 // const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 // const IST_TIME_ZONE = "Asia/Kolkata";
@@ -43,12 +41,31 @@
 //   });
 // };
 
+// const formatTime = (value) => {
+//   if (!value) return "--";
+//   const d = new Date(value);
+//   if (Number.isNaN(d.getTime())) return "--";
+//   return d.toLocaleTimeString("en-IN", {
+//     timeZone: IST_TIME_ZONE,
+//     hour: "2-digit",
+//     minute: "2-digit",
+//     hour12: true,
+//   });
+// };
+
 // const formatDuration = (ms = 0) => {
 //   const safe = Math.max(0, Number(ms) || 0);
 //   const totalMinutes = Math.floor(safe / 60000);
 //   const h = Math.floor(totalMinutes / 60);
 //   const m = totalMinutes % 60;
 //   return `${h}h ${m}m`;
+// };
+
+// const getLogoutTypeLabel = (reason = "") => {
+//   const value = String(reason || "").trim();
+//   if (value === "manual") return "Manual Logout";
+//   if (value === "auto_9h" || value === "auto_window") return "Auto Logout";
+//   return "";
 // };
 
 // const getRowPriorityScore = (row) => {
@@ -70,10 +87,42 @@
 //   return score;
 // };
 
-// const getLateByFallbackMs = (loginTime, shiftStartHour) => {
+// const normalizeShiftStartHour = (shiftStartHour, shiftEndHour) => {
+//   const startHour = Number(shiftStartHour);
+//   const endHour = Number(shiftEndHour);
+//   if (!Number.isFinite(startHour)) return null;
+
+//   const normalizedStart = ((startHour % 24) + 24) % 24;
+//   const normalizedEnd = Number.isFinite(endHour) ? ((endHour % 24) + 24) % 24 : null;
+
+//   if (normalizedStart > 0 && normalizedStart < 12 && normalizedEnd !== null && normalizedEnd < normalizedStart) {
+//     return normalizedStart + 12;
+//   }
+
+//   return normalizedStart;
+// };
+
+// const getIstHourFromDateLike = (dateLike) => {
+//   const date = new Date(dateLike);
+//   if (Number.isNaN(date.getTime())) return null;
+//   const parts = new Intl.DateTimeFormat("en-US", {
+//     timeZone: IST_TIME_ZONE,
+//     hour: "2-digit",
+//     hour12: false,
+//   }).formatToParts(date);
+//   const hour = Number(parts.find((p) => p.type === "hour")?.value || 0);
+//   return Number.isFinite(hour) ? hour : null;
+// };
+
+// const getLateByFallbackMs = (loginTime, shiftStartHour, shiftEndHour) => {
 //   if (!loginTime) return 0;
-//   const shiftHourNum = Number(shiftStartHour);
-//   if (!Number.isFinite(shiftHourNum)) return 0;
+//   const loginHour = getIstHourFromDateLike(loginTime);
+//   const shiftHourNum = normalizeShiftStartHour(shiftStartHour, shiftEndHour);
+//   const inferredShiftHour =
+//     Number.isFinite(shiftHourNum) && shiftHourNum < 12 && Number.isFinite(loginHour) && loginHour >= 14
+//       ? shiftHourNum + 12
+//       : shiftHourNum;
+//   if (!Number.isFinite(inferredShiftHour)) return 0;
 //   const login = new Date(loginTime);
 //   if (Number.isNaN(login.getTime())) return 0;
 //   const parts = new Intl.DateTimeFormat("en-US", {
@@ -87,7 +136,7 @@
 //   const minute = Number(parts.find((p) => p.type === "minute")?.value || 0);
 //   const second = Number(parts.find((p) => p.type === "second")?.value || 0);
 //   const loginClockMs = hour * 60 * 60 * 1000 + minute * 60 * 1000 + second * 1000;
-//   const expectedClockMs = shiftHourNum * 60 * 60 * 1000;
+//   const expectedClockMs = inferredShiftHour * 60 * 60 * 1000;
 //   const HALF_DAY_MS = 12 * 60 * 60 * 1000;
 //   const FULL_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -106,9 +155,9 @@
 //   return lateBy > 0 ? lateBy : 0;
 // };
 
-// const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour }) => {
+// const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour, shiftEndHour }) => {
 //   const safeServer = Number(serverLateByMs || 0);
-//   const fallback = getLateByFallbackMs(loginTime, shiftStartHour);
+//   const fallback = getLateByFallbackMs(loginTime, shiftStartHour, shiftEndHour);
 //   if (!(safeServer > 0)) return fallback;
 
 //   const HALF_DAY_MS = 12 * 60 * 60 * 1000;
@@ -167,7 +216,7 @@
 //     }
 //   }, []);
 
-//   const loadData = async () => {
+//   const loadData = async (force = false) => {
 //     if (!token) return;
 //     setLoading(true);
 //     setError("");
@@ -175,10 +224,7 @@
 //       const endpoint = isSuperAdminView
 //         ? `${API_URL}/punchx/superadmin/daily-status`
 //         : `${API_URL}/punchx/manager/team-status`;
-//       const resCurrent = await axios.get(endpoint, {
-//         params: { dateKey },
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
+//       const resCurrent = await getDailyStatus({ endpoint, dateKey, token, force });
 
 //       const merged = Array.isArray(resCurrent?.data?.rows) ? resCurrent.data.rows : [];
 
@@ -201,6 +247,7 @@
 //             serverLateByMs,
 //             loginTime,
 //             shiftStartHour: r.shiftStartHour,
+//             shiftEndHour: r.shiftEndHour,
 //           }),
 //           totalWorkedMs: Number(r.totalWorkedMs || 0),
 //           totalBreakMs,
@@ -376,7 +423,7 @@
 //                 </button>
 //               )}
 //               <button
-//                 onClick={loadData}
+//                 onClick={() => loadData(true)}
 //                 className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
 //               >
 //                 Refresh
@@ -432,7 +479,7 @@
 //                     <th className="px-3 py-2">Login</th>
 //                     <th className="px-3 py-2">Logout</th>
 //                     <th className="px-3 py-2">Floor Roster</th>
-//                     <th className="px-3 py-2">Late By</th>
+//                     <th className="px-3 py-2">Transport Arrival</th>
 //                     <th className="px-3 py-2">Worked</th>
 //                     <th className="px-3 py-2">9h Progress</th>
 //                     <th className="px-3 py-2">Break Used</th>
@@ -455,13 +502,18 @@
 //                         )}
 //                       </td>
 //                       <td className="px-3 py-2">{formatDateTime(row.loginTime)}</td>
-//                       <td className="px-3 py-2">{formatDateTime(row.logoutTime)}</td>
+//                       <td className="px-3 py-2">
+//                         {formatDateTime(row.logoutTime)}
+//                         {row.logoutTime && row.logoutReason ? (
+//                           <p className="text-xs text-slate-500 mt-1">{getLogoutTypeLabel(row.logoutReason)}</p>
+//                         ) : null}
+//                       </td>
 //                       <td className="px-3 py-2">
 //                         <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getFloorRosterStatusClass(row.floorRosterStatus)}`}>
 //                           {row.floorRosterStatus || "--"}
 //                         </span>
 //                       </td>
-//                       <td className="px-3 py-2">{!row.loginTime ? "--" : row.lateByMs > 0 ? formatDuration(row.lateByMs) : "On Time"}</td>
+//                       <td className="px-3 py-2">{formatTime(row.transportArrivalTime)}</td>
 //                       <td className="px-3 py-2">{row.loginTime ? formatDuration(row.totalWorkedMs || 0) : "--"}</td>
 //                       <td className="px-3 py-2">
 //                         {!row.loginTime ? (
@@ -535,11 +587,22 @@
 
 
 
+
+
+
+
+
+
+
+
+
+
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getRoleType } from "../utils/roleAccess.js";
+import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
-  // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
 const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
@@ -562,17 +625,36 @@ const toDateKey = (date) => {
 const getDefaultDateKey = () => toDateKey(new Date());
 
 const formatDateTime = (value) => {
-  if (!value) return "--";
+  if (!value) return null;
   const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "--";
-  return d.toLocaleString("en-IN", {
+  if (Number.isNaN(d.getTime())) return null;
+  
+  const dateStr = d.toLocaleDateString("en-GB", {
     timeZone: IST_TIME_ZONE,
-    year: "numeric",
-    month: "2-digit",
     day: "2-digit",
+    month: "2-digit",
+    year: "numeric"
+  });
+  
+  const timeStr = d.toLocaleTimeString("en-US", {
+    timeZone: IST_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
+    hour12: true
+  }).toLowerCase();
+
+  return { dateStr, timeStr };
+};
+
+const formatTime = (value) => {
+  if (!value) return "--";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "--";
+  return d.toLocaleTimeString("en-IN", {
+    timeZone: IST_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
     hour12: true,
   });
 };
@@ -583,6 +665,30 @@ const formatDuration = (ms = 0) => {
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
   return `${h}h ${m}m`;
+};
+
+const getTransportLoginDifference = (transportArrivalTime, loginTime) => {
+  if (!transportArrivalTime || !loginTime) return null;
+  const arrival = new Date(transportArrivalTime);
+  const login = new Date(loginTime);
+  if (Number.isNaN(arrival.getTime()) || Number.isNaN(login.getTime())) return null;
+
+  const diffMs = login.getTime() - arrival.getTime();
+  const absDiffMs = Math.abs(diffMs);
+
+  if (diffMs === 0) {
+    return { label: "Same time", toneClass: "bg-emerald-50 text-emerald-700 border-emerald-100" };
+  }
+
+  // 10 minutes = 10 * 60 * 1000 = 600,000 milliseconds
+  const isWithinTenMinutes = absDiffMs <= 600000;
+
+  return {
+    label: formatDuration(absDiffMs),
+    toneClass: isWithinTenMinutes
+      ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+      : "bg-rose-50 text-rose-700 border-rose-100",
+  };
 };
 
 const getLogoutTypeLabel = (reason = "") => {
@@ -607,7 +713,7 @@ const getRowPriorityScore = (row) => {
   if (isLive) score += 1000;
   if (incompleteNineHours) score += 200;
   if (hasLogin && !hasLogout) score += 100;
-  score += Math.floor(recencyTs / 1000); // tie-breaker by latest record
+  score += Math.floor(recencyTs / 1000);
   return score;
 };
 
@@ -622,7 +728,6 @@ const normalizeShiftStartHour = (shiftStartHour, shiftEndHour) => {
   if (normalizedStart > 0 && normalizedStart < 12 && normalizedEnd !== null && normalizedEnd < normalizedStart) {
     return normalizedStart + 12;
   }
-
   return normalizedStart;
 };
 
@@ -667,8 +772,6 @@ const getLateByFallbackMs = (loginTime, shiftStartHour, shiftEndHour) => {
   let adjustedLoginClockMs = loginClockMs;
   const directDelta = loginClockMs - expectedClockMs;
 
-  // If delta is very large, it is likely a midnight crossover artifact.
-  // Normalize to the nearest day-window around shift start before computing late-by.
   if (directDelta > HALF_DAY_MS) {
     adjustedLoginClockMs -= FULL_DAY_MS;
   } else if (directDelta < -HALF_DAY_MS) {
@@ -685,8 +788,6 @@ const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour, shiftEndHo
   if (!(safeServer > 0)) return fallback;
 
   const HALF_DAY_MS = 12 * 60 * 60 * 1000;
-  // Midnight rollover bug usually appears as huge lateBy (like 22h+).
-  // In those cases trust normalized fallback.
   if (safeServer > HALF_DAY_MS) return fallback;
   return safeServer;
 };
@@ -694,8 +795,8 @@ const resolveLateByMs = ({ serverLateByMs, loginTime, shiftStartHour, shiftEndHo
 const getFloorRosterStatusClass = (status) => {
   const key = String(status || "").trim().toUpperCase();
 
-  if (key === "P") return "bg-emerald-100 text-emerald-700";
-  if (key === "WO") return "bg-sky-100 text-sky-700";
+  if (key === "P") return "bg-[#E6F4EA] text-[#137333]"; 
+  if (key === "WO") return "bg-[#E8F0FE] text-[#1A73E8]"; 
   if (key === "L") return "bg-rose-100 text-rose-700";
   if (key === "NCNS") return "bg-red-100 text-red-700";
   if (key === "UL") return "bg-orange-100 text-orange-700";
@@ -740,7 +841,7 @@ const SuperAdminLoginStatus = () => {
     }
   }, []);
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     if (!token) return;
     setLoading(true);
     setError("");
@@ -748,10 +849,7 @@ const SuperAdminLoginStatus = () => {
       const endpoint = isSuperAdminView
         ? `${API_URL}/punchx/superadmin/daily-status`
         : `${API_URL}/punchx/manager/team-status`;
-      const resCurrent = await axios.get(endpoint, {
-        params: { dateKey },
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const resCurrent = await getDailyStatus({ endpoint, dateKey, token, force });
 
       const merged = Array.isArray(resCurrent?.data?.rows) ? resCurrent.data.rows : [];
 
@@ -798,7 +896,6 @@ const SuperAdminLoginStatus = () => {
           byUser.set(key, row);
           return;
         }
-        // Prefer current/live shift row, otherwise keep the most recent relevant row.
         const existingScore = getRowPriorityScore(existing);
         const currentScore = getRowPriorityScore(row);
         if (currentScore > existingScore) {
@@ -877,7 +974,7 @@ const SuperAdminLoginStatus = () => {
 
   useEffect(() => {
     if (isDateManuallySelected) return;
-      const syncDateKey = () => setDateKey(getDefaultDateKey());
+    const syncDateKey = () => setDateKey(getDefaultDateKey());
     syncDateKey();
     const id = setInterval(syncDateKey, 60000);
     return () => clearInterval(id);
@@ -911,199 +1008,280 @@ const SuperAdminLoginStatus = () => {
     setPage(1);
   }, [query, dept, status, pageSize, dateKey]);
 
-  const onBreakNames = useMemo(
-    () => filteredRows.filter((r) => r.isOnBreak).slice(0, 4).map((r) => r.pseudoName || r.name || r.username || "Employee"),
-    [filteredRows]
-  );
-
   return (
-    <div className="min-h-screen bg-slate-50 p-4 md:p-6">
-      <div className="mx-auto max-w-[1500px] space-y-4">
-        <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-[#0F2C78] to-[#1D4ED8] p-4 text-white md:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs uppercase tracking-[0.2em] text-blue-100">
-                {isSuperAdminView ? "SuperAdmin View" : "Supervisor View"}
-              </p>
-              <h1 className="text-2xl font-semibold">
-                {isSuperAdminView ? "Employee Login Monitoring Dashboard" : "Team Login Monitoring Dashboard"}
-              </h1>
-              <p className="text-sm text-blue-100">Real-time attendance and break intelligence</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={dateKey}
-                onChange={(e) => {
-                  setIsDateManuallySelected(true);
-                  setDateKey(e.target.value);
-                }}
-                className="rounded-lg border border-blue-200 bg-white/95 px-3 py-2 text-sm text-slate-800"
-              />
-              {isSuperAdminView && (
-                <button
-                  onClick={exportExcel}
-                  disabled={exporting}
-                  className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {exporting ? "Exporting..." : "Export Excel"}
-                </button>
-              )}
-              <button
-                onClick={loadData}
-                className="rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50"
-              >
-                Refresh
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-          <div className="rounded-xl border border-slate-200 bg-white p-4"><p className="text-xs text-slate-500">Total Employees</p><p className="text-2xl font-semibold text-slate-900">{summary?.totalEmployees || 0}</p></div>
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4"><p className="text-xs text-emerald-700">Logged In</p><p className="text-2xl font-semibold text-emerald-800">{summary?.loggedInCount || 0}</p></div>
-          <div className="rounded-xl border border-cyan-200 bg-cyan-50 p-4"><p className="text-xs text-cyan-700">Floor Roster Count</p><p className="text-2xl font-semibold text-cyan-800">{summary?.presentCount || 0}</p></div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4"><p className="text-xs text-amber-700">On Break</p><p className="text-2xl font-semibold text-amber-800">{summary?.onBreakCount || 0}</p></div>
-          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4"><p className="text-xs text-rose-700">9h Incomplete</p><p className="text-2xl font-semibold text-rose-800">{summary?.notCompletedNineHoursCount || 0}</p></div>
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4"><p className="text-xs text-indigo-700">Late Logins</p><p className="text-2xl font-semibold text-indigo-800">{summary?.lateLoginCount || 0}</p></div>
-        </div>
-
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-slate-900">Live Attendance Grid</h2>
-            <div className="text-xs text-slate-500">
-              {onBreakNames.length ? `On break: ${onBreakNames.join(", ")}` : "No one currently on break"}
-            </div>
-          </div>
-
-          <div className="mb-3 grid grid-cols-1 gap-2 md:grid-cols-4">
+    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 font-sans">
+      <div className="mx-auto max-w-[1600px] space-y-6">
+        
+        {/* Upper Dashboard Header Controller bar */}
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-center gap-3">
             <input
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search employee..."
-              className="rounded-lg border border-slate-300 px-3 py-2 text-sm"
+              className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm outline-none transition focus:border-blue-500 focus:bg-white w-64"
             />
-            <select value={dept} onChange={(e) => setDept(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              {departments.map((d) => <option key={d} value={d}>{d}</option>)}
+            <select value={dept} onChange={(e) => setDept(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white">
+              {departments.map((d) => <option key={d} value={d}>{d} Department</option>)}
             </select>
-            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              {["All", "Logged In", "Not Logged In", "On Break", "Late", "9h Incomplete"].map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
-            <select value={pageSize} onChange={(e) => setPageSize(Number(e.target.value))} className="rounded-lg border border-slate-300 px-3 py-2 text-sm">
-              {PAGE_SIZE_OPTIONS.map((size) => <option key={size} value={size}>{size} / page</option>)}
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:bg-white">
+              {["All", "Logged In", "Not Logged In", "On Break", "Late", "9h Incomplete"].map((s) => <option key={s} value={s}>{s} Status</option>)}
             </select>
           </div>
 
-          <div className="overflow-hidden rounded-xl border border-slate-200">
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-slate-100 text-left text-xs uppercase tracking-wide text-slate-600">
-                  <tr>
-                    <th className="px-3 py-2">Employee</th>
-                    <th className="px-3 py-2">Department</th>
-                    <th className="px-3 py-2">Status</th>
-                    <th className="px-3 py-2">Login</th>
-                    <th className="px-3 py-2">Logout</th>
-                    <th className="px-3 py-2">Floor Roster</th>
-                    <th className="px-3 py-2">Late By</th>
-                    <th className="px-3 py-2">Worked</th>
-                    <th className="px-3 py-2">9h Progress</th>
-                    <th className="px-3 py-2">Break Used</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedRows.map((row) => (
-                    <tr key={row.userId} className="border-t border-slate-100">
-                      <td className="px-3 py-2">
-                        <p className="font-semibold text-slate-900">{row.pseudoName || row.name || row.username || "--"}</p>
-                      </td>
-                      <td className="px-3 py-2">{row.department || "--"}</td>
-                      <td className="px-3 py-2">
-                        {row.isOnBreak ? (
-                          <span className="rounded-full bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-700">On Break</span>
-                        ) : row.loginTime ? (
-                          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">On Shift</span>
-                        ) : (
-                          <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-600">Not Logged In</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">{formatDateTime(row.loginTime)}</td>
-                      <td className="px-3 py-2">
-                        {formatDateTime(row.logoutTime)}
-                        {row.logoutTime && row.logoutReason ? (
-                          <p className="text-xs text-slate-500 mt-1">{getLogoutTypeLabel(row.logoutReason)}</p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${getFloorRosterStatusClass(row.floorRosterStatus)}`}>
-                          {row.floorRosterStatus || "--"}
-                        </span>
-                      </td>
-                      <td className="px-3 py-2">{!row.loginTime ? "--" : row.lateByMs > 0 ? formatDuration(row.lateByMs) : "On Time"}</td>
-                      <td className="px-3 py-2">{row.loginTime ? formatDuration(row.totalWorkedMs || 0) : "--"}</td>
-                      <td className="px-3 py-2">
-                        {!row.loginTime ? (
-                          "--"
-                        ) : row.hasCompletedNineHours ? (
-                          <span className="rounded-full bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">Completed</span>
-                        ) : (
-                          <span className="rounded-full bg-rose-100 px-2 py-1 text-xs font-semibold text-rose-700">
-                            Pending {formatDuration(getLiveRemainingMs(row))}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-3 py-2">
-                        {!row.loginTime ? (
-                          "--"
-                        ) : (
-                          <>
-                            <p>{formatDuration(row.totalBreakMs || 0)}</p>
-                            <p className="text-xs text-slate-500">
-                              {`Manual: ${formatDuration(row.manualBreakMs || 0)}`}
-                            </p>
-                          </>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                  {!loading && paginatedRows.length === 0 && (
-                    <tr>
-                      <td colSpan={10} className="px-3 py-8 text-center text-slate-500">No records found for selected filters.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-            <p className="text-sm text-slate-600">
-              Showing {filteredRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1}-
-              {Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}
-            </p>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <input
+              type="date"
+              value={dateKey}
+              onChange={(e) => {
+                setIsDateManuallySelected(true);
+                setDateKey(e.target.value);
+              }}
+              className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 font-medium outline-none"
+            />
+            {isSuperAdminView && (
               <button
-                disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={exportExcel}
+                disabled={exporting}
+                className="rounded-xl bg-[#1E4ED8] px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition disabled:opacity-60"
               >
-                Prev
+                {exporting ? "Exporting..." : "Export"}
               </button>
-              <span className="text-sm font-medium text-slate-700">Page {safePage} / {totalPages}</span>
-              <button
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Next
-              </button>
-            </div>
+            )}
+            <button
+              onClick={() => loadData(true)}
+              className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition shadow-sm"
+            >
+              Refresh
+            </button>
           </div>
         </div>
 
-        {loading ? <p className="text-sm text-slate-600">Loading...</p> : null}
-        {error ? <p className="text-sm text-rose-600">{error}</p> : null}
+        {/* High Fidelity Grid Table Area Container */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+          <div className="overflow-x-auto">
+            <table className="min-w-full table-auto border-collapse text-left">
+              <thead>
+                <tr className="border-b border-slate-200 bg-[#F8FAFC] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  {/* Sticky Table Header for Employee */}
+                  <th className="sticky left-0 z-10 whitespace-nowrap bg-[#F8FAFC] border-r border-slate-200/80 px-6 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
+                      Employee
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      Department
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      Status
+                      <svg className="w-3.5 h-3.5 text-slate-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                    </span>
+                  </th>
+                  {/* Transport Arrival Header */}
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4-4m-4 4l4 4" /></svg>
+                      Transport Arrival
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 01-3-3h7a3 3 0 013 3v1" /></svg>
+                      Login
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" /></svg>
+                      Login Difference
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" /></svg>
+                      Logout
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                      Floor Roster
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                      Worked
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h2a2 2 0 01-2-2z" /></svg>
+                      9H Progress
+                    </span>
+                  </th>
+                  <th className="whitespace-nowrap px-6 py-4">
+                    <span className="flex items-center gap-2">
+                      <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                      Break Used
+                    </span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-[13px] text-[#334155]">
+                {paginatedRows.map((row) => {
+                  const nameDisplay = row.pseudoName || row.name || row.username || "Unknown";
+                  const initialDisplay = nameDisplay.charAt(0).toUpperCase();
+                  const loginTimes = formatDateTime(row.loginTime);
+                  const logoutTimes = formatDateTime(row.logoutTime);
+                  const arrivalLoginDifference = getTransportLoginDifference(row.transportArrivalTime, row.loginTime);
+  
+                  return (
+                    <tr key={row.userId} className="group hover:bg-slate-50/80 transition-colors">
+                      {/* Sticky Employee Row Body Cell */}
+                      <td className="sticky left-0 z-10 whitespace-nowrap bg-white group-hover:bg-[#F8FAFC] border-r border-slate-200/80 px-6 py-4.5 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EFF6FF] text-[#1D4ED8] font-bold text-sm border border-blue-100">
+                            {initialDisplay}
+                          </div>
+                          <span className="font-semibold text-[#0F172A]">{nameDisplay}</span>
+                        </div>
+                      </td>
+
+                      {/* Department designation */}
+                      <td className="px-6 py-4.5 text-[#64748B] whitespace-nowrap">
+                        {row.department || "Ops - Meta"}
+                      </td>
+
+                      {/* Presence Status Badges */}
+                      <td className="px-6 py-4.5 whitespace-nowrap">
+                        {row.isOnBreak ? (
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
+                            <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                            On Break
+                          </div>
+                        ) : row.loginTime ? (
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-semibold text-[#137333] border border-emerald-200">
+                            <span className="h-2 w-2 rounded-full bg-[#10B981]"></span>
+                            On Shift
+                          </div>
+                        ) : (
+                          <div className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">
+                            <span className="h-2 w-2 rounded-full bg-slate-400"></span>
+                            Offline
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Transport Arrival Data Cell */}
+                      <td className="px-6 py-4.5 whitespace-nowrap text-slate-400">
+                        {row.transportArrivalTime ? (
+                          <span className="text-[#1E293B] font-medium">{formatTime(row.transportArrivalTime)}</span>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Login Timestamp view */}
+                      <td className="px-6 py-4.5 whitespace-nowrap font-medium text-[#1E293B]">
+                        {loginTimes ? (
+                          <div className="flex items-center gap-2">
+                            <svg className="w-4 h-4 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                            <div className="flex flex-col text-left">
+                              <span>{loginTimes.dateStr}</span>
+                              <span className="text-[11px] text-slate-400 font-normal">{loginTimes.timeStr}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Difference between transport arrival and login */}
+                      <td className="px-6 py-4.5 whitespace-nowrap">
+                        {arrivalLoginDifference ? (
+                          <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${arrivalLoginDifference.toneClass}`}>
+                            {arrivalLoginDifference.label}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400">--</span>
+                        )}
+                      </td>
+
+                      {/* Logout Timestamp view */}
+                      <td className="px-6 py-4.5 whitespace-nowrap font-medium text-[#1E293B]">
+                        {logoutTimes ? (
+                          <div className="flex flex-col text-left">
+                            <span>{logoutTimes.dateStr}</span>
+                            <span className="text-[11px] text-slate-400 font-normal">{logoutTimes.timeStr}</span>
+                            {row.logoutReason && (
+                              <span className="text-[10px] text-rose-500 font-normal mt-0.5">{getLogoutTypeLabel(row.logoutReason)}</span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      {/* Floor Roster Status Circle */}
+                      <td className="px-6 py-4.5 whitespace-nowrap text-center">
+                        <div className={`inline-flex h-7 w-10 items-center justify-center rounded-full font-bold text-xs shadow-sm ${getFloorRosterStatusClass(row.floorRosterStatus)}`}>
+                          {row.floorRosterStatus || "P"}
+                        </div>
+                      </td>
+
+                      {/* Total Hours Worked */}
+                      <td className="px-6 py-4.5 whitespace-nowrap">
+                        {row.loginTime ? (
+                          <div className="flex items-center gap-2 font-bold text-[#1E293B]">
+                            <svg className="w-4 h-4 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            {formatDuration(row.totalWorkedMs || 0)}
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+
+                      {/* 9H Circular Indicator Progress */}
+                      <td className="px-6 py-4.5 whitespace-nowrap">
+                        {!row.loginTime ? (
+                          <span className="text-slate-400">—</span>
+                        ) : (
+                          <div className="flex flex-col items-center justify-center w-24">
+                            <div className="relative flex items-center justify-center h-12 w-12 rounded-full border-2 border-rose-100 border-t-rose-500 border-r-rose-400">
+                              <span className="text-[11px] font-bold text-rose-600">
+                                {formatDuration(getLiveRemainingMs(row))}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+
+                      {/* Break Used Time Container */}
+                      <td className="px-6 py-4.5 whitespace-nowrap">
+                        {row.loginTime ? (
+                          <div className="flex items-center gap-2 font-medium text-[#475569]">
+                            <span>M: {formatDuration(row.manualBreakMs || 0)}</span>
+                            <span className="text-slate-300">|</span>
+                            <span>T: {formatDuration(row.totalBreakMs || 0)}</span>
+                          </div>
+                        ) : (
+                          <span className="text-slate-400">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   );

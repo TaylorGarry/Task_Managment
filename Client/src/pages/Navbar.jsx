@@ -546,6 +546,7 @@ import {
   normalizeDepartment,
 } from "../utils/roleAccess.js";
 import { getApiBaseUrl } from "../utils/apiUrl";
+import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
 const API_URL = getApiBaseUrl();
 
@@ -645,12 +646,12 @@ const Navbar = () => {
       window.__dailyStatusPollAt = now;
       window.__dailyStatusPollLock = true;
       try {
-        const res = await fetch(`${API_URL}/punchx/superadmin/daily-status?dateKey=${getTodayDateKey()}`, {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await getDailyStatus({
+          endpoint: `${API_URL}/punchx/superadmin/daily-status`,
+          dateKey: getTodayDateKey(),
+          token,
         });
-        if (!res.ok) return;
-        const data = await res.json();
-        const rows = Array.isArray(data?.rows) ? data.rows : [];
+        const rows = Array.isArray(res?.data?.rows) ? res.data.rows : [];
         const currentlyOnBreak = rows
           .filter((r) => r?.isOnBreak)
           .map((r) => ({

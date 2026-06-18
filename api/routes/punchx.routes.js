@@ -25,7 +25,11 @@ router.post("/shift/end", invalidateCacheTag("attendance"), endShift);
 router.post("/break/start", invalidateCacheTag("attendance"), startBreak);
 router.post("/break/end", invalidateCacheTag("attendance"), endBreak);
 router.post("/activity", invalidateCacheTag("attendance"), postActivity);
-router.get("/manager/team-status", getManagerTeamStatus);
+router.get(
+  "/manager/team-status",
+  cacheGetResponse({ keyPrefix: "team-status", ttlMs: 15 * 1000, tag: "attendance" }),
+  getManagerTeamStatus
+);
 router.get(
   "/superadmin/daily-status",
   cacheGetResponse({ keyPrefix: "daily-status", ttlMs: 15 * 1000, tag: "attendance" }),

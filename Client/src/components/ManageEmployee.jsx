@@ -3145,7 +3145,6 @@ const ManageEmployee = () => {
     const drawTemplate = (ctx) => {
       const w = 768;
       const h = 1280;
-      const edgeInset = 24;
       const topBlueHeight = 150;
       const topWaveY = 126;
       const topWaveAmp = 20;
@@ -3153,7 +3152,7 @@ const ManageEmployee = () => {
       const bottomBlueHeight = 150;
       const bottomWaveY = h - 154;
       const bottomWaveAmp = 18;
-      ctx.fillStyle = "#f2f2f2";
+      ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
 
       // Top blue header with curved bottom edge
@@ -3170,12 +3169,12 @@ const ManageEmployee = () => {
       // Yellow line connected to top blue curve
       ctx.fillStyle = "#f2cf00";
       ctx.beginPath();
-      ctx.moveTo(edgeInset, topWaveY + 3);
-      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + 2, w * 0.47, topWaveY + 3);
-      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + 2, w - edgeInset, topWaveY + 1);
-      ctx.lineTo(w - edgeInset, topWaveY + yellowThickness);
-      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness + 1, w * 0.47, topWaveY + yellowThickness + 2);
-      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness + 1, edgeInset, topWaveY + yellowThickness);
+      ctx.moveTo(-4, topWaveY - 2);
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp, w * 0.47, topWaveY);
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp, 0, topWaveY - 2);
+      ctx.lineTo(0, topWaveY + yellowThickness - 2);
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness, w * 0.47, topWaveY + yellowThickness);
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness, w + 4, topWaveY + yellowThickness - 2);
       ctx.closePath();
       ctx.fill();
 
@@ -3193,12 +3192,12 @@ const ManageEmployee = () => {
       // Yellow line connected to bottom blue curve
       ctx.fillStyle = "#f2cf00";
       ctx.beginPath();
-      ctx.moveTo(edgeInset, bottomWaveY - 1);
-      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - 1, w * 0.52, bottomWaveY + 1);
-      ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp - 1, w - edgeInset, bottomWaveY - 1);
-      ctx.lineTo(w - edgeInset, bottomWaveY - yellowThickness);
-      ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp - yellowThickness - 1, w * 0.52, bottomWaveY - yellowThickness + 1);
-      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - yellowThickness - 1, edgeInset, bottomWaveY - yellowThickness);
+      ctx.moveTo(-4, bottomWaveY + 11);
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp + 11, w * 0.5, bottomWaveY + 13);
+      ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp + 11, w + 4, bottomWaveY + 11);
+      ctx.lineTo(w + 4, bottomWaveY + 11 - yellowThickness);
+      ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp + 11 - yellowThickness, w * 0.5, bottomWaveY + 13 - yellowThickness);
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp + 11 - yellowThickness, -4, bottomWaveY + 11 - yellowThickness);
       ctx.closePath();
       ctx.fill();
     };
@@ -3206,21 +3205,22 @@ const ManageEmployee = () => {
     drawTemplate(frontCtx);
     drawTemplate(backCtx);
 
+    frontCtx.textAlign = "center";
     frontCtx.fillStyle = "#f2cf00";
-    frontCtx.fillRect(102, 268, 90, 64);
+    frontCtx.fillRect(96, 268, 86, 64);
     frontCtx.fillStyle = "#ffffff";
-    frontCtx.font = "700 58px Arial";
-    frontCtx.fillText("FD", 114, 318);
+    frontCtx.font = "700 54px Arial";
+    frontCtx.fillText("FD", 139, 317);
     frontCtx.fillStyle = "#0f3f69";
-    frontCtx.font = "700 84px Arial";
-    frontCtx.fillText("BUSINESS", 192, 318);
+    frontCtx.font = "700 66px Arial";
+    frontCtx.fillText("BUSINESS", 360, 318);
     frontCtx.fillStyle = "#f2cf00";
-    frontCtx.font = "700 62px Arial";
-    frontCtx.fillText("Service Private Limited", 288, 376);
+    frontCtx.font = "700 30px Arial";
+    frontCtx.fillText("Service Private Limited", 384, 366);
 
     const photoX = 224;
-    const photoY = 460;
-    const photoSize = 320;
+    const photoY = 468;
+    const photoSize = 308;
     frontCtx.strokeStyle = "#1f4e79";
     frontCtx.lineWidth = 5;
     frontCtx.beginPath();
@@ -3252,40 +3252,39 @@ const ManageEmployee = () => {
 
     frontCtx.fillStyle = "#1f4e79";
     frontCtx.textAlign = "center";
-    frontCtx.font = "500 60px Arial";
-    frontCtx.fillText(employeeName, 384, 845);
-    frontCtx.font = "500 52px Arial";
-    frontCtx.fillText(designation || "Employee", 384, 920);
-    frontCtx.font = "500 42px Arial";
-    frontCtx.fillText(`Emp ID        : ${empId || "N/A"}`, 384, 1020);
-    frontCtx.fillText(`Blood Group   : ${bloodGroup}`, 384, 1082);
+    frontCtx.font = "500 54px Arial";
+    frontCtx.fillText(employeeName, 384, 840);
+    frontCtx.font = "500 46px Arial";
+    frontCtx.fillText(designation || "Employee", 384, 905);
+    frontCtx.font = "500 38px Arial";
+    frontCtx.fillText(`Emp ID        : ${empId || "N/A"}`, 384, 1010);
+    frontCtx.fillText(`Blood Group   : ${bloodGroup}`, 384, 1070);
 
     backCtx.fillStyle = "#1f4e79";
     backCtx.textAlign = "left";
-    backCtx.font = "500 36px Arial";
-    backCtx.fillText(`Contact         : ${contactNumber}`, 130, 290);
-    backCtx.fillText(`Emg Contact: ${emergencyContact}`, 130, 350);
-
-    backCtx.textAlign = "center";
-    backCtx.font = "500 38px Arial";
-    backCtx.fillText("INSTRUCTION", 384, 510);
-    backCtx.font = "500 34px Arial";
-    backCtx.fillText("1.This ID Card is NonTransferable", 384, 572);
-    backCtx.fillText("2.It is mandatory to display the ID", 384, 616);
-    backCtx.fillText("card while on duty.", 384, 660);
-    backCtx.fillText("3.Loss ofthis ID Card Should be", 384, 704);
-    backCtx.fillText("reported to the issuing authority", 384, 748);
-    backCtx.fillText("4.Duplicate ID Card would be", 384, 792);
-    backCtx.fillText("Issued at a cost ofRs.200/-", 384, 836);
+    backCtx.font = "500 32px Arial";
+    backCtx.fillText(`Contact         : ${contactNumber}`, 126, 286);
+    backCtx.fillText(`Emg Contact: ${emergencyContact}`, 126, 342);
 
     backCtx.textAlign = "left";
+    backCtx.font = "500 36px Arial";
     backCtx.font = "500 30px Arial";
-    backCtx.fillText("FD Business Service Private Limited", 124, 950);
-    backCtx.font = "500 27px Arial";
-    backCtx.fillText("Unit no 118,119,120,", 124, 995);
-    backCtx.fillText("Suncity Success Tower", 124, 1032);
-    backCtx.fillText("Golf Course Extn. Road", 124, 1069);
-    backCtx.fillText("Sector -65, Gurugram 122018", 124, 1106);
+    backCtx.fillText("1.This ID Card is NonTransferable", 146, 560);
+    backCtx.fillText("2.It is mandatory to display the ID", 146, 602);
+    backCtx.fillText("card while on duty.", 146, 640);
+    backCtx.fillText("3.Loss of this ID Card should be", 146, 684);
+    backCtx.fillText("reported to the issuing authority", 146, 724);
+    backCtx.fillText("4.Duplicate ID Card would be", 146, 768);
+    backCtx.fillText("issued at a cost of Rs.200/-", 146, 808);
+
+    backCtx.textAlign = "left";
+    backCtx.font = "500 28px Arial";
+    backCtx.fillText("FD Business Service Private Limited", 126, 936);
+    backCtx.font = "500 24px Arial";
+    backCtx.fillText("Unit no 118,119,120,", 126, 980);
+    backCtx.fillText("Suncity Success Tower", 126, 1016);
+    backCtx.fillText("Golf Course Extn. Road", 126, 1052);
+    backCtx.fillText("Sector -65, Gurugram 122018", 126, 1088);
 
     const combinedCanvas = document.createElement("canvas");
     combinedCanvas.width = frontCard.canvas.width * 2 + 36;
@@ -4003,9 +4002,6 @@ const ManageEmployee = () => {
             </Avatar>
             <div className="flex-1 min-w-[220px]">
               <p className="text-sm font-semibold text-slate-800">Employee Profile Photo</p>
-              <p className="text-xs text-slate-500 mt-1">
-                Capture photo using local camera. Photo is uploaded to Cloudinary and URL is saved in DB.
-              </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
                   variant="contained"

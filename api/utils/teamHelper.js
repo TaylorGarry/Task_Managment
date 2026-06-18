@@ -82,6 +82,27 @@ export const getTeamMembersByTeamLeader = async (teamLeaderId, date = null) => {
     const teamLeader = await User.findById(teamLeaderId).lean();
     if (!teamLeader) return [];
 
+    const directMembers = await User.find({
+      reportingManager: teamLeader._id,
+      isActive: { $ne: false },
+      accountType: { $in: ["employee", "agent", "supervisor"] },
+      _id: { $ne: teamLeader._id },
+    })
+      .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour")
+      .lean();
+
+    if (directMembers.length > 0) {
+      return directMembers.map((member) => ({
+        userId: member._id,
+        name: member.realName || member.username || "",
+        username: member.username || member.realName || "",
+        department: member.department || "N/A",
+        shiftStartHour: member.shiftStartHour,
+        shiftEndHour: member.shiftEndHour,
+        teamLeader: teamLeader.username || teamLeader.realName || teamLeader.pseudoName || "",
+      }));
+    }
+
     const tlAliases = new Set(
       [
         teamLeader?.username,
