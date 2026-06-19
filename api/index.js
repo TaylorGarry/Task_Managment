@@ -47,6 +47,12 @@ import { Message } from "./Modals/Message.modal.js";
 import Kra from "./Modals/Kra.modal.js";
 import Announcement from "./Modals/Announcement.modal.js";
 import "./jobs/punchAutoLogout.job.js";
+import "./jobs/employeeExit.job.js";
+import EmployeeExit from "./Modals/EmployeeExit.modal.js";
+import EmployeeExitITChecklist from "./Modals/EmployeeExitITChecklist.modal.js";
+import EmployeeExitHRChecklist from "./Modals/EmployeeExitHRChecklist.modal.js";
+import EmployeeExitAuditLog from "./Modals/EmployeeExitAuditLog.modal.js";
+import EmployeeExitNotification from "./Modals/EmployeeExitNotification.modal.js";
 // Disable noisy debug logs across the API.
 // Set `DISABLE_CONSOLE_LOG=false` to re-enable.
 const disableConsoleLog = String(process.env.DISABLE_CONSOLE_LOG ?? "true").toLowerCase();
@@ -63,6 +69,11 @@ connectDB()
       await Message.syncIndexes();
       await Kra.syncIndexes();
       await Announcement.syncIndexes();
+      await EmployeeExit.syncIndexes();
+      await EmployeeExitITChecklist.syncIndexes();
+      await EmployeeExitHRChecklist.syncIndexes();
+      await EmployeeExitAuditLog.syncIndexes();
+      await EmployeeExitNotification.syncIndexes();
       
     } catch (err) {
       console.error("❌ Error syncing indexes:", err);

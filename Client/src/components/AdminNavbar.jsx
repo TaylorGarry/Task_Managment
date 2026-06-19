@@ -543,6 +543,10 @@ const AdminNavbar = ({ showOutlet = true }) => {
                 <FiCalendar className="text-sm text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
                 Leave
               </Link>
+              <Link to="/employee-exits" className={`${navLinkClass("/employee-exits")} ${location.pathname.startsWith("/employee-exits") ? "bg-[#f8fafc] text-[#0e5c7a]" : ""}`} onClick={() => setShowMobileMenu(false)}>
+                <FiUser className="text-sm text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
+                Employee Exits
+              </Link>
             </div>
           </div>
 

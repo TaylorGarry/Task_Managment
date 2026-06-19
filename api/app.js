@@ -896,6 +896,7 @@ import punchxRoutes from "./routes/punchx.routes.js";
 import payrollAttendanceRoutes from "./routes/payrollAttendance.routes.js";
 import kraRoutes from "./routes/kra.routes.js";
 import announcementRoutes from "./routes/announcement.routes.js";
+import employeeExitRoutes from "./routes/employeeExit.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 
@@ -1179,6 +1180,8 @@ app.use("/api/v1/punchx", punchxRoutes);
 app.use("/api/v1/payroll", payrollAttendanceRoutes);
 app.use("/api/v1/kras", kraRoutes);
 app.use("/api/v1/announcements", announcementRoutes);
+app.use("/api/v1/employee-exit", employeeExitRoutes);
+app.use("/api/employee-exit", employeeExitRoutes);
 
 
 app.get("/", (req, res) => {

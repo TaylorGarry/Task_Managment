@@ -162,6 +162,17 @@ const userSchema = new mongoose.Schema(
       default: true,
     },
 
+    active: {
+      type: Boolean,
+      default: true,
+    },
+
+    employmentStatus: {
+      type: String,
+      enum: ["Active", "Exited", ""],
+      default: "Active",
+    },
+
     realName: {
       type: String,
       trim: true,
