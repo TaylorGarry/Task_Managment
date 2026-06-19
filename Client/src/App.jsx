@@ -1023,7 +1023,7 @@
 
 
 
-import React, { useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import Signup from "./pages/Signup";
@@ -1072,6 +1072,9 @@ import {
   isTeamLeaderUser,
   normalizeDepartment,
 } from "./utils/roleAccess.js";
+
+const EmployeeExitList = lazy(() => import("./pages/EmployeeExitList.jsx"));
+const EmployeeExitDetails = lazy(() => import("./pages/EmployeeExitDetails.jsx"));
 
 const ALLOWED_ROSTER_DEPARTMENTS = [
   "Operations",
@@ -1229,6 +1232,48 @@ const AttendanceOverrideUploadShell = () => {
     <>
       <Navbar />
       <AttendanceOverrideUpload />
+    </>
+  );
+};
+
+const EmployeeExitAccessRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+  if (!user) return <Navigate to="/login" replace />;
+
+	  const allowed =
+	    isSuperAdmin(user) ||
+	    isHrDepartment(user) ||
+	    isAccountsDepartment(user) ||
+	    normalizeDepartment(user?.department) === "IT";
+
+  if (!allowed) {
+    return <Navigate to={(isAgent(user) || getRoleType(user) === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
+  }
+
+  return children;
+};
+
+const EmployeeExitRouteShell = ({ details = false }) => {
+  const { user } = useSelector((state) => state.auth);
+  const content = (
+    <Suspense fallback={<div className="min-h-screen bg-slate-50 p-6 text-sm text-slate-500">Loading employee exits...</div>}>
+      {details ? <EmployeeExitDetails /> : <EmployeeExitList />}
+    </Suspense>
+  );
+
+  if (canManageAdminPanels(user)) {
+    return (
+      <>
+        <AdminNavbar showOutlet={false} />
+        {content}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      {content}
     </>
   );
 };
@@ -1533,6 +1578,22 @@ function App() {
             <AuthRoute>
               <AnnouncementRouteShell />
             </AuthRoute>
+          }
+        />
+        <Route
+          path="/employee-exits"
+          element={
+            <EmployeeExitAccessRoute>
+              <EmployeeExitRouteShell />
+            </EmployeeExitAccessRoute>
+          }
+        />
+        <Route
+          path="/employee-exits/:id"
+          element={
+            <EmployeeExitAccessRoute>
+              <EmployeeExitRouteShell details={true} />
+            </EmployeeExitAccessRoute>
           }
         />
         <Route
