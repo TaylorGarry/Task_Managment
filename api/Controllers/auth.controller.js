@@ -1,7 +1,2789 @@
+// import bcrypt from "bcrypt";
+// import jwt from "jsonwebtoken";
+// import mongoose from "mongoose";
+// import User from "../Modals/User.modal.js";
+// import EmpIdCounter from "../Modals/EmpIdCounter.modal.js";
+// import EmployeeOnboardingToken from "../Modals/EmployeeOnboardingToken.modal.js";
+// import Roster from "../Modals/Roster.modal.js";
+// import { v2 as cloudinary } from "cloudinary";
+// import path from "path";
+// import fs from "fs/promises";
+// import { fileURLToPath } from "url";
+// import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
+// import { notifySuperAdminsForHrAction } from "../utils/adminNotification.js";
+// import XLSX from "xlsx-js-style";
+// import {
+//   getRoleType,
+//   isHrDepartment,
+//   isPrivilegedUser,
+//   normalizeDepartment,
+//   toStorageDepartment,
+//   toStorageAccountType,
+//   withRoleType,
+// } from "../utils/roleAccess.js";
+// import {
+//   createEmployeeOnboardingToken,
+//   getOnboardingTokenRecord,
+//   markOnboardingTokenUsed,
+//   sendOnboardingEmail,
+// } from "../utils/onboardingEmail.js";
+
+// cloudinary.config({
+//   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+//   api_key: process.env.CLOUDINARY_API_KEY,
+//   api_secret: process.env.CLOUDINARY_API_SECRET,
+// });
+
+// const JWT_SECRET = process.env.JWT_SECRET;
+// const __filename = fileURLToPath(import.meta.url);
+// const __dirname = path.dirname(__filename);
+
+// // export const signup = async (req, res) => {
+// //   try {
+// //     const { username, password, accountType, department, shiftLabel, isCoreTeam } = req.body;
+
+// //     if (req.user?.accountType !== "admin")
+// //       return res.status(403).json({ message: "Only admin can create users" });
+
+// //     if (!username || !password || !department || (!isCoreTeam && !shiftLabel))
+// //       return res.status(400).json({ message: "All fields are required" });
+
+// //     if (await User.exists({ username }))
+// //       return res.status(400).json({ message: "User already exists" });
+
+// //     const shiftMapping = {
+// //       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+// //       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+// //       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+// //       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+// //       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+// //       "11pm-8am": {shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
+// //     };
+
+// //     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
+// //     if (!isCoreTeam && !selectedShift)
+// //       return res.status(400).json({ message: "Invalid shift label" });
+
+// //     const hashedPassword = await bcrypt.hash(password, 10);
+
+// //     const newUser = await User.create({
+// //       username,
+// //       password: hashedPassword,
+// //       accountType,
+// //       department,
+// //       isCoreTeam: accountType === "employee" && !!isCoreTeam,
+// //       shift: selectedShift?.shift || null,
+// //       shiftStartHour: selectedShift?.shiftStartHour || null,
+// //       shiftEndHour: selectedShift?.shiftEndHour || null,
+// //     });
+
+// //     res.status(201).json({
+// //       message: "User created successfully",
+// //       user: {
+// //         id: newUser._id,
+// //         username,
+// //         accountType,
+// //         department,
+// //         isCoreTeam: newUser.isCoreTeam,
+// //         shift: newUser.shift,
+// //         shiftStartHour: newUser.shiftStartHour,
+// //         shiftEndHour: newUser.shiftEndHour,
+// //       },
+// //     });
+// //   } catch (error) {
+// //     console.error("Signup error:", error);
+// //     res.status(500).json({ message: "Server error", error: error.message });
+// //   }
+// // };
+
+// const shiftMapping = {
+//   "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+//   "2am-11am": { shift: "Start", shiftStartHour: 2, shiftEndHour: 11 },
+//   "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+//   "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+//   "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+//   "7pm-4am": { shift: "End", shiftStartHour: 19, shiftEndHour: 4 },
+//   "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+//   "9pm-6am": { shift: "End", shiftStartHour: 21, shiftEndHour: 6 },
+//   "10pm-7am": { shift: "Start", shiftStartHour: 22, shiftEndHour: 7 },
+//   "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+//   "12am-9am": { shift: "Start", shiftStartHour: 0, shiftEndHour: 9 },
+// };
+
+// const DEFAULT_POLICY_DOCUMENTS = [
+//   "/policies/Leave Policy.pdf",
+//   "/policies/IT Usage Policy.pdf",
+//   "/policies/Exit Policy 1.1.pdf",
+//   "/policies/Data Security Agreement.pdf",
+//   "/policies/Code of Conduct.pdf",
+// ];
+// const REQUIRED_PREVIOUS_EMPLOYMENT_DOCS = new Set([
+//   "previous company - appointment letter",
+//   "previous company - last 3 months salary slip",
+//   "relieving/experience letter",
+//   "resignation acceptance",
+// ]);
+
+// const LEGACY_POLICY_DOCS = new Set(["/policy-sample.txt", "policy-sample.txt"]);
+// const EMP_ID_COUNTER_KEY = "employee_emp_id";
+// const EMP_ID_BASELINE = 119461;
+// const ONBOARDING_REQUIRED_DOCS = [
+//   "Resume",
+//   "Photo",
+//   "Aadhaar Card",
+//   "PAN Card",
+//   "Current Address Proof",
+//   "Permanent Address Proof",
+//   "10th Marksheet",
+//   "12th Marksheet",
+//   "Graduation/Post Graduation Marksheet",
+//   "Additional Certificate",
+//   "Cancelled Cheque",
+//   "Bank Statement (Last 3 Months)",
+//   "Previous Company - Appointment Letter",
+//   "Previous Company - Last 3 Months Salary Slip",
+//   "Relieving/Experience Letter",
+//   "Resignation Acceptance",
+//   "Offer Letter",
+//   "Appointment Letter",
+// ];
+
+// const generateNextEmployeeId = async () => {
+//   const existingMaxRow = await User.aggregate([
+//     {
+//       $match: {
+//         empId: { $type: "string", $regex: "^[0-9]{1,}$" },
+//       },
+//     },
+//     {
+//       $project: {
+//         empIdNum: { $toInt: "$empId" },
+//       },
+//     },
+//     {
+//       $group: {
+//         _id: null,
+//         maxEmpId: { $max: "$empIdNum" },
+//       },
+//     },
+//   ]);
+//   const existingMax = Number(existingMaxRow?.[0]?.maxEmpId || 0);
+//   const seed = Math.max(existingMax, EMP_ID_BASELINE);
+//   const counter = await EmpIdCounter.findOneAndUpdate(
+//     { key: EMP_ID_COUNTER_KEY },
+//     { $max: { seq: seed } },
+//     { new: true, upsert: true, setDefaultsOnInsert: true }
+//   ).lean();
+//   const next = await EmpIdCounter.findOneAndUpdate(
+//     { key: EMP_ID_COUNTER_KEY },
+//     { $inc: { seq: 1 } },
+//     { new: true }
+//   ).lean();
+//   const nextNumber = Number(next?.seq || counter?.seq || seed + 1);
+//   return String(nextNumber).padStart(6, "0");
+// };
+
+// const resolvePolicyDocuments = (policyDocuments = []) => {
+//   const normalized = normalizePolicyDocuments(policyDocuments);
+//   if (!normalized.length) return DEFAULT_POLICY_DOCUMENTS;
+//   const allLegacy = normalized.every((doc) => LEGACY_POLICY_DOCS.has(String(doc || "").trim()));
+//   return allLegacy ? DEFAULT_POLICY_DOCUMENTS : normalized;
+// };
+
+// const toBooleanYesNo = (value, fallback = "No") => {
+//   if (value === undefined || value === null || value === "") return fallback;
+//   if (typeof value === "boolean") return value ? "Yes" : "No";
+//   const normalized = String(value).trim().toLowerCase();
+//   return normalized === "yes" || normalized === "true" ? "Yes" : "No";
+// };
+
+// const escapeRegex = (value = "") =>
+//   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// const normalizeDocumentList = (documents = []) => {
+//   if (!Array.isArray(documents)) return [];
+//   return documents
+//     .map((doc) => {
+//       if (typeof doc === "string") {
+//         const trimmed = doc.trim();
+//         return trimmed ? { name: trimmed } : null;
+//       }
+//       return doc;
+//     })
+//     .filter((doc) => doc && String(doc.name || "").trim())
+//     .map((doc) => ({
+//       name: String(doc.name || "").trim(),
+//       url: String(doc.url || "").trim(),
+//       publicId: String(doc.publicId || "").trim(),
+//       fileName: String(doc.fileName || "").trim(),
+//       mimeType: String(doc.mimeType || "").trim(),
+//       size: Number(doc.size || 0),
+//       uploaded: Boolean(doc.uploaded),
+//       uploadedAt: doc.uploaded ? new Date(doc.uploadedAt || Date.now()) : null,
+//       uploadedIp: String(doc.uploadedIp || "").trim(),
+//     }));
+// };
+
+// const normalizePolicyDocuments = (policyDocuments = []) => {
+//   if (!Array.isArray(policyDocuments)) return [];
+//   return [...new Set(policyDocuments.map((doc) => String(doc || "").trim()).filter(Boolean))];
+// };
+
+// const normalizePolicyKey = (value = "") => {
+//   const raw = String(value || "").trim().split("?")[0];
+//   try {
+//     return decodeURIComponent(raw);
+//   } catch {
+//     return raw;
+//   }
+// };
+
+// const normalizeIpAddress = (ip = "") => {
+//   const raw = String(ip || "").trim();
+//   if (!raw) return "";
+//   if (raw === "::1") return "127.0.0.1";
+//   if (raw.startsWith("::ffff:")) return raw.replace("::ffff:", "");
+//   return raw;
+// };
+
+// const getRequestIp = (req) => {
+//   const forwarded = req.headers["x-forwarded-for"]?.split(",")[0]?.trim();
+//   const realIp = req.headers["x-real-ip"]?.toString().trim();
+//   const expressIp = req.ip;
+//   const socketIp = req.socket?.remoteAddress || req.connection?.remoteAddress;
+//   return normalizeIpAddress(forwarded || realIp || expressIp || socketIp || "");
+// };
+
+// const uploadSignatureDataUrl = async (dataUrl, folder = "task_management/employee/policy_signatures") => {
+//   if (!dataUrl || typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) {
+//     throw new Error("Invalid signature format");
+//   }
+//   const result = await cloudinary.uploader.upload(dataUrl, {
+//     folder,
+//     resource_type: "image",
+//     use_filename: true,
+//     unique_filename: true,
+//     overwrite: false,
+//   });
+//   return {
+//     url: result.secure_url,
+//     publicId: result.public_id,
+//   };
+// };
+
+// const upsertPolicySignature = (existing = [], documentUrl, partyKey, patch = {}) => {
+//   const normalizedUrl = String(documentUrl || "").trim();
+//   const normalizedKey = normalizePolicyKey(normalizedUrl);
+//   if (!normalizedUrl) return existing || [];
+//   const next = Array.isArray(existing) ? [...existing] : [];
+//   const idx = next.findIndex((item) => normalizePolicyKey(item?.documentUrl || "") === normalizedKey);
+//   const currentRaw = idx >= 0 ? next[idx] : { documentUrl: normalizedUrl, employee: {}, hr: {} };
+//   const current =
+//     currentRaw && typeof currentRaw.toObject === "function"
+//       ? currentRaw.toObject()
+//       : { ...(currentRaw || {}) };
+//   current.documentUrl = normalizedUrl;
+//   current.employee = current.employee || {};
+//   current.hr = current.hr || {};
+//   current[partyKey] = {
+//     ...(current?.[partyKey] || {}),
+//     ...patch,
+//   };
+//   if (idx >= 0) {
+//     next[idx] = current;
+//   } else {
+//     next.push(current);
+//   }
+//   return next;
+// };
+
+// const normalizePolicySignatureItem = (signatureItem = {}, fallbackDocumentUrl = "") => {
+//   const raw =
+//     signatureItem && typeof signatureItem.toObject === "function"
+//       ? signatureItem.toObject()
+//       : { ...(signatureItem || {}) };
+//   const resolvedDocumentUrl = String(raw?.documentUrl || fallbackDocumentUrl || "").trim();
+//   if (!resolvedDocumentUrl) return null;
+//   return {
+//     documentUrl: resolvedDocumentUrl,
+//     employee: { ...(raw?.employee || {}) },
+//     hr: { ...(raw?.hr || {}) },
+//     signedPdfUrl: String(raw?.signedPdfUrl || "").trim(),
+//     signedPdfPublicId: String(raw?.signedPdfPublicId || "").trim(),
+//     signedPdfGeneratedAt: raw?.signedPdfGeneratedAt || null,
+//   };
+// };
+
+// const sanitizePolicySignatures = (policySignatures = [], fallbackDocumentUrl = "") => {
+//   const seen = new Set();
+//   const sanitized = [];
+//   for (const sig of Array.isArray(policySignatures) ? policySignatures : []) {
+//     const normalized = normalizePolicySignatureItem(sig, fallbackDocumentUrl);
+//     if (!normalized?.documentUrl) continue;
+//     const key = normalizePolicyKey(normalized.documentUrl);
+//     if (!key || seen.has(key)) continue;
+//     seen.add(key);
+//     sanitized.push(normalized);
+//   }
+//   return sanitized;
+// };
+
+// const normalizeDocName = (value = "") => String(value || "").trim().toLowerCase();
+
+// const isPreviousEmploymentDoc = (name = "") => REQUIRED_PREVIOUS_EMPLOYMENT_DOCS.has(normalizeDocName(name));
+
+// const normalizeEmploymentType = (value = "") => {
+//   const normalized = String(value || "").trim().toLowerCase();
+//   if (normalized === "fresher") return "fresher";
+//   if (normalized === "experienced") return "experienced";
+//   return "";
+// };
+
+// const normalizeOptionalAmount = (value) => {
+//   if (value === undefined || value === null || value === "") return null;
+//   const numeric = Number(value);
+//   return Number.isFinite(numeric) ? numeric : null;
+// };
+
+// const destroyCloudinaryAsset = async (publicId = "") => {
+//   const normalized = String(publicId || "").trim();
+//   if (!normalized) return;
+//   try {
+//     await cloudinary.uploader.destroy(normalized, { invalidate: true, resource_type: "image" });
+//   } catch (error) {
+//     console.warn("Failed to delete Cloudinary asset:", normalized, error?.message || error);
+//   }
+// };
+
+// const computeDocsStatus = ({ employmentType = "", documents = [], fallback = "No" } = {}) => {
+//   const normalizedEmployment = normalizeEmploymentType(employmentType);
+//   const docList = Array.isArray(documents) ? documents : [];
+//   const uploadedDocs = docList.filter((doc) => Boolean(doc?.uploaded));
+//   const anyUploaded = uploadedDocs.length > 0;
+
+//   if (normalizedEmployment === "fresher") {
+//     return anyUploaded ? "Yes" : "No";
+//   }
+//   if (normalizedEmployment !== "experienced") {
+//     return fallback;
+//   }
+
+//   const uploadedPreviousNames = new Set(uploadedDocs.map((doc) => normalizeDocName(doc?.name || "")));
+//   const hasAllPrevious = [...REQUIRED_PREVIOUS_EMPLOYMENT_DOCS].every((requiredDoc) =>
+//     uploadedPreviousNames.has(requiredDoc)
+//   );
+//   if (!hasAllPrevious) return "Pending";
+//   if (anyUploaded) return "Yes";
+//   return fallback === "Pending" ? "No" : fallback;
+// };
+
+// const isHrOverrideActive = (userLike = {}) => {
+//   const until = userLike?.hrDocumentOverrideUntil ? new Date(userLike.hrDocumentOverrideUntil) : null;
+//   return Boolean(until && !Number.isNaN(until.getTime()) && until.getTime() > Date.now());
+// };
+
+// const isHrGlobalOverrideActive = (userLike = {}) => {
+//   const until = userLike?.hrGlobalDocumentOverrideUntil ? new Date(userLike.hrGlobalDocumentOverrideUntil) : null;
+//   return Boolean(until && !Number.isNaN(until.getTime()) && until.getTime() > Date.now());
+// };
+
+// const evaluateLockedDocumentChanges = ({ existingDocuments = [], incomingDocuments = [] } = {}) => {
+//   const existingByName = new Map(
+//     (Array.isArray(existingDocuments) ? existingDocuments : [])
+//       .filter((doc) => normalizeDocName(doc?.name || ""))
+//       .map((doc) => [normalizeDocName(doc?.name || ""), doc])
+//   );
+//   const incomingByName = new Map(
+//     (Array.isArray(incomingDocuments) ? incomingDocuments : [])
+//       .filter((doc) => normalizeDocName(doc?.name || ""))
+//       .map((doc) => [normalizeDocName(doc?.name || ""), doc])
+//   );
+
+//   const locked = [];
+//   for (const [key, existing] of existingByName.entries()) {
+//     if (!(Boolean(existing?.uploaded) || String(existing?.url || "").trim())) continue;
+//     const incoming = incomingByName.get(key);
+//     if (!incoming) {
+//       locked.push(existing.name || "Unknown document");
+//       continue;
+//     }
+//     const currentUrl = String(existing?.url || "").trim();
+//     const nextUrl = String(incoming?.url || "").trim();
+//     if (currentUrl !== nextUrl) {
+//       locked.push(existing.name || incoming.name || "Unknown document");
+//     }
+//   }
+//   return locked;
+// };
+
+// const applyDocumentUploadAudit = ({ existingDocuments = [], incomingDocuments = [], uploadedIp = "" } = {}) => {
+//   const existingByName = new Map(
+//     (Array.isArray(existingDocuments) ? existingDocuments : [])
+//       .filter((doc) => normalizeDocName(doc?.name || ""))
+//       .map((doc) => [normalizeDocName(doc?.name || ""), doc])
+//   );
+
+//   return (Array.isArray(incomingDocuments) ? incomingDocuments : []).map((doc) => {
+//     const key = normalizeDocName(doc?.name || "");
+//     const existing = key ? existingByName.get(key) : null;
+//     const currentUrl = String(existing?.url || "").trim();
+//     const nextUrl = String(doc?.url || "").trim();
+//     const isNewOrReplaced = Boolean(nextUrl) && nextUrl !== currentUrl;
+
+//     if (isNewOrReplaced) {
+//       return {
+//         ...doc,
+//         uploaded: true,
+//         uploadedAt: new Date(),
+//         uploadedIp: String(uploadedIp || doc?.uploadedIp || existing?.uploadedIp || "").trim(),
+//       };
+//     }
+
+//     return {
+//       ...doc,
+//       uploaded: Boolean(doc?.uploaded ?? existing?.uploaded ?? false),
+//       uploadedAt: doc?.uploadedAt || existing?.uploadedAt || null,
+//       uploadedIp: String(doc?.uploadedIp || existing?.uploadedIp || ""),
+//     };
+//   });
+// };
+
+// const uploadPdfBuffer = async (buffer, publicIdPrefix = "signed_policy") => {
+//   const publicId = `task_management/employee/policy_signed_docs/${publicIdPrefix}_${Date.now()}`;
+//   const result = await new Promise((resolve, reject) => {
+//     const stream = cloudinary.uploader.upload_stream(
+//       {
+//         resource_type: "auto",
+//         public_id: publicId,
+//         format: "pdf",
+//         overwrite: true,
+//         type: "upload",
+//       },
+//       (error, uploadResult) => {
+//         if (error) return reject(error);
+//         resolve(uploadResult);
+//       }
+//     );
+//     stream.end(buffer);
+//   });
+//   return {
+//     url: result.secure_url,
+//     publicId: result.public_id,
+//   };
+// };
+
+// const getPolicyDocumentBaseUrls = () => {
+//   const envBases = [
+//     process.env.POLICY_DOC_BASE_URL,
+//     process.env.CLIENT_BASE_URL,
+//     process.env.FRONTEND_URL,
+//     process.env.APP_BASE_URL,
+//   ]
+//     .map((v) => String(v || "").trim().replace(/\/+$/, ""))
+//     .filter(Boolean);
+
+//   const defaults = [
+//     "https://crm.fdbs.in",
+//     "https://crm.terranovasolutions.in",
+//     "http://localhost:5173",
+//   ];
+
+//   return [...new Set([...envBases, ...defaults])];
+// };
+
+// const loadDocumentBytes = async (documentUrl = "") => {
+//   const normalized = String(documentUrl || "").trim();
+//   if (!normalized) throw new Error("Missing document URL");
+
+//   if (/^https?:\/\//i.test(normalized)) {
+//     const response = await fetch(normalized);
+//     if (!response.ok) throw new Error(`Failed to fetch document: ${response.status}`);
+//     return Buffer.from(await response.arrayBuffer());
+//   }
+
+//   const decodedPath = normalizePolicyKey(normalized);
+//   const relativePath = decodedPath.startsWith("/") ? decodedPath.slice(1) : decodedPath;
+//   const normalizedRelativePath = relativePath.replace(/^public[\\/]/i, "");
+//   const localCandidates = [
+//     path.resolve(__dirname, "../../Client/public", normalizedRelativePath),
+//     path.resolve(process.cwd(), "Client/public", normalizedRelativePath),
+//     path.resolve(process.cwd(), "public", normalizedRelativePath),
+//     path.resolve(__dirname, "../dist", normalizedRelativePath),
+//     path.resolve(process.cwd(), "dist", normalizedRelativePath),
+//     path.resolve(process.cwd(), "api/dist", normalizedRelativePath),
+//     path.resolve(process.cwd(), "Client/dist", normalizedRelativePath),
+//   ];
+
+//   for (const candidate of localCandidates) {
+//     try {
+//       return await fs.readFile(candidate);
+//     } catch (err) {
+//       if (err?.code !== "ENOENT") throw err;
+//     }
+//   }
+
+//   if (decodedPath.startsWith("/")) {
+//     const encodedPath = encodeURI(decodedPath);
+//     for (const base of getPolicyDocumentBaseUrls()) {
+//       try {
+//         const remoteUrl = `${base}${encodedPath}`;
+//         const response = await fetch(remoteUrl);
+//         if (!response.ok) continue;
+//         return Buffer.from(await response.arrayBuffer());
+//       } catch {
+//         // Try next base URL
+//       }
+//     }
+//   }
+
+//   throw new Error(`Policy file not found for path: ${decodedPath}`);
+// };
+
+// const loadImageBytes = async (imageUrl = "") => {
+//   const normalized = String(imageUrl || "").trim();
+//   if (!normalized) throw new Error("Missing image URL");
+//   const response = await fetch(normalized);
+//   if (!response.ok) throw new Error(`Failed to fetch image: ${response.status}`);
+//   return Buffer.from(await response.arrayBuffer());
+// };
+
+// const looksLikePng = (bytes) =>
+//   bytes?.length >= 8 &&
+//   bytes[0] === 0x89 &&
+//   bytes[1] === 0x50 &&
+//   bytes[2] === 0x4e &&
+//   bytes[3] === 0x47;
+
+// const looksLikeJpeg = (bytes) =>
+//   bytes?.length >= 3 &&
+//   bytes[0] === 0xff &&
+//   bytes[1] === 0xd8 &&
+//   bytes[2] === 0xff;
+
+// const embedSignatureImage = async (pdfDoc, signatureBytes = [], signatureUrl = "") => {
+//   if (looksLikePng(signatureBytes)) {
+//     return pdfDoc.embedPng(signatureBytes);
+//   }
+//   if (looksLikeJpeg(signatureBytes)) {
+//     return pdfDoc.embedJpg(signatureBytes);
+//   }
+
+//   const lower = String(signatureUrl || "").toLowerCase();
+//   try {
+//     if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+//       return await pdfDoc.embedJpg(signatureBytes);
+//     }
+//     return await pdfDoc.embedPng(signatureBytes);
+//   } catch {
+//     try {
+//       return await pdfDoc.embedPng(signatureBytes);
+//     } catch {
+//       return await pdfDoc.embedJpg(signatureBytes);
+//     }
+//   }
+// };
+
+// const maybeGenerateSignedPolicyPdf = async ({ documentUrl = "", employeeSignatureUrl = "", hrSignatureUrl = "", publicIdKey = "" } = {}) => {
+//   if (!documentUrl) return null;
+//   const hasEmployeeSignature = Boolean(String(employeeSignatureUrl || "").trim());
+//   const hasHrSignature = Boolean(String(hrSignatureUrl || "").trim());
+//   if (!hasEmployeeSignature && !hasHrSignature) return null;
+
+//   const pdfBytes = await loadDocumentBytes(documentUrl);
+//   const employeeSigBytes = hasEmployeeSignature ? await loadImageBytes(employeeSignatureUrl) : null;
+//   const hrSigBytes = hasHrSignature ? await loadImageBytes(hrSignatureUrl) : null;
+
+//   const pdfDoc = await PDFDocument.load(pdfBytes);
+//   const pages = pdfDoc.getPages();
+//   const lastPage = pages[pages.length - 1];
+//   if (!lastPage) throw new Error("Invalid policy document: no pages found");
+//   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+//   const empImage = employeeSigBytes
+//     ? await embedSignatureImage(pdfDoc, employeeSigBytes, employeeSignatureUrl)
+//     : null;
+//   const hrImage = hrSigBytes ? await embedSignatureImage(pdfDoc, hrSigBytes, hrSignatureUrl) : null;
+
+//   const { width: sourceWidth = 595, height: sourceHeight = 842 } = lastPage.getSize();
+//   const page = pdfDoc.addPage([sourceWidth, sourceHeight]);
+//   const { width, height } = page.getSize();
+//   const signWidth = 180;
+//   const signHeight = 62;
+//   const margin = 52;
+//   const panelY = Math.max(72, height - 230);
+
+//   page.drawText("Policy Signatures", {
+//     x: margin,
+//     y: panelY + 118,
+//     size: 16,
+//     font,
+//     color: rgb(0.12, 0.16, 0.24),
+//   });
+//   page.drawText("Generated after policy acknowledgment", {
+//     x: margin,
+//     y: panelY + 98,
+//     size: 10,
+//     font,
+//     color: rgb(0.42, 0.48, 0.58),
+//   });
+
+//   page.drawRectangle({
+//     x: margin - 12,
+//     y: panelY - 18,
+//     width: width - (margin - 12) * 2,
+//     height: 136,
+//     color: rgb(0.98, 0.99, 1),
+//     borderWidth: 1,
+//     borderColor: rgb(0.85, 0.9, 0.98),
+//   });
+//   page.drawText("Employee Signature", {
+//     x: margin,
+//     y: panelY + signHeight + 10,
+//     size: 10,
+//     font,
+//     color: rgb(0.2, 0.2, 0.2),
+//   });
+//   page.drawText("HR Signature", {
+//     x: width - margin - signWidth,
+//     y: panelY + signHeight + 10,
+//     size: 10,
+//     font,
+//     color: rgb(0.2, 0.2, 0.2),
+//   });
+//   if (empImage) {
+//     page.drawImage(empImage, { x: margin, y: panelY, width: signWidth, height: signHeight });
+//   } else {
+//     page.drawText("Pending", { x: margin + 56, y: panelY + 22, size: 11, font, color: rgb(0.55, 0.6, 0.67) });
+//   }
+//   if (hrImage) {
+//     page.drawImage(hrImage, { x: width - margin - signWidth, y: panelY, width: signWidth, height: signHeight });
+//   } else {
+//     page.drawText("Pending", {
+//       x: width - margin - signWidth + 56,
+//       y: panelY + 22,
+//       size: 11,
+//       font,
+//       color: rgb(0.55, 0.6, 0.67),
+//     });
+//   }
+
+//   const signedBytes = await pdfDoc.save();
+//   return uploadPdfBuffer(Buffer.from(signedBytes), publicIdKey || "policy_signed");
+// };
+
+// const refreshSignedPdfForSignature = async (signatureItem = {}, fallbackDocumentUrl = "") => {
+//   const item = normalizePolicySignatureItem(signatureItem, fallbackDocumentUrl);
+//   if (!item?.documentUrl) return null;
+//   const employeeSignatureUrl = String(item?.employee?.signatureUrl || "").trim();
+//   const hrSignatureUrl = String(item?.hr?.signatureUrl || "").trim();
+//   const hasAnySigned =
+//     Boolean(item?.employee?.signed && employeeSignatureUrl) ||
+//     Boolean(item?.hr?.signed && hrSignatureUrl);
+//   if (!hasAnySigned) {
+//     return {
+//       ...item,
+//       signedPdfUrl: "",
+//       signedPdfPublicId: "",
+//       signedPdfGeneratedAt: null,
+//     };
+//   }
+
+//   const generated = await maybeGenerateSignedPolicyPdf({
+//     documentUrl: item?.documentUrl || fallbackDocumentUrl,
+//     employeeSignatureUrl,
+//     hrSignatureUrl,
+//     publicIdKey: Buffer.from(normalizePolicyKey(item?.documentUrl || fallbackDocumentUrl || "policy")).toString("hex").slice(0, 24),
+//   });
+//   if (!generated) return item;
+
+//   return {
+//     ...item,
+//     signedPdfUrl: generated.url,
+//     signedPdfPublicId: generated.publicId,
+//     signedPdfGeneratedAt: new Date(),
+//   };
+// };
+
+// export const signup = async (req, res) => {
+//   try {
+//     const {
+//       username,
+//       password,
+//       accountType,
+//       department,
+//       shiftLabel,
+//       isCoreTeam,
+//       isTeamLeader,
+//       realName,
+//       pseudoName,
+//       dateOfJoining,
+//       dob,
+//       permanentAddress,
+//       currentAddress,
+//       bloodGroup,
+//       emergencyContactNumber,
+//       emergencyContactName,
+//       emergencyContactRelation,
+//       personalEmailId,
+//       transportOffice,
+//       docsStatus,
+//       documents,
+//       designation,
+//       officeLocation,
+//       reportingManager,
+//       policyDocuments,
+//       employmentType,
+//       profilePhotoUrl,
+//       profilePhotoPublicId,
+//       ctc,
+//       inHandSalary,
+//       transportAllowance,
+//     } = req.body;
+//     const normalizedDepartment = normalizeDepartment(department);
+//     const storageDepartment = toStorageDepartment(normalizedDepartment);
+//     const storageRole = toStorageAccountType(accountType, isTeamLeader);
+//     const storageAccountType = storageRole.accountType;
+//     const storageIsTeamLeader = storageRole.isTeamLeader;
+//     const isEmployeeFlow = storageAccountType === "employee";
+
+//     // ⭐ NEW: check if any superAdmin exists
+//     const superAdminExists = await User.exists({
+//       accountType: "superAdmin",
+//     });
+
+//     // ⭐ NEW: allow first superAdmin creation without token
+//     const isFirstSuperAdmin = !superAdminExists && storageAccountType === "superAdmin";
+
+//     const isAdminOrSuperAdmin = isPrivilegedUser(req.user || {});
+
+//     // ⭐ MODIFIED: block only if NOT first superAdmin
+//     if (!isAdminOrSuperAdmin && !isFirstSuperAdmin) {
+//       return res.status(403).json({
+//         message: "Only admin, super admin and HR can create users",
+//       });
+//     }
+
+//     if (!username || !password || !normalizedDepartment || !accountType) {
+//       return res.status(400).json({
+//         message:
+//           "Username, password, department, and account type are required",
+//       });
+//     }
+
+//     if (isEmployeeFlow && !isCoreTeam && !shiftLabel) {
+//       return res.status(400).json({
+//         message: "Shift label is required for non-core team employees",
+//       });
+//     }
+
+//     if (isEmployeeFlow) {
+//       if (!realName || !dateOfJoining || !designation) {
+//         return res.status(400).json({
+//           message:
+//             "Real name, joining date, and designation are required for employees",
+//         });
+//       }
+//     }
+
+//     // 🔥 Parallel DB checks (kept your optimization)
+//     const [userExists] = await Promise.all([
+//       User.exists({ username }),
+//     ]);
+
+//     // 🔥 Only superAdmin can create another superAdmin (after first)
+//     if (
+//       storageAccountType === "superAdmin" &&
+//       superAdminExists &&
+//       req.user?.accountType !== "superAdmin"
+//     ) {
+//       return res.status(403).json({
+//         message: "Only super admin can create another super admin",
+//       });
+//     }
+
+//     if (userExists) {
+//       return res.status(400).json({ message: "User already exists" });
+//     }
+
+//     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
+
+//     if (isEmployeeFlow && !isCoreTeam && !selectedShift) {
+//       return res.status(400).json({ message: "Invalid shift label" });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const normalizedDocuments = normalizeDocumentList(documents);
+//     const effectivePolicyDocuments = resolvePolicyDocuments(policyDocuments);
+//     const normalizedEmploymentType = normalizeEmploymentType(employmentType);
+//     const normalizedTransportOffice = toBooleanYesNo(transportOffice, "No");
+//     const normalizedDocsStatus = computeDocsStatus({
+//       employmentType: normalizedEmploymentType,
+//       documents: normalizedDocuments,
+//       fallback: toBooleanYesNo(docsStatus, "No"),
+//     });
+
+//     const generatedEmpId = isEmployeeFlow ? await generateNextEmployeeId() : "";
+
+//     const newUserPayload = {
+//       username,
+//       password: hashedPassword,
+//       accountType: storageAccountType,
+//       department: storageDepartment,
+//       isCoreTeam: isEmployeeFlow && !!isCoreTeam,
+//       isTeamLeader: Boolean(storageIsTeamLeader),
+//       shift: selectedShift?.shift || null,
+//       shiftStartHour: selectedShift?.shiftStartHour || null,
+//       shiftEndHour: selectedShift?.shiftEndHour || null,
+//       realName: realName || "",
+//       pseudoName: pseudoName || "",
+//       empId: generatedEmpId,
+//       dateOfJoining: dateOfJoining ? new Date(dateOfJoining) : null,
+//       dob: dob ? new Date(dob) : null,
+//       permanentAddress: String(permanentAddress || "").trim(),
+//       currentAddress: String(currentAddress || "").trim(),
+//       bloodGroup: String(bloodGroup || "").trim(),
+//       emergencyContactNumber: String(emergencyContactNumber || "").trim(),
+//       emergencyContactName: String(emergencyContactName || "").trim(),
+//       emergencyContactRelation: String(emergencyContactRelation || "").trim(),
+//       personalEmailId: String(personalEmailId || "").trim(),
+//       transportOffice: normalizedTransportOffice,
+//       docsStatus: normalizedDocsStatus,
+//       employmentType: normalizedEmploymentType,
+//       documents: normalizedDocuments,
+//       designation: designation || "",
+//       officeLocation: String(officeLocation || "").trim(),
+//       reportingManager: reportingManager || null,
+//       profilePhotoUrl: String(profilePhotoUrl || "").trim(),
+//       profilePhotoPublicId: String(profilePhotoPublicId || "").trim(),
+//       ctc: normalizeOptionalAmount(ctc),
+//       inHandSalary: normalizeOptionalAmount(inHandSalary),
+//       transportAllowance: normalizeOptionalAmount(transportAllowance),
+//       policyDocuments: effectivePolicyDocuments,
+//       policySignatures: effectivePolicyDocuments.map((url) => ({
+//         documentUrl: url,
+//         employee: { signed: false },
+//         hr: { signed: false },
+//       })),
+//     };
+//     const newUser = await User.create(newUserPayload);
+
+//     const populatedUser = await User.findById(newUser._id)
+//       .populate("reportingManager", "username realName")
+//       .select("-password")
+//       .lean();
+
+//     if (isEmployeeFlow && populatedUser?.personalEmailId) {
+//       try {
+//         const { rawToken } = await createEmployeeOnboardingToken(populatedUser._id);
+//         const baseUrl = String(
+//           process.env.EMPLOYEE_ONBOARDING_URL_BASE || "http://localhost:5173/#/employee-onboarding"
+//         ).trim();
+//         const uploadLink = `${baseUrl}?token=${encodeURIComponent(rawToken)}`;
+//         const joiningDateText = dateOfJoining
+//           ? new Date(dateOfJoining).toLocaleDateString("en-GB", {
+//               day: "2-digit",
+//               month: "long",
+//               year: "numeric",
+//             })
+//           : "";
+//         await sendOnboardingEmail({
+//           to: populatedUser.personalEmailId,
+//           realName: populatedUser.realName || populatedUser.username || "Candidate",
+//           joiningDateText,
+//           uploadLink,
+//         });
+//         console.log("Onboarding email sent to:", populatedUser.personalEmailId);
+//       } catch (emailError) {
+//         console.error("Onboarding email send failed:", emailError?.message || emailError);
+//       }
+//     }
+
+//     await notifySuperAdminsForHrAction({
+//       actor: req.user,
+//       action: "user_created",
+//       target: populatedUser,
+//       io: req.io,
+//     });
+
+//     return res.status(201).json({
+//       message: "User created successfully",
+//       user: withRoleType(populatedUser),
+//     });
+//   } catch (error) {
+//     console.error("Signup error:", error);
+//     return res.status(500).json({
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+// // export const signup = async (req, res) => {
+// //   try {
+// //     const {
+// //       username,
+// //       password,
+// //       accountType,
+// //       department,
+// //       shiftLabel,
+// //       isCoreTeam,
+// //     } = req.body;
+
+// //     const isAdminOrSuperAdmin =
+// //       req.user?.accountType === "admin" ||
+// //       req.user?.accountType === "superAdmin" || 
+// //       req.user?.accountType === "HR";
+
+// //     if (!isAdminOrSuperAdmin) {
+// //       return res
+// //         .status(403)
+// //         .json({ message: "Only admin, super admin and HR can create users" });
+// //     }
+
+// //     const superAdminExists = await User.exists({
+// //       accountType: "superAdmin",
+// //     });
+
+// //     if (accountType === "superAdmin") {
+// //       if (superAdminExists && req.user.accountType !== "superAdmin") {
+// //         return res.status(403).json({
+// //           message: "Only super admin can create another super admin",
+// //         });
+// //       }
+// //     }
+
+// //     if (!username || !password || !department || !accountType) {
+// //       return res.status(400).json({
+// //         message:
+// //           "Username, password, department, and account type are required",
+// //       });
+// //     }
+
+// //     if (accountType === "employee" && !isCoreTeam && !shiftLabel) {
+// //       return res.status(400).json({
+// //         message: "Shift label is required for non-core team employees",
+// //       });
+// //     }
+
+// //     if (await User.exists({ username })) {
+// //       return res.status(400).json({ message: "User already exists" });
+// //     }
+
+// //     const shiftMapping = {
+// //       "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+// //       "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+// //       "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+// //       "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+// //       "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+// //       "11pm-8am": { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+// //     };
+
+// //     const selectedShift = !isCoreTeam ? shiftMapping[shiftLabel] : null;
+
+// //     if (accountType === "employee" && !isCoreTeam && !selectedShift) {
+// //       return res.status(400).json({ message: "Invalid shift label" });
+// //     }
+
+// //     const hashedPassword = await bcrypt.hash(password, 10);
+
+// //     const newUser = await User.create({
+// //       username,
+// //       password: hashedPassword,
+// //       accountType,
+// //       department,
+// //       isCoreTeam: accountType === "employee" && !!isCoreTeam,
+// //       shift: selectedShift?.shift || null,
+// //       shiftStartHour: selectedShift?.shiftStartHour || null,
+// //       shiftEndHour: selectedShift?.shiftEndHour || null,
+// //     });
+
+// //     res.status(201).json({
+// //       message: "User created successfully",
+// //       user: {
+// //         id: newUser._id,
+// //         username,
+// //         accountType,
+// //         department,
+// //         isCoreTeam: newUser.isCoreTeam,
+// //         shift: newUser.shift,
+// //         shiftStartHour: newUser.shiftStartHour,
+// //         shiftEndHour: newUser.shiftEndHour,
+// //       },
+// //     });
+// //   } catch (error) {
+// //     console.error("Signup error:", error);
+// //     res.status(500).json({
+// //       message: "Server error",
+// //       error: error.message,
+// //     });
+// //   }
+// // };
+
+// export const createCoreTeamUser = async (req, res) => {
+//   try {
+//     const { username, password, accountType, department } = req.body;
+//     const normalizedDepartment = normalizeDepartment(department);
+//     const storageDepartment = toStorageDepartment(normalizedDepartment);
+//     const storageRole = toStorageAccountType(accountType || "agent", false);
+
+//     if (!isPrivilegedUser(req.user || {}))
+//       return res.status(403).json({ message: "Only privileged users can create users" });
+
+//     if (!username || !password || !normalizedDepartment)
+//       return res.status(400).json({ message: "Username, password, and department are required" });
+
+//     if (await User.exists({ username }))
+//       return res.status(400).json({ message: "User already exists" });
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const newUser = await User.create({
+//       username,
+//       password: hashedPassword,
+//       accountType: storageRole.accountType,
+//       department: storageDepartment,
+//       isCoreTeam: true,
+//       isTeamLeader: Boolean(storageRole.isTeamLeader),
+//     });
+
+//     res.status(201).json({
+//       message: "Core team user created successfully",
+//       user: {
+//         id: newUser._id,
+//         username,
+//         accountType: newUser.accountType,
+//         roleType: getRoleType(newUser),
+//         department: normalizeDepartment(newUser.department),
+//         isCoreTeam: newUser.isCoreTeam,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Create Core Team User Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const login = async (req, res) => {
+//   try {
+//     const { username, identifier, password } = req.body;
+//     const loginIdentifier = String(identifier || username || "").trim();
+
+//     if (!loginIdentifier || !password)
+//       return res.status(400).json({ message: "Login ID and password are required" });
+
+//     const escaped = escapeRegex(loginIdentifier);
+//     const exactRegex = new RegExp(`^${escaped}$`, "i");
+//     const candidates = await User.find({
+//       $or: [
+//         { username: exactRegex },
+//         { empId: loginIdentifier },
+//         { pseudoName: exactRegex },
+//         { realName: exactRegex },
+//       ],
+//     }).lean();
+
+//     const pickUser = () => {
+//       if (!candidates.length) return null;
+//       const idLower = loginIdentifier.toLowerCase();
+//       return (
+//         candidates.find((u) => String(u.username || "").toLowerCase() === idLower) ||
+//         candidates.find((u) => String(u.empId || "") === loginIdentifier) ||
+//         candidates.find((u) => String(u.pseudoName || "").toLowerCase() === idLower) ||
+//         candidates.find((u) => String(u.realName || "").toLowerCase() === idLower) ||
+//         candidates[0]
+//       );
+//     };
+
+//     const user = pickUser();
+//     if (!user)
+//       return res.status(404).json({ message: "User not found" });
+
+//     if (user.isActive === false) {
+//       return res.status(403).json({ message: "Your account is inactive. You cannot login." });
+//     }
+
+//     if (!(await bcrypt.compare(password, user.password)))
+//       return res.status(401).json({ message: "Invalid credentials" });
+
+//     const token = jwt.sign(
+//       { id: user._id, accountType: user.accountType },
+//       JWT_SECRET,
+//       { expiresIn: "7d" }
+//     );
+
+//     res.status(200).json({
+//       message: "Login successful",
+//       token,
+//       user: {
+//         id: user._id,
+//         username: user.username,
+//         accountType: user.accountType,
+//         roleType: getRoleType(user),
+//         department: normalizeDepartment(user.department),
+//         isCoreTeam: user.isCoreTeam,
+//         isTeamLeader: user.isTeamLeader,
+//         isActive: user.isActive !== false,
+//         realName: user.realName || "",
+//         pseudoName: user.pseudoName || "",
+//         empId: user.empId || "",
+//         dateOfJoining: user.dateOfJoining || null,
+//         designation: user.designation || "",
+//         officeLocation: user.officeLocation || "",
+//         profilePhotoUrl: user.profilePhotoUrl || "",
+//         profilePhotoPublicId: user.profilePhotoPublicId || "",
+//         ctc: user.ctc ?? null,
+//         inHandSalary: user.inHandSalary ?? null,
+//         transportAllowance: user.transportAllowance ?? null,
+//         transportOffice: user.transportOffice || "No",
+//         docsStatus: user.docsStatus || "No",
+//         employmentType: user.employmentType || "",
+//         documents: user.documents || [],
+//         policyDocuments: user.policyDocuments || [],
+//         policySignatures: user.policySignatures || [],
+//         policyAgreement: user.policyAgreement || {},
+//         reportingManager: user.reportingManager || null,
+//         hrGlobalDocumentOverrideUntil: user.hrGlobalDocumentOverrideUntil || null,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Login Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const logout = async (req, res) => {
+//   try {
+//     res.status(200).json({ message: "Logged out successfully" });
+//   } catch (error) {
+//     console.error("Logout Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// // export const getAllEmployees = async (req, res) => {
+// //   try {
+// //     const employees = await User.find(
+// //       { accountType: "employee" },
+// //       "_id username department isCoreTeam shiftStartHour shiftEndHour"
+// //     ).lean();
+
+// //     res.status(200).json(employees);
+// //   } catch (error) {
+// //     console.error("Get Employees Error:", error);
+// //     res.status(500).json({ message: "Server error", error: error.message });
+// //   }
+// // };
+
+// const SUPER_ADMIN_VISIBLE_ROLES = [
+//   "employee",
+//   "admin",
+//   "superAdmin",
+//   "HR",
+//   "Operations",
+//   "AM",
+//   "agent",
+//   "supervisor",
+// ];
+
+// const DEFAULT_EMPLOYEE_DOC_NAMES = [
+//   "Resume",
+//   "Photo",
+//   "Aadhaar Card",
+//   "PAN Card",
+//   "Current Address Proof",
+//   "Permanent Address Proof",
+//   "10th Marksheet",
+//   "12th Marksheet",
+//   "Graduation/Post Graduation Marksheet",
+//   "Additional Certificate",
+//   "Cancelled Cheque",
+//   "Bank Statement (Last 3 Months)",
+//   "Previous Company - Appointment Letter",
+//   "Previous Company - Last 3 Months Salary Slip",
+//   "Relieving/Experience Letter",
+//   "Resignation Acceptance",
+//   "Offer Letter",
+//   "Appointment Letter",
+// ];
+
+// const getShiftLabelFromHours = (start, end) => {
+//   const startNum = Number(start);
+//   const endNum = Number(end);
+//   if (!Number.isFinite(startNum) || !Number.isFinite(endNum)) return "";
+//   const formatHour = (hour) => {
+//     const suffix = hour >= 12 ? "PM" : "AM";
+//     const hour12 = hour % 12 === 0 ? 12 : hour % 12;
+//     return `${hour12}${suffix}`;
+//   };
+//   return `${formatHour(startNum)}-${formatHour(endNum)}`;
+// };
+
+// const formatDateOnly = (value) => {
+//   if (!value) return "";
+//   const date = new Date(value);
+//   if (Number.isNaN(date.getTime())) return "";
+//   const yyyy = date.getFullYear();
+//   const mm = String(date.getMonth() + 1).padStart(2, "0");
+//   const dd = String(date.getDate()).padStart(2, "0");
+//   return `${yyyy}-${mm}-${dd}`;
+// };
+
+// const formatDateTime = (value) => {
+//   if (!value) return "";
+//   const date = new Date(value);
+//   if (Number.isNaN(date.getTime())) return "";
+//   return date.toISOString();
+// };
+
+// export const getAllEmployees = async (req, res) => {
+//   try {
+//     const requester = req.user;
+//     const name = String(req.query?.name || "").trim();
+
+//     const isPrivilegedRole = isPrivilegedUser(requester || {});
+//     const query = isPrivilegedRole
+//       ? { accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } }
+//       : { accountType: "employee" };
+//     if (name) {
+//       const nameRegex = new RegExp(escapeRegex(name), "i");
+//       query.$or = [{ realName: nameRegex }, { username: nameRegex }, { pseudoName: nameRegex }];
+//     }
+
+//     const employees = await User.find(query)
+//       .select(
+//         "_id username department accountType isCoreTeam isTeamLeader isActive shiftStartHour shiftEndHour realName pseudoName empId dateOfJoining dob permanentAddress currentAddress bloodGroup emergencyContactNumber emergencyContactName emergencyContactRelation personalEmailId transportOffice docsStatus employmentType documents designation officeLocation reportingManager profilePhotoUrl profilePhotoPublicId ctc inHandSalary transportAllowance policyDocuments policySignatures policyAgreement hrDocumentOverrideUntil hrDocumentOverrideBy hrGlobalDocumentOverrideUntil hrGlobalDocumentOverrideBy createdAt"
+//       )
+//       .lean();
+
+//     const managerIds = [
+//       ...new Set(
+//         employees
+//           .map((e) => e?.reportingManager)
+//           .filter((id) => mongoose.Types.ObjectId.isValid(String(id || "")))
+//           .map((id) => String(id))
+//       ),
+//     ];
+//     const managerMap = new Map();
+//     if (managerIds.length) {
+//       const managers = await User.find({ _id: { $in: managerIds } })
+//         .select("_id username realName")
+//         .lean();
+//       for (const m of managers) {
+//         managerMap.set(String(m._id), m);
+//       }
+//     }
+//     const normalizedEmployees = employees.map((emp) => {
+//       const managerId = String(emp?.reportingManager || "");
+//       return withRoleType({
+//         ...emp,
+//         reportingManager: managerMap.get(managerId) || null,
+//       });
+//     });
+
+//     return res.status(200).json(normalizedEmployees);
+
+//   } catch (error) {
+//     console.error("Get Employees Error:", error);
+//     return res.status(500).json({
+//       message: "Server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+// export const updateProfile = async (req, res) => {
+//   try {
+//     const userId = req.user?.id;
+//     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+//     const { username, password } = req.body;
+//     const updateFields = {};
+
+//     if (username) {
+//       const existingUser = await User.findOne({ username }).lean();
+//       if (existingUser && existingUser._id.toString() !== userId) {
+//         return res.status(400).json({ message: "Username already taken" });
+//       }
+//       updateFields.username = username;
+//     }
+
+//     if (password) {
+//       updateFields.password = await bcrypt.hash(password, 10);
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(
+//       userId,
+//       { $set: updateFields },
+//       { new: true, select: "-password" }
+//     ).lean();
+
+//     if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+//     res.json({
+//       message: "Profile updated successfully",
+//       user: updatedUser,
+//     });
+//   } catch (error) {
+//     console.error("Update Profile Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const updateUserByAdmin = async (req, res) => {
+//   try {
+//     if (!isPrivilegedUser(req.user || {})) {
+//       return res.status(403).json({ message: "Only privileged users can update users" });
+//     }
+
+//     const userId = req.params.id;
+//     const {
+//       username,
+//       accountType,
+//       department,
+//       shiftLabel,
+//       isCoreTeam,
+//       isTeamLeader,
+//       password,
+//       confirmPassword,
+//       empId,
+//       dateOfJoining,
+//       dob,
+//       permanentAddress,
+//       currentAddress,
+//       bloodGroup,
+//       emergencyContactNumber,
+//       emergencyContactName,
+//       emergencyContactRelation,
+//       personalEmailId,
+//       docsStatus,
+//       transportOffice,
+//       realName,
+//       pseudoName,
+//       designation,
+//       officeLocation,
+//       reportingManager,
+//       profilePhotoUrl,
+//       profilePhotoPublicId,
+//       ctc,
+//       inHandSalary,
+//       transportAllowance,
+//       policyDocuments,
+//       documents,
+//       employmentType,
+//       allowHrDocumentEdit,
+//       allowHrDocumentEditGlobal,
+//       hrDocumentOverrideMinutes,
+//       isActive,
+//     } = req.body;
+
+//     const updateData = {};
+
+//     if (username) {
+//       const existingUser = await User.findOne({ username }).lean();
+//       if (existingUser && existingUser._id.toString() !== userId) {
+//         return res.status(400).json({ message: "Username already exists" });
+//       }
+//       updateData.username = username;
+//     }
+
+//     if (accountType !== undefined) {
+//       const mapped = toStorageAccountType(accountType, isTeamLeader);
+//       updateData.accountType = mapped.accountType;
+//       if (isTeamLeader === undefined) {
+//         updateData.isTeamLeader = Boolean(mapped.isTeamLeader);
+//       }
+//     }
+//     if (department) updateData.department = toStorageDepartment(department);
+//     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
+//     if (typeof isTeamLeader !== "undefined") updateData.isTeamLeader = Boolean(isTeamLeader);
+//     if (dateOfJoining) updateData.dateOfJoining = new Date(dateOfJoining);
+//     if (dob !== undefined) updateData.dob = dob ? new Date(dob) : null;
+//     if (empId !== undefined) {
+//       const normalizedEmpId = String(empId || "").trim();
+//       if (normalizedEmpId) {
+//         const existingEmpId = await User.findOne({ empId: normalizedEmpId }).lean();
+//         if (existingEmpId && existingEmpId._id.toString() !== userId) {
+//           return res.status(400).json({ message: "Employee ID already exists" });
+//         }
+//         updateData.empId = normalizedEmpId;
+//       } else {
+//         updateData.$unset = { ...(updateData.$unset || {}), empId: 1 };
+//       }
+//     }
+//     if (docsStatus !== undefined) updateData.docsStatus = toBooleanYesNo(docsStatus);
+//     if (transportOffice !== undefined) updateData.transportOffice = toBooleanYesNo(transportOffice);
+//     if (reportingManager !== undefined) {
+//       if (!reportingManager) {
+//         updateData.reportingManager = null;
+//       } else if (!mongoose.Types.ObjectId.isValid(String(reportingManager))) {
+//         return res.status(400).json({ message: "Invalid reporting manager id" });
+//       } else {
+//         updateData.reportingManager = reportingManager;
+//       }
+//     }
+//     if (realName !== undefined) updateData.realName = String(realName || "").trim();
+//     if (pseudoName !== undefined) updateData.pseudoName = String(pseudoName || "").trim();
+//     if (designation !== undefined) updateData.designation = String(designation || "").trim();
+//     if (officeLocation !== undefined) updateData.officeLocation = String(officeLocation || "").trim();
+//     if (permanentAddress !== undefined) updateData.permanentAddress = String(permanentAddress || "").trim();
+//     if (currentAddress !== undefined) updateData.currentAddress = String(currentAddress || "").trim();
+//     if (bloodGroup !== undefined) updateData.bloodGroup = String(bloodGroup || "").trim();
+//     if (emergencyContactNumber !== undefined)
+//       updateData.emergencyContactNumber = String(emergencyContactNumber || "").trim();
+//     if (emergencyContactName !== undefined)
+//       updateData.emergencyContactName = String(emergencyContactName || "").trim();
+//     if (emergencyContactRelation !== undefined)
+//       updateData.emergencyContactRelation = String(emergencyContactRelation || "").trim();
+//     if (personalEmailId !== undefined) updateData.personalEmailId = String(personalEmailId || "").trim();
+//     if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = String(profilePhotoUrl || "").trim();
+//     if (profilePhotoPublicId !== undefined)
+//       updateData.profilePhotoPublicId = String(profilePhotoPublicId || "").trim();
+//     const payrollPayloadProvided =
+//       ctc !== undefined || inHandSalary !== undefined || transportAllowance !== undefined;
+//     if (payrollPayloadProvided && !(isHrDepartment(req.user || {}) || req.user.accountType === "superAdmin")) {
+//       return res
+//         .status(403)
+//         .json({ message: "Only HR and superAdmin can update payroll fields" });
+//     }
+//     if (ctc !== undefined) updateData.ctc = normalizeOptionalAmount(ctc);
+//     if (inHandSalary !== undefined) updateData.inHandSalary = normalizeOptionalAmount(inHandSalary);
+//     if (transportAllowance !== undefined)
+//       updateData.transportAllowance = normalizeOptionalAmount(transportAllowance);
+//     if (employmentType !== undefined) {
+//       updateData.employmentType = normalizeEmploymentType(employmentType);
+//     }
+
+//     const existingUserForUpdate = await User.findById(userId)
+//       .select(
+//         "accountType username realName empId documents employmentType profilePhotoPublicId profilePhotoUrl hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil isActive"
+//       )
+//       .lean();
+//     if (!existingUserForUpdate) return res.status(404).json({ message: "User not found" });
+
+//     const wasActiveBeforeUpdate = existingUserForUpdate.isActive !== false;
+
+//     const isReactivationRequest =
+//       existingUserForUpdate.isActive === false &&
+//       isActive !== undefined &&
+//       Boolean(isActive) === true;
+
+//     if (isReactivationRequest && req.user?.accountType !== "superAdmin") {
+//       return res.status(403).json({
+//         message: "Only superAdmin can reactivate an inactive user.",
+//       });
+//     }
+
+//     if (existingUserForUpdate.isActive === false && !isReactivationRequest) {
+//       return res.status(403).json({
+//         message: "Inactive user cannot be edited from Manage Employee.",
+//       });
+//     }
+
+//     if (isActive !== undefined) {
+//       updateData.isActive = Boolean(isActive);
+//     }
+
+//     if (allowHrDocumentEdit !== undefined) {
+//       if (req.user.accountType !== "superAdmin") {
+//         return res.status(403).json({ message: "Only superAdmin can grant HR document override" });
+//       }
+//       const shouldAllow = Boolean(allowHrDocumentEdit);
+//       if (shouldAllow) {
+//         const minutes = Number(hrDocumentOverrideMinutes || 30);
+//         const validMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, 240) : 30;
+//         updateData.hrDocumentOverrideUntil = new Date(Date.now() + validMinutes * 60 * 1000);
+//         updateData.hrDocumentOverrideBy = req.user._id;
+//       } else {
+//         updateData.hrDocumentOverrideUntil = null;
+//         updateData.hrDocumentOverrideBy = null;
+//       }
+//     }
+
+//     if (allowHrDocumentEditGlobal !== undefined) {
+//       if (req.user.accountType !== "superAdmin") {
+//         return res.status(403).json({ message: "Only superAdmin can grant global HR document override" });
+//       }
+//       if (!isHrDepartment(existingUserForUpdate || {})) {
+//         return res.status(400).json({ message: "Global HR document override can only be granted to HR accounts" });
+//       }
+//       const shouldAllowGlobal = Boolean(allowHrDocumentEditGlobal);
+//       if (shouldAllowGlobal) {
+//         const minutes = Number(hrDocumentOverrideMinutes || 30);
+//         const validMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, 720) : 30;
+//         updateData.hrGlobalDocumentOverrideUntil = new Date(Date.now() + validMinutes * 60 * 1000);
+//         updateData.hrGlobalDocumentOverrideBy = req.user._id;
+//       } else {
+//         updateData.hrGlobalDocumentOverrideUntil = null;
+//         updateData.hrGlobalDocumentOverrideBy = null;
+//       }
+//     }
+//     if (policyDocuments !== undefined) {
+//       const normalizedPolicyDocs = resolvePolicyDocuments(policyDocuments);
+//       updateData.policyDocuments = normalizedPolicyDocs;
+//       const existingUser = await User.findById(userId).select("policySignatures").lean();
+//       const currentSignatures = Array.isArray(existingUser?.policySignatures) ? existingUser.policySignatures : [];
+//       updateData.policySignatures = normalizedPolicyDocs.map((docUrl) => {
+//         const found = currentSignatures.find((sig) => String(sig?.documentUrl || "").trim() === docUrl);
+//         return (
+//           found || {
+//             documentUrl: docUrl,
+//             employee: { signed: false },
+//             hr: { signed: false },
+//           }
+//         );
+//       });
+//     }
+//     if (documents !== undefined) {
+//       const normalizedIncomingDocs = normalizeDocumentList(documents);
+
+//       const hasEmployeeScopedOverride = isHrOverrideActive(existingUserForUpdate);
+//       const hasGlobalHrOverride = isHrGlobalOverrideActive(req.user);
+//       if (isHrDepartment(req.user || {}) && !(hasEmployeeScopedOverride || hasGlobalHrOverride)) {
+//         const lockedDocuments = evaluateLockedDocumentChanges({
+//           existingDocuments: existingUserForUpdate.documents || [],
+//           incomingDocuments: normalizedIncomingDocs,
+//         });
+//         if (lockedDocuments.length) {
+//           return res.status(403).json({
+//             message: `Document update blocked for: ${lockedDocuments.join(", ")}. Ask superAdmin for permission.`,
+//           });
+//         }
+//       }
+
+//       updateData.documents = applyDocumentUploadAudit({
+//         existingDocuments: existingUserForUpdate.documents || [],
+//         incomingDocuments: normalizedIncomingDocs,
+//         uploadedIp: getRequestIp(req),
+//       });
+//     }
+
+//     if (documents !== undefined || employmentType !== undefined || docsStatus !== undefined) {
+//       const docsForStatus = documents !== undefined ? updateData.documents || [] : existingUserForUpdate.documents || [];
+//       const employmentForStatus = updateData.employmentType ?? existingUserForUpdate.employmentType ?? "";
+//       updateData.docsStatus = computeDocsStatus({
+//         employmentType: employmentForStatus,
+//         documents: docsForStatus,
+//         fallback: updateData.docsStatus || "No",
+//       });
+//     }
+
+//     if (!isCoreTeam && shiftLabel) {
+//       const selected = shiftMapping[shiftLabel];
+//       if (!selected) return res.status(400).json({ message: "Invalid shift label" });
+
+//       updateData.shift = selected.shift;
+//       updateData.shiftStartHour = selected.shiftStartHour;
+//       updateData.shiftEndHour = selected.shiftEndHour;
+//     } else if (isCoreTeam) {
+//       updateData.shift = null;
+//       updateData.shiftStartHour = null;
+//       updateData.shiftEndHour = null;
+//     }
+
+//     if (password) {
+//       if (!confirmPassword) {
+//         return res.status(400).json({ message: "Confirm password is required" });
+//       }
+      
+//       if (password !== confirmPassword) {
+//         return res.status(400).json({ message: "Passwords do not match" });
+//       }
+      
+//       if (password.length < 6) {
+//         return res.status(400).json({ message: "Password must be at least 6 characters long" });
+//       }
+      
+//       const hashedPassword = await bcrypt.hash(password, 10);
+//       updateData.password = hashedPassword;
+      
+//       updateData.passwordLastReset = new Date();
+//     }
+
+//     const nextProfilePhotoUrl = String(updateData.profilePhotoUrl || "").trim();
+//     const prevProfilePhotoUrl = String(existingUserForUpdate.profilePhotoUrl || "").trim();
+//     const nextProfilePhotoPublicId = String(updateData.profilePhotoPublicId || "").trim();
+//     const prevProfilePhotoPublicId = String(existingUserForUpdate.profilePhotoPublicId || "").trim();
+//     const profilePhotoChanged =
+//       (nextProfilePhotoUrl && nextProfilePhotoUrl !== prevProfilePhotoUrl) ||
+//       (nextProfilePhotoPublicId && nextProfilePhotoPublicId !== prevProfilePhotoPublicId);
+//     if (profilePhotoChanged && prevProfilePhotoPublicId) {
+//       await destroyCloudinaryAsset(prevProfilePhotoPublicId);
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(
+//       userId,
+//       {
+//         ...(Object.keys(updateData).some((k) => k !== "$unset") ? { $set: Object.fromEntries(Object.entries(updateData).filter(([k]) => k !== "$unset")) } : {}),
+//         ...(updateData.$unset ? { $unset: updateData.$unset } : {}),
+//       },
+//       { new: true }
+//     )
+//       .select("-password")
+//       .populate("reportingManager", "username realName")
+//       .lean();
+
+//     if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+//     const isNowInactive = updatedUser.isActive === false;
+//     if (wasActiveBeforeUpdate && isNowInactive) {
+//       await notifySuperAdminsForHrAction({
+//         actor: req.user,
+//         action: "user_inactivated",
+//         target: updatedUser,
+//         io: req.io,
+//       });
+//     }
+
+//     const responseData = {
+//       message: "User updated successfully",
+//       user: withRoleType(updatedUser),
+//       passwordReset: password ? true : false
+//     };
+//     if (password) {
+//       responseData.message = "User updated and password reset successfully";
+//     }
+
+//     res.status(200).json(responseData);
+//   } catch (error) {
+//     console.error("Update User Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const exportEmployeeDetailsExcel = async (req, res) => {
+//   try {
+//     const requester = req.user;
+//     if (!isPrivilegedUser(requester || {})) {
+//       return res.status(403).json({ message: "Only superAdmin, admin and HR can export employees" });
+//     }
+
+//     const employees = await User.find({ accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } })
+//       .select(
+//         "_id username realName pseudoName empId accountType department designation officeLocation reportingManager dateOfJoining isActive isCoreTeam isTeamLeader shiftStartHour shiftEndHour transportOffice docsStatus employmentType ctc inHandSalary transportAllowance policyDocuments policyAgreement hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil documents createdAt updatedAt"
+//       )
+//       .lean();
+
+//     const managerIds = [
+//       ...new Set(
+//         employees
+//           .map((e) => e?.reportingManager)
+//           .filter((id) => mongoose.Types.ObjectId.isValid(String(id || "")))
+//           .map((id) => String(id))
+//       ),
+//     ];
+
+//     const managerMap = new Map();
+//     if (managerIds.length) {
+//       const managers = await User.find({ _id: { $in: managerIds } })
+//         .select("_id username realName")
+//         .lean();
+//       for (const m of managers) {
+//         managerMap.set(String(m._id), m);
+//       }
+//     }
+
+//     const discoveredDocNames = new Set(DEFAULT_EMPLOYEE_DOC_NAMES.map((doc) => String(doc || "").trim()));
+//     for (const employee of employees) {
+//       for (const doc of Array.isArray(employee?.documents) ? employee.documents : []) {
+//         const name = String(doc?.name || "").trim();
+//         if (name) discoveredDocNames.add(name);
+//       }
+//     }
+//     const docColumns = [...discoveredDocNames];
+
+//     const rows = employees.map((emp, index) => {
+//       const manager = managerMap.get(String(emp?.reportingManager || ""));
+//       const docStatusByName = new Map();
+//       for (const doc of Array.isArray(emp?.documents) ? emp.documents : []) {
+//         const name = String(doc?.name || "").trim();
+//         if (!name) continue;
+//         const hasDoc = Boolean(doc?.uploaded || String(doc?.url || "").trim());
+//         docStatusByName.set(name, hasDoc ? "Yes" : "No");
+//       }
+
+//       const row = {
+//         "S No": index + 1,
+//         "Employee ID": emp?.empId || "",
+//         "Username": emp?.username || "",
+//         "Real Name": emp?.realName || "",
+//         "Pseudo Name": emp?.pseudoName || "",
+//         "Account Type": emp?.accountType || "",
+//         "Department": emp?.department || "",
+//         "Designation": emp?.designation || "",
+//         "Office Location": emp?.officeLocation || "",
+//         "Reporting Manager": manager?.realName || manager?.username || "",
+//         "Date Of Joining": formatDateOnly(emp?.dateOfJoining),
+//         "Account Status": emp?.isActive === false ? "Inactive" : "Active",
+//         "Core Team": emp?.isCoreTeam ? "Yes" : "No",
+//         "Team Leader": emp?.isTeamLeader ? "Yes" : "No",
+//         "Shift": getShiftLabelFromHours(emp?.shiftStartHour, emp?.shiftEndHour),
+//         "Shift Start Hour": Number.isFinite(Number(emp?.shiftStartHour)) ? Number(emp.shiftStartHour) : "",
+//         "Shift End Hour": Number.isFinite(Number(emp?.shiftEndHour)) ? Number(emp.shiftEndHour) : "",
+//         "Transport Office": emp?.transportOffice || "",
+//         "Docs Status": emp?.docsStatus || "",
+//         "Employment Type": emp?.employmentType || "",
+//         "CTC": emp?.ctc ?? "",
+//         "In Hand Salary": emp?.inHandSalary ?? "",
+//         "Transport Allowance": emp?.transportAllowance ?? "",
+//         "Policy Assigned": Array.isArray(emp?.policyDocuments) && emp.policyDocuments.length ? "Yes" : "No",
+//         "Policy Agreed": emp?.policyAgreement?.agreed ? "Yes" : "No",
+//         "Policy Agreed At": formatDateTime(emp?.policyAgreement?.agreedAt),
+//         "HR Override Active": emp?.hrDocumentOverrideUntil ? "Yes" : "No",
+//         "HR Override Until": formatDateTime(emp?.hrDocumentOverrideUntil),
+//         "HR Global Override Active": emp?.hrGlobalDocumentOverrideUntil ? "Yes" : "No",
+//         "HR Global Override Until": formatDateTime(emp?.hrGlobalDocumentOverrideUntil),
+//         "Created At": formatDateTime(emp?.createdAt),
+//         "Updated At": formatDateTime(emp?.updatedAt),
+//       };
+
+//       for (const docName of docColumns) {
+//         row[`Doc - ${docName}`] = docStatusByName.get(docName) || "No";
+//       }
+//       return row;
+//     });
+
+//     const worksheet = XLSX.utils.json_to_sheet(rows);
+//     const workbook = XLSX.utils.book_new();
+//     XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+
+//     const fileName = `Employee_Details_${new Date().toISOString().slice(0, 10)}.xlsx`;
+//     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+//     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+//     res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+//     return res.send(buffer);
+//   } catch (error) {
+//     console.error("Export employee details excel error:", error);
+//     return res.status(500).json({ message: "Failed to export employee details", error: error.message });
+//   }
+// };
+
+// export const getReportingManagers = async (req, res) => {
+//   try {
+//     const normalizedDepartment = normalizeDepartment(req.query?.department || "Operations");
+//     const storageDepartment = toStorageDepartment(normalizedDepartment);
+//     const escapeRegex = (value = "") => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+//     const departmentRegex = new RegExp(`^\\s*${escapeRegex(storageDepartment)}\\s*$`, "i");
+
+//     const departmentFilters =
+//       normalizedDepartment === "Sales"
+//         ? [
+//             { department: departmentRegex },
+//             { department: new RegExp(`^\\s*${escapeRegex(toStorageDepartment("Operations"))}\\s*$`, "i") },
+//           ]
+//         : [{ department: departmentRegex }];
+
+//     // Fetch team leaders for requested department.
+//     // Special case: Sales employees can report to Sales TL or Operations TL.
+//     let managers = await User.find({
+//       isTeamLeader: true,
+//       $or: departmentFilters,
+//     })
+//       .select("_id username realName accountType department isTeamLeader")
+//       .sort({ username: 1 })
+//       .lean();
+
+//     // If no team leaders found in the specific department, try to find team leaders across all departments
+//     // This allows cross-department team leadership
+//     if (!managers.length) {
+//       managers = await User.find({
+//         isTeamLeader: true,
+//       })
+//         .select("_id username realName accountType department isTeamLeader")
+//         .sort({ username: 1 })
+//         .lean();
+//     }
+
+//     // If still no team leaders found, return empty array instead of falling back to all employees
+//     if (!managers.length) {
+//       console.log(`No team leaders found for department: ${normalizedDepartment}`);
+//       return res.status(200).json([]);
+//     }
+
+//     console.log(`Found ${managers.length} team leaders for department: ${normalizedDepartment}`);
+//     return res.status(200).json(managers);
+//   } catch (error) {
+//     console.error("Get reporting managers error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// const startOfDay = (dateLike) => {
+//   const d = new Date(dateLike);
+//   d.setHours(0, 0, 0, 0);
+//   return d;
+// };
+
+// const endOfDay = (dateLike) => {
+//   const d = new Date(dateLike);
+//   d.setHours(23, 59, 59, 999);
+//   return d;
+// };
+
+// const findWeekContainingDate = (rosters = [], date) => {
+//   const target = startOfDay(date).getTime();
+//   for (const roster of rosters) {
+//     for (const week of roster.weeks || []) {
+//       const weekStart = startOfDay(week.startDate).getTime();
+//       const weekEnd = endOfDay(week.endDate).getTime();
+//       if (target >= weekStart && target <= weekEnd) {
+//         return { roster, week };
+//       }
+//     }
+//   }
+//   return null;
+// };
+
+// const findEmployeeInWeek = (week, user) => {
+//   if (!week?.employees?.length) return null;
+//   const userId = String(user?._id || "").trim();
+//   const userUsername = String(user?.username || "").trim().toLowerCase();
+//   const userPseudo = String(user?.pseudoName || "").trim().toLowerCase();
+//   const userReal = String(user?.realName || "").trim().toLowerCase();
+//   const userEmpId = String(user?.empId || "").trim();
+
+//   return (
+//     week.employees.find((emp) => emp?.userId && String(emp.userId) === userId) ||
+//     week.employees.find((emp) => userEmpId && String(emp?.empId || "").trim() === userEmpId) ||
+//     week.employees.find((emp) => String(emp?.name || "").trim().toLowerCase() === userPseudo) ||
+//     week.employees.find((emp) => String(emp?.name || "").trim().toLowerCase() === userUsername) ||
+//     week.employees.find((emp) => String(emp?.name || "").trim().toLowerCase() === userReal) ||
+//     null
+//   );
+// };
+
+// const getWeekBounds = (dateLike = new Date()) => {
+//   const date = startOfDay(dateLike);
+//   const day = date.getDay();
+//   const diffToMonday = (day + 6) % 7;
+//   const weekStart = new Date(date);
+//   weekStart.setDate(date.getDate() - diffToMonday);
+//   const weekEnd = endOfDay(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6));
+//   return { weekStart, weekEnd };
+// };
+
+// const normalizeAnniversaryDateForYear = (joiningDate, year) => {
+//   const source = new Date(joiningDate);
+//   if (Number.isNaN(source.getTime())) return null;
+//   const month = source.getMonth();
+//   const day = source.getDate();
+//   const candidate = new Date(year, month, day);
+//   if (month === 1 && day === 29 && candidate.getMonth() !== 1) {
+//     return new Date(year, 2, 1);
+//   }
+//   return candidate;
+// };
+
+// const buildWeeklyWorkAnniversaries = (employees = [], referenceDate = new Date()) => {
+//   const { weekStart, weekEnd } = getWeekBounds(referenceDate);
+//   const year = weekStart.getFullYear();
+
+//   const weekly = employees
+//     .map((emp) => {
+//       const joiningDate = emp?.dateOfJoining ? new Date(emp.dateOfJoining) : null;
+//       if (!joiningDate || Number.isNaN(joiningDate.getTime())) return null;
+//       const anniversaryDate = normalizeAnniversaryDateForYear(joiningDate, year);
+//       if (!anniversaryDate) return null;
+//       if (anniversaryDate < weekStart || anniversaryDate > weekEnd) return null;
+//       const yearsCompleted = year - joiningDate.getFullYear();
+//       if (!Number.isFinite(yearsCompleted) || yearsCompleted < 1) return null;
+
+//       return {
+//         userId: emp._id,
+//         name: emp.pseudoName || emp.realName || emp.username || "Employee",
+//         username: emp.username || "",
+//         designation: emp.designation || "",
+//         department: emp.department || "",
+//         dateOfJoining: joiningDate,
+//         anniversaryDate,
+//         yearsCompleted,
+//         profilePhotoUrl: emp.profilePhotoUrl || "",
+//       };
+//     })
+//     .filter(Boolean)
+//     .sort((a, b) => new Date(a.anniversaryDate).getTime() - new Date(b.anniversaryDate).getTime());
+
+//   return {
+//     weekStart,
+//     weekEnd,
+//     total: weekly.length,
+//     weekly,
+//   };
+// };
+
+// const getAttendanceRowPriority = (row = {}) => {
+//   if (String(row?.overrideStatus || "").trim()) return 3;
+//   if (String(row?.departmentStatus || "").trim()) return 2;
+//   if (String(row?.transportStatus || "").trim()) return 1;
+//   if (String(row?.status || "").trim()) return 0;
+//   return -1;
+// };
+
+// const getAttendanceRowTimestamp = (row = {}) => {
+//   const candidates = [
+//     row?.rosterUpdatedAt,
+//     row?.updatedAt,
+//     row?.rosterCreatedAt,
+//     row?.createdAt,
+//   ];
+//   for (const value of candidates) {
+//     const ms = new Date(value).getTime();
+//     if (Number.isFinite(ms)) return ms;
+//   }
+//   return -1;
+// };
+
+// const isBetterAttendanceRow = (candidate, current) => {
+//   if (!current) return true;
+//   const candidatePriority = getAttendanceRowPriority(candidate);
+//   const currentPriority = getAttendanceRowPriority(current);
+//   if (candidatePriority !== currentPriority) {
+//     return candidatePriority > currentPriority;
+//   }
+
+//   const candidateTime = getAttendanceRowTimestamp(candidate);
+//   const currentTime = getAttendanceRowTimestamp(current);
+//   if (candidateTime !== currentTime) {
+//     return candidateTime > currentTime;
+//   }
+
+//   return String(candidate?.rosterId || "").localeCompare(String(current?.rosterId || "")) > 0;
+// };
+
+// export const getEmployeeDashboardSummary = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+//     const now = new Date();
+//     const today = startOfDay(now);
+//     const nextWeekDate = new Date(today);
+//     nextWeekDate.setDate(nextWeekDate.getDate() + 7);
+
+//     const rangeStart = startOfDay(today);
+//     const rangeEnd = endOfDay(nextWeekDate);
+
+//     const rosters = await Roster.find({
+//       rosterStartDate: { $lte: rangeEnd },
+//       rosterEndDate: { $gte: rangeStart },
+//     })
+//       .select("_id month year rosterStartDate rosterEndDate weeks createdAt updatedAt")
+//       .sort({ rosterStartDate: 1, rosterEndDate: 1, year: 1, month: 1 })
+//       .lean();
+
+//     const currentWeekResult = findWeekContainingDate(rosters, today);
+//     const nextWeekResult = findWeekContainingDate(rosters, nextWeekDate);
+
+//     const currentWeekEmployee = findEmployeeInWeek(currentWeekResult?.week, user);
+//     const nextWeekEmployee = findEmployeeInWeek(nextWeekResult?.week, user);
+
+//     const mapWeekData = (result, employee) => {
+//       if (!result?.week || !employee) return null;
+//       return {
+//         rosterId: result.roster._id,
+//         rosterCreatedAt: result.roster.createdAt,
+//         rosterUpdatedAt: result.roster.updatedAt,
+//         weekNumber: result.week.weekNumber,
+//         startDate: result.week.startDate,
+//         endDate: result.week.endDate,
+//         shiftStartHour: employee.shiftStartHour,
+//         shiftEndHour: employee.shiftEndHour,
+//         transport: employee.transport || user.transportOffice || "No",
+//         cabRoute: employee.cabRoute || "",
+//         dailyStatus: (employee.dailyStatus || []).map((day) => ({
+//           date: day.date,
+//           status: day.overrideStatus || day.departmentStatus || day.transportStatus || day.status || "",
+//           overrideStatus: day.overrideStatus || "",
+//           departmentStatus: day.departmentStatus || "",
+//           transportStatus: day.transportStatus || "",
+//           punchIn: day.punchIn || null,
+//           punchOut: day.punchOut || null,
+//           totalHours: day.totalHours ?? null,
+//         })),
+//       };
+//     };
+
+//     const currentWeek = mapWeekData(currentWeekResult, currentWeekEmployee);
+//     const nextWeek = mapWeekData(nextWeekResult, nextWeekEmployee);
+
+//     const currentWeekAttendance = (currentWeek?.dailyStatus || []).map((day) => ({
+//       date: day.date,
+//       status: day.overrideStatus || day.departmentStatus || day.transportStatus || day.status || "",
+//       overrideStatus: day.overrideStatus || "",
+//       departmentStatus: day.departmentStatus || "",
+//       transportStatus: day.transportStatus || "",
+//       punchIn: day.punchIn || null,
+//       punchOut: day.punchOut || null,
+//       totalHours: day.totalHours ?? null,
+//     }));
+
+//     const effectivePolicyDocuments = resolvePolicyDocuments(user.policyDocuments);
+//     const anniversaryUsers = await User.find({
+//       accountType: { $in: ["employee", "agent", "supervisor"] },
+//       isActive: { $ne: false },
+//       dateOfJoining: { $ne: null },
+//     })
+//       .select("_id username realName pseudoName designation department dateOfJoining profilePhotoUrl")
+//       .lean();
+//     const workAnniversaries = buildWeeklyWorkAnniversaries(anniversaryUsers, now);
+
+//     return res.status(200).json({
+//       profile: {
+//         id: user._id,
+//         username: user.username,
+//         realName: user.realName || "",
+//         pseudoName: user.pseudoName || "",
+//         empId: user.empId || "",
+//         dateOfJoining: user.dateOfJoining || null,
+//         department: user.department || "",
+//         designation: user.designation || "",
+//         officeLocation: user.officeLocation || "",
+//         profilePhotoUrl: user.profilePhotoUrl || "",
+//         profilePhotoPublicId: user.profilePhotoPublicId || "",
+//         ctc: user.ctc ?? null,
+//         inHandSalary: user.inHandSalary ?? null,
+//         transportAllowance: user.transportAllowance ?? null,
+//         transportOffice: user.transportOffice || "No",
+//         docsStatus: user.docsStatus || "No",
+//         documents: user.documents || [],
+//         policyDocuments: effectivePolicyDocuments,
+//         policySignatures: user.policySignatures || [],
+//         policyAgreement: user.policyAgreement || {},
+//         reportingManager: user.reportingManager || null,
+//         isTeamLeader: user.isTeamLeader || false,
+//       },
+//       roster: {
+//         currentWeek,
+//         nextWeek,
+//       },
+//       attendance: {
+//         currentWeek: currentWeekAttendance,
+//       },
+//       workAnniversaries,
+//     });
+//   } catch (error) {
+//     console.error("Get employee dashboard summary error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const getEmployeeAttendanceByMonth = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     if (!user) return res.status(401).json({ message: "Unauthorized" });
+
+//     const month = Number.parseInt(req.query?.month, 10);
+//     const year = Number.parseInt(req.query?.year, 10);
+//     if (!Number.isFinite(month) || !Number.isFinite(year) || month < 1 || month > 12) {
+//       return res.status(400).json({ message: "Valid month and year are required" });
+//     }
+
+//     const monthStart = new Date(Date.UTC(year, month - 1, 1, 0, 0, 0, 0));
+//     const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+
+//     const baseRosterFilter = {
+//       rosterStartDate: { $lte: monthEnd },
+//       rosterEndDate: { $gte: monthStart },
+//     };
+
+//     const toDateKey = (value) => {
+//       if (!value) return null;
+//       const d = new Date(value);
+//       if (Number.isNaN(d.getTime())) return null;
+//       const yyyy = d.getUTCFullYear();
+//       const mm = String(d.getUTCMonth() + 1).padStart(2, "0");
+//       const dd = String(d.getUTCDate()).padStart(2, "0");
+//       return `${yyyy}-${mm}-${dd}`;
+//     };
+
+//     const monthStartKey = `${year}-${String(month).padStart(2, "0")}-01`;
+//     const monthEndKey = `${year}-${String(month).padStart(2, "0")}-${String(new Date(Date.UTC(year, month, 0)).getUTCDate()).padStart(2, "0")}`;
+//     const updaterIds = new Set();
+//     const byDate = {};
+//     const userId = String(user?._id || "").trim();
+//     const userUsername = String(user?.username || "").trim().toLowerCase();
+//     const userPseudo = String(user?.pseudoName || "").trim().toLowerCase();
+//     const userReal = String(user?.realName || "").trim().toLowerCase();
+//     const userEmpId = String(user?.empId || "").trim();
+
+//     const collectUpdaterId = (candidate) => {
+//       if (!candidate) return;
+//       if (typeof candidate === "string") updaterIds.add(candidate);
+//       else if (candidate?._id) updaterIds.add(String(candidate._id));
+//     };
+
+//     const employeeMatchOr = [];
+//     if (userId) employeeMatchOr.push({ "weeks.employees.userId": user._id });
+//     if (userEmpId) employeeMatchOr.push({ "weeks.employees.empId": userEmpId });
+//     if (userPseudo) employeeMatchOr.push({ "weeks.employees.nameLower": userPseudo });
+//     if (userUsername) employeeMatchOr.push({ "weeks.employees.nameLower": userUsername });
+//     if (userReal) employeeMatchOr.push({ "weeks.employees.nameLower": userReal });
+
+//     const dayRows = await Roster.aggregate([
+//       { $match: baseRosterFilter },
+//       { $unwind: "$weeks" },
+//       {
+//         $match: {
+//           "weeks.startDate": { $lte: monthEnd },
+//           "weeks.endDate": { $gte: monthStart },
+//         },
+//       },
+//       { $unwind: "$weeks.employees" },
+//       {
+//         $addFields: {
+//           "weeks.employees.nameLower": {
+//             $toLower: { $trim: { input: { $ifNull: ["$weeks.employees.name", ""] } } },
+//           },
+//         },
+//       },
+//       {
+//         $match: employeeMatchOr.length ? { $or: employeeMatchOr } : { _id: null },
+//       },
+//       { $unwind: "$weeks.employees.dailyStatus" },
+//       {
+//         $match: {
+//           "weeks.employees.dailyStatus.date": { $gte: monthStart, $lte: monthEnd },
+//         },
+//       },
+//       {
+//         $project: {
+//           _id: 0,
+//           rosterId: "$_id",
+//           rosterCreatedAt: "$createdAt",
+//           rosterUpdatedAt: "$updatedAt",
+//           date: "$weeks.employees.dailyStatus.date",
+//           overrideStatus: "$weeks.employees.dailyStatus.overrideStatus",
+//           departmentStatus: "$weeks.employees.dailyStatus.departmentStatus",
+//           transportStatus: "$weeks.employees.dailyStatus.transportStatus",
+//           status: "$weeks.employees.dailyStatus.status",
+//           punchIn: "$weeks.employees.dailyStatus.punchIn",
+//           punchOut: "$weeks.employees.dailyStatus.punchOut",
+//           totalHours: "$weeks.employees.dailyStatus.totalHours",
+//           departmentStatusUpdatedBy: "$weeks.employees.dailyStatus.departmentStatusUpdatedBy",
+//           transportStatusUpdatedBy: "$weeks.employees.dailyStatus.transportStatusUpdatedBy",
+//           departmentUpdatedBy: "$weeks.employees.dailyStatus.departmentUpdatedBy",
+//           transportUpdatedBy: "$weeks.employees.dailyStatus.transportUpdatedBy",
+//         },
+//       },
+//       { $sort: { date: 1 } },
+//     ]);
+
+//     dayRows.forEach((day) => {
+//       const dateKey = toDateKey(day?.date);
+//       if (!dateKey || dateKey < monthStartKey || dateKey > monthEndKey) return;
+
+//       collectUpdaterId(day?.departmentStatusUpdatedBy);
+//       collectUpdaterId(day?.transportStatusUpdatedBy);
+//       collectUpdaterId(day?.departmentUpdatedBy);
+//       collectUpdaterId(day?.transportUpdatedBy);
+
+//       const previous = byDate[dateKey] || null;
+//       const row = {
+//         rosterId: String(day?.rosterId || ""),
+//         rosterCreatedAt: day?.rosterCreatedAt || null,
+//         rosterUpdatedAt: day?.rosterUpdatedAt || null,
+//         date: dateKey,
+//         overrideStatus: day?.overrideStatus || "",
+//         departmentStatus: day?.departmentStatus || "",
+//         transportStatus: day?.transportStatus || "",
+//         status: day?.overrideStatus || day?.departmentStatus || day?.transportStatus || day?.status || "",
+//         punchIn: day?.punchIn || null,
+//         punchOut: day?.punchOut || null,
+//         totalHours: day?.totalHours ?? null,
+//         departmentStatusUpdatedBy: day?.departmentStatusUpdatedBy || null,
+//         transportStatusUpdatedBy: day?.transportStatusUpdatedBy || null,
+//         departmentUpdatedBy: day?.departmentUpdatedBy || null,
+//         transportUpdatedBy: day?.transportUpdatedBy || null,
+//       };
+//       if (!previous || isBetterAttendanceRow(row, previous)) {
+//         byDate[dateKey] = row;
+//       }
+//     });
+
+//     const updaterIdList = Array.from(updaterIds);
+//     const updaterUsers = updaterIdList.length
+//       ? await User.find({ _id: { $in: updaterIdList } }).select("_id username").lean()
+//       : [];
+//     const updaterNameById = updaterUsers.reduce((acc, u) => {
+//       acc[String(u._id)] = u.username || "";
+//       return acc;
+//     }, {});
+
+//     const resolveUpdaterName = (entry) => {
+//       const preferred =
+//         entry.departmentStatusUpdatedBy ||
+//         entry.transportStatusUpdatedBy ||
+//         entry.departmentUpdatedBy ||
+//         entry.transportUpdatedBy;
+//       if (!preferred) return "";
+//       if (typeof preferred === "string") return updaterNameById[preferred] || "";
+//       if (preferred?.username) return preferred.username;
+//       if (preferred?._id) return updaterNameById[String(preferred._id)] || "";
+//       return "";
+//     };
+
+//     const attendance = Object.values(byDate)
+//       .map((entry) => ({
+//         date: entry.date,
+//         status: entry.status,
+//         overrideStatus: entry.overrideStatus || "",
+//         departmentStatus: entry.departmentStatus,
+//         transportStatus: entry.transportStatus,
+//         punchIn: entry.punchIn,
+//         punchOut: entry.punchOut,
+//         totalHours: entry.totalHours,
+//         updatedByDepartment: resolveUpdaterName(entry),
+//       }))
+//       .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+
+//     return res.status(200).json({ month, year, attendance });
+//   } catch (error) {
+//     console.error("Get employee attendance by month error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const acceptPolicyAgreement = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+//     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+
+//     const { version = "v1" } = req.body || {};
+
+//     const updated = await User.findByIdAndUpdate(
+//       userId,
+//       {
+//         $set: {
+//           "policyAgreement.agreed": true,
+//           "policyAgreement.agreedAt": new Date(),
+//           "policyAgreement.agreedIp": getRequestIp(req),
+//           "policyAgreement.version": version,
+//         },
+//       },
+//       { new: true }
+//     )
+//       .select("-password")
+//       .lean();
+
+//     if (!updated) return res.status(404).json({ message: "User not found" });
+
+//     return res.status(200).json({
+//       message: "Policy accepted successfully",
+//       policyAgreement: updated.policyAgreement,
+//       user: updated,
+//     });
+//   } catch (error) {
+//     console.error("Policy acceptance error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const signPolicyDocumentByEmployee = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+//     if (!userId) return res.status(401).json({ message: "Unauthorized" });
+//     if (getRoleType(req.user || {}) === "superAdmin") {
+//       return res.status(403).json({ message: "Only employee can sign this endpoint" });
+//     }
+
+//     const { documentUrl, signatureDataUrl, version = "v1" } = req.body || {};
+//     const normalizedUrl = String(documentUrl || "").trim();
+//     if (!normalizedUrl) return res.status(400).json({ message: "Policy document URL is required" });
+//     if (!signatureDataUrl) return res.status(400).json({ message: "Signature is required" });
+
+//     const user = await User.findById(userId).select("policyDocuments policySignatures policyAgreement");
+//     if (!user) return res.status(404).json({ message: "User not found" });
+
+//     const effectivePolicyDocuments = resolvePolicyDocuments(user.policyDocuments);
+
+//     const normalizedDocKey = normalizePolicyKey(normalizedUrl);
+//     const hasPolicy = effectivePolicyDocuments.some((doc) => normalizePolicyKey(doc || "") === normalizedDocKey);
+//     if (!hasPolicy) {
+//       return res.status(400).json({ message: "Selected policy is not assigned to employee" });
+//     }
+
+//     const uploadedSignature = await uploadSignatureDataUrl(signatureDataUrl);
+//     const now = new Date();
+//     user.policySignatures = upsertPolicySignature(user.policySignatures, normalizedUrl, "employee", {
+//       signed: true,
+//       signedAt: now,
+//       signedIp: getRequestIp(req),
+//       signatureUrl: uploadedSignature.url,
+//       signaturePublicId: uploadedSignature.publicId,
+//       signedBy: userId,
+//     });
+//     const signedIdx = user.policySignatures.findIndex(
+//       (sig) => normalizePolicyKey(sig?.documentUrl || "") === normalizedDocKey
+//     );
+//     if (signedIdx >= 0) {
+//       const refreshed = await refreshSignedPdfForSignature(
+//         user.policySignatures[signedIdx],
+//         normalizedUrl
+//       );
+//       if (refreshed) {
+//         user.policySignatures[signedIdx] = refreshed;
+//       }
+//     }
+//     user.policySignatures = sanitizePolicySignatures(user.policySignatures, normalizedUrl);
+
+//     const assignedDocs = normalizePolicyDocuments(effectivePolicyDocuments);
+//     const allEmployeeSigned =
+//       assignedDocs.length > 0 &&
+//       assignedDocs.every((docUrl) =>
+//         user.policySignatures.some(
+//           (sig) =>
+//             normalizePolicyKey(sig?.documentUrl || "") === normalizePolicyKey(docUrl) &&
+//             Boolean(sig?.employee?.signed)
+//         )
+//       );
+
+//     user.policyAgreement = {
+//       ...(user.policyAgreement || {}),
+//       agreed: allEmployeeSigned,
+//       agreedAt: allEmployeeSigned ? now : null,
+//       agreedIp: allEmployeeSigned ? getRequestIp(req) : "",
+//       version,
+//     };
+
+//     await user.save();
+
+//     return res.status(200).json({
+//       message: "Policy signed successfully",
+//       policySignatures: user.policySignatures,
+//       policyAgreement: user.policyAgreement,
+//     });
+//   } catch (error) {
+//     console.error("Employee policy signature error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const signPolicyDocumentByHR = async (req, res) => {
+//   try {
+//     const signer = req.user;
+//     if (!signer || !["HR", "superAdmin", "admin"].includes(signer.accountType)) {
+//       return res.status(403).json({ message: "Only HR, admin, or superAdmin can sign as HR" });
+//     }
+
+//     const targetUserId = req.params.id;
+//     const { documentUrl, signatureDataUrl, party = "hr" } = req.body || {};
+//     const partyKey = party === "employee" ? "employee" : "hr";
+//     const normalizedUrl = String(documentUrl || "").trim();
+//     if (!targetUserId) return res.status(400).json({ message: "Employee id is required" });
+//     if (!normalizedUrl) return res.status(400).json({ message: "Policy document URL is required" });
+//     if (!signatureDataUrl) return res.status(400).json({ message: "Signature is required" });
+
+//     const employee = await User.findById(targetUserId).select("accountType policyDocuments policySignatures");
+//     if (!employee) return res.status(404).json({ message: "Employee not found" });
+//     if (getRoleType(employee || {}) === "superAdmin") {
+//       return res.status(400).json({ message: "Target user is not an employee" });
+//     }
+
+//     const effectivePolicyDocuments = resolvePolicyDocuments(employee.policyDocuments);
+//     const normalizedDocKey = normalizePolicyKey(normalizedUrl);
+//     const hasPolicy = effectivePolicyDocuments.some((doc) => normalizePolicyKey(doc || "") === normalizedDocKey);
+//     if (!hasPolicy) {
+//       return res.status(400).json({ message: "Selected policy is not assigned to employee" });
+//     }
+
+//     const uploadedSignature = await uploadSignatureDataUrl(
+//       signatureDataUrl,
+//       "task_management/employee/policy_signatures/hr"
+//     );
+//     employee.policySignatures = upsertPolicySignature(employee.policySignatures, normalizedUrl, partyKey, {
+//       signed: true,
+//       signedAt: new Date(),
+//       signedIp: getRequestIp(req),
+//       signatureUrl: uploadedSignature.url,
+//       signaturePublicId: uploadedSignature.publicId,
+//       signedBy: signer._id,
+//     });
+//     const signedIdx = employee.policySignatures.findIndex(
+//       (sig) => normalizePolicyKey(sig?.documentUrl || "") === normalizedDocKey
+//     );
+//     if (signedIdx >= 0) {
+//       const refreshed = await refreshSignedPdfForSignature(
+//         employee.policySignatures[signedIdx],
+//         normalizedUrl
+//       );
+//       if (refreshed) {
+//         employee.policySignatures[signedIdx] = refreshed;
+//       }
+//     }
+//     employee.policySignatures = sanitizePolicySignatures(employee.policySignatures, normalizedUrl);
+
+//     const assignedDocs = normalizePolicyDocuments(effectivePolicyDocuments);
+//     const allEmployeeSigned =
+//       assignedDocs.length > 0 &&
+//       assignedDocs.every((docUrl) =>
+//         employee.policySignatures.some(
+//           (sig) =>
+//             normalizePolicyKey(sig?.documentUrl || "") === normalizePolicyKey(docUrl) &&
+//             Boolean(sig?.employee?.signed)
+//         )
+//       );
+//     if (allEmployeeSigned) {
+//       employee.policyAgreement = {
+//         ...(employee.policyAgreement || {}),
+//         agreed: true,
+//         agreedAt: new Date(),
+//         agreedIp: getRequestIp(req),
+//         version: employee.policyAgreement?.version || "v1",
+//       };
+//     } else {
+//       employee.policyAgreement = {
+//         ...(employee.policyAgreement || {}),
+//         agreed: false,
+//         agreedAt: null,
+//         agreedIp: "",
+//       };
+//     }
+
+//     await employee.save();
+
+//     return res.status(200).json({
+//       message:
+//         partyKey === "employee"
+//           ? "Employee signature recorded successfully by HR"
+//           : "HR signature recorded successfully",
+//       policySignatures: employee.policySignatures,
+//       policyAgreement: employee.policyAgreement,
+//       userId: employee._id,
+//     });
+//   } catch (error) {
+//     console.error("HR policy signature error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const uploadEmployeeAsset = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     if (!user || !isPrivilegedUser(user)) {
+//       return res.status(403).json({ message: "Only superAdmin and HR can upload assets" });
+//     }
+
+//     const file = req.file;
+//     const { assetType = "document" } = req.body || {};
+//     if (!file) return res.status(400).json({ message: "No file uploaded" });
+
+//     const folder =
+//       assetType === "policy"
+//         ? "task_management/employee/policies"
+//         : assetType === "profile-photo"
+//         ? "task_management/employee/profile_photos"
+//         : "task_management/employee/documents";
+
+//     const result = await new Promise((resolve, reject) => {
+//       const stream = cloudinary.uploader.upload_stream(
+//         {
+//           folder,
+//           resource_type: "auto",
+//           use_filename: true,
+//           unique_filename: true,
+//           overwrite: false,
+//         },
+//         (error, uploadResult) => {
+//           if (error) return reject(error);
+//           resolve(uploadResult);
+//         }
+//       );
+//       stream.end(file.buffer);
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Asset uploaded successfully",
+//       asset: {
+//         url: result.secure_url,
+//         publicId: result.public_id,
+//         resourceType: result.resource_type,
+//         format: result.format,
+//         bytes: result.bytes,
+//         originalName: file.originalname,
+//         mimeType: file.mimetype,
+//         assetType,
+//         uploadedIp: getRequestIp(req),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Upload employee asset error:", error);
+//     return res.status(500).json({ message: "Failed to upload asset", error: error.message });
+//   }
+// };
+
+// export const verifyEmployeeOnboardingToken = async (req, res) => {
+//   try {
+//     const token = String(req.query?.token || "").trim();
+//     if (!token) return res.status(400).json({ message: "Token is required" });
+//     const record = await getOnboardingTokenRecord(token);
+//     if (!record) return res.status(401).json({ message: "Invalid or expired onboarding token" });
+//     const employee = await User.findById(record.userId)
+//       .select("_id realName pseudoName username empId personalEmailId")
+//       .lean();
+//     if (!employee) return res.status(404).json({ message: "Employee not found" });
+//     return res.status(200).json({
+//       valid: true,
+//       employee: {
+//         id: employee._id,
+//         realName: employee.realName || employee.pseudoName || employee.username,
+//         empId: employee.empId || "",
+//         email: employee.personalEmailId || "",
+//       },
+//       requiredDocs: ONBOARDING_REQUIRED_DOCS,
+//     });
+//   } catch (error) {
+//     console.error("Verify onboarding token error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const uploadEmployeeOnboardingAsset = async (req, res) => {
+//   try {
+//     const token = String(req.body?.token || "").trim();
+//     const documentName = String(req.body?.documentName || "").trim();
+//     const file = req.file;
+//     if (!token) return res.status(400).json({ message: "Token is required" });
+//     if (!documentName) return res.status(400).json({ message: "Document name is required" });
+//     if (!file) return res.status(400).json({ message: "No file uploaded" });
+//     if (!ONBOARDING_REQUIRED_DOCS.includes(documentName)) {
+//       return res.status(400).json({ message: "Invalid document name" });
+//     }
+
+//     const record = await getOnboardingTokenRecord(token);
+//     if (!record) return res.status(401).json({ message: "Invalid or expired onboarding token" });
+
+//     const isPdf = file.mimetype === "application/pdf";
+//     const maxBytes = isPdf ? 300 * 1024 : 200 * 1024;
+//     if (file.size > maxBytes) {
+//       return res.status(400).json({
+//         message: `File too large. Max allowed is ${isPdf ? "300KB" : "200KB"}`,
+//       });
+//     }
+
+//     const folder = documentName === "Photo"
+//       ? "task_management/employee/profile_photos"
+//       : "task_management/employee/onboarding_docs";
+
+//     const result = await new Promise((resolve, reject) => {
+//       const stream = cloudinary.uploader.upload_stream(
+//         {
+//           folder,
+//           resource_type: "auto",
+//           use_filename: true,
+//           unique_filename: true,
+//           overwrite: false,
+//         },
+//         (error, uploadResult) => {
+//           if (error) return reject(error);
+//           resolve(uploadResult);
+//         }
+//       );
+//       stream.end(file.buffer);
+//     });
+
+//     return res.status(200).json({
+//       success: true,
+//       asset: {
+//         name: documentName,
+//         url: result.secure_url,
+//         publicId: result.public_id,
+//         fileName: file.originalname,
+//         mimeType: file.mimetype,
+//         size: result.bytes || file.size || 0,
+//         uploaded: true,
+//         uploadedAt: new Date().toISOString(),
+//         uploadedIp: getRequestIp(req),
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Employee onboarding upload error:", error);
+//     return res.status(500).json({ message: "Upload failed", error: error.message });
+//   }
+// };
+
+// export const submitEmployeeOnboardingDocs = async (req, res) => {
+//   try {
+//     const token = String(req.body?.token || "").trim();
+//     const documents = Array.isArray(req.body?.documents) ? req.body.documents : [];
+//     if (!token) return res.status(400).json({ message: "Token is required" });
+//     if (!documents.length) return res.status(400).json({ message: "Documents are required" });
+
+//     const record = await getOnboardingTokenRecord(token);
+//     if (!record) return res.status(401).json({ message: "Invalid or expired onboarding token" });
+
+//     const validDocuments = documents
+//       .map((doc) => ({
+//         name: String(doc?.name || "").trim(),
+//         url: String(doc?.url || "").trim(),
+//         publicId: String(doc?.publicId || "").trim(),
+//         fileName: String(doc?.fileName || "").trim(),
+//         mimeType: String(doc?.mimeType || "").trim(),
+//         size: Number(doc?.size || 0),
+//         uploaded: true,
+//         uploadedAt: doc?.uploadedAt ? new Date(doc.uploadedAt) : new Date(),
+//         uploadedIp: String(doc?.uploadedIp || getRequestIp(req)),
+//       }))
+//       .filter((doc) => doc.name && doc.url && ONBOARDING_REQUIRED_DOCS.includes(doc.name));
+
+//     const providedNames = new Set(validDocuments.map((d) => d.name));
+//     const missingDocs = ONBOARDING_REQUIRED_DOCS.filter((name) => !providedNames.has(name));
+//     if (missingDocs.length) {
+//       return res.status(400).json({
+//         message: "All documents are mandatory for onboarding upload",
+//         missingDocs,
+//       });
+//     }
+
+//     const photoDoc = validDocuments.find((d) => d.name === "Photo");
+//     const updateData = {
+//       documents: validDocuments,
+//       docsStatus: "Yes",
+//     };
+//     if (photoDoc?.url) {
+//       updateData.profilePhotoUrl = photoDoc.url;
+//       updateData.profilePhotoPublicId = photoDoc.publicId || "";
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(
+//       record.userId,
+//       { $set: updateData },
+//       { new: true }
+//     )
+//       .select("_id username realName empId documents docsStatus profilePhotoUrl profilePhotoPublicId")
+//       .lean();
+
+//     await markOnboardingTokenUsed(record._id);
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Documents submitted successfully",
+//       user: updatedUser,
+//     });
+//   } catch (error) {
+//     console.error("Submit onboarding docs error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// export const deleteEmployeeByAdmin = async (req, res) => {
+//   try {
+//     const requester = req.user;
+//     if (!requester || !isPrivilegedUser(requester)) {
+//       return res.status(403).json({ message: "Only admin, superAdmin and HR can delete employees" });
+//     }
+
+//     const targetUserId = String(req.params.id || "").trim();
+//     if (!targetUserId) {
+//       return res.status(400).json({ message: "User id is required" });
+//     }
+
+//     if (String(requester._id) === targetUserId) {
+//       return res.status(400).json({ message: "You cannot delete your own account" });
+//     }
+
+//     const target = await User.findById(targetUserId).select("_id accountType username realName empId").lean();
+//     if (!target) return res.status(404).json({ message: "User not found" });
+
+//     if (target.accountType === "superAdmin" && requester.accountType !== "superAdmin") {
+//       return res.status(403).json({ message: "Only superAdmin can delete a superAdmin account" });
+//     }
+
+//     await User.findByIdAndDelete(targetUserId);
+
+//     await notifySuperAdminsForHrAction({
+//       actor: requester,
+//       action: "user_deleted",
+//       target,
+//       io: req.io,
+//     });
+
+//     return res.status(200).json({
+//       message: "Employee deleted successfully",
+//       deletedUserId: targetUserId,
+//       deletedUsername: target.username || "",
+//     });
+//   } catch (error) {
+//     console.error("Delete employee error:", error);
+//     return res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
+
+// // export const updateUserByAdmin = async (req, res) => {
+// //   try {
+// //     if (!req.user?.accountType || req.user.accountType !== "admin") {
+// //       return res.status(403).json({ message: "Only admin can update users" });
+// //     }
+
+// //     const userId = req.params.id;
+// //     const { username, accountType, department, shiftLabel, isCoreTeam } = req.body;
+
+// //     const updateData = {};
+
+// //     if (username) {
+// //       const existingUser = await User.findOne({ username }).lean();
+// //       if (existingUser && existingUser._id.toString() !== userId) {
+// //         return res.status(400).json({ message: "Username already exists" });
+// //       }
+// //       updateData.username = username;
+// //     }
+
+// //     if (accountType) updateData.accountType = accountType;
+// //     if (department) updateData.department = department;
+// //     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
+
+// //     if (!isCoreTeam) {
+// //       const shiftMapping = {
+// //         "1am-10am": { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+// //         "4pm-1am": { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+// //         "5pm-2am": { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+// //         "6pm-3am": { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+// //         "8pm-5am": { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+// //         "11pm-8am": {shift: "Start", shiftStartHour: 23, shiftEndHour: 8},
+// //       };
+// //       const selected = shiftMapping[shiftLabel];
+// //       if (!selected) return res.status(400).json({ message: "Invalid shift label" });
+
+// //       updateData.shift = selected.shift;
+// //       updateData.shiftStartHour = selected.shiftStartHour;
+// //       updateData.shiftEndHour = selected.shiftEndHour;
+// //     } else {
+// //       updateData.shift = null;
+// //       updateData.shiftStartHour = null;
+// //       updateData.shiftEndHour = null;
+// //     }
+
+// //     const updatedUser = await User.findByIdAndUpdate(
+// //       userId,
+// //       { $set: updateData },
+// //       { new: true, select: "-password" }
+// //     ).lean();
+
+// //     if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+// //     res.status(200).json({
+// //       message: "User updated successfully",
+// //       user: updatedUser,
+// //     });
+// //   } catch (error) {
+// //     console.error("Update User Error:", error);
+// //     res.status(500).json({ message: "Server error", error: error.message });
+// //   }
+// // };
+
+
+
+
+
+
+
+
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import User from "../Modals/User.modal.js";
+import LeaveRequest from "../Modals/LeaveRequest.modal.js";
 import EmpIdCounter from "../Modals/EmpIdCounter.modal.js";
 import EmployeeOnboardingToken from "../Modals/EmployeeOnboardingToken.modal.js";
 import Roster from "../Modals/Roster.modal.js";
@@ -1218,6 +4000,101 @@ const getShiftLabelFromHours = (start, end) => {
   return `${formatHour(startNum)}-${formatHour(endNum)}`;
 };
 
+const toIstDateKeyForRosterSync = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  return year && month && day ? `${year}-${month}-${day}` : null;
+};
+
+const syncRosterEmployeeFieldsFromUser = async ({
+  userId,
+  userEmpId,
+  reportingManager,
+  hasReportingManager,
+  shiftStartHour,
+  shiftEndHour,
+  updatedBy,
+}) => {
+  const normalizedUserId = String(userId || "").trim();
+  const normalizedEmpId = String(userEmpId || "").trim();
+  if (!normalizedUserId) return;
+
+  const todayKey = toIstDateKeyForRosterSync(new Date());
+  if (!todayKey) return;
+
+  const rosterFilter = [{ "weeks.employees.userId": normalizedUserId }];
+  if (normalizedEmpId) {
+    rosterFilter.push({ "weeks.employees.empId": normalizedEmpId });
+  }
+
+  const rosters = await Roster.find({ $or: rosterFilter });
+
+  if (!rosters.length) return;
+
+  let managerLabel = undefined;
+  if (hasReportingManager) {
+    if (!reportingManager) {
+      managerLabel = "";
+    } else if (mongoose.Types.ObjectId.isValid(String(reportingManager))) {
+      const manager = await User.findById(reportingManager)
+        .select("username realName pseudoName")
+        .lean();
+      managerLabel = manager?.realName || manager?.username || manager?.pseudoName || "";
+    }
+  }
+
+  const nextShiftStartHour = Number(shiftStartHour);
+  const nextShiftEndHour = Number(shiftEndHour);
+  const shouldSyncShift = Number.isFinite(nextShiftStartHour) && Number.isFinite(nextShiftEndHour);
+
+  for (const roster of rosters) {
+    let rosterChanged = false;
+
+    for (const week of roster.weeks || []) {
+      const weekEndKey = toIstDateKeyForRosterSync(week?.endDate);
+      if (!weekEndKey || weekEndKey < todayKey) continue;
+
+      for (const emp of week.employees || []) {
+        const rosterUserId = String(emp?.userId?._id || emp?.userId || "").trim();
+        const rosterEmpId = String(emp?.empId || "").trim();
+        const matchesUser = rosterUserId === normalizedUserId || (normalizedEmpId && rosterEmpId === normalizedEmpId);
+
+        if (!matchesUser) continue;
+
+        if (managerLabel !== undefined && emp.teamLeader !== managerLabel) {
+          emp.teamLeader = managerLabel;
+          rosterChanged = true;
+        }
+
+        if (shouldSyncShift) {
+          if (emp.shiftStartHour !== nextShiftStartHour) {
+            emp.shiftStartHour = nextShiftStartHour;
+            rosterChanged = true;
+          }
+          if (emp.shiftEndHour !== nextShiftEndHour) {
+            emp.shiftEndHour = nextShiftEndHour;
+            rosterChanged = true;
+          }
+        }
+      }
+    }
+
+    if (rosterChanged) {
+      roster.updatedBy = updatedBy || roster.updatedBy;
+      await roster.save();
+    }
+  }
+};
+
 const formatDateOnly = (value) => {
   if (!value) return "";
   const date = new Date(value);
@@ -1633,6 +4510,29 @@ export const updateUserByAdmin = async (req, res) => {
         target: updatedUser,
         io: req.io,
       });
+    }
+
+    const hasReportingManagerUpdate = Object.prototype.hasOwnProperty.call(updateData, "reportingManager");
+    const shouldSyncShift =
+      Object.prototype.hasOwnProperty.call(updateData, "shiftStartHour") &&
+      Object.prototype.hasOwnProperty.call(updateData, "shiftEndHour") &&
+      Number.isFinite(Number(updateData.shiftStartHour)) &&
+      Number.isFinite(Number(updateData.shiftEndHour));
+
+    if (hasReportingManagerUpdate || shouldSyncShift) {
+      try {
+        await syncRosterEmployeeFieldsFromUser({
+          userId: updatedUser._id,
+          userEmpId: updatedUser.empId,
+          reportingManager: updateData.reportingManager,
+          hasReportingManager: hasReportingManagerUpdate,
+          shiftStartHour: shouldSyncShift ? updateData.shiftStartHour : undefined,
+          shiftEndHour: shouldSyncShift ? updateData.shiftEndHour : undefined,
+          updatedBy: req.user._id,
+        });
+      } catch (syncError) {
+        console.error("Roster sync after employee update failed:", syncError);
+      }
     }
 
     const responseData = {
@@ -2113,6 +5013,57 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
       else if (candidate?._id) updaterIds.add(String(candidate._id));
     };
 
+    const approvedLeaveRows = await LeaveRequest.find({
+      userId: user._id,
+      status: "approved",
+      startDate: { $lte: monthEnd },
+      endDate: { $gte: monthStart },
+    })
+      .select("leaveType startDate endDate")
+      .lean();
+
+    const toIstDateKey = (value) => {
+      if (!value) return null;
+      const d = new Date(value);
+      if (Number.isNaN(d.getTime())) return null;
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+      }).formatToParts(d);
+      const year = parts.find((p) => p.type === "year")?.value;
+      const month = parts.find((p) => p.type === "month")?.value;
+      const day = parts.find((p) => p.type === "day")?.value;
+      return year && month && day ? `${year}-${month}-${day}` : null;
+    };
+
+    const normalizeLeaveCode = (leaveType) => {
+      const code = String(leaveType || "").trim().toUpperCase();
+      if (code === "EL" || code === "CL" || code === "ML") return "L";
+      return code;
+    };
+
+    const approvedLeaveByDate = new Map();
+    for (const leave of approvedLeaveRows || []) {
+      const leaveCode = normalizeLeaveCode(leave?.leaveType);
+      if (!leaveCode) continue;
+
+      const startKey = toIstDateKey(leave.startDate);
+      const endKey = toIstDateKey(leave.endDate);
+      if (!startKey || !endKey) continue;
+
+      const cursor = new Date(`${startKey}T12:00:00.000Z`);
+      const end = new Date(`${endKey}T12:00:00.000Z`);
+      while (cursor <= end) {
+        const key = toIstDateKey(cursor);
+        if (key && key >= monthStartKey && key <= monthEndKey) {
+          approvedLeaveByDate.set(key, leaveCode);
+        }
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+      }
+    }
+
     const employeeMatchOr = [];
     if (userId) employeeMatchOr.push({ "weeks.employees.userId": user._id });
     if (userEmpId) employeeMatchOr.push({ "weeks.employees.empId": userEmpId });
@@ -2184,10 +5135,10 @@ export const getEmployeeAttendanceByMonth = async (req, res) => {
         rosterCreatedAt: day?.rosterCreatedAt || null,
         rosterUpdatedAt: day?.rosterUpdatedAt || null,
         date: dateKey,
-        overrideStatus: day?.overrideStatus || "",
+        overrideStatus: approvedLeaveByDate.get(dateKey) || day?.overrideStatus || "",
         departmentStatus: day?.departmentStatus || "",
         transportStatus: day?.transportStatus || "",
-        status: day?.overrideStatus || day?.departmentStatus || day?.transportStatus || day?.status || "",
+        status: approvedLeaveByDate.get(dateKey) || day?.overrideStatus || day?.departmentStatus || day?.transportStatus || day?.status || "",
         punchIn: day?.punchIn || null,
         punchOut: day?.punchOut || null,
         totalHours: day?.totalHours ?? null,

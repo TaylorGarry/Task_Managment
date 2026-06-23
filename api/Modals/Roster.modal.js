@@ -6,7 +6,7 @@
 //   // Roster Status (from weekly roster)
 //   status: {
 //     type: String,
-//     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", ""],
+//     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO", ""],
 //     default: "P"
 //   },
 
@@ -78,7 +78,7 @@
 //   // Department Status (updated by HR/Team Leaders)
 //   departmentStatus: { 
 //     type: String, 
-//     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD","OT", "HD","FWO", ""],
+//     enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO", ""],
 //     default: ""
 //   },
 //   departmentStatusUpdatedBy: {
@@ -443,3 +443,4 @@ rosterSchema.index({ "weeks.employees.userId": 1 });
 rosterSchema.index({ "weeks.employees.teamLeader": 1, "weeks.employees.department": 1 });
 
 export default mongoose.model("Roster", rosterSchema);
+
