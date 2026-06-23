@@ -47,6 +47,27 @@
 //   return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
 // };
 
+// const addDaysToIstDateKey = (dateKey, days) => {
+//   const raw = String(dateKey || "").trim();
+//   const match = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+//   if (!match) return null;
+
+//   const year = Number.parseInt(match[1], 10);
+//   const month = Number.parseInt(match[2], 10);
+//   const day = Number.parseInt(match[3], 10);
+//   if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+
+//   const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0, 0));
+//   date.setUTCDate(date.getUTCDate() + Number.parseInt(days, 10));
+//   return toIstDateKey(date);
+// };
+
+// const getAttendanceUpdateDeadlineKey = (weekEndDate, graceDays = 2) => {
+//   const weekEndKey = toIstDateKey(weekEndDate);
+//   if (!weekEndKey) return null;
+//   return addDaysToIstDateKey(weekEndKey, graceDays);
+// };
+
 // const getRosterMonthMetaFromRange = (startDate, endDate) => {
 //   const start = new Date(
 //     Date.UTC(
@@ -355,7 +376,7 @@
 //   const raw = String(value ?? "").trim().toUpperCase();
 //   if (!raw) return null;
 //   if (raw === "WOP") return "WO";
-//   const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT"]);
+//   const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO"]);
 //   return valid.has(raw) ? raw : null;
 // };
 
@@ -6708,12 +6729,26 @@
 //     weekStartDate.setHours(0, 0, 0, 0);
 //     weekEndDate.setHours(23, 59, 59, 999);
 //     const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+//     const isPastWeek = now > weekEndDate;
+//     const isFutureWeek = now < weekStartDate;
 //     const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+//     const isSupervisor = String(user?.roleType || "").trim().toLowerCase() === "supervisor";
+//     const attendanceEditDeadlineKey = getAttendanceUpdateDeadlineKey(weekEndDate, 2);
+//     const currentIstDateKey = toIstDateKey(now);
+//     const isWithinSupervisorGracePeriod =
+//       isSupervisor &&
+//       !canEditAnyWeek &&
+//       isPastWeek &&
+//       Boolean(currentIstDateKey) &&
+//       Boolean(attendanceEditDeadlineKey) &&
+//       currentIstDateKey <= attendanceEditDeadlineKey;
 
-//     if (!isCurrentWeek && !canEditAnyWeek) {
+//     if ((isFutureWeek || (isPastWeek && !isWithinSupervisorGracePeriod)) && !canEditAnyWeek) {
 //       return res.status(403).json({
 //         success: false,
-//         message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+//         message: isFutureWeek
+//           ? "Only HR and Super Admin can update future weeks. Department and Transport can update current week only."
+//           : "Only HR and Super Admin can update past weeks. Supervisors can update previous week attendance until Tuesday EOD."
 //       });
 //     }
 
@@ -6941,7 +6976,7 @@
 //         message: "At least one field (transportStatus, departmentStatus, or arrivalTime) is required"
 //       });
 //     }
-//     const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD"];
+//     const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO"];
 
 //     if (transportStatus && !validStatuses.includes(transportStatus)) {
 //       return res.status(400).json({
@@ -7003,13 +7038,32 @@
 //     const weekEndDate = new Date(week.endDate);
 //     weekStartDate.setHours(0, 0, 0, 0);
 //     weekEndDate.setHours(23, 59, 59, 999);
-//     const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+//     const currentIstDateKey = toIstDateKey(now);
+//     const weekStartIstKey = toIstDateKey(weekStartDate);
+//     const weekEndIstKey = toIstDateKey(weekEndDate);
+//     const isCurrentWeek =
+//       Boolean(currentIstDateKey && weekStartIstKey && weekEndIstKey) &&
+//       currentIstDateKey >= weekStartIstKey &&
+//       currentIstDateKey <= weekEndIstKey;
+//     const isPastWeek = Boolean(currentIstDateKey && weekEndIstKey && currentIstDateKey > weekEndIstKey);
+//     const isFutureWeek = Boolean(currentIstDateKey && weekStartIstKey && currentIstDateKey < weekStartIstKey);
 //     const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+//     const isSupervisor = String(user?.roleType || "").trim().toLowerCase() === "supervisor";
+//     const attendanceEditDeadlineKey = weekEndIstKey ? addDaysToIstDateKey(weekEndIstKey, 2) : null;
+//     const isWithinSupervisorGracePeriod =
+//       isSupervisor &&
+//       !canEditAnyWeek &&
+//       isPastWeek &&
+//       Boolean(currentIstDateKey) &&
+//       Boolean(attendanceEditDeadlineKey) &&
+//       currentIstDateKey <= attendanceEditDeadlineKey;
 
-//     if (!isCurrentWeek && !canEditAnyWeek) {
+//     if ((isFutureWeek || (isPastWeek && !isWithinSupervisorGracePeriod)) && !canEditAnyWeek) {
 //       return res.status(403).json({
 //         success: false,
-//         message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+//         message: isFutureWeek
+//           ? "Only HR and Super Admin can update future weeks. Department and Transport can update current week only."
+//           : "Only HR and Super Admin can update past weeks. Supervisors can update previous week attendance until Tuesday EOD."
 //       });
 //     }
 
@@ -8352,7 +8406,7 @@
 //       });
 //     }
 
-//     const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD"];
+//     const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO"];
 
 //     if (transportStatus && !validStatuses.includes(transportStatus)) {
 //       return res.status(400).json({
@@ -8621,13 +8675,32 @@
 //     );
 //     weekStartDate.setHours(0, 0, 0, 0);
 //     weekEndDate.setHours(23, 59, 59, 999);
-//     const isCurrentWeek = now >= weekStartDate && now <= weekEndDate;
+//     const currentIstDateKey = toIstDateKey(now);
+//     const weekStartIstKey = toIstDateKey(weekStartDate);
+//     const weekEndIstKey = toIstDateKey(weekEndDate);
+//     const isCurrentWeek =
+//       Boolean(currentIstDateKey && weekStartIstKey && weekEndIstKey) &&
+//       currentIstDateKey >= weekStartIstKey &&
+//       currentIstDateKey <= weekEndIstKey;
+//     const isPastWeek = Boolean(currentIstDateKey && weekEndIstKey && currentIstDateKey > weekEndIstKey);
+//     const isFutureWeek = Boolean(currentIstDateKey && weekStartIstKey && currentIstDateKey < weekStartIstKey);
 //     const canEditAnyWeek = user.accountType === "superAdmin" || user.accountType === "HR";
+//     const isSupervisor = String(user?.roleType || "").trim().toLowerCase() === "supervisor";
+//     const attendanceEditDeadlineKey = weekEndIstKey ? addDaysToIstDateKey(weekEndIstKey, 2) : null;
+//     const isWithinSupervisorGracePeriod =
+//       isSupervisor &&
+//       !canEditAnyWeek &&
+//       isPastWeek &&
+//       Boolean(currentIstDateKey) &&
+//       Boolean(attendanceEditDeadlineKey) &&
+//       currentIstDateKey <= attendanceEditDeadlineKey;
 
-//     if (!isCurrentWeek && !canEditAnyWeek) {
+//     if ((isFutureWeek || (isPastWeek && !isWithinSupervisorGracePeriod)) && !canEditAnyWeek) {
 //       return res.status(403).json({
 //         success: false,
-//         message: "Only HR and Super Admin can update past/future weeks. Department and Transport can update current week only."
+//         message: isFutureWeek
+//           ? "Only HR and Super Admin can update future weeks. Department and Transport can update current week only."
+//           : "Only HR and Super Admin can update past weeks. Supervisors can update previous week attendance until Tuesday EOD."
 //       });
 //     }
 
@@ -10057,8 +10130,22 @@
 //       canEdit = false;
 //       editMessage = "Cannot edit before the week starts";
 //     } else if (currentDateKey > weekEndKey) {
-//       canEdit = false;
-//       editMessage = "Cannot edit after the week has ended";
+//       const graceDeadlineKey = addDaysToIstDateKey(weekEndKey, 2);
+//       const isSupervisorLike =
+//         Boolean(user?.isTeamLeader) ||
+//         normalizedRoleType === "supervisor" ||
+//         normalizedAccountType === "supervisor" ||
+//         normalizedDesignation.includes("supervisor") ||
+//         normalizedDesignation.includes("team lead") ||
+//         normalizedDesignation.includes("teamleader");
+
+//       if (isSupervisorLike && graceDeadlineKey && currentDateKey <= graceDeadlineKey) {
+//         canEdit = true;
+//         editMessage = "Previous week can be edited until Tuesday EOD";
+//       } else {
+//         canEdit = false;
+//         editMessage = "Cannot edit after the week has ended";
+//       }
 //     } else {
 //       canEdit = true;
 //       editMessage = "Can edit during current week";
@@ -12278,6 +12365,9 @@
 // };
 
 
+
+
+
 import XLSX from "xlsx-js-style";
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
@@ -12346,6 +12436,138 @@ const getAttendanceUpdateDeadlineKey = (weekEndDate, graceDays = 2) => {
   const weekEndKey = toIstDateKey(weekEndDate);
   if (!weekEndKey) return null;
   return addDaysToIstDateKey(weekEndKey, graceDays);
+};
+
+const getShiftTypeFromHours = (start, end) => {
+  const startNum = Number(start);
+  const endNum = Number(end);
+  if (!Number.isFinite(startNum) || !Number.isFinite(endNum)) return "";
+
+  const shiftLookup = [
+    { shift: "Start", shiftStartHour: 1, shiftEndHour: 10 },
+    { shift: "Start", shiftStartHour: 2, shiftEndHour: 11 },
+    { shift: "Mid", shiftStartHour: 16, shiftEndHour: 1 },
+    { shift: "Mid", shiftStartHour: 17, shiftEndHour: 2 },
+    { shift: "End", shiftStartHour: 18, shiftEndHour: 3 },
+    { shift: "End", shiftStartHour: 19, shiftEndHour: 4 },
+    { shift: "End", shiftStartHour: 20, shiftEndHour: 5 },
+    { shift: "End", shiftStartHour: 21, shiftEndHour: 6 },
+    { shift: "Start", shiftStartHour: 22, shiftEndHour: 7 },
+    { shift: "Start", shiftStartHour: 23, shiftEndHour: 8 },
+    { shift: "Start", shiftStartHour: 0, shiftEndHour: 9 },
+  ];
+
+  const match = shiftLookup.find(
+    (shift) =>
+      Number(shift.shiftStartHour) === startNum && Number(shift.shiftEndHour) === endNum
+  );
+
+  return match?.shift || "";
+};
+
+const resolveReportingManagerIdFromTeamLeader = async (value) => {
+  const raw = String(value || "").trim();
+  if (!raw) return null;
+  if (mongoose.Types.ObjectId.isValid(raw)) return raw;
+
+  const normalized = raw.toLowerCase();
+  const candidates = new Set([normalized]);
+
+  const parenthesisMatch = raw.match(/^(.+?)\s*\((.+)\)$/);
+  if (parenthesisMatch) {
+    candidates.add(parenthesisMatch[1].trim().toLowerCase());
+    candidates.add(parenthesisMatch[2].trim().toLowerCase());
+  }
+
+  const slashParts = raw.split("/").map((part) => part.trim().toLowerCase()).filter(Boolean);
+  slashParts.forEach((p) => candidates.add(p));
+
+  const dashParts = raw.split("-").map((part) => part.trim().toLowerCase()).filter(Boolean);
+  dashParts.forEach((p) => candidates.add(p));
+
+  const words = raw.split(/\s+/).map((part) => part.trim().toLowerCase()).filter(Boolean);
+  words.forEach((p) => candidates.add(p));
+
+  const matchesAnyCandidate = (fieldValue) => {
+    if (!fieldValue) return false;
+    const normalizedField = String(fieldValue).trim().toLowerCase();
+    for (const candidate of candidates) {
+      if (!candidate) continue;
+      if (normalizedField === candidate) return true;
+      if (normalizedField.includes(candidate)) return true;
+      if (candidate.includes(normalizedField)) return true;
+    }
+    return false;
+  };
+
+  const findMatch = (users) =>
+    users.find((user) =>
+      [user?.username, user?.realName, user?.pseudoName].some(matchesAnyCandidate)
+    );
+
+  let users = await User.find({ isTeamLeader: true })
+    .select("_id username realName pseudoName")
+    .lean();
+
+  let matched = findMatch(users);
+  if (matched) return String(matched._id);
+
+  users = await User.find({})
+    .select("_id username realName pseudoName")
+    .lean();
+  matched = findMatch(users);
+  return matched?._id ? String(matched._id) : null;
+};
+
+const syncEmployeeDetailsFromRosterUpdate = async ({ employee, updates, updatedBy }) => {
+  const employeeUserId = String(employee?.userId?._id || employee?.userId || "").trim();
+  const employeeEmpId = String(employee?.empId || "").trim();
+  if (!employeeUserId && !employeeEmpId) return;
+
+  const user =
+    (employeeUserId ? await User.findById(employeeUserId) : null) ||
+    (employeeEmpId ? await User.findOne({ empId: employeeEmpId }) : null);
+  if (!user) return;
+
+  const updateData = {};
+
+  if (Object.prototype.hasOwnProperty.call(updates || {}, "teamLeader")) {
+    const teamLeaderValue = String(updates.teamLeader || "").trim();
+    if (!teamLeaderValue) {
+      updateData.reportingManager = null;
+    } else {
+      const reportingManagerId = await resolveReportingManagerIdFromTeamLeader(teamLeaderValue);
+      if (reportingManagerId) {
+        updateData.reportingManager = reportingManagerId;
+      }
+    }
+  }
+
+  const hasShiftUpdate =
+    Object.prototype.hasOwnProperty.call(updates || {}, "shiftStartHour") ||
+    Object.prototype.hasOwnProperty.call(updates || {}, "shiftEndHour");
+  if (hasShiftUpdate) {
+    const nextShiftStartHour =
+      updates.shiftStartHour !== undefined ? Number(updates.shiftStartHour) : Number(employee.shiftStartHour);
+    const nextShiftEndHour =
+      updates.shiftEndHour !== undefined ? Number(updates.shiftEndHour) : Number(employee.shiftEndHour);
+
+    if (Number.isFinite(nextShiftStartHour) && Number.isFinite(nextShiftEndHour)) {
+      updateData.shiftStartHour = nextShiftStartHour;
+      updateData.shiftEndHour = nextShiftEndHour;
+
+      const shift = getShiftTypeFromHours(nextShiftStartHour, nextShiftEndHour);
+      if (shift) updateData.shift = shift;
+    }
+  }
+
+  if (!Object.keys(updateData).length) return;
+
+  await User.findByIdAndUpdate(
+    user._id,
+    { $set: updateData },
+    { new: false }
+  );
 };
 
 const getRosterMonthMetaFromRange = (startDate, endDate) => {
@@ -13403,6 +13625,16 @@ export const updateRoster = async (req, res) => {
     }
 
     await roster.save();
+
+    try {
+      await syncEmployeeDetailsFromRosterUpdate({
+        employee: foundEmployee,
+        updates,
+        updatedBy: user._id,
+      });
+    } catch (syncError) {
+      console.error("Employee sync after roster update failed:", syncError);
+    }
 
     return res.status(200).json({
       success: true,
@@ -16609,6 +16841,21 @@ export const bulkUpdateRosterWeeks = async (req, res) => {
           });
 
           employee.markModified("dailyStatus");
+        }
+
+        const userSyncUpdates = {};
+        ["teamLeader", "shiftStartHour", "shiftEndHour"].forEach((field) => {
+          if (empUpdate[field] !== undefined && empUpdate[field] !== employee[field]) {
+            userSyncUpdates[field] = empUpdate[field];
+          }
+        });
+
+        if (Object.keys(userSyncUpdates).length > 0) {
+          await syncEmployeeDetailsFromRosterUpdate({
+            employee,
+            updates: userSyncUpdates,
+            updatedBy: user._id,
+          });
         }
 
         // Push history if changes exist
