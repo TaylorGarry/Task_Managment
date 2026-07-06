@@ -17631,7 +17631,7 @@ export const rosterUploadFromExcel = async (req, res) => {
           const rawStatus = (row[excelDateColumns[i]] || "P").toString().trim();
           const status = rawStatus.toUpperCase();
 
-          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", ""];
+          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FWO", "H", "LWD", "HD", ""];
           if (!validStatus.includes(status)) {
             errors.push(`Row ${index + dataStartRowIndex + 1}: Invalid status "${rawStatus}"`);
             continue;
