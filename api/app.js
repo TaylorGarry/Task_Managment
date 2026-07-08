@@ -897,6 +897,7 @@ import payrollAttendanceRoutes from "./routes/payrollAttendance.routes.js";
 import kraRoutes from "./routes/kra.routes.js";
 import announcementRoutes from "./routes/announcement.routes.js";
 import employeeExitRoutes from "./routes/employeeExit.routes.js";
+import attendanceAuditRoutes from "./routes/attendanceAudit.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 
@@ -1182,6 +1183,7 @@ app.use("/api/v1/kras", kraRoutes);
 app.use("/api/v1/announcements", announcementRoutes);
 app.use("/api/v1/employee-exit", employeeExitRoutes);
 app.use("/api/employee-exit", employeeExitRoutes);
+app.use("/api/v1/attendance", attendanceAuditRoutes);
 
 
 app.get("/", (req, res) => {

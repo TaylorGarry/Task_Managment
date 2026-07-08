@@ -579,12 +579,17 @@ const AdminNavbar = ({ showOutlet = true }) => {
                       Upload Roster
                     </button>
                   )}
-                  {canUploadAttendanceOverride && (
-                    <button onClick={() => { navigate("/attendance-override-upload"); setShowAttendanceDropdown(false); setShowMobileMenu(false); }} className="w-full text-left px-2 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-[#f8fafc] rounded-md transition-colors flex items-center gap-2">
-                      Attendance Override Upload
-                    </button>
-                  )}
-                </div>
+	                  {canUploadAttendanceOverride && (
+	                    <button onClick={() => { navigate("/attendance-override-upload"); setShowAttendanceDropdown(false); setShowMobileMenu(false); }} className="w-full text-left px-2 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-[#f8fafc] rounded-md transition-colors flex items-center gap-2">
+	                      Attendance Override Upload
+	                    </button>
+	                  )}
+	                  {isSuperAdmin(user) && (
+	                    <button onClick={() => { navigate("/admin/attendance-audit"); setShowAttendanceDropdown(false); setShowMobileMenu(false); }} className="w-full text-left px-2 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-900 hover:bg-[#f8fafc] rounded-md transition-colors flex items-center gap-2">
+	                      Attendance Update Log
+	                    </button>
+	                  )}
+	                </div>
               )}
             </div>
           )}

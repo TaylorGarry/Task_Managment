@@ -4427,112 +4427,114 @@ const ArrivalAttendanceUpdate = ({ rosterId, delegatedFromUserId = "" }) => {
   };
 
   const handleApplyBulkUpdate = async () => {
-    if (!canBulkUpdate) {
-      toast.error("Read-only view for your role.");
-      return;
-    }
-    if (!selectedWeek || !effectiveSelectedDate) {
-      toast.error("Please select week and date first.");
-      return;
-    }
+  if (!canBulkUpdate) {
+    toast.error("Read-only view for your role.");
+    return;
+  }
+  if (!selectedWeek || !effectiveSelectedDate) {
+    toast.error("Please select week and date first.");
+    return;
+  }
 
-    const filteredEmployeeIds = selectedEmployeeIds.filter((id) => {
-      const row = rosterEntries.find((emp) => String(emp._id) === String(id));
-      return row && !isOwnRosterRow(row);
-    });
+  const filteredEmployeeIds = selectedEmployeeIds.filter((id) => {
+    const row = rosterEntries.find((emp) => String(emp._id) === String(id));
+    return row && !isOwnRosterRow(row);
+  });
 
-    if (filteredEmployeeIds.length === 0) {
-      toast.error("Please select at least one employee.");
-      return;
-    }
+  if (filteredEmployeeIds.length === 0) {
+    toast.error("Please select at least one employee.");
+    return;
+  }
 
-    const payload = {
-      rosterId: activeRosterId || rosterId,
-      weekNumber: getWeekRequestNumberFromValue(selectedWeek),
-      employeeIds: filteredEmployeeIds,
-        date: effectiveSelectedDate,
-      delegatedFrom: delegatedFromUserId || undefined,
-    };
+  const payload = {
+    rosterId: activeRosterId || rosterId,
+    weekNumber: getWeekRequestNumberFromValue(selectedWeek),
+    employeeIds: filteredEmployeeIds,
+    date: effectiveSelectedDate,
+    delegatedFrom: delegatedFromUserId || undefined,
+  };
 
-    if (canUpdateTransport && bulkUpdate.transportStatus) {
-      payload.transportStatus = bulkUpdate.transportStatus;
-    }
+  if (canUpdateTransport && bulkUpdate.transportStatus) {
+    payload.transportStatus = bulkUpdate.transportStatus;
+  }
 
-    if (canUpdateDepartment && bulkUpdate.departmentStatus) {
-      payload.departmentStatus = bulkUpdate.departmentStatus;
-    }
+  if (canUpdateDepartment && bulkUpdate.departmentStatus) {
+    payload.departmentStatus = bulkUpdate.departmentStatus;
+  }
 
-    if ((canUpdateTransport || canUpdateDepartment) && bulkUpdate.arrivalTime) {
-      payload.arrivalTime = bulkUpdate.arrivalTime;
-    }
+  if ((canUpdateTransport || canUpdateDepartment) && bulkUpdate.arrivalTime) {
+    payload.arrivalTime = bulkUpdate.arrivalTime;
+  }
 
-    if (
-      (canUpdateDepartment && bulkUpdate.departmentStatus && !bulkUpdate.arrivalTime) ||
-      (canUpdateDepartment && bulkUpdate.arrivalTime && !bulkUpdate.departmentStatus)
-    ) {
-      toast.error("Please select both Bulk Department Status and Bulk Arrival Time to proceed with the update.");
-      return;
-    }
-
-    if (canUpdatePunchTimes) {
-      if (bulkUpdate.punchIn) payload.punchIn = bulkUpdate.punchIn;
-      if (bulkUpdate.punchOut) payload.punchOut = bulkUpdate.punchOut;
-    }
-
-    if (!payload.transportStatus && !payload.departmentStatus && !payload.arrivalTime && !payload.punchIn && !payload.punchOut) {
-      toast.error("Select at least one bulk update value (status, arrival time, or punch times).");
-      return;
-    }
-
-    if (isEmployeeNonTransportUser && payload.departmentStatus === "P" && !payload.arrivalTime) {
-      toast.error("Department arrival time is required when Department Status is P.");
-      return;
-    }
-
-    if (bulkUpdate.punchIn && !isValidTimeFormat(bulkUpdate.punchIn)) {
-      toast.error("Invalid bulk punch in time format. Use HH:MM (e.g., 09:30)");
+  // 🔥 FIXED VALIDATION: Department users with status/arrival time
+  if (isEmployeeNonTransportUser && canUpdateDepartment) {
+    // Case 1: If departmentStatus is "P", arrivalTime is REQUIRED
+    if (payload.departmentStatus === "P" && !payload.arrivalTime) {
+      toast.error("Arrival time is required when Department Status is 'P'.");
       return;
     }
     
-    if (bulkUpdate.punchOut && !isValidTimeFormat(bulkUpdate.punchOut)) {
-      toast.error("Invalid bulk punch out time format. Use HH:MM (e.g., 18:30)");
+    // Case 2: If arrivalTime is provided, departmentStatus MUST be "P"
+    if (payload.arrivalTime && payload.departmentStatus !== "P") {
+      toast.error("Department Status must be 'P' when arrival time is provided.");
       return;
     }
+  }
 
-    setBulkUpdating(true);
-    try {
-      if (payload.punchIn || payload.punchOut) {
-        await dispatch(bulkUpdatePunchTimes(payload)).unwrap();
-      } else {
-        await dispatch(updateAttendanceBulk(payload)).unwrap();
-      }
-      
-      dispatch(getEmployeesForUpdates({
-        rosterId: activeRosterId || rosterId,
-        weekNumber: getWeekRequestNumberFromValue(selectedWeek),
-        date: effectiveSelectedDate,
-        month: monthYearForRequests?.month,
-        year: monthYearForRequests?.year,
-        page: currentPage,
-        limit: pageSize,
-        q: appliedSearch,
-        searchBy,
-        delegatedFrom: delegatedFromUserId,
-      }));
-      
-      setSelectedEmployeeIds([]);
-      setBulkUpdate({
-        transportStatus: "",
-        departmentStatus: "",
-        arrivalTime: "",
-        punchIn: "",
-        punchOut: ""
-      });
-    } catch {
-    } finally {
-      setBulkUpdating(false);
+  if (canUpdatePunchTimes) {
+    if (bulkUpdate.punchIn) payload.punchIn = bulkUpdate.punchIn;
+    if (bulkUpdate.punchOut) payload.punchOut = bulkUpdate.punchOut;
+  }
+
+  if (!payload.transportStatus && !payload.departmentStatus && !payload.arrivalTime && !payload.punchIn && !payload.punchOut) {
+    toast.error("Select at least one bulk update value (status, arrival time, or punch times).");
+    return;
+  }
+
+  if (bulkUpdate.punchIn && !isValidTimeFormat(bulkUpdate.punchIn)) {
+    toast.error("Invalid bulk punch in time format. Use HH:MM (e.g., 09:30)");
+    return;
+  }
+  
+  if (bulkUpdate.punchOut && !isValidTimeFormat(bulkUpdate.punchOut)) {
+    toast.error("Invalid bulk punch out time format. Use HH:MM (e.g., 18:30)");
+    return;
+  }
+
+  setBulkUpdating(true);
+  try {
+    if (payload.punchIn || payload.punchOut) {
+      await dispatch(bulkUpdatePunchTimes(payload)).unwrap();
+    } else {
+      await dispatch(updateAttendanceBulk(payload)).unwrap();
     }
-  };
+    
+    dispatch(getEmployeesForUpdates({
+      rosterId: activeRosterId || rosterId,
+      weekNumber: getWeekRequestNumberFromValue(selectedWeek),
+      date: effectiveSelectedDate,
+      month: monthYearForRequests?.month,
+      year: monthYearForRequests?.year,
+      page: currentPage,
+      limit: pageSize,
+      q: appliedSearch,
+      searchBy,
+      delegatedFrom: delegatedFromUserId,
+    }));
+    
+    setSelectedEmployeeIds([]);
+    setBulkUpdate({
+      transportStatus: "",
+      departmentStatus: "",
+      arrivalTime: "",
+      punchIn: "",
+      punchOut: ""
+    });
+  } catch {
+  } finally {
+    setBulkUpdating(false);
+  }
+};
 
   const handleDownloadDelegatedSnapshotImage = async () => {
     if (!delegatedFromUserId || !exportCaptureRef.current || isDownloadingDelegatedSnapshot) return;
