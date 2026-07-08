@@ -1055,6 +1055,7 @@ import Navbar from "./pages/Navbar.jsx";
 import SuperAdminLoginStatus from "./pages/SuperAdminLoginStatus.jsx";
 import MyProfile from "./pages/MyProfile.jsx";
 import AttendanceOverrideUpload from "./pages/AttendanceOverrideUpload.jsx";
+import AttendanceAuditLog from "./pages/AttendanceAuditLog.jsx";
 import EmployeeOnboardingUpload from "./pages/EmployeeOnboardingUpload.jsx";
 import KraManagement from "./pages/KraManagement.jsx";
 import AnnouncementManagement from "./pages/AnnouncementManagement.jsx";
@@ -1517,7 +1518,8 @@ function App() {
 	          <Route path="admintask" element={<AdminTask />} />
 	          <Route path="admin/assigned-tasks" element={<AdminAssignedTasks />} />
 	          <Route path="chat" element={<ChatUI />} />
-            <Route
+	          <Route path="attendance-audit" element={<AttendanceAuditLog />} />
+	            <Route
               path="attendance-override-upload"
               element={
                 <AttendanceOverrideUploadRoute>

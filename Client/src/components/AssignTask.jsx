@@ -119,7 +119,7 @@ const AssignTask = () => {
       <div className="absolute inset-0 bg-[radial-gradient(50%_50%_at_15%_85%,rgba(14,116,144,0.12),rgba(248,250,252,0))]" />
       <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(248,250,252,0.15),rgba(248,250,252,0.85))]" />
 
-      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-12">
+      <div className="relative mx-auto flex min-h-screen max-w-6xl items-center px-4 py-6">
         <div className="w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_70px_-45px_rgba(15,23,42,0.35)]">
           <div className="grid lg:grid-cols-[1.05fr_1.4fr]">
             <div className="relative p-8 lg:p-10 bg-gradient-to-br from-slate-100 via-blue-50 to-white border-r border-slate-200">

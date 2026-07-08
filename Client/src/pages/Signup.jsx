@@ -308,14 +308,14 @@ const Signup = () => {
     <>
       <Toaster />
       <AdminNavbar />
-      <div className="relative min-h-screen overflow-y-auto bg-gradient-to-br from-slate-100 via-cyan-50 to-white pt-16">
+      <div className="relative min-h-screen overflow-y-auto bg-gradient-to-br from-slate-100 via-cyan-50 to-white">
         <div className="absolute inset-0 bg-[radial-gradient(55%_55%_at_15%_10%,rgba(2,132,199,0.12),rgba(255,255,255,0))]" />
         <div className="absolute inset-0 bg-[radial-gradient(50%_45%_at_90%_10%,rgba(14,116,144,0.14),rgba(255,255,255,0))]" />
-        <div className="relative mx-auto max-w-[1600px] px-3 md:px-4 py-6">
+        <div className="relative mx-auto max-w-[1600px] px-3 md:px-4 py-1">
           <div className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_30px_65px_-45px_rgba(15,23,42,0.45)]">
             <div className="grid gap-0 lg:grid-cols-[0.9fr_1.35fr]">
               <section className="border-b border-slate-200 bg-gradient-to-br from-slate-900 via-cyan-900 to-slate-900 p-8 text-white lg:border-b-0 lg:border-r">
-                <p className="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-cyan-100">
+                <p className="inline-flex rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 text-xs uppercase tracking-[0.22em] text-cyan-100">
                   HR Workspace
                 </p>
                 <h1 className="mt-5 text-3xl font-semibold leading-tight">Employee Onboarding Desk</h1>
@@ -334,13 +334,13 @@ const Signup = () => {
                 </div>
               </section>
 
-              <section className="bg-white p-8">
+              <section className="bg-white p-4">
                 <div className="mb-6">
                   <h2 className="text-2xl font-semibold text-slate-900">{isEmployee ? "Add Employee" : "Create User"}</h2>
                   <p className="mt-1 text-sm text-slate-500">Complete the form and submit to create account access.</p>
                 </div>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-3">
                   <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                     <div className="mb-2 text-sm font-medium text-slate-700">Step {currentStep} of {totalSteps}</div>
                     <div className="flex items-center gap-2">

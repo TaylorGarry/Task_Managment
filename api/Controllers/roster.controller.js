@@ -12379,6 +12379,11 @@ import {
 } from "../utils/delegationAccess.js";
 import { getRoleType, normalizeDepartment } from "../utils/roleAccess.js";
 import mongoose from 'mongoose';
+import {
+  buildAttendanceAuditLogs,
+  inferAuditAction,
+  writeAttendanceAuditLogs,
+} from "../services/attendanceAudit.service.js";
 
 const ATTENDANCE_SLOW_QUERY_MS = Number.parseInt(process.env.ATTENDANCE_SLOW_QUERY_MS || "250", 10);
 const timedDb = async (label, fn, meta = {}) => {
@@ -19008,8 +19013,9 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
     let updatedDays = 0;
     let insertedEmployees = 0;
     let insertedDays = 0;
-    let touchedRosters = 0;
-    const coveredUserIds = new Set();
+	    let touchedRosters = 0;
+	    const coveredUserIds = new Set();
+	    const overrideAuditLogs = [];
 
     for (const roster of rosters) {
       let rosterChanged = false;
@@ -19037,41 +19043,70 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
           }
           if (matchedUserId) coveredUserIds.add(matchedUserId);
 
-          let employeeChanged = false;
-          for (const [dateKey, status] of perDate.entries()) {
-            let day = (employee.dailyStatus || []).find((d) => toIstDateKey(d?.date) === dateKey);
-            if (!day) {
-              const createdDate = parseYmdRangeDate(dateKey);
-              if (!createdDate) continue;
-              employee.dailyStatus = employee.dailyStatus || [];
-              employee.dailyStatus.push({
-                date: createdDate,
-                status,
-                overrideStatus: status,
-                overrideStatusUpdatedBy: user._id,
-                overrideStatusUpdatedAt: new Date(),
-                transportStatus: "",
-                departmentStatus: "",
-              });
-              employeeChanged = true;
-              updatedDays += 1;
-              continue;
-            }
-            if (
-              String(day.status || "") !== status ||
-              String(day.departmentStatus || "") ||
-              String(day.transportStatus || "")
-            ) {
-              day.status = status;
-              day.overrideStatus = status;
-              day.overrideStatusUpdatedBy = user._id;
-              day.overrideStatusUpdatedAt = new Date();
-              day.departmentStatus = "";
-              day.transportStatus = "";
-              employeeChanged = true;
-              updatedDays += 1;
-            }
-          }
+	          let employeeChanged = false;
+	          for (const [dateKey, status] of perDate.entries()) {
+	            let day = (employee.dailyStatus || []).find((d) => toIstDateKey(d?.date) === dateKey);
+	            if (!day) {
+	              const createdDate = parseYmdRangeDate(dateKey);
+	              if (!createdDate) continue;
+	              employee.dailyStatus = employee.dailyStatus || [];
+	              employee.dailyStatus.push({
+	                date: createdDate,
+	                status,
+	                overrideStatus: status,
+	                overrideStatusUpdatedBy: user._id,
+	                overrideStatusUpdatedAt: new Date(),
+	                transportStatus: "",
+	                departmentStatus: "",
+	              });
+	              overrideAuditLogs.push(...buildAttendanceAuditLogs({
+	                req,
+	                roster,
+	                employee,
+	                attendanceDate: createdDate,
+	                changes: [{
+	                  field: `overrideStatus (${dateKey})`,
+	                  oldValue: null,
+	                  newValue: status,
+	                }],
+	                action: "OVERRIDE",
+	                source: "attendance_override_upload",
+	                metadata: { dateKey },
+	              }));
+	              employeeChanged = true;
+	              updatedDays += 1;
+	              continue;
+	            }
+	            if (
+	              String(day.status || "") !== status ||
+	              String(day.departmentStatus || "") ||
+	              String(day.transportStatus || "")
+	            ) {
+	              const oldValue = day.overrideStatus || day.status || day.departmentStatus || day.transportStatus || null;
+	              day.status = status;
+	              day.overrideStatus = status;
+	              day.overrideStatusUpdatedBy = user._id;
+	              day.overrideStatusUpdatedAt = new Date();
+	              day.departmentStatus = "";
+	              day.transportStatus = "";
+	              overrideAuditLogs.push(...buildAttendanceAuditLogs({
+	                req,
+	                roster,
+	                employee,
+	                attendanceDate: day.date,
+	                changes: [{
+	                  field: `overrideStatus (${dateKey})`,
+	                  oldValue,
+	                  newValue: status,
+	                }],
+	                action: "OVERRIDE",
+	                source: "attendance_override_upload",
+	                metadata: { dateKey },
+	              }));
+	              employeeChanged = true;
+	              updatedDays += 1;
+	            }
+	          }
 
           if (employeeChanged) {
             updatedEmployees += 1;
@@ -19173,14 +19208,35 @@ export const uploadAttendanceOverrideFromExcel = async (req, res) => {
         endDate: bucketEnd,
         employees: employeesToInsert,
       });
-      targetRoster.markModified("weeks");
-      await targetRoster.save();
-      touchedRosters += 1;
-      insertedEmployees += employeesToInsert.length;
-      insertedDays += employeesToInsert.reduce((sum, emp) => sum + (emp.dailyStatus?.length || 0), 0);
-    }
-
-    let payrollSync = null;
+	      targetRoster.markModified("weeks");
+	      await targetRoster.save();
+	      const insertedWeek = targetRoster.weeks?.[targetRoster.weeks.length - 1];
+	      for (const insertedEmployee of insertedWeek?.employees || []) {
+	        for (const daily of insertedEmployee.dailyStatus || []) {
+	          const dateKey = toIstDateKey(daily?.date);
+	          overrideAuditLogs.push(...buildAttendanceAuditLogs({
+	            req,
+	            roster: targetRoster,
+	            employee: insertedEmployee,
+	            attendanceDate: daily.date,
+	            changes: [{
+	              field: `overrideStatus (${dateKey || ""})`,
+	              oldValue: null,
+	              newValue: daily.status || daily.overrideStatus || "",
+	            }],
+	            action: "OVERRIDE",
+	            source: "attendance_override_upload",
+	            metadata: { dateKey },
+	          }));
+	        }
+	      }
+	      touchedRosters += 1;
+	      insertedEmployees += employeesToInsert.length;
+	      insertedDays += employeesToInsert.reduce((sum, emp) => sum + (emp.dailyStatus?.length || 0), 0);
+	    }
+	    await writeAttendanceAuditLogs(overrideAuditLogs);
+	
+	    let payrollSync = null;
     const warnings = [];
     try {
       payrollSync = await syncPayrollAttendanceFromExcel({
@@ -20638,11 +20694,26 @@ export const updateAttendance = async (req, res) => {
       });
     }
 
-    // Mark the employee as modified to ensure changes are saved
-    employee.markModified('dailyStatus');
-    await roster.save();
-
-    return res.status(200).json({
+	    // Mark the employee as modified to ensure changes are saved
+	    employee.markModified('dailyStatus');
+	    await roster.save();
+	    if (changes.length > 0) {
+	      await writeAttendanceAuditLogs(buildAttendanceAuditLogs({
+	        req,
+	        roster,
+	        employee,
+	        attendanceDate: selectedDate,
+	        changes,
+	        action: inferAuditAction({ isNewDay }),
+	        source: "attendance_update",
+	        metadata: {
+	          weekNumber: parsedWeekNumber,
+	          selectedDate: selectedDateKey,
+	        },
+	      }));
+	    }
+	
+	    return res.status(200).json({
       success: true,
       message: "Attendance updated successfully",
       data: daily
@@ -22124,10 +22195,13 @@ export const updateAttendanceBulk = async (req, res) => {
     });
 
     const loopStartedAt = Date.now();
-    const setOps = {};
-    const pushOps = {};
-    const historyEntries = [];
-    for (const employeeId of employeeIds) {
+	    const setOps = {};
+	    const pushOps = {};
+	    const historyEntries = [];
+	    const auditLogs = [];
+	    let changedCount = 0;
+	    let insertedAuditLogs = [];
+	    for (const employeeId of employeeIds) {
       const perEmployeeStart = Date.now();
       try {
         employeesScanned += 1;
@@ -22340,8 +22414,9 @@ export const updateAttendanceBulk = async (req, res) => {
           foundDaily: Boolean(daily),
         });
 
-        if (changes.length > 0) {
-          const dailyPathBase =
+	        if (changes.length > 0) {
+	          changedCount += 1;
+	          const dailyPathBase =
             dailyIndex >= 0
               ? `weeks.${location.weekIndex}.employees.${location.employeeIndex}.dailyStatus.${dailyIndex}`
               : null;
@@ -22376,18 +22451,30 @@ export const updateAttendanceBulk = async (req, res) => {
               departmentUpdatedAt: daily.departmentUpdatedAt ?? null,
             };
           }
-          historyEntries.push({
-            editedBy: user._id,
-            editedByName: user.username,
-            accountType: user.accountType,
-            actionType: "bulk-update",
-            weekNumber: parsedWeekNumber,
-            employeeId: employee._id,
-            employeeName: employee.name,
-            changes,
-          });
-        }
-
+	          historyEntries.push({
+	            editedBy: user._id,
+	            editedByName: user.username,
+	            accountType: user.accountType,
+	            actionType: "bulk-update",
+	            weekNumber: parsedWeekNumber,
+	            employeeId: employee._id,
+	            employeeName: employee.name,
+	            changes,
+	          });
+	          auditLogs.push(...buildAttendanceAuditLogs({
+	            req,
+	            roster,
+	            employee,
+	            attendanceDate: selectedDate,
+	            changes,
+	            action: inferAuditAction({ isBulk: true }),
+	            source: "attendance_bulk_update",
+	            metadata: {
+	              weekNumber: parsedWeekNumber,
+	              selectedDate: selectedDateKey,
+	            },
+	          }));
+	        }
         results.push({ employeeId: employee._id, data: daily });
         console.log("[Perf] updateAttendanceBulk.perEmployee", {
           durationMs: Date.now() - perEmployeeStart,
@@ -22443,9 +22530,17 @@ export const updateAttendanceBulk = async (req, res) => {
         pushOpsCount: Object.keys(pushOps).length,
         historyEntriesCount: historyEntries.length,
       });
-      const updateOneStartedAt = Date.now();
-      await Roster.updateOne({ _id: roster._id }, updateDoc);
-      saveMs = Date.now() - updateOneStartedAt;
+	      const updateOneStartedAt = Date.now();
+	      await Roster.updateOne({ _id: roster._id }, updateDoc);
+	      insertedAuditLogs = await writeAttendanceAuditLogs(auditLogs);
+	      if (auditLogs.length > 0 && insertedAuditLogs.length === 0) {
+	        console.error("[AttendanceAudit] bulk update produced audit logs but none were inserted", {
+	          rosterId: String(roster?._id || rosterId),
+	          auditLogsCount: auditLogs.length,
+	          changedCount,
+	        });
+	      }
+	      saveMs = Date.now() - updateOneStartedAt;
       console.log("[Perf] updateAttendanceBulk.Roster.updateOne", {
         durationMs: saveMs,
         rosterId: String(roster?._id || rosterId),
@@ -22465,10 +22560,12 @@ export const updateAttendanceBulk = async (req, res) => {
     }
     const responseStart = Date.now();
     const responsePayload = {
-      success: true,
-      message: "Bulk attendance updated successfully",
-      updatedCount: results.length,
-      failedCount: failed.length,
+	      success: true,
+		      message: "Bulk attendance updated successfully",
+		      updatedCount: changedCount,
+		      auditLogsGenerated: auditLogs.length,
+		      auditLogsInserted: insertedAuditLogs.length,
+		      failedCount: failed.length,
       results,
       failed
     };
