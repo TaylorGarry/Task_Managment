@@ -21625,22 +21625,45 @@ export const updateAttendanceBulk = async (req, res) => {
       });
     }
 
-    // Department users must provide arrival time when marking department status as Present.
+    // UPDATED VALIDATION: Department users validation for status and arrival time
     const isDepartmentUser = user?.accountType === "employee" && user?.department !== "Transport";
-    if (isDepartmentUser && departmentStatus === "P" && !arrivalTime) {
-      return res.status(400).json({
-        success: false,
-        message: "Arrival time is required when Department Status is P."
-      });
+
+    if (isDepartmentUser) {
+      // Case 1: If departmentStatus is "P", arrivalTime is required
+      if (departmentStatus === "P" && !arrivalTime) {
+        return res.status(400).json({
+          success: false,
+          message: "Arrival time is required when Department Status is 'P'."
+        });
+      }
+      
+      // Case 2: If arrivalTime is provided, departmentStatus must be "P"
+      if (arrivalTime && departmentStatus !== "P") {
+        return res.status(400).json({
+          success: false,
+          message: "Department Status must be 'P' when arrival time is provided."
+        });
+      }
     }
 
-    // Validate time format (HH:MM) if provided
+    // For Transport users, only validate arrival time format if provided
+    if (user?.department === "Transport" && arrivalTime) {
+      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
+      if (!timeRegex.test(arrivalTime)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+        });
+      }
+    }
+
+    // Validate time format (HH:MM) for all users if provided
     if (arrivalTime) {
       const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/;
       if (!timeRegex.test(arrivalTime)) {
         return res.status(400).json({
           success: false,
-        message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
+          message: "Invalid arrival time format. Please use HH:MM format (e.g., 09:30)"
         });
       }
     }
