@@ -1062,6 +1062,7 @@ import AnnouncementManagement from "./pages/AnnouncementManagement.jsx";
 import PendingLeaveNotification from "./components/PendingLeaveNotification.jsx";
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
+import TicketManagement from "./pages/TicketManagement.jsx";
 import { subscribeUserToPush } from "./utils/pushNotifications.js";
 import {
   canManageAdminPanels,
@@ -1317,6 +1318,26 @@ const AnnouncementRouteShell = () => {
   );
 };
 
+
+const TicketRouteShell = () => {
+  const { user } = useSelector((state) => state.auth);
+  if (canManageAdminPanels(user)) {
+    return (
+      <>
+        <AdminNavbar showOutlet={false} />
+        <TicketManagement />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      <TicketManagement />
+    </>
+  );
+};
+
 const AdminHomeRedirect = () => {
   const { user } = useSelector((state) => state.auth);
   const shouldAvoidTasksLanding = isHrDepartment(user) || isSuperAdmin(user);
@@ -1331,6 +1352,7 @@ function App() {
   const isTransportAllowedPath =
     location.pathname.startsWith("/attendance-update") ||
     location.pathname.startsWith("/attendance-snapshot") ||
+    location.pathname.startsWith("/tickets") ||
     location.pathname === "/login";
 
   useEffect(() => {
@@ -1579,6 +1601,14 @@ function App() {
           element={
             <AuthRoute>
               <AnnouncementRouteShell />
+            </AuthRoute>
+          }
+        />
+          <Route
+          path="/tickets"
+          element={
+            <AuthRoute>
+              <TicketRouteShell />
             </AuthRoute>
           }
         />

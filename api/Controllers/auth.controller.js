@@ -4229,6 +4229,7 @@ export const updateUserByAdmin = async (req, res) => {
       permanentAddress,
       currentAddress,
       bloodGroup,
+      contactNumber,
       emergencyContactNumber,
       emergencyContactName,
       emergencyContactRelation,
@@ -4306,6 +4307,7 @@ export const updateUserByAdmin = async (req, res) => {
     if (permanentAddress !== undefined) updateData.permanentAddress = String(permanentAddress || "").trim();
     if (currentAddress !== undefined) updateData.currentAddress = String(currentAddress || "").trim();
     if (bloodGroup !== undefined) updateData.bloodGroup = String(bloodGroup || "").trim();
+    if (contactNumber !== undefined) updateData.contactNumber = String(contactNumber || "").trim();
     if (emergencyContactNumber !== undefined)
       updateData.emergencyContactNumber = String(emergencyContactNumber || "").trim();
     if (emergencyContactName !== undefined)
@@ -4550,6 +4552,350 @@ export const updateUserByAdmin = async (req, res) => {
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
+
+// export const updateUserByAdmin = async (req, res) => {
+//   try {
+//     if (!isPrivilegedUser(req.user || {})) {
+//       return res.status(403).json({ message: "Only privileged users can update users" });
+//     }
+
+//     const userId = req.params.id;
+//     const {
+//       username,
+//       accountType,
+//       department,
+//       shiftLabel,
+//       isCoreTeam,
+//       isTeamLeader,
+//       password,
+//       confirmPassword,
+//       empId,
+//       dateOfJoining,
+//       dob,
+//       permanentAddress,
+//       currentAddress,
+//       bloodGroup,
+//       emergencyContactNumber,
+//       emergencyContactName,
+//       emergencyContactRelation,
+//       personalEmailId,
+//       docsStatus,
+//       transportOffice,
+//       realName,
+//       pseudoName,
+//       designation,
+//       officeLocation,
+//       reportingManager,
+//       profilePhotoUrl,
+//       profilePhotoPublicId,
+//       ctc,
+//       inHandSalary,
+//       transportAllowance,
+//       policyDocuments,
+//       documents,
+//       employmentType,
+//       allowHrDocumentEdit,
+//       allowHrDocumentEditGlobal,
+//       hrDocumentOverrideMinutes,
+//       isActive,
+//     } = req.body;
+
+//     const updateData = {};
+
+//     if (username) {
+//       const existingUser = await User.findOne({ username }).lean();
+//       if (existingUser && existingUser._id.toString() !== userId) {
+//         return res.status(400).json({ message: "Username already exists" });
+//       }
+//       updateData.username = username;
+//     }
+
+//     if (accountType !== undefined) {
+//       const mapped = toStorageAccountType(accountType, isTeamLeader);
+//       updateData.accountType = mapped.accountType;
+//       if (isTeamLeader === undefined) {
+//         updateData.isTeamLeader = Boolean(mapped.isTeamLeader);
+//       }
+//     }
+//     if (department) updateData.department = toStorageDepartment(department);
+//     if (typeof isCoreTeam !== "undefined") updateData.isCoreTeam = isCoreTeam;
+//     if (typeof isTeamLeader !== "undefined") updateData.isTeamLeader = Boolean(isTeamLeader);
+//     if (dateOfJoining) updateData.dateOfJoining = new Date(dateOfJoining);
+//     if (dob !== undefined) updateData.dob = dob ? new Date(dob) : null;
+//     if (empId !== undefined) {
+//       const normalizedEmpId = String(empId || "").trim();
+//       if (normalizedEmpId) {
+//         const existingEmpId = await User.findOne({ empId: normalizedEmpId }).lean();
+//         if (existingEmpId && existingEmpId._id.toString() !== userId) {
+//           return res.status(400).json({ message: "Employee ID already exists" });
+//         }
+//         updateData.empId = normalizedEmpId;
+//       } else {
+//         updateData.$unset = { ...(updateData.$unset || {}), empId: 1 };
+//       }
+//     }
+//     if (docsStatus !== undefined) updateData.docsStatus = toBooleanYesNo(docsStatus);
+//     if (transportOffice !== undefined) updateData.transportOffice = toBooleanYesNo(transportOffice);
+//     if (reportingManager !== undefined) {
+//       if (!reportingManager) {
+//         updateData.reportingManager = null;
+//       } else if (!mongoose.Types.ObjectId.isValid(String(reportingManager))) {
+//         return res.status(400).json({ message: "Invalid reporting manager id" });
+//       } else {
+//         updateData.reportingManager = reportingManager;
+//       }
+//     }
+//     if (realName !== undefined) updateData.realName = String(realName || "").trim();
+//     if (pseudoName !== undefined) updateData.pseudoName = String(pseudoName || "").trim();
+//     if (designation !== undefined) updateData.designation = String(designation || "").trim();
+//     if (officeLocation !== undefined) updateData.officeLocation = String(officeLocation || "").trim();
+//     if (permanentAddress !== undefined) updateData.permanentAddress = String(permanentAddress || "").trim();
+//     if (currentAddress !== undefined) updateData.currentAddress = String(currentAddress || "").trim();
+//     if (bloodGroup !== undefined) updateData.bloodGroup = String(bloodGroup || "").trim();
+//     if (emergencyContactNumber !== undefined)
+//       updateData.emergencyContactNumber = String(emergencyContactNumber || "").trim();
+//     if (emergencyContactName !== undefined)
+//       updateData.emergencyContactName = String(emergencyContactName || "").trim();
+//     if (emergencyContactRelation !== undefined)
+//       updateData.emergencyContactRelation = String(emergencyContactRelation || "").trim();
+//     if (personalEmailId !== undefined) updateData.personalEmailId = String(personalEmailId || "").trim();
+//     if (profilePhotoUrl !== undefined) updateData.profilePhotoUrl = String(profilePhotoUrl || "").trim();
+//     if (profilePhotoPublicId !== undefined)
+//       updateData.profilePhotoPublicId = String(profilePhotoPublicId || "").trim();
+//     const payrollPayloadProvided =
+//       ctc !== undefined || inHandSalary !== undefined || transportAllowance !== undefined;
+//     if (payrollPayloadProvided && !(isHrDepartment(req.user || {}) || req.user.accountType === "superAdmin")) {
+//       return res
+//         .status(403)
+//         .json({ message: "Only HR and superAdmin can update payroll fields" });
+//     }
+//     if (ctc !== undefined) updateData.ctc = normalizeOptionalAmount(ctc);
+//     if (inHandSalary !== undefined) updateData.inHandSalary = normalizeOptionalAmount(inHandSalary);
+//     if (transportAllowance !== undefined)
+//       updateData.transportAllowance = normalizeOptionalAmount(transportAllowance);
+//     if (employmentType !== undefined) {
+//       updateData.employmentType = normalizeEmploymentType(employmentType);
+//     }
+
+//     const existingUserForUpdate = await User.findById(userId)
+//       .select(
+//         "accountType username realName empId documents employmentType profilePhotoPublicId profilePhotoUrl hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil isActive"
+//       )
+//       .lean();
+//     if (!existingUserForUpdate) return res.status(404).json({ message: "User not found" });
+
+//     const wasActiveBeforeUpdate = existingUserForUpdate.isActive !== false;
+
+//     const isReactivationRequest =
+//       existingUserForUpdate.isActive === false &&
+//       isActive !== undefined &&
+//       Boolean(isActive) === true;
+
+//     if (isReactivationRequest && req.user?.accountType !== "superAdmin") {
+//       return res.status(403).json({
+//         message: "Only superAdmin can reactivate an inactive user.",
+//       });
+//     }
+
+//     if (existingUserForUpdate.isActive === false && !isReactivationRequest) {
+//       return res.status(403).json({
+//         message: "Inactive user cannot be edited from Manage Employee.",
+//       });
+//     }
+
+//     if (isActive !== undefined) {
+//       updateData.isActive = Boolean(isActive);
+//     }
+
+//     if (allowHrDocumentEdit !== undefined) {
+//       if (req.user.accountType !== "superAdmin") {
+//         return res.status(403).json({ message: "Only superAdmin can grant HR document override" });
+//       }
+//       const shouldAllow = Boolean(allowHrDocumentEdit);
+//       if (shouldAllow) {
+//         const minutes = Number(hrDocumentOverrideMinutes || 30);
+//         const validMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, 240) : 30;
+//         updateData.hrDocumentOverrideUntil = new Date(Date.now() + validMinutes * 60 * 1000);
+//         updateData.hrDocumentOverrideBy = req.user._id;
+//       } else {
+//         updateData.hrDocumentOverrideUntil = null;
+//         updateData.hrDocumentOverrideBy = null;
+//       }
+//     }
+
+//     if (allowHrDocumentEditGlobal !== undefined) {
+//       if (req.user.accountType !== "superAdmin") {
+//         return res.status(403).json({ message: "Only superAdmin can grant global HR document override" });
+//       }
+//       if (!isHrDepartment(existingUserForUpdate || {})) {
+//         return res.status(400).json({ message: "Global HR document override can only be granted to HR accounts" });
+//       }
+//       const shouldAllowGlobal = Boolean(allowHrDocumentEditGlobal);
+//       if (shouldAllowGlobal) {
+//         const minutes = Number(hrDocumentOverrideMinutes || 30);
+//         const validMinutes = Number.isFinite(minutes) && minutes > 0 ? Math.min(minutes, 720) : 30;
+//         updateData.hrGlobalDocumentOverrideUntil = new Date(Date.now() + validMinutes * 60 * 1000);
+//         updateData.hrGlobalDocumentOverrideBy = req.user._id;
+//       } else {
+//         updateData.hrGlobalDocumentOverrideUntil = null;
+//         updateData.hrGlobalDocumentOverrideBy = null;
+//       }
+//     }
+//     if (policyDocuments !== undefined) {
+//       const normalizedPolicyDocs = resolvePolicyDocuments(policyDocuments);
+//       updateData.policyDocuments = normalizedPolicyDocs;
+//       const existingUser = await User.findById(userId).select("policySignatures").lean();
+//       const currentSignatures = Array.isArray(existingUser?.policySignatures) ? existingUser.policySignatures : [];
+//       updateData.policySignatures = normalizedPolicyDocs.map((docUrl) => {
+//         const found = currentSignatures.find((sig) => String(sig?.documentUrl || "").trim() === docUrl);
+//         return (
+//           found || {
+//             documentUrl: docUrl,
+//             employee: { signed: false },
+//             hr: { signed: false },
+//           }
+//         );
+//       });
+//     }
+//     if (documents !== undefined) {
+//       const normalizedIncomingDocs = normalizeDocumentList(documents);
+
+//       const hasEmployeeScopedOverride = isHrOverrideActive(existingUserForUpdate);
+//       const hasGlobalHrOverride = isHrGlobalOverrideActive(req.user);
+//       if (isHrDepartment(req.user || {}) && !(hasEmployeeScopedOverride || hasGlobalHrOverride)) {
+//         const lockedDocuments = evaluateLockedDocumentChanges({
+//           existingDocuments: existingUserForUpdate.documents || [],
+//           incomingDocuments: normalizedIncomingDocs,
+//         });
+//         if (lockedDocuments.length) {
+//           return res.status(403).json({
+//             message: `Document update blocked for: ${lockedDocuments.join(", ")}. Ask superAdmin for permission.`,
+//           });
+//         }
+//       }
+
+//       updateData.documents = applyDocumentUploadAudit({
+//         existingDocuments: existingUserForUpdate.documents || [],
+//         incomingDocuments: normalizedIncomingDocs,
+//         uploadedIp: getRequestIp(req),
+//       });
+//     }
+
+//     if (documents !== undefined || employmentType !== undefined || docsStatus !== undefined) {
+//       const docsForStatus = documents !== undefined ? updateData.documents || [] : existingUserForUpdate.documents || [];
+//       const employmentForStatus = updateData.employmentType ?? existingUserForUpdate.employmentType ?? "";
+//       updateData.docsStatus = computeDocsStatus({
+//         employmentType: employmentForStatus,
+//         documents: docsForStatus,
+//         fallback: updateData.docsStatus || "No",
+//       });
+//     }
+
+//     if (!isCoreTeam && shiftLabel) {
+//       const selected = shiftMapping[shiftLabel];
+//       if (!selected) return res.status(400).json({ message: "Invalid shift label" });
+
+//       updateData.shift = selected.shift;
+//       updateData.shiftStartHour = selected.shiftStartHour;
+//       updateData.shiftEndHour = selected.shiftEndHour;
+//     } else if (isCoreTeam) {
+//       updateData.shift = null;
+//       updateData.shiftStartHour = null;
+//       updateData.shiftEndHour = null;
+//     }
+
+//     if (password) {
+//       if (!confirmPassword) {
+//         return res.status(400).json({ message: "Confirm password is required" });
+//       }
+      
+//       if (password !== confirmPassword) {
+//         return res.status(400).json({ message: "Passwords do not match" });
+//       }
+      
+//       if (password.length < 6) {
+//         return res.status(400).json({ message: "Password must be at least 6 characters long" });
+//       }
+      
+//       const hashedPassword = await bcrypt.hash(password, 10);
+//       updateData.password = hashedPassword;
+      
+//       updateData.passwordLastReset = new Date();
+//     }
+
+//     const nextProfilePhotoUrl = String(updateData.profilePhotoUrl || "").trim();
+//     const prevProfilePhotoUrl = String(existingUserForUpdate.profilePhotoUrl || "").trim();
+//     const nextProfilePhotoPublicId = String(updateData.profilePhotoPublicId || "").trim();
+//     const prevProfilePhotoPublicId = String(existingUserForUpdate.profilePhotoPublicId || "").trim();
+//     const profilePhotoChanged =
+//       (nextProfilePhotoUrl && nextProfilePhotoUrl !== prevProfilePhotoUrl) ||
+//       (nextProfilePhotoPublicId && nextProfilePhotoPublicId !== prevProfilePhotoPublicId);
+//     if (profilePhotoChanged && prevProfilePhotoPublicId) {
+//       await destroyCloudinaryAsset(prevProfilePhotoPublicId);
+//     }
+
+//     const updatedUser = await User.findByIdAndUpdate(
+//       userId,
+//       {
+//         ...(Object.keys(updateData).some((k) => k !== "$unset") ? { $set: Object.fromEntries(Object.entries(updateData).filter(([k]) => k !== "$unset")) } : {}),
+//         ...(updateData.$unset ? { $unset: updateData.$unset } : {}),
+//       },
+//       { new: true }
+//     )
+//       .select("-password")
+//       .populate("reportingManager", "username realName")
+//       .lean();
+
+//     if (!updatedUser) return res.status(404).json({ message: "User not found" });
+
+//     const isNowInactive = updatedUser.isActive === false;
+//     if (wasActiveBeforeUpdate && isNowInactive) {
+//       await notifySuperAdminsForHrAction({
+//         actor: req.user,
+//         action: "user_inactivated",
+//         target: updatedUser,
+//         io: req.io,
+//       });
+//     }
+
+//     const hasReportingManagerUpdate = Object.prototype.hasOwnProperty.call(updateData, "reportingManager");
+//     const shouldSyncShift =
+//       Object.prototype.hasOwnProperty.call(updateData, "shiftStartHour") &&
+//       Object.prototype.hasOwnProperty.call(updateData, "shiftEndHour") &&
+//       Number.isFinite(Number(updateData.shiftStartHour)) &&
+//       Number.isFinite(Number(updateData.shiftEndHour));
+
+//     if (hasReportingManagerUpdate || shouldSyncShift) {
+//       try {
+//         await syncRosterEmployeeFieldsFromUser({
+//           userId: updatedUser._id,
+//           userEmpId: updatedUser.empId,
+//           reportingManager: updateData.reportingManager,
+//           hasReportingManager: hasReportingManagerUpdate,
+//           shiftStartHour: shouldSyncShift ? updateData.shiftStartHour : undefined,
+//           shiftEndHour: shouldSyncShift ? updateData.shiftEndHour : undefined,
+//           updatedBy: req.user._id,
+//         });
+//       } catch (syncError) {
+//         console.error("Roster sync after employee update failed:", syncError);
+//       }
+//     }
+
+//     const responseData = {
+//       message: "User updated successfully",
+//       user: withRoleType(updatedUser),
+//       passwordReset: password ? true : false
+//     };
+//     if (password) {
+//       responseData.message = "User updated and password reset successfully";
+//     }
+
+//     res.status(200).json(responseData);
+//   } catch (error) {
+//     console.error("Update User Error:", error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
 
 export const exportEmployeeDetailsExcel = async (req, res) => {
   try {
@@ -4922,6 +5268,8 @@ export const getEmployeeDashboardSummary = async (req, res) => {
     const anniversaryUsers = await User.find({
       accountType: { $in: ["employee", "agent", "supervisor"] },
       isActive: { $ne: false },
+       active: { $ne: false },
+      employmentStatus: { $nin: ["Exited", "Inactive", "inactive"] },
       dateOfJoining: { $ne: null },
     })
       .select("_id username realName pseudoName designation department dateOfJoining profilePhotoUrl")

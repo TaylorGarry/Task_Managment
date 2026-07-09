@@ -12566,6 +12566,20 @@ const syncEmployeeDetailsFromRosterUpdate = async ({ employee, updates, updatedB
     }
   }
 
+  // 🔥 ADD CONTACT NUMBER SYNC - NEW CODE
+  if (Object.prototype.hasOwnProperty.call(updates || {}, "contactNumber")) {
+    const contactNumberValue = String(updates.contactNumber || "").trim();
+    updateData.contactNumber = contactNumberValue;
+  }
+
+  // 🔥 ADD DEPARTMENT SYNC - NEW CODE
+  if (Object.prototype.hasOwnProperty.call(updates || {}, "department")) {
+    const departmentValue = String(updates.department || "").trim();
+    if (departmentValue) {
+      updateData.department = departmentValue;
+    }
+  }
+
   if (!Object.keys(updateData).length) return;
 
   await User.findByIdAndUpdate(
@@ -12574,6 +12588,58 @@ const syncEmployeeDetailsFromRosterUpdate = async ({ employee, updates, updatedB
     { new: false }
   );
 };
+
+
+// const syncEmployeeDetailsFromRosterUpdate = async ({ employee, updates, updatedBy }) => {
+//   const employeeUserId = String(employee?.userId?._id || employee?.userId || "").trim();
+//   const employeeEmpId = String(employee?.empId || "").trim();
+//   if (!employeeUserId && !employeeEmpId) return;
+
+//   const user =
+//     (employeeUserId ? await User.findById(employeeUserId) : null) ||
+//     (employeeEmpId ? await User.findOne({ empId: employeeEmpId }) : null);
+//   if (!user) return;
+
+//   const updateData = {};
+
+//   if (Object.prototype.hasOwnProperty.call(updates || {}, "teamLeader")) {
+//     const teamLeaderValue = String(updates.teamLeader || "").trim();
+//     if (!teamLeaderValue) {
+//       updateData.reportingManager = null;
+//     } else {
+//       const reportingManagerId = await resolveReportingManagerIdFromTeamLeader(teamLeaderValue);
+//       if (reportingManagerId) {
+//         updateData.reportingManager = reportingManagerId;
+//       }
+//     }
+//   }
+
+//   const hasShiftUpdate =
+//     Object.prototype.hasOwnProperty.call(updates || {}, "shiftStartHour") ||
+//     Object.prototype.hasOwnProperty.call(updates || {}, "shiftEndHour");
+//   if (hasShiftUpdate) {
+//     const nextShiftStartHour =
+//       updates.shiftStartHour !== undefined ? Number(updates.shiftStartHour) : Number(employee.shiftStartHour);
+//     const nextShiftEndHour =
+//       updates.shiftEndHour !== undefined ? Number(updates.shiftEndHour) : Number(employee.shiftEndHour);
+
+//     if (Number.isFinite(nextShiftStartHour) && Number.isFinite(nextShiftEndHour)) {
+//       updateData.shiftStartHour = nextShiftStartHour;
+//       updateData.shiftEndHour = nextShiftEndHour;
+
+//       const shift = getShiftTypeFromHours(nextShiftStartHour, nextShiftEndHour);
+//       if (shift) updateData.shift = shift;
+//     }
+//   }
+
+//   if (!Object.keys(updateData).length) return;
+
+//   await User.findByIdAndUpdate(
+//     user._id,
+//     { $set: updateData },
+//     { new: false }
+//   );
+// };
 
 const getRosterMonthMetaFromRange = (startDate, endDate) => {
   const start = new Date(

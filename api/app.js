@@ -900,7 +900,7 @@ import employeeExitRoutes from "./routes/employeeExit.routes.js";
 import attendanceAuditRoutes from "./routes/attendanceAudit.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
-
+import ticketRoutes from "./routes/ticket.routes.js";
 dotenv.config();
 const app = express();
 
@@ -1184,7 +1184,7 @@ app.use("/api/v1/announcements", announcementRoutes);
 app.use("/api/v1/employee-exit", employeeExitRoutes);
 app.use("/api/employee-exit", employeeExitRoutes);
 app.use("/api/v1/attendance", attendanceAuditRoutes);
-
+app.use("/api/v1/tickets", ticketRoutes);
 
 app.get("/", (req, res) => {
   res.json({

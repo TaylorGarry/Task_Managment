@@ -5,7 +5,7 @@ import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar, FiBell } from "react-icons/fi";
-import { Clock } from "lucide-react";  
+import { Clock, TicketCheck } from "lucide-react";  
 import { Camera } from "lucide-react";  
 import { ChevronDown } from "lucide-react";  
 import toast from "react-hot-toast";
@@ -21,6 +21,7 @@ import {
   normalizeDepartment,
 } from "../utils/roleAccess.js";
 import { getDailyStatus } from "../utils/dailyStatusApi.js";
+
 
 const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 
@@ -519,7 +520,10 @@ const AdminNavbar = ({ showOutlet = true }) => {
                   )}
                 </div>
               </Link>
-
+               <Link to="/tickets" className={`${navLinkClass("/tickets")} ${location.pathname === "/tickets" ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-600/40" : ""}`} onClick={() => setShowMobileMenu(false)}>
+                <TicketCheck className="w-3.5 h-3.5 text-blue-500 group-hover:text-blue-700 flex-shrink-0" />
+                Ticket Raise
+              </Link>   
               <Link to="/admin/roster" className={navLinkClass("/admin/roster")} onClick={() => setShowMobileMenu(false)}>
                 <FiCalendar className="text-sm text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
                 Roster
