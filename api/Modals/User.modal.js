@@ -221,7 +221,11 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
-
+    contactNumber: {
+    type: String,
+    trim: true,
+    default: "",
+    },
     emergencyContactNumber: {
       type: String,
       trim: true,

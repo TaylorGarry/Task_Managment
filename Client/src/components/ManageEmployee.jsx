@@ -86,6 +86,7 @@
 //   return `${formatHour(start)}-${formatHour(end)}`;
 // };
 
+// // Predefined document categories with separate Appointment Letter and Offer Letter
 // const DOCUMENT_CATEGORIES = [
 //   { id: "resume", name: "Resume", icon: <Description />, required: true, category: "Personal" },
 //   { id: "photo", name: "Photo", icon: <Image />, required: true, category: "Personal" },
@@ -145,8 +146,16 @@
 //     pseudoName: "",
 //     empId: "",
 //     dateOfJoining: "",
+//     dob: "",
 //     designation: "",
 //     officeLocation: "",
+//     permanentAddress: "",
+//     currentAddress: "",
+//     bloodGroup: "",
+//     emergencyContactNumber: "",
+//     emergencyContactName: "",
+//     emergencyContactRelation: "",
+//     personalEmailId: "",
 //     department: "",
 //     transportOffice: "No",
 //     docsStatus: "No",
@@ -290,7 +299,40 @@
 //     return () => clearInterval(timer);
 //   }, [selectedUser]);
 
+//   const reportingManagerOptions = useMemo(() => {
+//     const uniqueManagers = new Map();
+//     const managerSources = [
+//       ...(Array.isArray(employees) ? employees : []),
+//       ...(Array.isArray(localEmployees) ? localEmployees : []),
+//       ...(Array.isArray(reportingManagers) ? reportingManagers : []),
+//       ...(selectedUser?.reportingManager && typeof selectedUser.reportingManager === "object"
+//         ? [selectedUser.reportingManager]
+//         : []),
+//     ];
+
+//     for (const manager of managerSources) {
+//       if (!manager?._id) continue;
+//       const isTeamLeaderManager =
+//         Boolean(manager.isTeamLeader) ||
+//         String(manager.roleType || "").trim().toLowerCase() === "supervisor" ||
+//         String(manager.accountType || "").trim().toLowerCase() === "supervisor";
+
+//       if (!isTeamLeaderManager) continue;
+//       uniqueManagers.set(String(manager._id), manager);
+//     }
+
+//     return [...uniqueManagers.values()].sort((a, b) => {
+//       const aLabel = a.realName ? `${a.realName} (${a.username})` : String(a.username || "");
+//       const bLabel = b.realName ? `${b.realName} (${b.username})` : String(b.username || "");
+//       return aLabel.localeCompare(bLabel);
+//     });
+//   }, [employees, localEmployees, reportingManagers, selectedUser]);
+
 //   const handleOpenDialog = (user) => {
+//     const existingPhotoDoc = user.documents?.find((doc) => {
+//       const docName = String(doc?.name || "").trim().toLowerCase();
+//       return docName === "photo";
+//     });
 //     setSelectedUser(user);
 //     setActiveSection("basic");
 //     setFormData({
@@ -299,14 +341,22 @@
 //       pseudoName: user.pseudoName || "",
 //       empId: user.empId || "",
 //       dateOfJoining: user.dateOfJoining ? new Date(user.dateOfJoining).toISOString().split("T")[0] : "",
+//       dob: user.dob ? new Date(user.dob).toISOString().split("T")[0] : "",
 //       designation: user.designation || "",
 //       officeLocation: user.officeLocation || "",
+//       permanentAddress: user.permanentAddress || "",
+//       currentAddress: user.currentAddress || "",
+//       bloodGroup: user.bloodGroup || "",
+//       emergencyContactNumber: user.emergencyContactNumber || "",
+//       emergencyContactName: user.emergencyContactName || "",
+//       emergencyContactRelation: user.emergencyContactRelation || "",
+//       personalEmailId: user.personalEmailId || "",
 //       department: user.department || "",
 //       transportOffice: user.transportOffice || "No",
 //       docsStatus: user.docsStatus || "No",
 //       employmentType: user.employmentType || "experienced",
-//       profilePhotoUrl: user.profilePhotoUrl || "",
-//       profilePhotoPublicId: user.profilePhotoPublicId || "",
+//       profilePhotoUrl: user.profilePhotoUrl || existingPhotoDoc?.url || "",
+//       profilePhotoPublicId: user.profilePhotoPublicId || existingPhotoDoc?.publicId || "",
 //       ctc: user.ctc ?? "",
 //       inHandSalary: user.inHandSalary ?? "",
 //       transportAllowance: user.transportAllowance ?? "",
@@ -368,8 +418,16 @@
 //       pseudoName: "",
 //       empId: "",
 //       dateOfJoining: "",
+//       dob: "",
 //       designation: "",
 //       officeLocation: "",
+//       permanentAddress: "",
+//       currentAddress: "",
+//       bloodGroup: "",
+//       emergencyContactNumber: "",
+//       emergencyContactName: "",
+//       emergencyContactRelation: "",
+//       personalEmailId: "",
 //       department: "",
 //       transportOffice: "No",
 //       docsStatus: "No",
@@ -546,7 +604,6 @@
 //     const drawTemplate = (ctx) => {
 //       const w = 768;
 //       const h = 1280;
-//       const edgeInset = 24;
 //       const topBlueHeight = 150;
 //       const topWaveY = 126;
 //       const topWaveAmp = 20;
@@ -554,7 +611,7 @@
 //       const bottomBlueHeight = 150;
 //       const bottomWaveY = h - 154;
 //       const bottomWaveAmp = 18;
-//       ctx.fillStyle = "#f2f2f2";
+//       ctx.fillStyle = "#ffffff";
 //       ctx.fillRect(0, 0, w, h);
 
 //       // Top blue header with curved bottom edge
@@ -571,12 +628,12 @@
 //       // Yellow line connected to top blue curve
 //       ctx.fillStyle = "#f2cf00";
 //       ctx.beginPath();
-//       ctx.moveTo(edgeInset, topWaveY + 3);
-//       ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + 2, w * 0.47, topWaveY + 3);
-//       ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + 2, w - edgeInset, topWaveY + 1);
-//       ctx.lineTo(w - edgeInset, topWaveY + yellowThickness);
-//       ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness + 1, w * 0.47, topWaveY + yellowThickness + 2);
-//       ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness + 1, edgeInset, topWaveY + yellowThickness);
+//       ctx.moveTo(-4, topWaveY - 2);
+//       ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp, w * 0.47, topWaveY);
+//       ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp, 0, topWaveY - 2);
+//       ctx.lineTo(0, topWaveY + yellowThickness - 2);
+//       ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness, w * 0.47, topWaveY + yellowThickness);
+//       ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness, w + 4, topWaveY + yellowThickness - 2);
 //       ctx.closePath();
 //       ctx.fill();
 
@@ -594,12 +651,12 @@
 //       // Yellow line connected to bottom blue curve
 //       ctx.fillStyle = "#f2cf00";
 //       ctx.beginPath();
-//       ctx.moveTo(edgeInset, bottomWaveY - 1);
-//       ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - 1, w * 0.52, bottomWaveY + 1);
-//       ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp - 1, w - edgeInset, bottomWaveY - 1);
-//       ctx.lineTo(w - edgeInset, bottomWaveY - yellowThickness);
-//       ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp - yellowThickness - 1, w * 0.52, bottomWaveY - yellowThickness + 1);
-//       ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - yellowThickness - 1, edgeInset, bottomWaveY - yellowThickness);
+//       ctx.moveTo(-4, bottomWaveY + 11);
+//       ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp + 11, w * 0.5, bottomWaveY + 13);
+//       ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp + 11, w + 4, bottomWaveY + 11);
+//       ctx.lineTo(w + 4, bottomWaveY + 11 - yellowThickness);
+//       ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp + 11 - yellowThickness, w * 0.5, bottomWaveY + 13 - yellowThickness);
+//       ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp + 11 - yellowThickness, -4, bottomWaveY + 11 - yellowThickness);
 //       ctx.closePath();
 //       ctx.fill();
 //     };
@@ -607,21 +664,22 @@
 //     drawTemplate(frontCtx);
 //     drawTemplate(backCtx);
 
+//     frontCtx.textAlign = "center";
 //     frontCtx.fillStyle = "#f2cf00";
-//     frontCtx.fillRect(102, 268, 90, 64);
+//     frontCtx.fillRect(96, 268, 86, 64);
 //     frontCtx.fillStyle = "#ffffff";
-//     frontCtx.font = "700 58px Arial";
-//     frontCtx.fillText("FD", 114, 318);
+//     frontCtx.font = "700 54px Arial";
+//     frontCtx.fillText("FD", 139, 317);
 //     frontCtx.fillStyle = "#0f3f69";
-//     frontCtx.font = "700 84px Arial";
-//     frontCtx.fillText("BUSINESS", 192, 318);
+//     frontCtx.font = "700 66px Arial";
+//     frontCtx.fillText("BUSINESS", 360, 318);
 //     frontCtx.fillStyle = "#f2cf00";
-//     frontCtx.font = "700 62px Arial";
-//     frontCtx.fillText("Service Private Limited", 288, 376);
+//     frontCtx.font = "700 30px Arial";
+//     frontCtx.fillText("Service Private Limited", 384, 366);
 
 //     const photoX = 224;
-//     const photoY = 460;
-//     const photoSize = 320;
+//     const photoY = 468;
+//     const photoSize = 308;
 //     frontCtx.strokeStyle = "#1f4e79";
 //     frontCtx.lineWidth = 5;
 //     frontCtx.beginPath();
@@ -653,40 +711,39 @@
 
 //     frontCtx.fillStyle = "#1f4e79";
 //     frontCtx.textAlign = "center";
-//     frontCtx.font = "500 60px Arial";
-//     frontCtx.fillText(employeeName, 384, 845);
-//     frontCtx.font = "500 52px Arial";
-//     frontCtx.fillText(designation || "Employee", 384, 920);
-//     frontCtx.font = "500 42px Arial";
-//     frontCtx.fillText(`Emp ID        : ${empId || "N/A"}`, 384, 1020);
-//     frontCtx.fillText(`Blood Group   : ${bloodGroup}`, 384, 1082);
+//     frontCtx.font = "500 54px Arial";
+//     frontCtx.fillText(employeeName, 384, 840);
+//     frontCtx.font = "500 46px Arial";
+//     frontCtx.fillText(designation || "Employee", 384, 905);
+//     frontCtx.font = "500 38px Arial";
+//     frontCtx.fillText(`Emp ID        : ${empId || "N/A"}`, 384, 1010);
+//     frontCtx.fillText(`Blood Group   : ${bloodGroup}`, 384, 1070);
 
 //     backCtx.fillStyle = "#1f4e79";
 //     backCtx.textAlign = "left";
-//     backCtx.font = "500 36px Arial";
-//     backCtx.fillText(`Contact         : ${contactNumber}`, 130, 290);
-//     backCtx.fillText(`Emg Contact: ${emergencyContact}`, 130, 350);
-
-//     backCtx.textAlign = "center";
-//     backCtx.font = "500 38px Arial";
-//     backCtx.fillText("INSTRUCTION", 384, 510);
-//     backCtx.font = "500 34px Arial";
-//     backCtx.fillText("1.This ID Card is NonTransferable", 384, 572);
-//     backCtx.fillText("2.It is mandatory to display the ID", 384, 616);
-//     backCtx.fillText("card while on duty.", 384, 660);
-//     backCtx.fillText("3.Loss ofthis ID Card Should be", 384, 704);
-//     backCtx.fillText("reported to the issuing authority", 384, 748);
-//     backCtx.fillText("4.Duplicate ID Card would be", 384, 792);
-//     backCtx.fillText("Issued at a cost ofRs.200/-", 384, 836);
+//     backCtx.font = "500 32px Arial";
+//     backCtx.fillText(`Contact         : ${contactNumber}`, 126, 286);
+//     backCtx.fillText(`Emg Contact: ${emergencyContact}`, 126, 342);
 
 //     backCtx.textAlign = "left";
+//     backCtx.font = "500 36px Arial";
 //     backCtx.font = "500 30px Arial";
-//     backCtx.fillText("FD Business Service Private Limited", 124, 950);
-//     backCtx.font = "500 27px Arial";
-//     backCtx.fillText("Unit no 118,119,120,", 124, 995);
-//     backCtx.fillText("Suncity Success Tower", 124, 1032);
-//     backCtx.fillText("Golf Course Extn. Road", 124, 1069);
-//     backCtx.fillText("Sector -65, Gurugram 122018", 124, 1106);
+//     backCtx.fillText("1.This ID Card is NonTransferable", 146, 560);
+//     backCtx.fillText("2.It is mandatory to display the ID", 146, 602);
+//     backCtx.fillText("card while on duty.", 146, 640);
+//     backCtx.fillText("3.Loss of this ID Card should be", 146, 684);
+//     backCtx.fillText("reported to the issuing authority", 146, 724);
+//     backCtx.fillText("4.Duplicate ID Card would be", 146, 768);
+//     backCtx.fillText("issued at a cost of Rs.200/-", 146, 808);
+
+//     backCtx.textAlign = "left";
+//     backCtx.font = "500 28px Arial";
+//     backCtx.fillText("FD Business Service Private Limited", 126, 936);
+//     backCtx.font = "500 24px Arial";
+//     backCtx.fillText("Unit no 118,119,120,", 126, 980);
+//     backCtx.fillText("Suncity Success Tower", 126, 1016);
+//     backCtx.fillText("Golf Course Extn. Road", 126, 1052);
+//     backCtx.fillText("Sector -65, Gurugram 122018", 126, 1088);
 
 //     const combinedCanvas = document.createElement("canvas");
 //     combinedCanvas.width = frontCard.canvas.width * 2 + 36;
@@ -734,7 +791,10 @@
 
 //     try {
 //       setUploadStates(prev => ({ ...prev, [categoryId]: true }));
-//       const asset = await dispatch(uploadEmployeeAsset({ file, assetType: "document" })).unwrap();
+//       const isPhotoCategory = categoryId === "photo";
+//       const asset = await dispatch(
+//         uploadEmployeeAsset({ file, assetType: isPhotoCategory ? "profile-photo" : "document" })
+//       ).unwrap();
       
 //       setDocuments(prev => ({
 //         ...prev,
@@ -750,6 +810,15 @@
 //           uploadedIp: asset.uploadedIp || "",
 //         }
 //       }));
+
+//       // Keep profile photo in sync with latest uploaded Photo document.
+//       if (isPhotoCategory) {
+//         setFormData((prev) => ({
+//           ...prev,
+//           profilePhotoUrl: asset.url || "",
+//           profilePhotoPublicId: asset.publicId || "",
+//         }));
+//       }
       
 //       toast.success(`${category.name} uploaded successfully`);
 //     } catch (err) {
@@ -764,6 +833,13 @@
 //       ...prev,
 //       [categoryId]: null
 //     }));
+//     if (categoryId === "photo") {
+//       setFormData((prev) => ({
+//         ...prev,
+//         profilePhotoUrl: "",
+//         profilePhotoPublicId: "",
+//       }));
+//     }
 //     toast.success("Document removed");
 //   };
 
@@ -942,8 +1018,16 @@
 //         pseudoName: formData.pseudoName,
 //         empId: formData.empId,
 //         dateOfJoining: formData.dateOfJoining || null,
+//         dob: formData.dob || null,
 //         designation: formData.designation,
 //         officeLocation: formData.officeLocation,
+//         permanentAddress: formData.permanentAddress,
+//         currentAddress: formData.currentAddress,
+//         bloodGroup: formData.bloodGroup,
+//         emergencyContactNumber: formData.emergencyContactNumber,
+//         emergencyContactName: formData.emergencyContactName,
+//         emergencyContactRelation: formData.emergencyContactRelation,
+//         personalEmailId: formData.personalEmailId,
 //         department: formData.department,
 //         transportOffice: formData.transportOffice,
 //         docsStatus: docsStatusValue,
@@ -1377,9 +1461,6 @@
 //             </Avatar>
 //             <div className="flex-1 min-w-[220px]">
 //               <p className="text-sm font-semibold text-slate-800">Employee Profile Photo</p>
-//               <p className="text-xs text-slate-500 mt-1">
-//                 Capture photo using local camera. Photo is uploaded to Cloudinary and URL is saved in DB.
-//               </p>
 //               <div className="mt-3 flex flex-wrap gap-2">
 //                 <Button
 //                   variant="contained"
@@ -1396,11 +1477,17 @@
 //                     variant="outlined"
 //                     size="small"
 //                     onClick={() =>
-//                       setFormData((prev) => ({
-//                         ...prev,
-//                         profilePhotoUrl: "",
-//                         profilePhotoPublicId: "",
-//                       }))
+//                       {
+//                         setFormData((prev) => ({
+//                           ...prev,
+//                           profilePhotoUrl: "",
+//                           profilePhotoPublicId: "",
+//                         }));
+//                         setDocuments((prev) => ({
+//                           ...prev,
+//                           photo: null,
+//                         }));
+//                       }
 //                     }
 //                     sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
 //                   >
@@ -1593,6 +1680,194 @@
 //                 }}
 //               />
 //             </div>
+//             <div>
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">DOB</label>
+//               <StyledDatePicker
+//                 value={formData.dob}
+//                 onChange={(val) =>
+//                   setFormData((prev) => ({
+//                     ...prev,
+//                     dob: val,
+//                   }))
+//                 }
+//                 placeholder="Select DOB"
+//               />
+//             </div>
+//             <div>
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Blood Group</label>
+//               <TextField
+//                 fullWidth
+//                 name="bloodGroup"
+//                 value={formData.bloodGroup}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
+//             <div>
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Personal Email ID</label>
+//               <TextField
+//                 fullWidth
+//                 name="personalEmailId"
+//                 value={formData.personalEmailId}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
+//             <div>
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Name</label>
+//               <TextField
+//                 fullWidth
+//                 name="emergencyContactName"
+//                 value={formData.emergencyContactName}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
+//             <div>
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Number</label>
+//               <TextField
+//                 fullWidth
+//                 name="emergencyContactNumber"
+//                 value={formData.emergencyContactNumber}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
+//             <div>
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Relation</label>
+//               <TextField
+//                 fullWidth
+//                 name="emergencyContactRelation"
+//                 value={formData.emergencyContactRelation}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
+//             <div className="md:col-span-2">
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Permanent Address</label>
+//               <TextField
+//                 fullWidth
+//                 name="permanentAddress"
+//                 value={formData.permanentAddress}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
+//             <div className="md:col-span-2">
+//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Current Address</label>
+//               <TextField
+//                 fullWidth
+//                 name="currentAddress"
+//                 value={formData.currentAddress}
+//                 onChange={handleChange}
+//                 size="small"
+//                 sx={{
+//                   "& .MuiOutlinedInput-root": {
+//                     borderRadius: "12px",
+//                     "& fieldset": {
+//                       borderColor: "#eaeaea",
+//                     },
+//                     "&:hover fieldset": {
+//                       borderColor: "#cbd5e1",
+//                     },
+//                     "&.Mui-focused fieldset": {
+//                       borderColor: "#3b82f6",
+//                       borderWidth: "2px",
+//                     },
+//                   },
+//                 }}
+//               />
+//             </div>
 //           </div>
 //         </div>
 //       )}
@@ -1685,7 +1960,7 @@
 //           }}
 //         >
 //           <MenuItem value="">— None —</MenuItem>
-//           {reportingManagers.map((manager) => (
+//           {reportingManagerOptions.map((manager) => (
 //             <MenuItem key={manager._id} value={manager._id}>
 //               {manager.realName ? `${manager.realName} (${manager.username})` : manager.username}
 //             </MenuItem>
@@ -2537,8 +2812,6 @@
 // export default ManageEmployee;
 
 
-
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Table, TableBody, TableCell, TableContainer,
@@ -2693,6 +2966,7 @@ const ManageEmployee = () => {
     permanentAddress: "",
     currentAddress: "",
     bloodGroup: "",
+    contactNumber: "",
     emergencyContactNumber: "",
     emergencyContactName: "",
     emergencyContactRelation: "",
@@ -2888,6 +3162,7 @@ const ManageEmployee = () => {
       permanentAddress: user.permanentAddress || "",
       currentAddress: user.currentAddress || "",
       bloodGroup: user.bloodGroup || "",
+      contactNumber: user.contactNumber || "",
       emergencyContactNumber: user.emergencyContactNumber || "",
       emergencyContactName: user.emergencyContactName || "",
       emergencyContactRelation: user.emergencyContactRelation || "",
@@ -2965,6 +3240,7 @@ const ManageEmployee = () => {
       permanentAddress: "",
       currentAddress: "",
       bloodGroup: "",
+      contactNumber: "",
       emergencyContactNumber: "",
       emergencyContactName: "",
       emergencyContactRelation: "",
@@ -3121,8 +3397,8 @@ const ManageEmployee = () => {
     const designation = formData.designation || selectedUser?.designation || "";
     const empId = formData.empId || selectedUser?.empId || "";
     const bloodGroup = formData.bloodGroup || selectedUser?.bloodGroup || "N/A";
-    const contactNumber = formData.phone || selectedUser?.phone || "N/A";
-    const emergencyContact = formData.emergencyPhone || selectedUser?.emergencyPhone || "N/A";
+    const contactNumber = formData.contactNumber || selectedUser?.contactNumber || "N/A";
+    const emergencyContact = formData.emergencyContactNumber || selectedUser?.emergencyContactNumber || "N/A";
     const photoUrl = formData.profilePhotoUrl || selectedUser?.profilePhotoUrl || "";
 
     const createCardCanvas = () => {
@@ -3142,6 +3418,7 @@ const ManageEmployee = () => {
     const frontCtx = frontCard.ctx;
     const backCtx = backCard.ctx;
 
+    // FIXED: Draw template with proper yellow line alignment and no blue bleed
     const drawTemplate = (ctx) => {
       const w = 768;
       const h = 1280;
@@ -3149,55 +3426,66 @@ const ManageEmployee = () => {
       const topWaveY = 126;
       const topWaveAmp = 20;
       const yellowThickness = 12;
-      const bottomBlueHeight = 150;
-      const bottomWaveY = h - 154;
-      const bottomWaveAmp = 18;
+      // Reduced bottom blue height to prevent blue from showing behind contact info
+      const bottomBlueHeight = 110;
+      const bottomWaveY = h - 114;
+      const bottomWaveAmp = 16;
+      
+      // White background
       ctx.fillStyle = "#ffffff";
       ctx.fillRect(0, 0, w, h);
 
-      // Top blue header with curved bottom edge
+      // === TOP SECTION: Blue header with curved bottom edge ===
       ctx.fillStyle = "#1f4e79";
       ctx.beginPath();
       ctx.moveTo(0, 0);
       ctx.lineTo(w, 0);
       ctx.lineTo(w, topBlueHeight - 6);
+      // Curve from right to left - going upward in the middle
       ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp, w * 0.47, topWaveY);
       ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp, 0, topWaveY - 2);
       ctx.closePath();
       ctx.fill();
 
-      // Yellow line connected to top blue curve
+      // === TOP YELLOW LINE: Follows the same curve as blue header ===
       ctx.fillStyle = "#f2cf00";
       ctx.beginPath();
-      ctx.moveTo(-4, topWaveY - 2);
-      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp, w * 0.47, topWaveY);
-      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp, 0, topWaveY - 2);
-      ctx.lineTo(0, topWaveY + yellowThickness - 2);
-      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness, w * 0.47, topWaveY + yellowThickness);
-      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness, w + 4, topWaveY + yellowThickness - 2);
+      ctx.moveTo(0, topWaveY - 2);
+      // Curve from left to right - matching the blue header curve
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp, w * 0.47, topWaveY);
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp, w, topWaveY - 2);
+      // Draw thickness downward
+      ctx.lineTo(w, topWaveY + yellowThickness - 2);
+      // Curve back from right to left with thickness
+      ctx.quadraticCurveTo(w * 0.74, topWaveY - topWaveAmp + yellowThickness, w * 0.47, topWaveY + yellowThickness);
+      ctx.quadraticCurveTo(w * 0.2, topWaveY + topWaveAmp + yellowThickness, 0, topWaveY + yellowThickness - 2);
       ctx.closePath();
       ctx.fill();
 
-      // Bottom blue footer with curved top edge
+      // === BOTTOM SECTION: Blue footer with curved top edge ===
       ctx.fillStyle = "#1f4e79";
       ctx.beginPath();
       ctx.moveTo(0, h);
       ctx.lineTo(w, h);
       ctx.lineTo(w, h - bottomBlueHeight + 8);
+      // Curve from right to left - going downward in the middle
       ctx.quadraticCurveTo(w * 0.75, bottomWaveY + bottomWaveAmp, w * 0.52, bottomWaveY + 2);
       ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp, 0, bottomWaveY + 2);
       ctx.closePath();
       ctx.fill();
 
-      // Yellow line connected to bottom blue curve
+      // === BOTTOM YELLOW LINE: Follows the same curve as blue footer ===
       ctx.fillStyle = "#f2cf00";
       ctx.beginPath();
-      ctx.moveTo(-4, bottomWaveY + 11);
-      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp + 11, w * 0.5, bottomWaveY + 13);
-      ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp + 11, w + 4, bottomWaveY + 11);
-      ctx.lineTo(w + 4, bottomWaveY + 11 - yellowThickness);
-      ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp + 11 - yellowThickness, w * 0.5, bottomWaveY + 13 - yellowThickness);
-      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp + 11 - yellowThickness, -4, bottomWaveY + 11 - yellowThickness);
+      ctx.moveTo(0, bottomWaveY + 2);
+      // Curve from left to right - matching the blue footer curve
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp, w * 0.5, bottomWaveY + 2);
+      ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp, w, bottomWaveY + 2);
+      // Draw thickness upward
+      ctx.lineTo(w, bottomWaveY + 2 - yellowThickness);
+      // Curve back from right to left with thickness
+      ctx.quadraticCurveTo(w * 0.77, bottomWaveY + bottomWaveAmp - yellowThickness, w * 0.5, bottomWaveY + 2 - yellowThickness);
+      ctx.quadraticCurveTo(w * 0.23, bottomWaveY - bottomWaveAmp - yellowThickness, 0, bottomWaveY + 2 - yellowThickness);
       ctx.closePath();
       ctx.fill();
     };
@@ -3263,7 +3551,7 @@ const ManageEmployee = () => {
     backCtx.fillStyle = "#1f4e79";
     backCtx.textAlign = "left";
     backCtx.font = "500 32px Arial";
-    backCtx.fillText(`Contact         : ${contactNumber}`, 126, 286);
+    backCtx.fillText(`Contact: ${contactNumber}`, 126, 286);
     backCtx.fillText(`Emg Contact: ${emergencyContact}`, 126, 342);
 
     backCtx.textAlign = "left";
@@ -3565,6 +3853,7 @@ const ManageEmployee = () => {
         permanentAddress: formData.permanentAddress,
         currentAddress: formData.currentAddress,
         bloodGroup: formData.bloodGroup,
+        contactNumber: formData.contactNumber,
         emergencyContactNumber: formData.emergencyContactNumber,
         emergencyContactName: formData.emergencyContactName,
         emergencyContactRelation: formData.emergencyContactRelation,
@@ -4242,6 +4531,32 @@ const ManageEmployee = () => {
                 value={formData.bloodGroup}
                 onChange={handleChange}
                 size="small"
+                sx={{
+                  "& .MuiOutlinedInput-root": {
+                    borderRadius: "12px",
+                    "& fieldset": {
+                      borderColor: "#eaeaea",
+                    },
+                    "&:hover fieldset": {
+                      borderColor: "#cbd5e1",
+                    },
+                    "&.Mui-focused fieldset": {
+                      borderColor: "#3b82f6",
+                      borderWidth: "2px",
+                    },
+                  },
+                }}
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1.5">Contact Number</label>
+              <TextField
+                fullWidth
+                name="contactNumber"
+                value={formData.contactNumber}
+                onChange={handleChange}
+                size="small"
+                placeholder="Enter contact number"
                 sx={{
                   "& .MuiOutlinedInput-root": {
                     borderRadius: "12px",
