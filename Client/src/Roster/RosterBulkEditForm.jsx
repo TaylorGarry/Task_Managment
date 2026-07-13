@@ -1,4 +1,3 @@
-
 // import React, { useState, useEffect, useRef } from 'react';
 // import { useDispatch, useSelector } from 'react-redux';
 // import { FiEye, FiTrash2, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown } from 'react-icons/fi';
@@ -1966,9 +1965,6 @@
 // export default RosterBulkEditForm;
 
 
-
-
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { FiEye, FiTrash2, FiChevronLeft, FiChevronRight, FiChevronUp, FiChevronDown } from 'react-icons/fi';
@@ -3327,6 +3323,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                     <option value="H">H</option>
                                                     <option value="HD">HD</option>
                                                     <option value="LWD">LWD</option>
+                                                    <option value="Exit">Exit</option>
                                                     <option value="OT">OT</option>
                                                     <option value="FWO">FWO</option>
                                                 </select>
@@ -3557,6 +3554,7 @@ const RosterBulkEditForm = ({ rosterId, onClose }) => {
                                                                             <option value="H">H</option>
 	                                                                            <option value="HD">HD</option>
 	                                                                            <option value="LWD">LWD</option>
+	                                                                            <option value="Exit">Exit</option>
 	                                                                            <option value="OT">OT</option>
 	                                                                            <option value="FWO">FWO</option>
 	                                                                        </select>

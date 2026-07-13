@@ -12949,7 +12949,7 @@ const parseStatusCode = (value) => {
   const raw = String(value ?? "").trim().toUpperCase();
   if (!raw) return null;
   if (raw === "WOP") return "WO";
-  const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO"]);
+  const valid = new Set(["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO", "EXIT"]);
   return valid.has(raw) ? raw : null;
 };
 
@@ -18381,7 +18381,7 @@ export const rosterUploadFromExcel = async (req, res) => {
           const rawStatus = (row[excelDateColumns[i]] || "P").toString().trim();
           const status = rawStatus.toUpperCase();
 
-          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FWO", "H", "LWD", "HD", ""];
+          const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FWO", "H", "LWD", "HD","EXIT", ""];
           if (!validStatus.includes(status)) {
             errors.push(`Row ${index + dataStartRowIndex + 1}: Invalid status "${rawStatus}"`);
             continue;
@@ -20304,7 +20304,7 @@ export const updateAttendance = async (req, res) => {
         message: "At least one field (transportStatus, departmentStatus, or arrivalTime) is required"
       });
     }
-    const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO"];
+    const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO", "EXIT"];
 
     if (transportStatus && !validStatuses.includes(transportStatus)) {
       return res.status(400).json({
