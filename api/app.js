@@ -901,6 +901,7 @@ import attendanceAuditRoutes from "./routes/attendanceAudit.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 import ticketRoutes from "./routes/ticket.routes.js";
+import salarySlipRoutes from "./routes/salarySlip.routes.js";
 dotenv.config();
 const app = express();
 
@@ -1174,7 +1175,7 @@ app.use("/api/v1/roster", rosterRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/v1/push", pushRoutes);
-app.use("/api/v1/delegations", delegationRoutes);  // ← ADD THIS LINE
+app.use("/api/v1/delegations", delegationRoutes);   
 app.use("/api/v1/leaves", leaveRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/punchx", punchxRoutes);
@@ -1185,6 +1186,7 @@ app.use("/api/v1/employee-exit", employeeExitRoutes);
 app.use("/api/employee-exit", employeeExitRoutes);
 app.use("/api/v1/attendance", attendanceAuditRoutes);
 app.use("/api/v1/tickets", ticketRoutes);
+app.use("/api/payroll", salarySlipRoutes);
 
 app.get("/", (req, res) => {
   res.json({

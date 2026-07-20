@@ -1063,6 +1063,7 @@ import PendingLeaveNotification from "./components/PendingLeaveNotification.jsx"
 import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import TicketManagement from "./pages/TicketManagement.jsx";
+import SalarySlips from "./pages/SalarySlips.jsx";
 import { subscribeUserToPush } from "./utils/pushNotifications.js";
 import {
   canManageAdminPanels,
@@ -1338,6 +1339,25 @@ const TicketRouteShell = () => {
   );
 };
 
+const SalarySlipRouteShell = () => {
+  const { user } = useSelector((state) => state.auth);
+  if (canManageAdminPanels(user)) {
+    return (
+      <>
+        <AdminNavbar showOutlet={false} />
+        <SalarySlips />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Navbar />
+      <SalarySlips />
+    </>
+  );
+};
+
 const AdminHomeRedirect = () => {
   const { user } = useSelector((state) => state.auth);
   const shouldAvoidTasksLanding = isHrDepartment(user) || isSuperAdmin(user);
@@ -1353,6 +1373,7 @@ function App() {
     location.pathname.startsWith("/attendance-update") ||
     location.pathname.startsWith("/attendance-snapshot") ||
     location.pathname.startsWith("/tickets") ||
+    location.pathname.startsWith("/salary-slips") ||
     location.pathname === "/login";
 
   useEffect(() => {
@@ -1518,6 +1539,14 @@ function App() {
             <OpsMetaRoute>
               <OpsRoster />
             </OpsMetaRoute>
+          }
+        />
+        <Route
+          path="/salary-slips"
+          element={
+            <AuthRoute>
+              <SalarySlipRouteShell />
+            </AuthRoute>
           }
         />
 
