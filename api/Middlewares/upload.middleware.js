@@ -29,7 +29,7 @@ const fileFilter = (req, file, cb) => {
     'application/json': true,
     
     // Audio
-    'audio/mpeg': true, // mp3
+    'audio/mpeg': true,  
     'audio/wav': true,
     'audio/ogg': true,
     'audio/mp4': true,

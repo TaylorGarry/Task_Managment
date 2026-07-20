@@ -617,8 +617,9 @@ import {
   Users, 
   Upload, 
   Calendar, 
-  FileText, 
-  Megaphone, 
+  FileText,
+  FileSpreadsheet,
+  Megaphone,
   Shield, 
   User, 
   MessageSquare, 
@@ -944,7 +945,7 @@ const Navbar = () => {
       <Toaster position="top-right" />
 
       {/* Desktop Sidebar - Light Blue & White Mix */}
-      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen w-[250px] border-r border-blue-200/50 bg-gradient-to-b from-blue-100/80 via-blue-50/60 to-blue-100/70 backdrop-blur-sm z-50 overflow-hidden">
+      <aside className="hidden md:flex fixed left-0 inset-y-0 h-screen min-h-screen w-[250px] border-r border-blue-200/50 bg-[#F0F9FF] z-50 overflow-hidden">
         <div className="h-full w-full px-4 py-6 flex flex-col min-h-0 justify-between">
           
           <div className="flex flex-col min-h-0 flex-1">
@@ -963,7 +964,7 @@ const Navbar = () => {
             </div>
 
             <div className="no-scrollbar flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
-              <div className="flex flex-col space-y-1">
+              <div className="flex flex-col space-y-1 ">
                 <p className="px-3 text-[10px] font-bold tracking-wider text-blue-500/70 uppercase mb-1 mt-2">Menu</p>
                 
                 {!isTransportDepartment && renderSideItem("Today", "/dashboard", Home)}
@@ -979,6 +980,8 @@ const Navbar = () => {
                 {canShowAttendanceSidebarLinks && canAccessAttendanceUpdate && renderSideItem("Attendance Update", "/attendance-update", Calendar, false)}
 
                 {!isTransportDepartment && renderSideItem("KRA", "/kra", FileText)}
+
+                {renderSideItem("Salary Slips", "/salary-slips", FileSpreadsheet)}
 
                 {!isTransportDepartment && renderSideItem("Announcement", "/announcements", Megaphone)}
 
@@ -1015,12 +1018,11 @@ const Navbar = () => {
             </div>
           </div>
 
-          {/* Bottom Controls - Light Blue Theme */}
           <div className="pt-4 flex flex-col gap-3 border-t border-blue-200/40 mt-auto shrink-0">
             
             <button
               onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-3 py-2 text-xs font-semibold rounded-lg border border-rose-200/60 bg-rose-50/40 text-rose-600 hover:bg-rose-50/80 transition duration-150"
+              className="w-full flex items-center gap-3 px-3 py-2 cursor-pointer text-xs font-semibold rounded-lg border border-rose-200/60 bg-rose-50/40 text-rose-600 hover:bg-rose-50/80 transition duration-150"
             >
               <LogOut size={16} className="text-rose-500" />
               <span>Logout</span>
@@ -1059,25 +1061,12 @@ const Navbar = () => {
                 </div>
                 <ChevronDown size={14} className="text-blue-400 shrink-0 pr-0.5" />
               </button>
-
-              {showProfileMenu && (
-                <div className="absolute bottom-full mb-2 left-0 w-full bg-blue-50/95 backdrop-blur-sm border border-blue-200/50 rounded-lg shadow-lg shadow-blue-200/20 py-1 z-50">
-                  <button
-                    onClick={handleLogout}
-                    className="w-full text-left px-3 py-2 text-xs text-rose-600 hover:bg-rose-50 font-medium flex items-center gap-2"
-                  >
-                    <LogOut size={14} />
-                    Logout Account
-                  </button>
-                </div>
-              )}
             </div>
           </div>
 
         </div>
       </aside>
 
-      {/* Mobile Top Navigation - Light Blue Theme */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50">
         <div className="h-1 bg-gradient-to-r from-blue-300 via-blue-400 to-blue-500" />
         <nav className="bg-blue-50/95 backdrop-blur-sm border-b border-blue-200/50 px-4 py-3 shadow-sm">
@@ -1115,6 +1104,9 @@ const Navbar = () => {
                   <FileText size={18} className="text-blue-400" /> KRA
                 </button>
               )}
+              <button onClick={() => { navigate("/salary-slips"); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left text-slate-700 hover:bg-blue-100/60 text-sm font-medium">
+                <FileSpreadsheet size={18} className="text-blue-400" /> Salary Slips
+              </button>
               {!isTransportDepartment && (
                 <button onClick={() => { navigate("/announcements"); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg text-left text-slate-700 hover:bg-blue-100/60 text-sm font-medium">
                   <Megaphone size={18} className="text-blue-400" /> Announcements

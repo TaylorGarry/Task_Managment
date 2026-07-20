@@ -5,7 +5,7 @@ import axios from "axios";
 import { logoutUser } from "../features/slices/authSlice.js";
 import { exportTaskStatusExcel } from "../features/slices/taskSlice.js";
 import { FiLogOut, FiMenu, FiX, FiDownload, FiUsers, FiUserPlus, FiUser, FiCalendar, FiBell } from "react-icons/fi";
-import { Clock, TicketCheck } from "lucide-react";  
+import { Clock, FileSpreadsheet, TicketCheck } from "lucide-react";  
 import { Camera } from "lucide-react";  
 import { ChevronDown } from "lucide-react";  
 import toast from "react-hot-toast";
@@ -550,6 +550,10 @@ const AdminNavbar = ({ showOutlet = true }) => {
               <Link to="/employee-exits" className={`${navLinkClass("/employee-exits")} ${location.pathname.startsWith("/employee-exits") ? "bg-[#f8fafc] text-[#0e5c7a]" : ""}`} onClick={() => setShowMobileMenu(false)}>
                 <FiUser className="text-sm text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
                 Employee Exits
+              </Link>
+              <Link to="/salary-slips" className={`${navLinkClass("/salary-slips")} ${location.pathname.startsWith("/salary-slips") ? "bg-[#f8fafc] text-[#0e5c7a]" : ""}`} onClick={() => setShowMobileMenu(false)}>
+                <FileSpreadsheet className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 flex-shrink-0" />
+                Salary Slips
               </Link>
             </div>
           </div>

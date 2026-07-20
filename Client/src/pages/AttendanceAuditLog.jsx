@@ -598,7 +598,7 @@ const AttendanceAuditLog = () => {
                     </td>
                     <td className="px-4 py-3.5">
                       <div className="flex flex-col">
-                        <p className="text-sm font-semibold text-slate-900">{row.updatedByName || getPersonName(row.updatedBy)}</p>
+                        <p className="text-sm font-semibold text-slate-900">{row.updatedBy?.pseudoName || row.updatedByName || getPersonName(row.updatedBy)}</p>
                         <span className="mt-0.5 inline-flex w-fit rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
                           {row.updatedByRole || "Supervisor"}
                         </span>
