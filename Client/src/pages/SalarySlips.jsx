@@ -1,4 +1,5 @@
 // import React, { useEffect, useMemo, useState } from "react";
+
 // import { useSelector } from "react-redux";
 // import toast from "react-hot-toast";
 // import { 
@@ -15,7 +16,12 @@
 //   X,
 //   CheckCircle,
 //   AlertCircle,
-//   Clock
+//   Clock,
+//   UserCog,
+//   Eye,
+//   UserCheck,
+//   RefreshCw,
+//   XCircle
 // } from "lucide-react";
 // import axios from "axios";
 // import {
@@ -95,9 +101,20 @@
 //   const [filterYear, setFilterYear] = useState("all");
 //   const [searchTerm, setSearchTerm] = useState("");
 //   const [showFilters, setShowFilters] = useState(false);
+  
+//   // New state for HR/Accounts features
+//   const [viewMode, setViewMode] = useState("my-slips");
+//   const [employees, setEmployees] = useState([]);
+//   const [employeeStats, setEmployeeStats] = useState({ total: 0, uploaded: 0, pending: 0, noAccount: 0 });
+//   const [employeeFilterStatus, setEmployeeFilterStatus] = useState("all");
+//   const [employeeSearchTerm, setEmployeeSearchTerm] = useState("");
+//   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
+//   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+//   const [salaryRecords, setSalaryRecords] = useState([]);
 
-//   const canUpload =
-//     isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
+//   const canUpload = isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
+//   const isHRorAccounts = isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
+
 //   const selectedMonthLabel = useMemo(
 //     () => MONTHS.find((item) => Number(item.value) === Number(month))?.label || "",
 //     [month]
@@ -126,6 +143,66 @@
 //     return { total, uniqueYears, latest };
 //   }, [slips]);
 
+//   // Create employee list from salary records if employees state is empty
+//   const employeeList = useMemo(() => {
+//     // If we have employees from the status API, use them
+//     if (employees.length > 0) {
+//       return employees;
+//     }
+    
+//     // Otherwise, create employee list from salary records
+//     const employeeMap = new Map();
+//     salaryRecords.forEach(record => {
+//       const key = record.employeeCode || record._id;
+//       if (!employeeMap.has(key)) {
+//         employeeMap.set(key, {
+//           employeeId: record.employee?._id || record._id,
+//           employeeCode: record.employeeCode || 'N/A',
+//           employeeName: record.employee?.username|| record.employee?.realName || 'Unknown',
+//           department: record.department || record.employee?.department || 'N/A',
+//           designation: record.designation || 'N/A',
+//           hasSalarySlip: true,
+//           hasUserAccount: true,
+//           status: 'Uploaded',
+//           salaryRecordId: record._id
+//         });
+//       }
+//     });
+//     return Array.from(employeeMap.values());
+//   }, [employees, salaryRecords]);
+
+//   // Filter employees for HR/Accounts view
+//   const filteredEmployees = useMemo(() => {
+//     return employeeList.filter(emp => {
+//       const matchesSearch = emp.employeeName?.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
+//                            emp.employeeCode?.toLowerCase().includes(employeeSearchTerm.toLowerCase());
+//       const matchesStatus = employeeFilterStatus === "all" || 
+//                            (employeeFilterStatus === "uploaded" && emp.hasSalarySlip) ||
+//                            (employeeFilterStatus === "pending" && !emp.hasSalarySlip);
+//       return matchesSearch && matchesStatus;
+//     });
+//   }, [employeeList, employeeSearchTerm, employeeFilterStatus]);
+
+//   // Create a map of employeeCode to salary record for quick lookup
+//   const salaryRecordsMap = useMemo(() => {
+//     const map = new Map();
+//     salaryRecords.forEach(record => {
+//       if (record.employeeCode) {
+//         map.set(record.employeeCode, record);
+//       }
+//       if (record.employee?.employeeCode) {
+//         map.set(record.employee.employeeCode, record);
+//       }
+//       if (record.employee?._id) {
+//         map.set(record.employee._id, record);
+//       }
+//       if (record._id) {
+//         map.set(record._id, record);
+//       }
+//     });
+//     return map;
+//   }, [salaryRecords]);
+
 //   const fetchSalaryData = async () => {
 //     setLoading(true);
 //     try {
@@ -142,9 +219,64 @@
 //     }
 //   };
 
+//   // Fetch employee salary status for HR/Accounts
+//   const fetchEmployeeSalaryStatus = async () => {
+//     if (!isHRorAccounts) return;
+//     try {
+//       setLoading(true);
+//       const response = await salaryApi.get("/api/payroll/employee-salary-status", {
+//         params: { month: selectedMonth, year: selectedYear }
+//       });
+//       const data = response.data?.data || {};
+//       setEmployees(data.employees || []);
+//       setEmployeeStats({
+//         total: data.total || 0,
+//         uploaded: data.uploaded || 0,
+//         pending: data.pending || 0,
+//         noAccount: data.noAccount || 0
+//       });
+//     } catch (error) {
+//       console.error("Failed to fetch employee status:", error);
+//       // Don't show toast error here, we'll fallback to salary records
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   // Fetch salary records for employees
+//   const fetchEmployeeSalarySlips = async () => {
+//     if (!isHRorAccounts) return;
+//     try {
+//       const response = await salaryApi.get("/api/payroll/employee-slips", {
+//         params: { month: selectedMonth, year: selectedYear }
+//       });
+//       const records = Array.isArray(response.data?.data) ? response.data.data : [];
+//       setSalaryRecords(records);
+      
+//       // If employees array is empty, update stats from salary records
+//       if (employees.length === 0 && records.length > 0) {
+//         setEmployeeStats({
+//           total: records.length,
+//           uploaded: records.length,
+//           pending: 0,
+//           noAccount: 0
+//         });
+//       }
+//     } catch (error) {
+//       console.error("Failed to fetch salary slips:", error);
+//     }
+//   };
+
 //   useEffect(() => {
 //     fetchSalaryData();
 //   }, [canUpload]);
+
+//   useEffect(() => {
+//     if (viewMode === "employee-management" && isHRorAccounts) {
+//       fetchEmployeeSalaryStatus();
+//       fetchEmployeeSalarySlips();
+//     }
+//   }, [selectedMonth, selectedYear, viewMode]);
 
 //   const handleUpload = async (event) => {
 //     event.preventDefault();
@@ -171,6 +303,9 @@
 //       setFile(null);
 //       event.target.reset();
 //       await fetchSalaryData();
+//       if (viewMode === "employee-management") {
+//         await fetchEmployeeSalaryStatus();
+//       }
 //     } catch (error) {
 //       toast.error(error.response?.data?.message || "Salary sheet upload failed");
 //     } finally {
@@ -200,6 +335,32 @@
 //     }
 //   };
 
+//   // Download employee salary slip (HR/Accounts)
+//   const downloadEmployeeSlip = async (recordId, employeeName) => {
+//     setDownloadingId(recordId);
+//     try {
+//       const response = await salaryApi.get(`/api/payroll/download/${recordId}`, {
+//         responseType: 'blob'
+//       });
+      
+//       const blob = new Blob([response.data], { type: 'application/pdf' });
+//       const url = window.URL.createObjectURL(blob);
+//       const link = document.createElement('a');
+//       link.href = url;
+//       link.download = `salary-slip-${employeeName}-${selectedMonth}-${selectedYear}.pdf`;
+//       document.body.appendChild(link);
+//       link.click();
+//       link.remove();
+//       window.URL.revokeObjectURL(url);
+      
+//       toast.success('Salary slip downloaded successfully');
+//     } catch (error) {
+//       toast.error(error.response?.data?.message || 'Failed to download salary slip');
+//     } finally {
+//       setDownloadingId('');
+//     }
+//   };
+
 //   const clearFilters = () => {
 //     setFilterMonth("all");
 //     setFilterYear("all");
@@ -207,10 +368,10 @@
 //     setShowFilters(false);
 //   };
 
-// 	  return (
-// 	    <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 ml-5">
-// 	      <div className="w-full space-y-5">
-//         {/* Header Section - Reduced height */}
+//   return (
+//     <main className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50/30 p-4 ml-5">
+//       <div className="w-full space-y-5">
+//         {/* Header Section */}
 //         <header className="relative overflow-hidden rounded-xl bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-5 shadow-lg">
 //           <div className="absolute right-0 top-0 h-full w-1/3 opacity-10">
 //             <div className="absolute right-10 top-10 h-32 w-32 rounded-full bg-white"></div>
@@ -222,67 +383,146 @@
 //               <p className="mt-0.5 text-sm text-blue-100">View and manage your salary slips efficiently</p>
 //             </div>
 //             <div className="flex items-center gap-3">
+//               {isHRorAccounts && (
+//                 <div className="flex rounded-lg bg-white/20 p-1 backdrop-blur-sm">
+//                   <button
+//                     onClick={() => setViewMode("my-slips")}
+//                     className={`px-3 py-1 text-xs font-medium rounded transition ${
+//                       viewMode === "my-slips" 
+//                         ? "bg-white text-blue-700" 
+//                         : "text-white hover:bg-white/10"
+//                     }`}
+//                   >
+//                     <UserCheck className="inline h-3.5 w-3.5 mr-1" />
+//                     My Slips
+//                   </button>
+//                   <button
+//                     onClick={() => setViewMode("employee-management")}
+//                     className={`px-3 py-1 text-xs font-medium rounded transition ${
+//                       viewMode === "employee-management" 
+//                         ? "bg-white text-blue-700" 
+//                         : "text-white hover:bg-white/10"
+//                     }`}
+//                   >
+//                     <Users className="inline h-3.5 w-3.5 mr-1" />
+//                     All Employees
+//                   </button>
+//                 </div>
+//               )}
 //               <div className="rounded-lg bg-white/20 px-3 py-1.5 backdrop-blur-sm">
 //                 <span className="text-sm font-medium text-white">
-//                   {slips.length} {slips.length === 1 ? "Slip" : "Slips"} Available
+//                   {viewMode === "my-slips" 
+//                     ? `${slips.length} ${slips.length === 1 ? "Slip" : "Slips"} Available`
+//                     : `${employeeList.length} Employees`}
 //                 </span>
 //               </div>
 //             </div>
 //           </div>
 //         </header>
 
-//         {/* Stats Cards - Reduced gap */}
+//         {/* Stats Cards */}
 //         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-//           <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-xs font-medium text-slate-500">Total Slips</p>
-//                 <p className="text-xl font-bold text-slate-900">{stats.total}</p>
+//           {viewMode === "my-slips" ? (
+//             <>
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Total Slips</p>
+//                     <p className="text-xl font-bold text-slate-900">{stats.total}</p>
+//                   </div>
+//                   <div className="rounded-lg bg-blue-50 p-2.5">
+//                     <FileText className="h-4 w-4 text-blue-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//               <div className="rounded-lg bg-blue-50 p-2.5">
-//                 <FileText className="h-4 w-4 text-blue-600" />
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Years Active</p>
+//                     <p className="text-xl font-bold text-slate-900">{stats.uniqueYears}</p>
+//                   </div>
+//                   <div className="rounded-lg bg-purple-50 p-2.5">
+//                     <Calendar className="h-4 w-4 text-purple-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//             </div>
-//           </div>
-//           <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-xs font-medium text-slate-500">Years Active</p>
-//                 <p className="text-xl font-bold text-slate-900">{stats.uniqueYears}</p>
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Latest Slip</p>
+//                     <p className="text-sm font-semibold text-slate-900">
+//                       {stats.latest ? `${stats.latest.monthName} ${stats.latest.year}` : "N/A"}
+//                     </p>
+//                   </div>
+//                   <div className="rounded-lg bg-emerald-50 p-2.5">
+//                     <TrendingUp className="h-4 w-4 text-emerald-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//               <div className="rounded-lg bg-purple-50 p-2.5">
-//                 <Calendar className="h-4 w-4 text-purple-600" />
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Status</p>
+//                     <p className="text-sm font-semibold text-emerald-600">Active</p>
+//                   </div>
+//                   <div className="rounded-lg bg-amber-50 p-2.5">
+//                     <Clock className="h-4 w-4 text-amber-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//             </div>
-//           </div>
-//           <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-xs font-medium text-slate-500">Latest Slip</p>
-//                 <p className="text-sm font-semibold text-slate-900">
-//                   {stats.latest ? `${stats.latest.monthName} ${stats.latest.year}` : "N/A"}
-//                 </p>
+//             </>
+//           ) : (
+//             <>
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Total Employees</p>
+//                     <p className="text-xl font-bold text-slate-900">{employeeList.length}</p>
+//                   </div>
+//                   <div className="rounded-lg bg-blue-50 p-2.5">
+//                     <Users className="h-4 w-4 text-blue-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//               <div className="rounded-lg bg-emerald-50 p-2.5">
-//                 <TrendingUp className="h-4 w-4 text-emerald-600" />
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Salary Uploaded</p>
+//                     <p className="text-xl font-bold text-emerald-600">{employeeStats.uploaded}</p>
+//                   </div>
+//                   <div className="rounded-lg bg-green-50 p-2.5">
+//                     <CheckCircle className="h-4 w-4 text-green-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//             </div>
-//           </div>
-//           <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
-//             <div className="flex items-center justify-between">
-//               <div>
-//                 <p className="text-xs font-medium text-slate-500">Status</p>
-//                 <p className="text-sm font-semibold text-emerald-600">Active</p>
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">Pending Upload</p>
+//                     <p className="text-xl font-bold text-yellow-600">{employeeStats.pending}</p>
+//                   </div>
+//                   <div className="rounded-lg bg-yellow-50 p-2.5">
+//                     <AlertCircle className="h-4 w-4 text-yellow-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//               <div className="rounded-lg bg-amber-50 p-2.5">
-//                 <Clock className="h-4 w-4 text-amber-600" />
+//               <div className="rounded-xl bg-white p-4 shadow-sm transition-all hover:shadow-md">
+//                 <div className="flex items-center justify-between">
+//                   <div>
+//                     <p className="text-xs font-medium text-slate-500">No Account</p>
+//                     <p className="text-xl font-bold text-red-600">{employeeStats.noAccount}</p>
+//                   </div>
+//                   <div className="rounded-lg bg-red-50 p-2.5">
+//                     <XCircle className="h-4 w-4 text-red-600" />
+//                   </div>
+//                 </div>
 //               </div>
-//             </div>
-//           </div>
+//             </>
+//           )}
 //         </div>
 
-//         {/* Upload Section - Reduced padding */}
-//         {canUpload && (
+//         {/* Upload Section */}
+//         {canUpload && viewMode === "my-slips" && (
 //           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:shadow-md">
 //             <div className="mb-4 flex items-center gap-3">
 //               <div className="rounded-lg bg-blue-50 p-2">
@@ -379,144 +619,287 @@
 //           </section>
 //         )}
 
-//         {/* Salary Slips List - Reduced padding */}
-//         <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md">
-//           <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
-//             <div>
-//               <h2 className="text-base font-semibold text-slate-900">My Salary Slips</h2>
-//               <p className="text-xs text-slate-500">Download your salary slips in PDF format</p>
-//             </div>
-            
-//             <div className="flex flex-wrap items-center gap-2">
-//               {/* Search */}
-//               <div className="relative">
-//                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
-//                 <input
-//                   type="text"
-//                   placeholder="Search..."
-//                   value={searchTerm}
-//                   onChange={(e) => setSearchTerm(e.target.value)}
-//                   className="w-36 rounded-lg border border-slate-200 pl-8 pr-3 py-1.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 lg:w-40"
-//                 />
+//         {/* Main Content - My Salary Slips */}
+//         {viewMode === "my-slips" && (
+//           <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md">
+//             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+//               <div>
+//                 <h2 className="text-base font-semibold text-slate-900">My Salary Slips</h2>
+//                 <p className="text-xs text-slate-500">Download your salary slips in PDF format</p>
 //               </div>
               
-//               <button
-//                 onClick={() => setShowFilters(!showFilters)}
-//                 className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-//               >
-//                 <Filter className="h-3.5 w-3.5" />
-//                 Filters
-//                 {(filterMonth !== "all" || filterYear !== "all") && (
-//                   <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
-//                     Active
-//                   </span>
-//                 )}
-//               </button>
-              
-//               {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
-//             </div>
-//           </div>
-          
-//           {/* Filters Panel */}
-//           {showFilters && (
-//             <div className="border-b border-slate-100 bg-slate-50/50 p-3">
-//               <div className="flex flex-wrap items-end gap-3">
-//                 <div>
-//                   <label className="mb-0.5 block text-xs font-medium text-slate-600">Month</label>
-//                   <select
-//                     value={filterMonth}
-//                     onChange={(e) => setFilterMonth(e.target.value)}
-//                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
-//                   >
-//                     <option value="all">All months</option>
-//                     {MONTHS.map((item) => (
-//                       <option key={item.value} value={item.value}>{item.label}</option>
-//                     ))}
-//                   </select>
-//                 </div>
-                
-//                 <div>
-//                   <label className="mb-0.5 block text-xs font-medium text-slate-600">Year</label>
-//                   <select
-//                     value={filterYear}
-//                     onChange={(e) => setFilterYear(e.target.value)}
-//                     className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
-//                   >
-//                     <option value="all">All years</option>
-//                     {availableYears.map((item) => (
-//                       <option key={item} value={item}>{item}</option>
-//                     ))}
-//                   </select>
+//               <div className="flex flex-wrap items-center gap-2">
+//                 <div className="relative">
+//                   <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+//                   <input
+//                     type="text"
+//                     placeholder="Search..."
+//                     value={searchTerm}
+//                     onChange={(e) => setSearchTerm(e.target.value)}
+//                     className="w-36 rounded-lg border border-slate-200 pl-8 pr-3 py-1.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 lg:w-40"
+//                   />
 //                 </div>
                 
 //                 <button
-//                   onClick={clearFilters}
-//                   className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-500 transition hover:text-slate-700"
+//                   onClick={() => setShowFilters(!showFilters)}
+//                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
 //                 >
-//                   <X className="h-3.5 w-3.5" />
-//                   Clear all
+//                   <Filter className="h-3.5 w-3.5" />
+//                   Filters
+//                   {(filterMonth !== "all" || filterYear !== "all") && (
+//                     <span className="ml-0.5 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">
+//                       Active
+//                     </span>
+//                   )}
+//                 </button>
+                
+//                 {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+//               </div>
+//             </div>
+            
+//             {showFilters && (
+//               <div className="border-b border-slate-100 bg-slate-50/50 p-3">
+//                 <div className="flex flex-wrap items-end gap-3">
+//                   <div>
+//                     <label className="mb-0.5 block text-xs font-medium text-slate-600">Month</label>
+//                     <select
+//                       value={filterMonth}
+//                       onChange={(e) => setFilterMonth(e.target.value)}
+//                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
+//                     >
+//                       <option value="all">All months</option>
+//                       {MONTHS.map((item) => (
+//                         <option key={item.value} value={item.value}>{item.label}</option>
+//                       ))}
+//                     </select>
+//                   </div>
+                  
+//                   <div>
+//                     <label className="mb-0.5 block text-xs font-medium text-slate-600">Year</label>
+//                     <select
+//                       value={filterYear}
+//                       onChange={(e) => setFilterYear(e.target.value)}
+//                       className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
+//                     >
+//                       <option value="all">All years</option>
+//                       {availableYears.map((item) => (
+//                         <option key={item} value={item}>{item}</option>
+//                       ))}
+//                     </select>
+//                   </div>
+                  
+//                   <button
+//                     onClick={clearFilters}
+//                     className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-xs text-slate-500 transition hover:text-slate-700"
+//                   >
+//                     <X className="h-3.5 w-3.5" />
+//                     Clear all
+//                   </button>
+//                 </div>
+//               </div>
+//             )}
+            
+//             <div className="divide-y divide-slate-100">
+//               {!loading && filteredSlips.length === 0 ? (
+//                 <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
+//                   <div className="rounded-full bg-slate-100 p-3">
+//                     <FileText className="h-6 w-6 text-slate-400" />
+//                   </div>
+//                   <p className="mt-3 text-sm font-medium text-slate-900">No salary slips found</p>
+//                   <p className="text-xs text-slate-500">
+//                     {searchTerm || filterMonth !== "all" || filterYear !== "all" 
+//                       ? "Try adjusting your filters or search terms" 
+//                       : "Your salary slips will appear here once processed"}
+//                   </p>
+//                 </div>
+//               ) : (
+//                 filteredSlips.map((slip) => (
+//                   <div 
+//                     key={slip._id} 
+//                     className="flex flex-col gap-2 px-4 py-3 transition hover:bg-slate-50/50 sm:flex-row sm:items-center sm:justify-between"
+//                   >
+//                     <div className="flex items-center gap-3">
+//                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+//                         <Calendar className="h-4 w-4" />
+//                       </div>
+//                       <div>
+//                         <p className="text-sm font-semibold text-slate-900">
+//                           {slip.monthName} {slip.year}
+//                         </p>
+//                         <p className="text-xs text-slate-500">
+//                           {slip.employeeName} • {slip.employeeCode}
+//                         </p>
+//                       </div>
+//                     </div>
+                    
+//                     <div className="flex items-center gap-2">
+//                       <span className="mr-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+//                         Available
+//                       </span>
+//                       <button
+//                         onClick={() => handleDownload(slip)}
+//                         disabled={downloadingId === slip._id}
+//                         className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+//                       >
+//                         {downloadingId === slip._id ? (
+//                           <Loader2 className="h-3.5 w-3.5 animate-spin" />
+//                         ) : (
+//                           <Download className="h-3.5 w-3.5" />
+//                         )}
+//                         Download PDF
+//                       </button>
+//                     </div>
+//                   </div>
+//                 ))
+//               )}
+//             </div>
+//           </section>
+//         )}
+
+//         {/* Employee Management View - HR/Accounts */}
+//         {viewMode === "employee-management" && isHRorAccounts && (
+//           <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md">
+//             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
+//               <div>
+//                 <h2 className="text-base font-semibold text-slate-900">Employee Salary Status</h2>
+//                 <p className="text-xs text-slate-500">View and download salary slips for all employees</p>
+//               </div>
+              
+//               <div className="flex flex-wrap items-center gap-2">
+//                 <select
+//                   value={selectedMonth}
+//                   onChange={(e) => setSelectedMonth(Number(e.target.value))}
+//                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-blue-500"
+//                 >
+//                   {MONTHS.map((item) => (
+//                     <option key={item.value} value={item.value}>{item.label}</option>
+//                   ))}
+//                 </select>
+//                 <input
+//                   type="number"
+//                   value={selectedYear}
+//                   onChange={(e) => setSelectedYear(Number(e.target.value))}
+//                   className="w-20 rounded-lg border border-slate-200 px-3 py-1.5 text-sm outline-none focus:border-blue-500"
+//                   min="2020"
+//                   max="2100"
+//                 />
+//                 <button
+//                   onClick={() => {
+//                     fetchEmployeeSalaryStatus();
+//                     fetchEmployeeSalarySlips();
+//                   }}
+//                   className="inline-flex items-center gap-1.5 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-medium text-blue-700 transition hover:bg-blue-100"
+//                 >
+//                   <RefreshCw className="h-3.5 w-3.5" />
+//                   Refresh
 //                 </button>
 //               </div>
 //             </div>
-//           )}
-          
-//           <div className="divide-y divide-slate-100">
-//             {!loading && filteredSlips.length === 0 ? (
-//               <div className="flex flex-col items-center justify-center px-4 py-10 text-center">
-//                 <div className="rounded-full bg-slate-100 p-3">
-//                   <FileText className="h-6 w-6 text-slate-400" />
+            
+//             <div className="border-b border-slate-100 p-4 bg-slate-50/50">
+//               <div className="flex flex-wrap gap-3">
+//                 <div className="relative flex-1 min-w-[200px]">
+//                   <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+//                   <input
+//                     type="text"
+//                     placeholder="Search by name or code..."
+//                     value={employeeSearchTerm}
+//                     onChange={(e) => setEmployeeSearchTerm(e.target.value)}
+//                     className="w-full rounded-lg border border-slate-200 pl-8 pr-3 py-1.5 text-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+//                   />
 //                 </div>
-//                 <p className="mt-3 text-sm font-medium text-slate-900">No salary slips found</p>
-//                 <p className="text-xs text-slate-500">
-//                   {searchTerm || filterMonth !== "all" || filterYear !== "all" 
-//                     ? "Try adjusting your filters or search terms" 
-//                     : "Your salary slips will appear here once processed"}
-//                 </p>
-//               </div>
-//             ) : (
-//               filteredSlips.map((slip) => (
-//                 <div 
-//                   key={slip._id} 
-//                   className="flex flex-col gap-2 px-4 py-3 transition hover:bg-slate-50/50 sm:flex-row sm:items-center sm:justify-between"
+//                 <select
+//                   value={employeeFilterStatus}
+//                   onChange={(e) => setEmployeeFilterStatus(e.target.value)}
+//                   className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm outline-none focus:border-blue-500"
 //                 >
-//                   <div className="flex items-center gap-3">
-//                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-//                       <Calendar className="h-4 w-4" />
-//                     </div>
-//                     <div>
-//                       <p className="text-sm font-semibold text-slate-900">
-//                         {slip.monthName} {slip.year}
-//                       </p>
-//                       <p className="text-xs text-slate-500">
-//                         {slip.employeeName} • {slip.employeeCode}
-//                       </p>
-//                     </div>
-//                   </div>
-                  
-//                   <div className="flex items-center gap-2">
-//                     <span className="mr-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-//                       Available
-//                     </span>
-//                     <button
-//                       onClick={() => handleDownload(slip)}
-//                       disabled={downloadingId === slip._id}
-//                       className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
-//                     >
-//                       {downloadingId === slip._id ? (
-//                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
-//                       ) : (
-//                         <Download className="h-3.5 w-3.5" />
-//                       )}
-//                       Download PDF
-//                     </button>
-//                   </div>
-//                 </div>
-//               ))
-//             )}
-//           </div>
-//         </section>
+//                   <option value="all">All Status</option>
+//                   <option value="uploaded">Uploaded</option>
+//                   <option value="pending">Pending</option>
+//                 </select>
+//               </div>
+//             </div>
+            
+//             <div className="overflow-x-auto">
+//               <table className="min-w-full divide-y divide-gray-200">
+//                 <thead className="bg-gray-50">
+//                   <tr>
+//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Employee</th>
+//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
+//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
+//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary Status</th>
+//                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+//                   </tr>
+//                 </thead>
+//                 <tbody className="bg-white divide-y divide-gray-200">
+//                   {loading ? (
+//                     <tr>
+//                       <td colSpan="5" className="px-4 py-4 text-center">
+//                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-600" />
+//                       </td>
+//                     </tr>
+//                   ) : filteredEmployees.length === 0 ? (
+//                     <tr>
+//                       <td colSpan="5" className="px-4 py-4 text-center text-gray-500 text-sm">
+//                         No employees found
+//                       </td>
+//                     </tr>
+//                   ) : (
+//                     filteredEmployees.map((emp) => {
+//                       // Find salary record for this employee
+//                       let salaryRecord = salaryRecordsMap.get(emp.employeeCode) || 
+//                                         salaryRecordsMap.get(emp.employeeId);
+                      
+//                       return (
+//                         <tr key={emp.employeeId || emp._id} className="hover:bg-gray-50 transition">
+//                           <td className="px-4 py-3 whitespace-nowrap">
+//                             <div className="text-sm font-medium text-gray-900">{emp.employeeName}</div>
+//                           </td>
+//                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.employeeCode || 'N/A'}</td>
+//                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.department || 'N/A'}</td>
+//                           <td className="px-4 py-3 whitespace-nowrap">
+//                             <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${
+//                               emp.hasSalarySlip || salaryRecord
+//                                 ? 'bg-green-100 text-green-800' 
+//                                 : 'bg-yellow-100 text-yellow-800'
+//                             }`}>
+//                               {emp.hasSalarySlip || salaryRecord ? '✅ Uploaded' : '⏳ Pending'}
+//                             </span>
+//                           </td>
+//                           <td className="px-4 py-3 whitespace-nowrap text-sm">
+//                             {(emp.hasSalarySlip || salaryRecord) && (salaryRecord || emp.salaryRecordId) ? (
+//                               <button
+//                                 onClick={() => downloadEmployeeSlip(
+//                                   salaryRecord?._id || emp.salaryRecordId, 
+//                                   emp.employeeName
+//                                 )}
+//                                 disabled={downloadingId === (salaryRecord?._id || emp.salaryRecordId)}
+//                                 className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition"
+//                               >
+//                                 {downloadingId === (salaryRecord?._id || emp.salaryRecordId) ? (
+//                                   <Loader2 className="h-3 w-3 animate-spin mr-1" />
+//                                 ) : (
+//                                   <Download className="h-3 w-3 mr-1" />
+//                                 )}
+//                                 Download
+//                               </button>
+//                             ) : (
+//                               <span className="text-xs text-gray-400">
+//                                 {!emp.hasUserAccount ? 'No account' : 'Not uploaded'}
+//                               </span>
+//                             )}
+//                           </td>
+//                         </tr>
+//                       );
+//                     })
+//                   )}
+//                 </tbody>
+//               </table>
+//             </div>
+//           </section>
+//         )}
 
-//         {/* Recent Uploads - Reduced padding */}
+//         {/* Recent Uploads */}
 //         {canUpload && batches.length > 0 && (
 //           <section className="rounded-xl border border-slate-200 bg-white shadow-sm transition-all hover:shadow-md">
 //             <div className="border-b border-slate-100 px-4 py-3">
@@ -539,6 +922,7 @@
 //                     <th className="px-4 py-2.5 font-medium">File Name</th>
 //                     <th className="px-4 py-2.5 font-medium">Success Rate</th>
 //                     <th className="px-4 py-2.5 font-medium">Status</th>
+//                     <th className="px-4 py-2.5 font-medium">Failed</th>
 //                   </tr>
 //                 </thead>
 //                 <tbody className="divide-y divide-slate-100">
@@ -546,6 +930,7 @@
 //                     const successRate = batch.totalRows > 0 
 //                       ? Math.round((batch.successRows / batch.totalRows) * 100)
 //                       : 0;
+//                     const failedCount = batch.failedCount || (batch.totalRows - batch.successRows);
 //                     return (
 //                       <tr key={batch._id} className="transition hover:bg-slate-50/50">
 //                         <td className="px-4 py-2.5 text-xs font-medium text-slate-700">
@@ -579,6 +964,15 @@
 //                             {batch.status}
 //                           </span>
 //                         </td>
+//                         <td className="px-4 py-2.5">
+//                           {failedCount > 0 ? (
+//                             <span className="text-red-600 text-xs font-medium">
+//                               {failedCount} failed
+//                             </span>
+//                           ) : (
+//                             <span className="text-emerald-600 text-xs">None</span>
+//                           )}
+//                         </td>
 //                       </tr>
 //                     );
 //                   })}
@@ -593,6 +987,12 @@
 // };
 
 // export default SalarySlips;
+
+
+
+
+
+
 
 
 
@@ -710,6 +1110,13 @@ const SalarySlips = () => {
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [salaryRecords, setSalaryRecords] = useState([]);
 
+  // ===== Failed Employees Modal States =====
+  const [showFailedModal, setShowFailedModal] = useState(false);
+  const [failedEmployees, setFailedEmployees] = useState([]);
+  const [selectedBatch, setSelectedBatch] = useState(null);
+  const [downloadingFailed, setDownloadingFailed] = useState(false);
+  const [loadingFailed, setLoadingFailed] = useState(false);
+
   const canUpload = isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
   const isHRorAccounts = isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
 
@@ -743,12 +1150,10 @@ const SalarySlips = () => {
 
   // Create employee list from salary records if employees state is empty
   const employeeList = useMemo(() => {
-    // If we have employees from the status API, use them
     if (employees.length > 0) {
       return employees;
     }
     
-    // Otherwise, create employee list from salary records
     const employeeMap = new Map();
     salaryRecords.forEach(record => {
       const key = record.employeeCode || record._id;
@@ -756,7 +1161,7 @@ const SalarySlips = () => {
         employeeMap.set(key, {
           employeeId: record.employee?._id || record._id,
           employeeCode: record.employeeCode || 'N/A',
-          employeeName: record.employee?.username|| record.employee?.realName || 'Unknown',
+          employeeName: record.employee?.username || record.employee?.realName || 'Unknown',
           department: record.department || record.employee?.department || 'N/A',
           designation: record.designation || 'N/A',
           hasSalarySlip: true,
@@ -769,7 +1174,6 @@ const SalarySlips = () => {
     return Array.from(employeeMap.values());
   }, [employees, salaryRecords]);
 
-  // Filter employees for HR/Accounts view
   const filteredEmployees = useMemo(() => {
     return employeeList.filter(emp => {
       const matchesSearch = emp.employeeName?.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
@@ -781,7 +1185,6 @@ const SalarySlips = () => {
     });
   }, [employeeList, employeeSearchTerm, employeeFilterStatus]);
 
-  // Create a map of employeeCode to salary record for quick lookup
   const salaryRecordsMap = useMemo(() => {
     const map = new Map();
     salaryRecords.forEach(record => {
@@ -801,6 +1204,100 @@ const SalarySlips = () => {
     return map;
   }, [salaryRecords]);
 
+  // ===== Fetch Failed Employees - Using upload result data =====
+  const fetchFailedEmployees = async (batchId) => {
+    setLoadingFailed(true);
+    try {
+      // First check if we have the data from upload result
+      if (uploadResult?.failedEmployees && uploadResult.failedEmployees.length > 0) {
+        const failedData = uploadResult.failedEmployees.map(item => ({
+          employeeName: item.employeeName || item.employee || 'Unknown',
+          employeeCode: item.employeeCode || 'N/A',
+          reason: item.reason || 'Unknown error',
+          existsInSystem: false,
+          hasUserAccount: false
+        }));
+        setFailedEmployees(failedData);
+        setSelectedBatch({
+          batchId: batchId,
+          month: month,
+          year: year,
+          fileName: uploadResult.batch?.fileName || 'Unknown',
+          totalFailed: failedData.length
+        });
+        setShowFailedModal(true);
+        setLoadingFailed(false);
+        return;
+      }
+
+      // Fallback: Try API call
+      const response = await salaryApi.get(`/api/payroll/batch/${batchId}/failed-employees`);
+      const data = response.data?.data;
+      
+      if (data && data.failedEmployees && data.failedEmployees.length > 0) {
+        setFailedEmployees(data.failedEmployees);
+        setSelectedBatch(data);
+      } else {
+        setFailedEmployees([]);
+        setSelectedBatch(data || {});
+      }
+      setShowFailedModal(true);
+    } catch (error) {
+      console.error('Failed to fetch failed employees:', error);
+      toast.error(error.response?.data?.message || 'Failed to fetch failed employees');
+    } finally {
+      setLoadingFailed(false);
+    }
+  };
+
+  // ===== Download Failed Employees CSV =====
+  const downloadFailedEmployees = async (batchId) => {
+    setDownloadingFailed(true);
+    try {
+      // If we have data from upload result, create CSV directly
+      if (uploadResult?.failedEmployees && uploadResult.failedEmployees.length > 0) {
+        let csv = 'Sl. No.,Employee Name,Employee Code,Reason\n';
+        uploadResult.failedEmployees.forEach((item, index) => {
+          csv += `${index + 1},${item.employeeName || item.employee || 'Unknown'},${item.employeeCode || 'N/A'},${item.reason || 'Unknown error'}\n`;
+        });
+        
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `failed-employees-${month}-${year}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        toast.success('Failed employees list downloaded successfully');
+        setDownloadingFailed(false);
+        return;
+      }
+
+      // Fallback: API call
+      const response = await salaryApi.get(`/api/payroll/batch/${batchId}/failed-employees/download`, {
+        responseType: 'blob'
+      });
+      
+      const blob = new Blob([response.data], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `failed-employees-${selectedMonth}-${selectedYear}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      
+      toast.success('Failed employees list downloaded successfully');
+    } catch (error) {
+      toast.error(error.response?.data?.message || 'Failed to download failed employees list');
+    } finally {
+      setDownloadingFailed(false);
+    }
+  };
+
   const fetchSalaryData = async () => {
     setLoading(true);
     try {
@@ -817,7 +1314,6 @@ const SalarySlips = () => {
     }
   };
 
-  // Fetch employee salary status for HR/Accounts
   const fetchEmployeeSalaryStatus = async () => {
     if (!isHRorAccounts) return;
     try {
@@ -835,13 +1331,11 @@ const SalarySlips = () => {
       });
     } catch (error) {
       console.error("Failed to fetch employee status:", error);
-      // Don't show toast error here, we'll fallback to salary records
     } finally {
       setLoading(false);
     }
   };
 
-  // Fetch salary records for employees
   const fetchEmployeeSalarySlips = async () => {
     if (!isHRorAccounts) return;
     try {
@@ -851,7 +1345,6 @@ const SalarySlips = () => {
       const records = Array.isArray(response.data?.data) ? response.data.data : [];
       setSalaryRecords(records);
       
-      // If employees array is empty, update stats from salary records
       if (employees.length === 0 && records.length > 0) {
         setEmployeeStats({
           total: records.length,
@@ -933,7 +1426,6 @@ const SalarySlips = () => {
     }
   };
 
-  // Download employee salary slip (HR/Accounts)
   const downloadEmployeeSlip = async (recordId, employeeName) => {
     setDownloadingId(recordId);
     try {
@@ -1197,19 +1689,55 @@ const SalarySlips = () => {
                     </p>
                   </div>
                 </div>
-                {Array.isArray(uploadResult.failedRecords) && uploadResult.failedRecords.length > 0 && (
-                  <div className="mt-2 max-h-28 overflow-y-auto rounded-lg bg-red-50 p-2 text-xs text-red-700">
-                    {uploadResult.failedRecords.slice(0, 5).map((item, index) => (
-                      <p key={`${item.employee || "row"}-${index}`} className="flex items-center gap-1">
-                        <AlertCircle className="h-3 w-3" />
-                        {item.employee || "Unknown employee"}: {item.reason}
-                      </p>
-                    ))}
-                    {uploadResult.failedRecords.length > 5 && (
-                      <p className="mt-1 text-red-600">
-                        +{uploadResult.failedRecords.length - 5} more failed rows
-                      </p>
-                    )}
+                
+                {/* ===== FIX: Show all failed employees from upload result ===== */}
+                {uploadResult.failedEmployees && uploadResult.failedEmployees.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-xs font-semibold text-red-600 mb-1">
+                      Failed Employees ({uploadResult.failedEmployees.length}):
+                    </p>
+                    <div className="max-h-28 overflow-y-auto rounded-lg bg-red-50 p-2 text-xs text-red-700">
+                      {uploadResult.failedEmployees.slice(0, 10).map((item, index) => (
+                        <p key={index} className="flex items-center gap-1">
+                          <AlertCircle className="h-3 w-3 flex-shrink-0" />
+                          <span className="font-medium">{item.employeeName || item.employee || 'Unknown'}</span>
+                          {item.employeeCode && item.employeeCode !== 'N/A' && (
+                            <span className="text-red-500">({item.employeeCode})</span>
+                          )}
+                          <span className="text-red-400">-</span>
+                          <span className="truncate">{item.reason || 'Unknown error'}</span>
+                        </p>
+                      ))}
+                      {uploadResult.failedEmployees.length > 10 && (
+                        <p className="mt-1 text-red-600 font-medium">
+                          +{uploadResult.failedEmployees.length - 10} more failed employees
+                          <button 
+                            onClick={() => {
+                              // Use upload result data directly
+                              const failedData = uploadResult.failedEmployees.map(item => ({
+                                employeeName: item.employeeName || item.employee || 'Unknown',
+                                employeeCode: item.employeeCode || 'N/A',
+                                reason: item.reason || 'Unknown error',
+                                existsInSystem: false,
+                                hasUserAccount: false
+                              }));
+                              setFailedEmployees(failedData);
+                              setSelectedBatch({
+                                batchId: uploadResult.batch?._id || 'unknown',
+                                month: month,
+                                year: year,
+                                fileName: uploadResult.batch?.fileName || 'Unknown',
+                                totalFailed: failedData.length
+                              });
+                              setShowFailedModal(true);
+                            }}
+                            className="ml-2 text-blue-600 hover:underline"
+                          >
+                            View all
+                          </button>
+                        </p>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -1444,7 +1972,6 @@ const SalarySlips = () => {
                     </tr>
                   ) : (
                     filteredEmployees.map((emp) => {
-                      // Find salary record for this employee
                       let salaryRecord = salaryRecordsMap.get(emp.employeeCode) || 
                                         salaryRecordsMap.get(emp.employeeId);
                       
@@ -1564,9 +2091,13 @@ const SalarySlips = () => {
                         </td>
                         <td className="px-4 py-2.5">
                           {failedCount > 0 ? (
-                            <span className="text-red-600 text-xs font-medium">
+                            <button
+                              onClick={() => fetchFailedEmployees(batch._id)}
+                              className="text-red-600 hover:text-red-700 text-xs font-medium hover:underline inline-flex items-center gap-1"
+                            >
+                              <AlertCircle className="h-3 w-3" />
                               {failedCount} failed
-                            </span>
+                            </button>
                           ) : (
                             <span className="text-emerald-600 text-xs">None</span>
                           )}
@@ -1580,6 +2111,139 @@ const SalarySlips = () => {
           </section>
         )}
       </div>
+
+      {/* ===== Failed Employees Modal ===== */}
+      {showFailedModal && selectedBatch && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-4 border-b border-slate-200">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Failed Employees</h3>
+                <p className="text-sm text-slate-500">
+                  {selectedBatch.monthName || MONTHS.find(m => m.value === selectedBatch.month)?.label || selectedBatch.month} {selectedBatch.year} - {selectedBatch.fileName}
+                </p>
+              </div>
+              <button
+                onClick={() => setShowFailedModal(false)}
+                className="text-slate-400 hover:text-slate-600"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {/* Summary Stats */}
+              <div className="grid grid-cols-4 gap-3 mb-4">
+                <div className="bg-red-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-red-600">{failedEmployees.length}</p>
+                  <p className="text-xs text-red-600">Total Failed</p>
+                </div>
+                <div className="bg-yellow-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-yellow-600">
+                    {failedEmployees.filter(e => e.existsInSystem).length}
+                  </p>
+                  <p className="text-xs text-yellow-600">Exists in System</p>
+                </div>
+                <div className="bg-orange-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-orange-600">
+                    {failedEmployees.filter(e => e.existsInSystem && !e.hasUserAccount).length}
+                  </p>
+                  <p className="text-xs text-orange-600">No User Account</p>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <p className="text-2xl font-bold text-gray-600">
+                    {failedEmployees.filter(e => !e.existsInSystem).length}
+                  </p>
+                  <p className="text-xs text-gray-600">Not in System</p>
+                </div>
+              </div>
+              
+              {/* Failed Employees Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Employee Name</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Employee Code</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {loadingFailed ? (
+                      <tr>
+                        <td colSpan="5" className="px-3 py-4 text-center">
+                          <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-600" />
+                        </td>
+                      </tr>
+                    ) : failedEmployees.length === 0 ? (
+                      <tr>
+                        <td colSpan="5" className="px-3 py-4 text-center text-gray-500 text-sm">
+                          No failed employees found
+                        </td>
+                      </tr>
+                    ) : (
+                      failedEmployees.map((emp, index) => (
+                        <tr key={index} className="hover:bg-gray-50">
+                          <td className="px-3 py-2 text-sm text-gray-500">{index + 1}</td>
+                          <td className="px-3 py-2 text-sm font-medium text-gray-900">{emp.employeeName}</td>
+                          <td className="px-3 py-2 text-sm text-gray-500">{emp.employeeCode}</td>
+                          <td className="px-3 py-2 text-sm text-red-600">{emp.reason}</td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                              emp.existsInSystem 
+                                ? emp.hasUserAccount 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-yellow-100 text-yellow-800'
+                                : 'bg-red-100 text-red-800'
+                            }`}>
+                              {emp.existsInSystem 
+                                ? emp.hasUserAccount 
+                                  ? '✅ Has Account' 
+                                  : '⚠️ No Account'
+                                : '❌ Not Found'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between p-4 border-t border-slate-200">
+              <div className="text-sm text-slate-500">
+                Total: {failedEmployees.length} failed employees
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => downloadFailedEmployees(selectedBatch.batchId)}
+                  disabled={downloadingFailed}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+                >
+                  {downloadingFailed ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Download className="h-4 w-4" />
+                  )}
+                  Download CSV
+                </button>
+                <button
+                  onClick={() => setShowFailedModal(false)}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 };

@@ -233,6 +233,72 @@ const parseMonthYear = ({ month, year }) => {
   return { monthNumber, yearNumber };
 };
 
+// export const uploadSalaryExcel = async (req, res) => {
+//   try {
+//     if (!canManageSalarySlips(req.user)) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "You are not authorized to upload salary sheets.",
+//       });
+//     }
+
+//     const parsed = parseMonthYear(req.body);
+//     if (parsed.error) {
+//       return res.status(400).json({ success: false, message: parsed.error });
+//     }
+
+//     if (!req.file?.buffer) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Please upload an Excel file.",
+//       });
+//     }
+
+//     const extension = path.extname(req.file.originalname || "").toLowerCase();
+//     if (![".xlsx", ".xls"].includes(extension)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Only Excel (.xlsx, .xls) files are allowed.",
+//       });
+//     }
+
+//     const result = await importSalaryExcel({
+//       fileBuffer: req.file.buffer,
+//       fileName: req.file.originalname,
+//       month: parsed.monthNumber,
+//       year: parsed.yearNumber,
+//       uploadedBy: req.user._id,
+//     });
+
+//     const failedRecords = result.failedRecords || [];
+//     const failedEmployees = failedRecords.map(record => ({
+//       employeeName: record.employeeName || record.employee || 'Unknown',
+//       employeeCode: record.employeeCode || record.code || 'N/A',
+//       reason: record.reason || 'Unknown error',
+//       rowNumber: record.rowNumber || 0
+//     }));
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "Salary sheet uploaded successfully.",
+//       data: {
+//         ...result,
+//         failedEmployees: failedEmployees,
+//         totalFailed: failedEmployees.length
+//       },
+//     });
+//   } catch (error) {
+//     console.error("Salary Upload Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Internal Server Error",
+//     });
+//   }
+// };
+
+
+// In salarySlip.controller.js - update the uploadSalaryExcel function
+
 export const uploadSalaryExcel = async (req, res) => {
   try {
     if (!canManageSalarySlips(req.user)) {
@@ -270,7 +336,10 @@ export const uploadSalaryExcel = async (req, res) => {
       uploadedBy: req.user._id,
     });
 
+    // ===== FIX: Ensure failedRecords are properly stored =====
     const failedRecords = result.failedRecords || [];
+    
+    // Create failed employees list with proper data
     const failedEmployees = failedRecords.map(record => ({
       employeeName: record.employeeName || record.employee || 'Unknown',
       employeeCode: record.employeeCode || record.code || 'N/A',
@@ -278,13 +347,27 @@ export const uploadSalaryExcel = async (req, res) => {
       rowNumber: record.rowNumber || 0
     }));
 
+    // Update the batch with failed records if not already stored
+    if (result.batchId) {
+      await SalaryBatch.findByIdAndUpdate(result.batchId, {
+        failedRecords: failedRecords.map(record => ({
+          employee: record.employee || record.employeeName || 'Unknown',
+          employeeName: record.employeeName || record.employee || 'Unknown',
+          employeeCode: record.employeeCode || record.code || 'N/A',
+          reason: record.reason || 'Unknown error',
+          rowNumber: record.rowNumber || 0
+        }))
+      });
+    }
+
     return res.status(200).json({
       success: true,
       message: "Salary sheet uploaded successfully.",
       data: {
         ...result,
         failedEmployees: failedEmployees,
-        totalFailed: failedEmployees.length
+        totalFailed: failedEmployees.length,
+        failedRecords: failedRecords // Make sure this is included
       },
     });
   } catch (error) {
@@ -587,6 +670,130 @@ export const downloadEmployeeSalarySlip = async (req, res) => {
   }
 };
 
+// export const getBatchFailedEmployees = async (req, res) => {
+//   try {
+//     if (!canManageSalarySlips(req.user)) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "You are not authorized to view this information.",
+//       });
+//     }
+
+//     const { batchId } = req.params;
+//     const batch = await SalaryBatch.findById(batchId);
+
+//     if (!batch) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "Batch not found.",
+//       });
+//     }
+
+//     const failedRecords = batch.failedRecords || [];
+    
+//     const enrichedFailed = await Promise.all(failedRecords.map(async (record) => {
+//       let user = null;
+//       if (record.employeeCode) {
+//         user = await User.findOne({ employeeCode: record.employeeCode });
+//       }
+//       if (!user && record.employeeName) {
+//         user = await User.findOne({ realName: record.employeeName });
+//       }
+//       if (!user && record.employeeName) {
+//         user = await User.findOne({ username: record.employeeName });
+//       }
+
+//       return {
+//         employeeName: record.employeeName || record.employee || 'Unknown',
+//         employeeCode: record.employeeCode || record.code || 'N/A',
+//         reason: record.reason || 'Unknown error',
+//         rowNumber: record.rowNumber || 0,
+//         existsInSystem: !!user,
+//         userId: user?._id || null,
+//         hasUserAccount: !!user,
+//         userEmail: user?.email || null,
+//         userUsername: user?.username || null,
+//         department: user?.department || null,
+//         realName: user?.realName || null,
+//         role: user?.role || null
+//       };
+//     }));
+
+//     return res.json({
+//       success: true,
+//       data: {
+//         batchId: batch._id,
+//         month: batch.month,
+//         year: batch.year,
+//         fileName: batch.fileName,
+//         uploadedBy: batch.uploadedBy,
+//         uploadedAt: batch.createdAt,
+//         totalFailed: enrichedFailed.length,
+//         failedEmployees: enrichedFailed,
+//         summary: {
+//           totalInSystem: enrichedFailed.filter(e => e.existsInSystem).length,
+//           hasAccounts: enrichedFailed.filter(e => e.hasUserAccount).length,
+//           missingAccounts: enrichedFailed.filter(e => !e.hasUserAccount && e.existsInSystem).length,
+//           notInSystem: enrichedFailed.filter(e => !e.existsInSystem).length
+//         }
+//       }
+//     });
+//   } catch (error) {
+//     console.error("Batch Failed Employees Error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Internal Server Error",
+//     });
+//   }
+// };
+
+// Get employee by ID or employeeCode for downloading
+export const getEmployeeSalaryDetails = async (req, res) => {
+  try {
+    if (!canManageSalarySlips(req.user)) {
+      return res.status(403).json({
+        success: false,
+        message: "You are not authorized to view this information.",
+      });
+    }
+
+    const { employeeId } = req.params;
+    const { month, year } = req.query;
+
+    const filter = { employeeId: employeeId };
+    if (month) filter.month = Number(month);
+    if (year) filter.year = Number(year);
+
+    const records = await SalaryRecord.find(filter)
+      .sort({ year: -1, month: -1 })
+      .populate('employeeId', 'username email realName employeeCode department designation');
+
+    return res.json({
+      success: true,
+      data: records.map((record) => ({
+        _id: record._id,
+        month: record.month,
+        year: record.year,
+        monthName: MONTH_NAMES[record.month] || String(record.month),
+        employeeCode: record.employeeCode,
+        employeeName: record.employeeName,
+        department: record.department,
+        designation: record.designation,
+        employee: record.employeeId,
+        uploadedAt: record.createdAt,
+      })),
+    });
+  } catch (error) {
+    console.error("Employee Salary Details Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Internal Server Error",
+    });
+  }
+};
+// In salarySlip.controller.js
+
+// Get failed employees from a specific batch
 export const getBatchFailedEmployees = async (req, res) => {
   try {
     if (!canManageSalarySlips(req.user)) {
@@ -606,18 +813,23 @@ export const getBatchFailedEmployees = async (req, res) => {
       });
     }
 
+    // Get failed employees with details
     const failedRecords = batch.failedRecords || [];
     
+    // Try to find if these employees exist in the system
     const enrichedFailed = await Promise.all(failedRecords.map(async (record) => {
+      // Try to find user by employeeCode or realName
       let user = null;
       if (record.employeeCode) {
         user = await User.findOne({ employeeCode: record.employeeCode });
       }
       if (!user && record.employeeName) {
-        user = await User.findOne({ realName: record.employeeName });
-      }
-      if (!user && record.employeeName) {
-        user = await User.findOne({ username: record.employeeName });
+        user = await User.findOne({ 
+          $or: [
+            { realName: { $regex: new RegExp('^' + record.employeeName + '$', 'i') } },
+            { username: { $regex: new RegExp('^' + record.employeeName + '$', 'i') } }
+          ]
+        });
       }
 
       return {
@@ -664,44 +876,39 @@ export const getBatchFailedEmployees = async (req, res) => {
   }
 };
 
-// Get employee by ID or employeeCode for downloading
-export const getEmployeeSalaryDetails = async (req, res) => {
+// Download failed employees as CSV
+export const downloadFailedEmployees = async (req, res) => {
   try {
     if (!canManageSalarySlips(req.user)) {
       return res.status(403).json({
         success: false,
-        message: "You are not authorized to view this information.",
+        message: "You are not authorized to download this information.",
       });
     }
 
-    const { employeeId } = req.params;
-    const { month, year } = req.query;
+    const { batchId } = req.params;
+    const batch = await SalaryBatch.findById(batchId);
 
-    const filter = { employeeId: employeeId };
-    if (month) filter.month = Number(month);
-    if (year) filter.year = Number(year);
+    if (!batch) {
+      return res.status(404).json({
+        success: false,
+        message: "Batch not found.",
+      });
+    }
 
-    const records = await SalaryRecord.find(filter)
-      .sort({ year: -1, month: -1 })
-      .populate('employeeId', 'username email realName employeeCode department designation');
-
-    return res.json({
-      success: true,
-      data: records.map((record) => ({
-        _id: record._id,
-        month: record.month,
-        year: record.year,
-        monthName: MONTH_NAMES[record.month] || String(record.month),
-        employeeCode: record.employeeCode,
-        employeeName: record.employeeName,
-        department: record.department,
-        designation: record.designation,
-        employee: record.employeeId,
-        uploadedAt: record.createdAt,
-      })),
+    const failedRecords = batch.failedRecords || [];
+    
+    // Create CSV
+    let csv = 'Sl. No.,Employee Name,Employee Code,Reason,Status in System\n';
+    failedRecords.forEach((record, index) => {
+      csv += `${index + 1},${record.employeeName || 'Unknown'},${record.employeeCode || 'N/A'},${record.reason || 'Unknown error'},Not Found\n`;
     });
+
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="failed-employees-${batch.month}-${batch.year}.csv"`);
+    return res.send(csv);
   } catch (error) {
-    console.error("Employee Salary Details Error:", error);
+    console.error("Download Failed Employees Error:", error);
     return res.status(500).json({
       success: false,
       message: error.message || "Internal Server Error",
