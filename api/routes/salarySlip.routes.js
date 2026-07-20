@@ -36,6 +36,7 @@ import {
   downloadEmployeeSalarySlip,
   getBatchFailedEmployees,
   getEmployeeSalaryDetails,
+  downloadFailedEmployees,
 } from "../Controllers/SalarySlip/salarySlip.controller.js"
 
 const router = express.Router();
@@ -76,5 +77,9 @@ router.get("/download/:id", authMiddleware, downloadEmployeeSalarySlip);
 
 // Get failed employees from a specific batch
 router.get("/batch/:batchId/failed-employees", authMiddleware, getBatchFailedEmployees);
+
+// In salarySlipRoutes.js
+router.get("/batch/:batchId/failed-employees", authMiddleware, getBatchFailedEmployees);
+router.get("/batch/:batchId/failed-employees/download", authMiddleware, downloadFailedEmployees);
 
 export default router;
