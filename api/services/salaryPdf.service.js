@@ -114,7 +114,6 @@
 //     textX = x + padding;
 //   }
   
-//   // Ensure text stays within bounds
 //   if (textX + textWidth > x + width - padding) {
 //     textX = x + width - padding - textWidth;
 //   }
@@ -141,11 +140,11 @@
 //   const navyBlue = rgb(0.04, 0.25, 0.38);    // #0A4161
 //   const white = rgb(1, 1, 1);
   
-//   // Website-style logo lockup from fdbs.in.
+//   // Smaller logo
 //   const fdX = x;
 //   const fdY = y;
-//   const fdWidth = 50;
-//   const fdHeight = 36;
+//   const fdWidth = 30;
+//   const fdHeight = 22;
   
 //   // Yellow background for FD only
 //   page.drawRectangle({
@@ -157,7 +156,7 @@
 //   });
   
 //   // "FD" text in white
-//   const fdTextSize = 22;
+//   const fdTextSize = 13;
 //   const fdText = "FD";
 //   const fdTextWidth = boldFont.widthOfTextAtSize(fdText, fdTextSize);
 //   const fdTextHeight = boldFont.heightAtSize(fdTextSize, { descender: false });
@@ -169,29 +168,28 @@
 //     color: white,
 //   });
   
-//   const companyX = x + fdWidth + 8;
+//   // "BUSINESS" next to FD - closer to FD
+//   const businessX = x + fdWidth + 3;
 //   const businessText = "BUSINESS";
-//   const businessSize = 18;
+//   const businessSize = 10;
 //   const businessHeight = boldFont.heightAtSize(businessSize, { descender: false });
 //   page.drawText(businessText, {
-//     x: companyX,
-//     y: y + fdHeight - businessHeight - 2,
+//     x: businessX,
+//     y: y + fdHeight - businessHeight - 1,
 //     size: businessSize,
 //     font: boldFont,
 //     color: navyBlue,
 //   });
 
-//   const companyName = "Service Private Limited";
-//   const companyMaxWidth = 180;
-//   let companySize = 9.5;
-//   while (companySize > 7 && font.widthOfTextAtSize(companyName, companySize) > companyMaxWidth) {
-//     companySize -= 0.5;
-//   }
-//   page.drawText(companyName, {
-//     x: companyX,
-//     y: y + 4,
-//     size: companySize,
-//     font,
+//   // "Service Private Limited" below BUSINESS - closer with yellow color
+//   const serviceText = "Service Private Limited";
+//   const serviceSize = 6.5;
+//   const serviceHeight = font.heightAtSize(serviceSize, { descender: false });
+//   page.drawText(serviceText, {
+//     x: businessX,
+//     y: y + 1,
+//     size: serviceSize,
+//     font: font,
 //     color: yellowBg,
 //   });
 // };
@@ -239,25 +237,42 @@
 //   const tableBorder = rgb(0.36, 0.36, 0.36);
 //   const lightBlue = rgb(0.84, 0.91, 0.98);
 //   const lightGrey = rgb(0.94, 0.94, 0.94);
+//   const navyBlue = rgb(0.04, 0.25, 0.38);
+//   const black = rgb(0, 0, 0);
 
-//   // Draw single centered logo (no blue background)
-//   const logoWidth = 238;
-//   const logoX = (width - logoWidth) / 2;
-//   const logoY = height - 75;
+//   // Draw smaller logo at top-left corner
+//   const logoX = margin;
+//   const logoY = height - 45;
 //   drawLogo(page, { x: logoX, y: logoY, boldFont, font });
 
-//   const address = "118 -119-120 Suncity Success Tower Gurgaon 122005.";
-//   const addressSize = 9.5;
-//   const addressWidth = boldFont.widthOfTextAtSize(address, addressSize);
-//   page.drawText(address, {
-//     x: (width - addressWidth) / 2,
-//     y: logoY - 14,
-//     size: addressSize,
+//   // Draw company name in center
+//   const companyName = "FD Business Service Private Limited";
+//   const companySize = 13;
+//   const companyWidth = boldFont.widthOfTextAtSize(companyName, companySize);
+//   const companyX = (width - companyWidth) / 2;
+//   const companyY = height - 45 + 3;
+//   page.drawText(companyName, {
+//     x: companyX,
+//     y: companyY,
+//     size: companySize,
 //     font: boldFont,
-//     color: rgb(0.25, 0.25, 0.25),
+//     color: navyBlue,
 //   });
 
-//   const tableTopY = logoY - 32;
+//   // Draw address below company name - Black Bold
+//   const address = "118-119-120 Suncity Success Tower, Gurgaon 122101 Sector-65";
+//   const addressSize = 8.5;
+//   const addressWidth = boldFont.widthOfTextAtSize(address, addressSize);
+//   const addressX = (width - addressWidth) / 2;
+//   page.drawText(address, {
+//     x: addressX,
+//     y: companyY - 16,
+//     size: addressSize,
+//     font: boldFont,
+//     color: black,
+//   });
+
+//   const tableTopY = companyY - 32;
 
 //   // Employee Information Table
 //   const employeeInfo = [
@@ -316,7 +331,6 @@
 //         padding: 6
 //       });
 //     } else {
-//       // If odd number of items, fill remaining space with empty cells
 //       drawCell({ 
 //         page, x: margin + labelW + valueW, y, width: labelW, height: rowH, 
 //         text: "", font: boldFont, size: 8, fill: lightGrey, border: tableBorder 
@@ -432,6 +446,9 @@
 
 //   return Buffer.from(await pdfDoc.save());
 // };
+
+
+
 
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
@@ -667,7 +684,7 @@ export const generateSalarySlipPdf = async (record) => {
 
   const salaryData = record.salaryData || {};
   const monthName = MONTH_NAMES[record.month] || String(record.month);
-  const titleMonth = `${monthName}-${record.year}`;
+  const titleMonth = `${monthName} ${record.year}`;
   const margin = 36;
   const tableBorder = rgb(0.36, 0.36, 0.36);
   const lightBlue = rgb(0.84, 0.91, 0.98);
@@ -675,17 +692,22 @@ export const generateSalarySlipPdf = async (record) => {
   const navyBlue = rgb(0.04, 0.25, 0.38);
   const black = rgb(0, 0, 0);
 
-  // Draw smaller logo at top-left corner
+  // Header Y position - increased to give more space
+  const headerY = height - 50;
+
+  // ====== HEADER: Logo, Company Name, and Month in same line ======
+  
+  // 1. Draw logo at left
   const logoX = margin;
-  const logoY = height - 45;
+  const logoY = headerY - 10;
   drawLogo(page, { x: logoX, y: logoY, boldFont, font });
 
-  // Draw company name in center
-  const companyName = "FD Business Services Private Limited";
+  // 2. Company Name - centered
+  const companyName = "FD Business Service Private Limited";
   const companySize = 13;
   const companyWidth = boldFont.widthOfTextAtSize(companyName, companySize);
   const companyX = (width - companyWidth) / 2;
-  const companyY = height - 45 + 3;
+  const companyY = headerY + 2;
   page.drawText(companyName, {
     x: companyX,
     y: companyY,
@@ -694,20 +716,44 @@ export const generateSalarySlipPdf = async (record) => {
     color: navyBlue,
   });
 
-  // Draw address below company name - Black Bold
-  const address = "118-119-120 Suncity Success Tower, Gurgaon 122005";
+  // 3. Current Month - right aligned
+  const monthText = `${titleMonth}`;
+  const monthSize = 12;
+  const monthWidth = boldFont.widthOfTextAtSize(monthText, monthSize);
+  const monthX = width - margin - monthWidth;
+  const monthY = headerY + 3;
+  page.drawText(monthText, {
+    x: monthX,
+    y: monthY,
+    size: monthSize,
+    font: boldFont,
+    color: navyBlue,
+  });
+
+  // 4. Address - centered below the header line
+  const address = "118-119-120 Suncity Success Tower, Sector-65, Gurgaon 122101";
   const addressSize = 8.5;
   const addressWidth = boldFont.widthOfTextAtSize(address, addressSize);
   const addressX = (width - addressWidth) / 2;
+  const addressY = headerY - 22;
   page.drawText(address, {
     x: addressX,
-    y: companyY - 16,
+    y: addressY,
     size: addressSize,
     font: boldFont,
     color: black,
   });
 
-  const tableTopY = companyY - 32;
+  // 5. Divider line below header
+  const lineY = headerY - 32;
+  page.drawLine({
+    start: { x: margin, y: lineY },
+    end: { x: width - margin, y: lineY },
+    thickness: 1,
+    color: tableBorder,
+  });
+
+  const tableTopY = lineY - 10;
 
   // Employee Information Table
   const employeeInfo = [
