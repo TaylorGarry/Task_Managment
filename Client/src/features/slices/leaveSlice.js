@@ -1,7 +1,8 @@
+
 // import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 // import axios from "axios";
 
-// // const API_URL = "http://localhost:4000/api/v1/leaves";
+// //  const API_URL = "http://localhost:4000/api/v1/leaves";
 // const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1/leaves";
 
 // const getToken = (state) => state.auth?.user?.token;
@@ -83,6 +84,23 @@
 //   }
 // );
 
+// export const fetchTeamLeaveCalendarRequests = createAsyncThunk(
+//   "leave/fetchTeamLeaveCalendarRequests",
+//   async (_, thunkAPI) => {
+//     try {
+//       const state = thunkAPI.getState();
+//       const res = await axios.get(`${API_URL}/admin/requests`, {
+//         headers: getAuthHeaders(state),
+//         params: { status: "all" },
+//         signal: thunkAPI.signal,
+//       });
+//       return res.data;
+//     } catch (err) {
+//       return thunkAPI.rejectWithValue(normalizeError(err));
+//     }
+//   }
+// );
+
 // export const reviewLeaveRequest = createAsyncThunk(
 //   "leave/reviewLeaveRequest",
 //   async ({ requestId, action, comment = "" }, thunkAPI) => {
@@ -105,10 +123,12 @@
 //   myRequests: [],
 //   adminDashboard: null,
 //   adminRequests: [],
+//   teamCalendarRequests: [],
 //   loadingSummary: false,
 //   loadingRequests: false,
 //   loadingAdminDashboard: false,
 //   loadingAdminRequests: false,
+//   loadingTeamCalendarRequests: false,
 //   applying: false,
 //   reviewing: false,
 //   error: null,
@@ -193,6 +213,22 @@
 //         state.loadingAdminRequests = false;
 //         state.error = action.payload;
 //       })
+//       .addCase(fetchTeamLeaveCalendarRequests.pending, (state) => {
+//         state.loadingTeamCalendarRequests = true;
+//         state.error = null;
+//       })
+//       .addCase(fetchTeamLeaveCalendarRequests.fulfilled, (state, action) => {
+//         state.loadingTeamCalendarRequests = false;
+//         state.teamCalendarRequests = action.payload?.requests || [];
+//       })
+//       .addCase(fetchTeamLeaveCalendarRequests.rejected, (state, action) => {
+//         if (action.meta?.aborted) {
+//           state.loadingTeamCalendarRequests = false;
+//           return;
+//         }
+//         state.loadingTeamCalendarRequests = false;
+//         state.error = action.payload;
+//       })
 //       .addCase(reviewLeaveRequest.pending, (state) => {
 //         state.reviewing = true;
 //         state.error = null;
@@ -208,7 +244,7 @@
 //             String(row._id) === String(updated._id) ? updated : row
 //           );
 //         }
-//         state.message = "Leave request reviewed";
+//         state.message = action.payload?.message || "Leave request reviewed";
 //       })
 //       .addCase(reviewLeaveRequest.rejected, (state, action) => {
 //         state.reviewing = false;
@@ -219,6 +255,7 @@
 
 // export const { clearLeaveMessage } = leaveSlice.actions;
 // export default leaveSlice.reducer;
+
 
 
 
@@ -267,6 +304,18 @@ export const applyLeave = createAsyncThunk("leave/applyLeave", async (payload, t
   try {
     const state = thunkAPI.getState();
     const res = await axios.post(`${API_URL}/apply`, payload, {
+      headers: getAuthHeaders(state),
+    });
+    return res.data;
+  } catch (err) {
+    return thunkAPI.rejectWithValue(normalizeError(err));
+  }
+});
+
+export const applyLeaveOnBehalf = createAsyncThunk("leave/applyLeaveOnBehalf", async (payload, thunkAPI) => {
+  try {
+    const state = thunkAPI.getState();
+    const res = await axios.post(`${API_URL}/admin/apply-on-behalf`, payload, {
       headers: getAuthHeaders(state),
     });
     return res.data;
@@ -353,6 +402,7 @@ const initialState = {
   loadingAdminRequests: false,
   loadingTeamCalendarRequests: false,
   applying: false,
+  applyingOnBehalf: false,
   reviewing: false,
   error: null,
   message: null,
@@ -406,6 +456,21 @@ const leaveSlice = createSlice({
       })
       .addCase(applyLeave.rejected, (state, action) => {
         state.applying = false;
+        state.error = action.payload;
+      })
+      .addCase(applyLeaveOnBehalf.pending, (state) => {
+        state.applyingOnBehalf = true;
+        state.error = null;
+      })
+      .addCase(applyLeaveOnBehalf.fulfilled, (state, action) => {
+        state.applyingOnBehalf = false;
+        if (action.payload?.request) {
+          state.adminRequests = [action.payload.request, ...state.adminRequests];
+        }
+        state.message = "Leave request submitted on behalf of employee";
+      })
+      .addCase(applyLeaveOnBehalf.rejected, (state, action) => {
+        state.applyingOnBehalf = false;
         state.error = action.payload;
       })
       .addCase(fetchAdminLeaveDashboard.pending, (state) => {
