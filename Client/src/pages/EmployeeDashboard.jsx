@@ -1,3 +1,4 @@
+
 // import React, { useEffect, useState, useRef } from "react";
 // import { useDispatch, useSelector } from "react-redux";
 // import axios from "axios";
@@ -723,6 +724,7 @@
 //           <>
 //             <AgentDashboard
 //               session={punchSession}
+//               token={user?.token}
 //               attendanceScore={attendanceScore}
 //               employeeDashboardSummary={employeeDashboardSummary}
 //               onStartShift={handleStartShift}
@@ -1536,41 +1538,35 @@ useEffect(() => {
 
   const openBreak = punchSession?.breaks?.find((b) => !b.endAt) || null;
   const liveBreakMs = openBreak?.startAt ? Math.max(0, breakNowMs - new Date(openBreak.startAt).getTime()) : 0;
+  
+  // --- FIX: toIstDateKey function correctly handles IST ---
+  const toIstDateKey = (value) => {
+    if (!value) return "";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "";
+    // Convert to IST and get date part only
+    const istDate = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const year = istDate.getFullYear();
+    const month = String(istDate.getMonth() + 1).padStart(2, "0");
+    const day = String(istDate.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  
+  // --- FIX: getEffectiveIstDate returns correct IST date ---
+  const getEffectiveIstDate = () => {
+    const now = new Date();
+    const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    return istDate;
+  };
+  
+  const effectiveIstDate = getEffectiveIstDate();
+  const todayIstKey = toIstDateKey(effectiveIstDate);
+
+  // --- WORK ANNIVERSARY LOGIC ---
   const weeklyAnniversaries = Array.isArray(employeeDashboardSummary?.workAnniversaries?.weekly)
     ? employeeDashboardSummary.workAnniversaries.weekly
     : [];
-  const toIstDateKey = (value) => {
-    const d = value ? new Date(value) : new Date();
-    if (Number.isNaN(d.getTime())) return "";
-    const parts = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-    }).formatToParts(d);
-    const year = parts.find((p) => p.type === "year")?.value;
-    const month = parts.find((p) => p.type === "month")?.value;
-    const day = parts.find((p) => p.type === "day")?.value;
-    return year && month && day ? `${year}-${month}-${day}` : "";
-  };
-  const getEffectiveIstDate = () => {
-    const now = new Date();
-    const istHourRaw = new Intl.DateTimeFormat("en-US", {
-      timeZone: "Asia/Kolkata",
-      hour: "2-digit",
-      hour12: false,
-    }).format(now);
-    const istHour = Number.parseInt(istHourRaw, 10);
-    if (Number.isNaN(istHour)) return now;
-    if (istHour < 11) {
-      const prev = new Date(now);
-      prev.setUTCDate(prev.getUTCDate() - 1);
-      return prev;
-    }
-    return now;
-  };
-  const effectiveIstDate = getEffectiveIstDate();
-  const todayIstKey = toIstDateKey(effectiveIstDate);
+
   const todayAnniversaries = weeklyAnniversaries.filter(
     (item) => toIstDateKey(item?.anniversaryDate) === todayIstKey
   );
@@ -1587,6 +1583,52 @@ useEffect(() => {
       year: "numeric",
     });
   };
+
+  // --- BIRTHDAY LOGIC (Month/Day comparison only) ---
+  const weeklyBirthdays = Array.isArray(employeeDashboardSummary?.birthdays?.weekly)
+    ? employeeDashboardSummary.birthdays.weekly
+    : [];
+  
+  // Get today's month and day in IST
+  const getTodayMonthDay = () => {
+    const now = new Date();
+    const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+    const month = String(istDate.getMonth() + 1).padStart(2, "0");
+    const day = String(istDate.getDate()).padStart(2, "0");
+    return `${month}-${day}`;
+  };
+
+  // Get month-day from DOB
+  const getDobMonthDay = (dob) => {
+    if (!dob) return "";
+    const d = new Date(dob);
+    if (Number.isNaN(d.getTime())) return "";
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${month}-${day}`;
+  };
+
+  const todayKey = getTodayMonthDay();
+
+  // Filter birthdays matching today's month-day
+  const todayBirthdays = weeklyBirthdays.filter((item) => {
+    const itemKey = getDobMonthDay(item?.dob);
+    return itemKey === todayKey;
+  });
+
+  const formatBirthdayDate = (value) => {
+    if (!value) return "--";
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return "--";
+    return d.toLocaleDateString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
   const liveBreakTimer = (() => {
     const totalSec = Math.floor(liveBreakMs / 1000);
     const hh = String(Math.floor(totalSec / 3600)).padStart(2, "0");
@@ -1704,24 +1746,21 @@ useEffect(() => {
           }
         `}</style>
 
-	        <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
-	          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
-	            <h2 className="text-sm font-semibold text-violet-700 md:text-base">Work Anniversary Celebration!</h2>
-	            <p className="text-xs text-slate-500">
-	              {formatAnniversaryDate(effectiveIstDate)}
-	            </p>
-	          </div>
-	
-	          {todayAnniversaries.length === 0 ? (
-	            <div className="rounded-2xl border border-dashed border-violet-200 bg-gradient-to-r from-violet-50 to-indigo-50 px-4 py-10 text-center text-sm font-medium text-violet-700">
-	              No work anniversary today.
-	            </div>
-	          ) : (
-	            <div className="space-y-4">
-	              {todayAnniversaries.map((item) => (
-	                <div
-	                  key={`${item.userId}-${item.anniversaryDate}`}
-	                  className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-r from-[#efe9ff] via-[#f4efff] to-[#ecebff] p-4 md:p-6"
+        {/* --- WORK ANNIVERSARY SECTION --- */}
+        {todayAnniversaries.length > 0 && (
+          <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+              <h2 className="text-sm font-semibold text-violet-700 md:text-base">Work Anniversary Celebration!</h2>
+              <p className="text-xs text-slate-500">
+                {formatAnniversaryDate(effectiveIstDate)}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {todayAnniversaries.map((item) => (
+                <div
+                  key={`${item.userId}-${item.anniversaryDate}`}
+                  className="relative overflow-hidden rounded-2xl border border-violet-100 bg-gradient-to-r from-[#efe9ff] via-[#f4efff] to-[#ecebff] p-4 md:p-6"
                 >
                   <div className="pointer-events-none absolute -left-3 top-10 h-20 w-14 rounded-full bg-violet-300/40" />
                   <div className="pointer-events-none absolute left-8 top-16 h-14 w-10 rounded-full bg-amber-300/50" />
@@ -1775,8 +1814,70 @@ useEffect(() => {
                 </div>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
+
+        {/* --- BIRTHDAY SECTION (AGE AND DOB REMOVED) --- */}
+        {todayBirthdays.length > 0 && (
+          <section className="mb-8 rounded-2xl border border-pink-100 bg-white p-3 shadow-sm md:p-4">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+              <h2 className="text-sm font-semibold text-pink-700 md:text-base">🎂 Happy Birthday!</h2>
+              <p className="text-xs text-slate-500">
+                {formatBirthdayDate(effectiveIstDate)}
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              {todayBirthdays.map((item) => (
+                <div
+                  key={`${item.userId}-${item.dob}`}
+                  className="relative overflow-hidden rounded-2xl border border-pink-100 bg-gradient-to-r from-[#fce7f3] via-[#fdf2f8] to-[#fce4ec] p-4 md:p-6"
+                >
+                  <div className="pointer-events-none absolute -left-3 top-10 h-20 w-14 rounded-full bg-pink-300/40" />
+                  <div className="pointer-events-none absolute left-8 top-16 h-14 w-10 rounded-full bg-yellow-300/50" />
+
+                  <div className="grid grid-cols-1 items-center gap-5 md:grid-cols-2">
+                    <div>
+                      <p className="text-3xl font-bold italic text-pink-600">🎉 Happy Birthday!</p>
+                      <p className="text-3xl font-bold text-slate-800">Wishing you a great day</p>
+                      <p className="mt-2 text-sm text-slate-600">
+                        Celebrating our amazing team member today! 🥳
+                      </p>
+
+                      <div className="mt-4 grid max-w-md grid-cols-1 overflow-hidden rounded-xl border border-pink-200 bg-white/80">
+                        <div className="p-3 text-center">
+                          <p className="text-lg font-bold text-pink-600">{item.name}</p>
+                          <p className="text-xs text-slate-500">{item.designation || "Employee"}</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-center">
+                      <div className="relative">
+                        <div className="h-44 w-44 overflow-hidden rounded-full border-4 border-white shadow-lg">
+                          {item.profilePhotoUrl ? (
+                            <img
+                              src={item.profilePhotoUrl}
+                              alt={item.name}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-pink-100 text-5xl font-bold text-pink-500">
+                              {String(item.name || "E").trim().charAt(0).toUpperCase()}
+                            </div>
+                          )}
+                        </div>
+                        <div className="absolute -bottom-3 left-1/2 w-36 -translate-x-1/2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-3 py-2 text-center text-lg font-extrabold text-white shadow-md">
+                          🎂 BIRTHDAY
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {(isAgentUser || isSupervisorUser) && (
           <>
