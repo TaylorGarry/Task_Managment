@@ -63,6 +63,9 @@ const formatIstDateTime = (value, displayDateKey) => {
 };
 
 const BREAK_LABELS = {
+  lunch: "Lunch",
+  bio_1: "Short Break 1",
+  bio_2: "Short Break 2",
   manual: "Manual Break",
   system_disconnect: "System Disconnect Break",
 };
@@ -77,7 +80,7 @@ const BreakTracker = ({ session, onStartBreak, onEndBreak }) => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-[#0F172A]">Break Management</h3>
         <div className="flex gap-2">
-          <button onClick={() => onStartBreak("manual")} className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-1.5 text-xs font-semibold text-[#1D4ED8]">Start Break</button>
+          <button onClick={() => onStartBreak("lunch")} className="rounded-lg border border-[#BFDBFE] bg-[#EFF6FF] px-3 py-1.5 text-xs font-semibold text-[#1D4ED8]">Start Break</button>
           <button onClick={onEndBreak} className="rounded-lg border border-[#DBEAFE] bg-white px-3 py-1.5 text-xs font-semibold text-[#2563EB]">End Break</button>
         </div>
       </div>

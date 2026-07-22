@@ -74,7 +74,7 @@ const breakLogSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["lunch", "bio_1", "bio_2"],
+      enum: ["lunch", "bio_1", "bio_2", "manual", "auto_idle", "system_disconnect"],
       required: true,
     },
     startAt: { type: Date, required: true },
