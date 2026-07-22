@@ -1,3 +1,4 @@
+
 // import mongoose from "mongoose";
 
 // const breakLogSchema = new mongoose.Schema(
@@ -24,6 +25,11 @@
 //     dateKey: { type: String, required: true, index: true },
 //     shiftStartAt: { type: Date, default: null },
 //     shiftEndAt: { type: Date, default: null },
+//     shiftEndReason: {
+//       type: String,
+//       enum: ["", "manual", "auto_9h", "auto_window"],
+//       default: "",
+//     },
 //     status: {
 //       type: String,
 //       enum: ["not_started", "active", "ended"],
@@ -60,13 +66,15 @@
 // export default PunchSession;
 
 
+
+
 import mongoose from "mongoose";
 
 const breakLogSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["manual", "auto_idle", "system_disconnect"],
+      enum: ["lunch", "bio_1", "bio_2"],
       required: true,
     },
     startAt: { type: Date, required: true },
@@ -107,6 +115,24 @@ const punchSessionSchema = new mongoose.Schema(
     totalIdleMs: { type: Number, default: 0 },
     totalBreakMs: { type: Number, default: 0 },
     breaks: { type: [breakLogSchema], default: [] },
+    // Break tracking fields
+    breakTracking: {
+      lunch: {
+        totalMs: { type: Number, default: 0 },
+        isCompleted: { type: Boolean, default: false },
+        sessions: { type: Number, default: 0 },
+      },
+      bio_1: {
+        totalMs: { type: Number, default: 0 },
+        isCompleted: { type: Boolean, default: false },
+        sessions: { type: Number, default: 0 },
+      },
+      bio_2: {
+        totalMs: { type: Number, default: 0 },
+        isCompleted: { type: Boolean, default: false },
+        sessions: { type: Number, default: 0 },
+      },
+    },
     alerts: {
       type: [
         {
