@@ -5,6 +5,7 @@ import {
   endShift,
   getManagerTeamStatus,
   exportSuperAdminDailyStatusExcel,
+  getFloorStatusDashboard,
   getSuperAdminDailyStatus,
   getSessionHistory,
   getTodaySession,
@@ -34,6 +35,11 @@ router.get(
   "/superadmin/daily-status",
   cacheGetResponse({ keyPrefix: "daily-status", ttlMs: 15 * 1000, tag: "attendance" }),
   getSuperAdminDailyStatus
+);
+router.get(
+  "/floor-status",
+  cacheGetResponse({ keyPrefix: "floor-status", ttlMs: 10 * 1000, tag: "attendance" }),
+  getFloorStatusDashboard
 );
 router.get("/superadmin/daily-status/export", exportSuperAdminDailyStatusExcel);
 

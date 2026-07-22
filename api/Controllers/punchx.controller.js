@@ -1179,7 +1179,7 @@ import { getTeamMembersByTeamLeader } from "../utils/teamHelper.js";
 const APP_TZ = "Asia/Kolkata";
 const IDLE_WARN_MS = 25 * 60 * 1000;
 const SESSION_RESUME_GRACE_MS = 0;
-const OPERATIONAL_DAY_START_HOUR_IST = 14;
+const OPERATIONAL_DAY_START_HOUR_IST = 12;
 const PUNCHX_DEBUG_TIME = process.env.PUNCHX_DEBUG_TIME === "1";
 
 const getNow = () => new Date();
@@ -1437,7 +1437,7 @@ const resolveOperationalDateKeyForUser = (_userLike = {}, now = new Date()) => {
       nowIso: now.toISOString(),
       nyHour,
       resolvedDateKey: yesterdayKey,
-      rule: "before_14_ist_use_previous_day",
+      rule: `before_${OPERATIONAL_DAY_START_HOUR_IST}_ist_use_previous_day`,
     });
     return yesterdayKey;
   }
@@ -1445,7 +1445,7 @@ const resolveOperationalDateKeyForUser = (_userLike = {}, now = new Date()) => {
     nowIso: now.toISOString(),
     nyHour,
     resolvedDateKey: todayKey,
-    rule: "at_or_after_14_ist_use_same_day",
+    rule: `at_or_after_${OPERATIONAL_DAY_START_HOUR_IST}_ist_use_same_day`,
   });
   return todayKey;
 };
@@ -1457,7 +1457,7 @@ const toMs = (start, end) => {
 };
 
 const NINE_HOURS_MS = 9 * 60 * 60 * 1000;
-const VALID_BREAK_TYPES = ["lunch", "bio_1", "bio_2", "manual"];
+const VALID_BREAK_TYPES = ["lunch", "bio_1", "bio_2"];
 
 const formatIstDateTime = (value) => {
   if (!value) return "";
@@ -2256,27 +2256,19 @@ const getSessionHistoryStartDate = (userLike = {}, session = null) => {
   return candidates.reduce((latest, current) => (!latest || current > latest ? current : latest), null);
 };
 
-// ========== UPDATED: getSuperAdminDailyStatus ==========
-export const getSuperAdminDailyStatus = async (req, res) => {
-  try {
-    const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
-    const userId = req.user?._id ? String(req.user._id) : "";
-    const isSuperAdmin = role === "superadmin";
-    const isSupervisor = role === "supervisor" || Boolean(req.user?.isTeamLeader);
+const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateKey = "" } = {}) => {
+  const role = String(requester?.roleType || requester?.accountType || "").toLowerCase();
+  const userId = requester?._id ? String(requester._id) : "";
+  const isSuperAdmin = role === "superadmin";
+  const dateKey = String(requestedDateKey || resolveOperationalDateKeyForUser({}, getNow()));
+  const employeeQuery = {
+    accountType: { $in: ["employee", "agent", "supervisor"] },
+    isActive: { $ne: false },
+  };
 
-    if (!isSuperAdmin && !isSupervisor) {
-      return res.status(403).json({ message: "Only superAdmin or supervisor can access this dashboard" });
-    }
-
-    const dateKey = String(req.query?.dateKey || resolveOperationalDateKeyForUser({}, getNow()));
-    const employeeQuery = {
-      accountType: { $in: ["employee", "agent", "supervisor"] },
-      isActive: { $ne: false },
-    };
-
-    if (!isSuperAdmin && userId) {
-      employeeQuery.reportingManager = req.user._id;
-    }
+  if (!isSuperAdmin && userId) {
+    employeeQuery.reportingManager = requester._id;
+  }
 
     const employees = await User.find(employeeQuery)
       .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
@@ -2314,8 +2306,9 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       return {
         userId: emp._id,
         username: emp.username || "",
+        realName: emp.realName || "",
         pseudoName: emp.pseudoName || "",
-        name: emp.pseudoName || emp.username || "",
+        name: emp.realName || emp.pseudoName || emp.username || "",
         department: emp.department || "",
         accountType: emp.accountType || "employee",
         isTeamLeader: Boolean(emp.isTeamLeader),
@@ -2354,15 +2347,89 @@ export const getSuperAdminDailyStatus = async (req, res) => {
       lateLoginCount: rows.filter((r) => r.lateByMs > 0).length,
     };
 
-    return res.status(200).json({
+    return {
       dateKey,
       timezone: APP_TZ,
       summary,
       rows,
+    };
+};
+
+// ========== UPDATED: getSuperAdminDailyStatus ==========
+export const getSuperAdminDailyStatus = async (req, res) => {
+  try {
+    const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
+    const isSuperAdmin = role === "superadmin";
+    const isSupervisor = role === "supervisor" || Boolean(req.user?.isTeamLeader);
+
+    if (!isSuperAdmin && !isSupervisor) {
+      return res.status(403).json({ message: "Only superAdmin or supervisor can access this dashboard" });
+    }
+
+    const payload = await buildDailyStatusPayload({
+      requester: req.user || {},
+      dateKey: req.query?.dateKey,
     });
+
+    return res.status(200).json(payload);
   } catch (error) {
     return res.status(500).json({
       message: "Failed to fetch superAdmin daily login status",
+      error: error.message,
+    });
+  }
+};
+
+export const getFloorStatusDashboard = async (req, res) => {
+  try {
+    const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
+    const isAllowed = role === "floorstatus" || role === "superadmin";
+
+    if (!isAllowed) {
+      return res.status(403).json({ message: "Only floorStatus or superAdmin can access this dashboard" });
+    }
+
+    const payload = await buildDailyStatusPayload({
+      requester: { ...(req.user || {}), roleType: "superAdmin", accountType: "superAdmin" },
+      dateKey: req.query?.dateKey,
+    });
+
+    const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    const toFloorRow = (row = {}) => ({
+      userId: row.userId,
+      username: row.username || "",
+      pseudoName: row.pseudoName || "",
+      name: row.pseudoName || row.username || "",
+      department: row.department || "",
+      floorRosterStatus: row.floorRosterStatus || "",
+      isOnBreak: Boolean(row.isOnBreak),
+      breakType: row.breakType || "",
+      breakStartAt: row.breakStartAt || null,
+      totalBreakMs: row.totalBreakMs || 0,
+      totalWorkedMs: row.totalWorkedMs || 0,
+      loginTime: row.loginTime || null,
+    });
+    const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
+    const rosterPresentRows = rows.filter(isRosterPresent);
+    const onBreakRows = rosterPresentRows.filter((row) => row.isOnBreak).map(toFloorRow);
+    const notLoggedInRows = rosterPresentRows.filter((row) => !row.loginTime).map(toFloorRow);
+
+    return res.status(200).json({
+      ...payload,
+      rows: rosterPresentRows.map(toFloorRow),
+      summary: {
+        ...(payload.summary || {}),
+        totalEmployees: rosterPresentRows.length,
+        onBreakCount: onBreakRows.length,
+        notLoggedInCount: notLoggedInRows.length,
+      },
+      onBreakRows,
+      notLoggedInRows,
+      generatedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(500).json({
+      message: "Failed to fetch floor status dashboard",
       error: error.message,
     });
   }

@@ -510,6 +510,7 @@ const Signup = () => {
                           >
                             <option value="agent">Agent</option>
                             <option value="supervisor">Supervisor</option>
+                            <option value="floorStatus">Floor Status</option>
                             <option value="superAdmin">Super Admin</option>
                           </select>
                         </div>

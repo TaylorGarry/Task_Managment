@@ -755,6 +755,7 @@ import { getDailyStatus } from "../utils/dailyStatusApi.js";
  
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 const IST_TIME_ZONE = "Asia/Kolkata";
+const OPERATIONAL_DAY_START_HOUR_IST = 12;
 
 const toDateKey = (date) => {
   const d = new Date(date);
@@ -770,7 +771,31 @@ const toDateKey = (date) => {
   return yyyy && mm && dd ? `${yyyy}-${mm}-${dd}` : "";
 };
 
-const getDefaultDateKey = () => toDateKey(new Date());
+const addDaysToDateKey = (dateKey = "", days = 0) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return dateKey;
+  const date = new Date(`${dateKey}T00:00:00+05:30`);
+  date.setDate(date.getDate() + days);
+  return toDateKey(date);
+};
+
+const getIstHour = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: IST_TIME_ZONE,
+    hour12: false,
+    hour: "2-digit",
+  }).formatToParts(date);
+  const hour = Number(parts.find((p) => p.type === "hour")?.value);
+  return Number.isFinite(hour) ? hour : null;
+};
+
+const getDefaultDateKey = () => {
+  const now = new Date();
+  const todayKey = toDateKey(now);
+  const hour = getIstHour(now);
+  return Number.isFinite(hour) && hour < OPERATIONAL_DAY_START_HOUR_IST
+    ? addDaysToDateKey(todayKey, -1)
+    : todayKey;
+};
 
 const formatDateTime = (value) => {
   if (!value) return null;
@@ -1027,6 +1052,7 @@ const getBreakTypeLabel = (type) => {
     "lunch": "Lunch",
     "bio_1": "Short Break 1",
     "bio_2": "Short Break 2",
+    "manual": "Lunch",
   };
   return map[type] || type;
 };

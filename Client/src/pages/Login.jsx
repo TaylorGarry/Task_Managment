@@ -145,7 +145,7 @@ import toast from "react-hot-toast";
 import { loginUser } from "../features/slices/authSlice.js";
 import { Eye, EyeOff } from "lucide-react";
 import { useEffect, useState } from "react";
-import { canManageAdminPanels } from "../utils/roleAccess.js";
+import { canManageAdminPanels, isFloorStatus } from "../utils/roleAccess.js";
 
 const Login = () => {
   const { register, handleSubmit } = useForm();
@@ -167,7 +167,7 @@ const Login = () => {
       };
       const user = await dispatch(loginUser(payload)).unwrap();
       toast.success("Login successful!", { id: "auth-login-success", duration: 2000 });
-      navigate(canManageAdminPanels(user) ? "/admin" : "/dashboard");
+      navigate(isFloorStatus(user) ? "/floor-status" : canManageAdminPanels(user) ? "/admin" : "/dashboard");
     } catch (err) {
       const message = String(err || "Login failed");
       const normalizedMessage = message.toLowerCase();
