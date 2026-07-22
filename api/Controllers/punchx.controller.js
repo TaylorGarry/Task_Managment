@@ -1,3 +1,5 @@
+
+
 // import PunchSession from "../Modals/PunchSession.modal.js";
 // import Roster from "../Modals/Roster.modal.js";
 // import User from "../Modals/User.modal.js";
@@ -63,6 +65,7 @@
 // const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
 //   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
 //   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
+//   const targetObjectIds = (employees || []).map((employee) => employee?._id).filter(Boolean);
 //   const userIdByEmpId = new Map();
 //   const userIdByName = new Map();
 
@@ -93,11 +96,20 @@
 //   }
 
 //   const dayStartMs = parseDateKeyStartMs(dateKey);
-//   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) return 0;
+//   const emptyRosterSnapshot = () => ({
+//     presentCount: 0,
+//     rosterStatusByUserId: new Map(),
+//     rosterShiftStartHourByUserId: new Map(),
+//     rosterShiftEndHourByUserId: new Map(),
+//     transportArrivalTimeByUserId: new Map(),
+//   });
+//   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) {
+//     return emptyRosterSnapshot();
+//   }
 
 //   const dayStart = new Date(dayStartMs);
 //   const dayEnd = new Date(dayStartMs + 24 * 60 * 60 * 1000 - 1);
-//   const rosters = await Roster.find({
+//   const rosterQuery = {
 //     $or: [
 //       {
 //         rosterStartDate: { $lte: dayEnd },
@@ -112,64 +124,124 @@
 //         },
 //       },
 //     ],
-//   })
-//     .select("weeks.startDate weeks.endDate weeks.employees.userId weeks.employees.empId weeks.employees.name weeks.employees.dailyStatus")
-//     .lean();
+//   };
+
+//   if (!countAllRosterEmployees && targetIds.size) {
+//     rosterQuery["weeks.employees.userId"] = { $in: targetObjectIds };
+//   }
+
+//   const pipeline = [
+//     { $match: rosterQuery },
+//     {
+//       $project: {
+//         weeks: {
+//           $filter: {
+//             input: "$weeks",
+//             as: "week",
+//             cond: {
+//               $and: [
+//                 { $lte: ["$$week.startDate", dayEnd] },
+//                 { $gte: ["$$week.endDate", dayStart] },
+//               ],
+//             },
+//           },
+//         },
+//       },
+//     },
+//     { $unwind: "$weeks" },
+//     { $unwind: "$weeks.employees" },
+//   ];
+
+//   if (!countAllRosterEmployees && targetObjectIds.length) {
+//     pipeline.push({ $match: { "weeks.employees.userId": { $in: targetObjectIds } } });
+//   }
+
+//   pipeline.push(
+//     {
+//       $project: {
+//         rosterUserId: "$weeks.employees.userId",
+//         rosterEmpId: "$weeks.employees.empId",
+//         rosterName: "$weeks.employees.name",
+//         shiftStartHour: "$weeks.employees.shiftStartHour",
+//         shiftEndHour: "$weeks.employees.shiftEndHour",
+//         matchingDay: {
+//           $first: {
+//             $filter: {
+//               input: "$weeks.employees.dailyStatus",
+//               as: "day",
+//               cond: {
+//                 $and: [
+//                   { $gte: ["$$day.date", dayStart] },
+//                   { $lte: ["$$day.date", dayEnd] },
+//                 ],
+//               },
+//             },
+//           },
+//         },
+//       },
+//     },
+//     { $match: { matchingDay: { $ne: null } } }
+//   );
+
+//   const rosterRows = await Roster.aggregate(pipeline).allowDiskUse(true);
 
 //   const presentIds = new Set();
 //   const rosterStatusByUserId = new Map();
-//   for (const roster of rosters || []) {
-//     for (const week of roster?.weeks || []) {
-//       const weekStart = week?.startDate ? new Date(week.startDate) : null;
-//       const weekEnd = week?.endDate ? new Date(week.endDate) : null;
-//       if (!weekStart || !weekEnd || Number.isNaN(weekStart.getTime()) || Number.isNaN(weekEnd.getTime())) continue;
-//       if (!overlaps(weekStart, weekEnd, dayStart, dayEnd)) continue;
+//   const rosterShiftStartHourByUserId = new Map();
+//   const rosterShiftEndHourByUserId = new Map();
+//   const transportArrivalTimeByUserId = new Map();
+//   for (const row of rosterRows || []) {
+//     const rosterUserId = String(row?.rosterUserId || "").trim();
+//     const rosterEmpId = String(row?.rosterEmpId || "").trim().toLowerCase();
+//     const rosterNameKey = normalizeRosterName(row?.rosterName || "");
+//     const matchedUserId =
+//       (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
+//       userIdByEmpId.get(rosterEmpId) ||
+//       userIdByName.get(rosterNameKey) ||
+//       "";
+//     const presentKey = matchedUserId ||
+//       (countAllRosterEmployees
+//         ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
+//         : "");
 
-//       for (const employee of week?.employees || []) {
-//         const rosterUserId = String(employee?.userId || "").trim();
-//         const rosterEmpId = String(employee?.empId || "").trim().toLowerCase();
-//         const rosterNameKey = normalizeRosterName(employee?.name || "");
-//         const matchedUserId =
-//           (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
-//           userIdByEmpId.get(rosterEmpId) ||
-//           userIdByName.get(rosterNameKey) ||
-//           "";
-//         const presentKey = matchedUserId ||
-//           (countAllRosterEmployees
-//             ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
-//             : "");
+//     if (!presentKey || presentIds.has(presentKey)) continue;
 
-//         if (!presentKey || presentIds.has(presentKey)) continue;
+//     const matchingDay = row?.matchingDay;
+//     const effectiveStatus = String(
+//       matchingDay?.status ||
+//       matchingDay?.departmentStatus ||
+//       matchingDay?.transportStatus ||
+//       "P"
+//     ).trim().toUpperCase();
 
-//         const matchingDay = (employee?.dailyStatus || []).find((dayEntry) => {
-//           if (!dayEntry?.date) return false;
-//           const dayDate = new Date(dayEntry.date);
-//           if (Number.isNaN(dayDate.getTime())) return false;
-//           return getNyDateKey(dayDate) === dateKey;
-//         });
-//         if (!matchingDay) continue;
-
-//         const effectiveStatus = String(
-//           matchingDay?.status ||
-//           matchingDay?.departmentStatus ||
-//           matchingDay?.transportStatus ||
-//           "P"
-//         ).trim().toUpperCase();
-
-//         if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
-//           rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
-//         }
-
-//         if (effectiveStatus === "P") {
-//           presentIds.add(presentKey);
-//         }
+//     if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
+//       rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
+//     }
+//     if (matchedUserId) {
+//       if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
+//         transportArrivalTimeByUserId.set(matchedUserId, matchingDay.transportArrivalTime);
 //       }
+//       const rosterStartHour = Number(row?.shiftStartHour);
+//       const rosterEndHour = Number(row?.shiftEndHour);
+//       if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
+//         rosterShiftStartHourByUserId.set(matchedUserId, rosterStartHour);
+//       }
+//       if (Number.isFinite(rosterEndHour) && !rosterShiftEndHourByUserId.has(matchedUserId)) {
+//         rosterShiftEndHourByUserId.set(matchedUserId, rosterEndHour);
+//       }
+//     }
+
+//     if (effectiveStatus === "P") {
+//       presentIds.add(presentKey);
 //     }
 //   }
 
 //   return {
 //     presentCount: presentIds.size,
 //     rosterStatusByUserId,
+//     rosterShiftStartHourByUserId,
+//     rosterShiftEndHourByUserId,
+//     transportArrivalTimeByUserId,
 //   };
 // };
 
@@ -424,7 +496,7 @@
 //   if (
 //     normalizedStart > 0 &&
 //     normalizedStart < 12 &&
-//     (normalizedEnd !== null ? normalizedEnd < normalizedStart : eveningLogin)
+//     eveningLogin
 //   ) {
 //     return normalizedStart + 12;
 //   }
@@ -462,11 +534,20 @@
 //     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
 //     const now = getNow();
-//     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+//     const userProfile = await User.findById(userId)
+//       .select("shiftStartHour sessionHistoryStartAt username pseudoName realName")
+//       .lean();
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 //     if (autoEndShiftIfDue(session)) {
 //       await session.save();
+//     }
+
+//     if (isJosephHistoryAccount(userProfile || {}) && !userProfile?.sessionHistoryStartAt && session?.shiftStartAt) {
+//       await User.updateOne(
+//         { _id: userId, sessionHistoryStartAt: null },
+//         { $set: { sessionHistoryStartAt: session.shiftStartAt } }
+//       );
 //     }
 
 //     return res.status(200).json({
@@ -484,7 +565,9 @@
 //   try {
 //     const userId = req.user?._id;
 //     const now = getNow();
-//     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+//     const userProfile = await User.findById(userId)
+//       .select("shiftStartHour sessionHistoryStartAt username pseudoName realName")
+//       .lean();
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
@@ -498,6 +581,13 @@
 //     session.lastActivityAt = now;
 //     session.shiftEndReason = "";
 //     await session.save();
+
+//     if (isJosephHistoryAccount(userProfile || {}) && !userProfile?.sessionHistoryStartAt && session?.shiftStartAt) {
+//       await User.updateOne(
+//         { _id: userId, sessionHistoryStartAt: null },
+//         { $set: { sessionHistoryStartAt: session.shiftStartAt } }
+//       );
+//     }
 
 //     return res.status(200).json({ message: "Shift started", session, attendanceScore: scoreSession(session) });
 //   } catch (error) {
@@ -657,12 +747,16 @@
 //     if (!userId) return res.status(401).json({ message: "Unauthorized" });
 
 //     const now = getNow();
-//     const userProfile = await User.findById(userId).select("shiftStartHour").lean();
+//     const userProfile = await User.findById(userId)
+//       .select("shiftStartHour dateOfJoining createdAt sessionHistoryStartAt username pseudoName realName")
+//       .lean();
 //     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
 //     const currentSession = await PunchSession.findOne({ userId, dateKey });
 //     if (currentSession && autoEndShiftIfDue(currentSession, now)) {
 //       await currentSession.save();
 //     }
+
+//     const historyCutoff = getSessionHistoryStartDate(userProfile || {}, currentSession);
 
 //     const page = Math.max(1, Number.parseInt(req.query?.page || "1", 10) || 1);
 //     const limit = Math.min(50, Math.max(5, Number.parseInt(req.query?.limit || "5", 10) || 5));
@@ -672,6 +766,10 @@
 //       userId,
 //       shiftStartAt: { $ne: null },
 //     };
+
+//     if (historyCutoff) {
+//       query.shiftStartAt.$gte = historyCutoff;
+//     }
 
 //     const [total, sessions] = await Promise.all([
 //       PunchSession.countDocuments(query),
@@ -774,10 +872,10 @@
 //     }
 
 //     const ids = teamMembers.map((u) => u._id);
-//     const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey });
+//     const sessions = await PunchSession.find({ userId: { $in: ids }, dateKey }).lean();
 //     const now = getNow();
 //     await persistAutoEndedSessions(sessions, now);
-//     const byUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
+//     const byUser = new Map(sessions.map((s) => [String(s.userId), s]));
 //     const rosterSnapshot = await getRosterPresentCountForUsers(teamMembers, dateKey);
 //     const presentCount = rosterSnapshot.presentCount;
 
@@ -807,6 +905,7 @@
 //         logoutTime: session?.shiftEndAt || null,
 //         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
 //         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
+//         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(member._id)) || null,
 //         isOnBreak: Boolean(openBreak),
 //         lateByMs,
 //         totalWorkedMs: Math.max(0, totalWorkedMs),
@@ -831,6 +930,26 @@
 // };
 
 // const getOpenBreak = (session) => (session?.breaks || []).find((b) => !b.endAt) || null;
+
+// const isJosephHistoryAccount = (userLike = {}) => {
+//   const tokens = [userLike?.username, userLike?.pseudoName, userLike?.realName]
+//     .map((value) => String(value || "").trim().toLowerCase())
+//     .filter(Boolean);
+//   return tokens.includes("joseph");
+// };
+
+// const getSessionHistoryStartDate = (userLike = {}, session = null) => {
+//   const candidates = [
+//     userLike?.sessionHistoryStartAt,
+//     isJosephHistoryAccount(userLike) ? session?.shiftStartAt : null,
+//     userLike?.dateOfJoining,
+//     userLike?.createdAt,
+//   ]
+//     .map((value) => (value ? new Date(value) : null))
+//     .filter((value) => value && !Number.isNaN(value.getTime()));
+
+//   return candidates.reduce((latest, current) => (!latest || current > latest ? current : latest), null);
+// };
 
 // export const getSuperAdminDailyStatus = async (req, res) => {
 //   try {
@@ -857,22 +976,29 @@
 //       .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
 //       .lean();
 
-//     const employeeIds = employees.map((e) => e._id);
 //     const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
 //       countAllRosterEmployees: isSuperAdmin,
 //     });
 //     const presentCount = rosterSnapshot.presentCount;
-//     const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey });
+//     const sessionQuery = isSuperAdmin ? { dateKey } : { userId: { $in: employees.map((e) => e._id) }, dateKey };
+//     const sessions = await PunchSession.find(sessionQuery).lean();
 //     await persistAutoEndedSessions(sessions, getNow());
-//     const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s.toObject()]));
+//     const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s]));
 //     const now = new Date();
 
 //     const rows = employees.map((emp) => {
 //       const session = sessionsByUser.get(String(emp._id)) || null;
 //       const breakUsage = getBreakUsage(session, now);
 //       const openBreak = getOpenBreak(session);
-//       const shiftStartHour = Number(emp.shiftStartHour);
-//       const lateByMs = computeSessionLateByMs(session, emp);
+//       const rosterShiftStartHour = rosterSnapshot.rosterShiftStartHourByUserId.get(String(emp._id));
+//       const rosterShiftEndHour = rosterSnapshot.rosterShiftEndHourByUserId.get(String(emp._id));
+//       const shiftStartHour = Number.isFinite(rosterShiftStartHour) ? rosterShiftStartHour : Number(emp.shiftStartHour);
+//       const shiftEndHour = Number.isFinite(rosterShiftEndHour) ? rosterShiftEndHour : Number(emp.shiftEndHour);
+//       const lateByMs = computeSessionLateByMs(session, {
+//         ...emp,
+//         shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
+//         shiftEndHour: Number.isFinite(shiftEndHour) ? shiftEndHour : null,
+//       });
 //       const totalWorkedMs = getSessionWorkedMs(session, now);
 //       const remainingForNineHoursMs = Math.max(0, 9 * 60 * 60 * 1000 - totalWorkedMs);
 //       const inactiveSinceMs = session?.lastActivityAt
@@ -887,12 +1013,13 @@
 //         department: emp.department || "",
 //         accountType: emp.accountType || "employee",
 //         isTeamLeader: Boolean(emp.isTeamLeader),
-//         shiftStartHour: Number.isFinite(Number(emp.shiftStartHour)) ? Number(emp.shiftStartHour) : null,
-//         shiftEndHour: Number.isFinite(Number(emp.shiftEndHour)) ? Number(emp.shiftEndHour) : null,
+//         shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
+//         shiftEndHour: Number.isFinite(shiftEndHour) ? shiftEndHour : null,
 //         loginTime: session?.shiftStartAt || null,
 //         logoutTime: session?.shiftEndAt || null,
 //         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
 //         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
+//         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(emp._id)) || null,
 //         isOnBreak: Boolean(openBreak),
 //         breakType: openBreak?.type || "",
 //         breakStartAt: openBreak?.startAt || null,
@@ -982,7 +1109,15 @@
 //     const rows = employees.map((emp) => {
 //       const session = sessionsByUser.get(String(emp._id)) || null;
 //       const breakUsage = getBreakUsage(session, now);
-//       const lateByMs = computeSessionLateByMs(session, emp);
+//       const rosterShiftStartHour = rosterSnapshot.rosterShiftStartHourByUserId.get(String(emp._id));
+//       const rosterShiftEndHour = rosterSnapshot.rosterShiftEndHourByUserId.get(String(emp._id));
+//       const shiftStartHour = Number.isFinite(rosterShiftStartHour) ? rosterShiftStartHour : Number(emp.shiftStartHour);
+//       const shiftEndHour = Number.isFinite(rosterShiftEndHour) ? rosterShiftEndHour : Number(emp.shiftEndHour);
+//       const lateByMs = computeSessionLateByMs(session, {
+//         ...emp,
+//         shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
+//         shiftEndHour: Number.isFinite(shiftEndHour) ? shiftEndHour : null,
+//       });
 //       const totalWorkedMs = getSessionWorkedMs(session, now);
 
 //       const breakSegments = (session?.breaks || []).map((b) => {
@@ -1034,6 +1169,7 @@
 
 
 
+
 import PunchSession from "../Modals/PunchSession.modal.js";
 import Roster from "../Modals/Roster.modal.js";
 import User from "../Modals/User.modal.js";
@@ -1043,7 +1179,7 @@ import { getTeamMembersByTeamLeader } from "../utils/teamHelper.js";
 const APP_TZ = "Asia/Kolkata";
 const IDLE_WARN_MS = 25 * 60 * 1000;
 const SESSION_RESUME_GRACE_MS = 0;
-const OPERATIONAL_DAY_START_HOUR_IST = 14; // 2:00 PM IST
+const OPERATIONAL_DAY_START_HOUR_IST = 14;
 const PUNCHX_DEBUG_TIME = process.env.PUNCHX_DEBUG_TIME === "1";
 
 const getNow = () => new Date();
@@ -1333,22 +1469,30 @@ const formatIstDateTime = (value) => {
   });
 };
 
+// ========== UPDATED: getBreakUsage ==========
 const getBreakUsage = (session, now = getNow()) => {
-  if (!session) return { manualBreakMs: 0, autoIdleBreakMs: 0, totalBreakMs: 0 };
+  if (!session) return { lunchBreakMs: 0, bioBreak1Ms: 0, bioBreak2Ms: 0, totalBreakMs: 0 };
+  
   const breaks = Array.isArray(session.breaks) ? session.breaks : [];
-  let manualBreakMs = 0;
+  let lunchBreakMs = 0;
+  let bioBreak1Ms = 0;
+  let bioBreak2Ms = 0;
 
   for (const br of breaks) {
     const baseDuration = Number(br?.durationMs || 0);
     const openDuration = !br?.endAt ? toMs(br?.startAt, now) : 0;
     const durationMs = Math.max(0, baseDuration + openDuration);
-    if (br?.type === "manual") manualBreakMs += durationMs;
+    
+    if (br?.type === "lunch") lunchBreakMs += durationMs;
+    else if (br?.type === "bio_1") bioBreak1Ms += durationMs;
+    else if (br?.type === "bio_2") bioBreak2Ms += durationMs;
   }
 
   return {
-    manualBreakMs,
-    autoIdleBreakMs: 0,
-    totalBreakMs: manualBreakMs,
+    lunchBreakMs,
+    bioBreak1Ms,
+    bioBreak2Ms,
+    totalBreakMs: lunchBreakMs + bioBreak1Ms + bioBreak2Ms,
   };
 };
 
@@ -1364,11 +1508,7 @@ const addBreak = (session, type, now, meta = {}) => {
     meta,
   });
 
-  if (type === "manual") session.activityStatus = "manual_break";
-  if (type === "auto_idle") {
-    session.activityStatus = "auto_break";
-    session.autoBreakStartedAt = now;
-  }
+  session.activityStatus = "manual_break";
   return true;
 };
 
@@ -1479,16 +1619,16 @@ const ensureSession = async (userId, userLike = {}, dateKey, now = new Date()) =
   return PunchSession.create({ userId, dateKey });
 };
 
+// ========== UPDATED: scoreSession ==========
 const scoreSession = (session) => {
   let score = 100;
   const latePenalty = session.shiftStartAt ? 0 : 25;
   const completionPenalty = session.shiftEndAt ? 0 : 25;
 
-  const manualBreakMs = session.breaks
-    .filter((b) => b.type === "manual")
-    .reduce((sum, b) => sum + (b.durationMs || 0), 0);
-
-  const breakPenalty = manualBreakMs > 90 * 60 * 1000 ? 20 : manualBreakMs > 60 * 60 * 1000 ? 10 : 0;
+  const breakUsage = getBreakUsage(session);
+  const totalBreakMs = breakUsage.totalBreakMs;
+  
+  const breakPenalty = totalBreakMs > 90 * 60 * 1000 ? 20 : totalBreakMs > 60 * 60 * 1000 ? 10 : 0;
   const idlePenalty = session.totalIdleMs > 90 * 60 * 1000 ? 25 : session.totalIdleMs > 60 * 60 * 1000 ? 15 : session.totalIdleMs > 30 * 60 * 1000 ? 8 : 0;
 
   score -= latePenalty + completionPenalty + breakPenalty + idlePenalty;
@@ -1650,12 +1790,17 @@ export const endShift = async (req, res) => {
   }
 };
 
+// ========== UPDATED: startBreak ==========
 export const startBreak = async (req, res) => {
   try {
     const userId = req.user?._id;
-    const { type = "manual", reason = "" } = req.body || {};
-    if (!["manual", "system_disconnect"].includes(type)) {
-      return res.status(400).json({ message: "Invalid break type" });
+    const { type = "lunch", reason = "" } = req.body || {};
+    
+    const validBreakTypes = ["lunch", "bio_1", "bio_2"];
+    if (!validBreakTypes.includes(type)) {
+      return res.status(400).json({ 
+        message: "Invalid break type. Allowed: lunch, bio_1, bio_2" 
+      });
     }
 
     const now = getNow();
@@ -1664,12 +1809,20 @@ export const startBreak = async (req, res) => {
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     if (session.status === "ended" || session.shiftEndAt) {
-      return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ 
+        message: "Shift already ended", 
+        session, 
+        attendanceScore: scoreSession(session) 
+      });
     }
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
-      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ 
+        message: "Shift already auto-ended after 9 hours", 
+        session, 
+        attendanceScore: scoreSession(session) 
+      });
     }
 
     if (session.status === "not_started") {
@@ -1677,16 +1830,66 @@ export const startBreak = async (req, res) => {
       session.status = "active";
     }
 
-    const added = addBreak(session, type, now, { reason, source: "ui" });
-    if (!added) return res.status(409).json({ message: "A break is already active", session });
+    const existingOpen = session.breaks.find((b) => !b.endAt);
+    if (existingOpen) {
+      return res.status(409).json({ 
+        message: "A break is already active. Please end the current break first.", 
+        session 
+      });
+    }
 
+    if (!session.breakTracking) {
+      session.breakTracking = {
+        lunch: { totalMs: 0, isCompleted: false, sessions: 0 },
+        bio_1: { totalMs: 0, isCompleted: false, sessions: 0 },
+        bio_2: { totalMs: 0, isCompleted: false, sessions: 0 },
+      };
+    }
+
+    const breakLimit = type === "lunch" ? 30 * 60 * 1000 : 15 * 60 * 1000;
+    if (session.breakTracking[type]?.isCompleted) {
+      return res.status(409).json({ 
+        message: `${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} is already completed for today.`, 
+        session 
+      });
+    }
+
+    const usedMs = session.breakTracking[type]?.totalMs || 0;
+    if (usedMs >= breakLimit) {
+      session.breakTracking[type].isCompleted = true;
+      await session.save();
+      return res.status(409).json({ 
+        message: `${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} limit already reached for today.`, 
+        session 
+      });
+    }
+
+    session.breaks.push({
+      type,
+      startAt: now,
+      endAt: null,
+      durationMs: 0,
+      meta: { reason, source: "ui" },
+    });
+
+    session.activityStatus = "manual_break";
     await session.save();
-    return res.status(200).json({ message: "Break started", session, attendanceScore: scoreSession(session) });
+
+    const remainingMs = Math.max(0, breakLimit - usedMs);
+    const remainingMinutes = Math.ceil(remainingMs / 60000);
+
+    return res.status(200).json({ 
+      message: `${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} started`, 
+      session, 
+      attendanceScore: scoreSession(session),
+      remainingTime: `${remainingMinutes} minutes remaining`
+    });
   } catch (error) {
     return res.status(500).json({ message: "Failed to start break", error: error.message });
   }
 };
 
+// ========== UPDATED: endBreak ==========
 export const endBreak = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1697,20 +1900,84 @@ export const endBreak = async (req, res) => {
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
     if (session.status === "ended" || session.shiftEndAt) {
-      return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ 
+        message: "Shift already ended", 
+        session, 
+        attendanceScore: scoreSession(session) 
+      });
     }
 
     if (autoEndShiftIfDue(session, now)) {
       await session.save();
-      return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+      return res.status(409).json({ 
+        message: "Shift already auto-ended after 9 hours", 
+        session, 
+        attendanceScore: scoreSession(session) 
+      });
     }
 
-    const closed = closeOpenBreak(session, now, type || null);
-    if (!closed) return res.status(404).json({ message: "No active break found", session });
+    const openBreakIndex = session.breaks.findIndex((b) => !b.endAt && (!type || b.type === type));
+    if (openBreakIndex === -1) {
+      return res.status(404).json({ 
+        message: type ? `No active ${type} break found` : "No active break found", 
+        session 
+      });
+    }
 
+    const br = session.breaks[openBreakIndex];
+    br.endAt = now;
+    br.durationMs = toMs(br.startAt, now);
+    session.totalBreakMs += br.durationMs;
+
+    if (!session.breakTracking) {
+      session.breakTracking = {
+        lunch: { totalMs: 0, isCompleted: false, sessions: 0 },
+        bio_1: { totalMs: 0, isCompleted: false, sessions: 0 },
+        bio_2: { totalMs: 0, isCompleted: false, sessions: 0 },
+      };
+    }
+
+    const breakType = br.type;
+    if (session.breakTracking[breakType]) {
+      session.breakTracking[breakType].totalMs += br.durationMs;
+      session.breakTracking[breakType].sessions += 1;
+
+      const breakLimit = breakType === "lunch" ? 30 * 60 * 1000 : 15 * 60 * 1000;
+      if (session.breakTracking[breakType].totalMs >= breakLimit) {
+        session.breakTracking[breakType].isCompleted = true;
+        
+        const actualMinutes = Math.ceil(session.breakTracking[breakType].totalMs / 60000);
+        const limitMinutes = breakLimit / 60000;
+        
+        session.alerts.push({
+          type: "break_completed",
+          message: `${breakType === "lunch" ? "Lunch" : breakType === "bio_1" ? "Short Break 1" : "Short Break 2"} completed (${actualMinutes} min / ${limitMinutes} min limit)`,
+          at: now,
+        });
+      }
+    }
+
+    session.activityStatus = "active";
     session.lastActivityAt = now;
     await session.save();
-    return res.status(200).json({ message: "Break ended", session, attendanceScore: scoreSession(session) });
+
+    const usedMs = session.breakTracking[breakType]?.totalMs || 0;
+    const breakLimit = breakType === "lunch" ? 30 * 60 * 1000 : 15 * 60 * 1000;
+    const remainingMs = Math.max(0, breakLimit - usedMs);
+    const isCompleted = usedMs >= breakLimit;
+
+    return res.status(200).json({ 
+      message: `${breakType === "lunch" ? "Lunch" : breakType === "bio_1" ? "Short Break 1" : "Short Break 2"} ended`, 
+      session, 
+      attendanceScore: scoreSession(session),
+      breakSummary: {
+        type: breakType,
+        totalUsed: Math.ceil(usedMs / 60000),
+        limit: breakLimit / 60000,
+        remaining: Math.ceil(remainingMs / 60000),
+        isCompleted,
+      }
+    });
   } catch (error) {
     return res.status(500).json({ message: "Failed to end break", error: error.message });
   }
@@ -1828,7 +2095,9 @@ export const getSessionHistory = async (req, res) => {
         activityStatus: session.activityStatus || "no_activity",
         totalWorkedMs: durationMs,
         totalBreakMs: Number(breakUsage.totalBreakMs || 0),
-        manualBreakMs: Number(breakUsage.manualBreakMs || 0),
+        lunchBreakMs: Number(breakUsage.lunchBreakMs || 0),
+        bioBreak1Ms: Number(breakUsage.bioBreak1Ms || 0),
+        bioBreak2Ms: Number(breakUsage.bioBreak2Ms || 0),
         alertCount: Array.isArray(session.alerts) ? session.alerts.length : 0,
         latestAlert: Array.isArray(session.alerts) && session.alerts.length > 0 ? session.alerts[session.alerts.length - 1] : null,
         hasCompletedNineHours: durationMs >= NINE_HOURS_MS,
@@ -1849,6 +2118,7 @@ export const getSessionHistory = async (req, res) => {
   }
 };
 
+// ========== UPDATED: getManagerTeamStatus ==========
 export const getManagerTeamStatus = async (req, res) => {
   try {
     const user = req.user || {};
@@ -1931,8 +2201,9 @@ export const getManagerTeamStatus = async (req, res) => {
         idleTimeMs: session?.totalIdleMs || 0,
         breakType: openBreak?.type || "",
         totalBreakMs: breakUsage.totalBreakMs,
-        manualBreakMs: breakUsage.manualBreakMs,
-        autoIdleBreakMs: breakUsage.autoIdleBreakMs,
+        lunchBreakMs: breakUsage.lunchBreakMs,
+        bioBreak1Ms: breakUsage.bioBreak1Ms,
+        bioBreak2Ms: breakUsage.bioBreak2Ms,
         shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
         shiftStartedAt: session?.shiftStartAt || null,
         loginTime: session?.shiftStartAt || null,
@@ -1985,6 +2256,7 @@ const getSessionHistoryStartDate = (userLike = {}, session = null) => {
   return candidates.reduce((latest, current) => (!latest || current > latest ? current : latest), null);
 };
 
+// ========== UPDATED: getSuperAdminDailyStatus ==========
 export const getSuperAdminDailyStatus = async (req, res) => {
   try {
     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
@@ -2058,9 +2330,10 @@ export const getSuperAdminDailyStatus = async (req, res) => {
         breakType: openBreak?.type || "",
         breakStartAt: openBreak?.startAt || null,
         totalBreakMs: breakUsage.totalBreakMs,
-        totalIdleMs: breakUsage.autoIdleBreakMs,
-        manualBreakMs: breakUsage.manualBreakMs,
-        autoIdleBreakMs: breakUsage.autoIdleBreakMs,
+        lunchBreakMs: breakUsage.lunchBreakMs,
+        bioBreak1Ms: breakUsage.bioBreak1Ms,
+        bioBreak2Ms: breakUsage.bioBreak2Ms,
+        totalIdleMs: session?.totalIdleMs || 0,
         status: session?.status || "not_started",
         activityStatus: session?.activityStatus || "no_activity",
         lastActivityAt: session?.lastActivityAt || null,
@@ -2095,6 +2368,7 @@ export const getSuperAdminDailyStatus = async (req, res) => {
   }
 };
 
+// ========== UPDATED: exportSuperAdminDailyStatusExcel ==========
 export const exportSuperAdminDailyStatusExcel = async (req, res) => {
   try {
     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
@@ -2115,6 +2389,9 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
     const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey }).lean();
     const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s]));
     const now = new Date();
+    const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+      countAllRosterEmployees: true,
+    });
 
     const formatDateTime = (value) => {
       if (!value) return "";
@@ -2159,7 +2436,8 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
         const endAt = b?.endAt ? new Date(b.endAt) : null;
         const openDuration = !endAt && startAt ? Math.max(0, now.getTime() - startAt.getTime()) : 0;
         const durationMs = Math.max(0, Number(b?.durationMs || 0) + openDuration);
-        return `${b?.type || "unknown"}: ${formatDateTime(startAt)} - ${formatDateTime(endAt)} (${formatDuration(durationMs)})`;
+        const typeLabel = b?.type === "lunch" ? "Lunch" : b?.type === "bio_1" ? "Bio 1" : b?.type === "bio_2" ? "Bio 2" : b?.type;
+        return `${typeLabel}: ${formatDateTime(startAt)} - ${formatDateTime(endAt)} (${formatDuration(durationMs)})`;
       });
 
       return {
@@ -2174,9 +2452,10 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
         "Last Activity (IST)": formatDateTime(session?.lastActivityAt || null),
         "On Break": session?.breaks?.some((b) => !b.endAt) ? "Yes" : "No",
         "Break Type (Open)": (session?.breaks || []).find((b) => !b.endAt)?.type || "",
+        "Lunch Break": formatDuration(breakUsage.lunchBreakMs || 0),
+        "Bio Break 1": formatDuration(breakUsage.bioBreak1Ms || 0),
+        "Bio Break 2": formatDuration(breakUsage.bioBreak2Ms || 0),
         "Total Break": formatDuration(breakUsage.totalBreakMs || 0),
-        "Manual Break": formatDuration(breakUsage.manualBreakMs || 0),
-        "Auto Idle Break": formatDuration(breakUsage.autoIdleBreakMs || 0),
         "Total Worked": formatDuration(totalWorkedMs || 0),
         "Late By": lateByMs > 0 ? formatDuration(lateByMs) : "On Time",
         "Status 9h": totalWorkedMs >= 9 * 60 * 60 * 1000 ? "Completed" : "Pending",

@@ -683,6 +683,49 @@
 //               </tbody>
 //             </table>
 //           </div>
+//           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-[#F8FAFC] px-4 py-3">
+//             <div className="flex items-center gap-2 text-sm text-slate-600">
+//               <span>Rows per page:</span>
+//               <select
+//                 value={pageSize}
+//                 onChange={(e) => setPageSize(Number(e.target.value))}
+//                 className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-slate-700 outline-none focus:border-blue-500"
+//               >
+//                 {PAGE_SIZE_OPTIONS.map((size) => (
+//                   <option key={size} value={size}>
+//                     {size}
+//                   </option>
+//                 ))}
+//               </select>
+//             </div>
+
+//             <div className="text-sm text-slate-600">
+//               Showing {filteredRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1}-
+//               {Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}
+//             </div>
+
+//             <div className="flex items-center gap-2">
+//               <button
+//                 type="button"
+//                 disabled={safePage <= 1}
+//                 onClick={() => setPage((p) => Math.max(1, p - 1))}
+//                 className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+//               >
+//                 Prev
+//               </button>
+//               <span className="text-sm font-medium text-slate-700">
+//                 Page {safePage} / {totalPages}
+//               </span>
+//               <button
+//                 type="button"
+//                 disabled={safePage >= totalPages}
+//                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+//                 className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+//               >
+//                 Next
+//               </button>
+//             </div>
+//           </div>
 //         </div>
 //       </div>
 //     </div>
@@ -690,6 +733,7 @@
 // };
 
 // export default SuperAdminLoginStatus;
+
 
 
 
@@ -782,7 +826,6 @@ const getTransportLoginDifference = (transportArrivalTime, loginTime) => {
     return { label: "Same time", toneClass: "bg-emerald-50 text-emerald-700 border-emerald-100" };
   }
 
-  // 10 minutes = 10 * 60 * 1000 = 600,000 milliseconds
   const isWithinTenMinutes = absDiffMs <= 600000;
 
   return {
@@ -910,6 +953,16 @@ const getFloorRosterStatusClass = (status) => {
   return "bg-slate-100 text-slate-600";
 };
 
+// Break type labels
+const getBreakTypeLabel = (type) => {
+  const map = {
+    "lunch": "Lunch",
+    "bio_1": "Short Break 1",
+    "bio_2": "Short Break 2",
+  };
+  return map[type] || type;
+};
+
 const SuperAdminLoginStatus = () => {
   const currentUser = useMemo(() => {
     try {
@@ -958,10 +1011,10 @@ const SuperAdminLoginStatus = () => {
       const normalizedRows = merged.map((r) => {
         const loginTime = r.loginTime || r.shiftStartedAt || r.shiftStartAt || null;
         const serverLateByMs = Number(r.lateByMs || 0);
-        const explicitManualBreakMs = Number(r.manualBreakMs);
-        const hasExplicitSplit = Number.isFinite(explicitManualBreakMs);
         const totalBreakMs = Number(r.totalBreakMs || 0);
-        const manualBreakMs = hasExplicitSplit ? explicitManualBreakMs : totalBreakMs;
+        const lunchBreakMs = Number(r.lunchBreakMs || 0);
+        const bioBreak1Ms = Number(r.bioBreak1Ms || 0);
+        const bioBreak2Ms = Number(r.bioBreak2Ms || 0);
         return {
           ...r,
           loginTime,
@@ -978,7 +1031,9 @@ const SuperAdminLoginStatus = () => {
           }),
           totalWorkedMs: Number(r.totalWorkedMs || 0),
           totalBreakMs,
-          manualBreakMs,
+          lunchBreakMs,
+          bioBreak1Ms,
+          bioBreak2Ms,
           hasCompletedNineHours:
             typeof r.hasCompletedNineHours === "boolean"
               ? r.hasCompletedNineHours
@@ -1231,7 +1286,7 @@ const SuperAdminLoginStatus = () => {
                   <th className="whitespace-nowrap px-6 py-4">
                     <span className="flex items-center gap-2">
                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-                      Break Used
+                      Breaks Used
                     </span>
                   </th>
                 </tr>
@@ -1266,7 +1321,7 @@ const SuperAdminLoginStatus = () => {
                         {row.isOnBreak ? (
                           <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
                             <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-                            On Break
+                            {row.breakType ? getBreakTypeLabel(row.breakType) : "On Break"}
                           </div>
                         ) : row.loginTime ? (
                           <div className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-semibold text-[#137333] border border-emerald-200">
@@ -1365,13 +1420,13 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Break Used Time Container */}
+                      {/* Break Used Time Container - Updated with 3 break types */}
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {row.loginTime ? (
-                          <div className="flex items-center gap-2 font-medium text-[#475569]">
-                            <span>M: {formatDuration(row.manualBreakMs || 0)}</span>
-                            <span className="text-slate-300">|</span>
-                            <span>T: {formatDuration(row.totalBreakMs || 0)}</span>
+                          <div className="flex flex-col gap-0.5 font-medium text-[#475569] text-xs">
+                            <span className="text-emerald-600">Lunch: {formatDuration(row.lunchBreakMs || 0)}</span>
+                            <span className="text-blue-600">Short Break 1: {formatDuration(row.bioBreak1Ms || 0)}</span>
+                            <span className="text-purple-600">Short Break 2: {formatDuration(row.bioBreak2Ms || 0)}</span>
                           </div>
                         ) : (
                           <span className="text-slate-400">—</span>

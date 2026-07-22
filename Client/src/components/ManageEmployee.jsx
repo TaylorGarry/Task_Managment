@@ -2946,7 +2946,6 @@ const getShiftLabel = (start, end) => {
   return `${formatHour(start)}-${formatHour(end)}`;
 };
 
-// Predefined document categories with separate Appointment Letter and Offer Letter
 const DOCUMENT_CATEGORIES = [
   { id: "resume", name: "Resume", icon: <Description />, required: true, category: "Personal" },
   { id: "photo", name: "Photo", icon: <Image />, required: true, category: "Personal" },
