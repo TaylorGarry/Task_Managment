@@ -743,14 +743,16 @@
 
 
 
+
+
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getRoleType } from "../utils/roleAccess.js";
 import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
 // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
-
+ const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+ 
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 const IST_TIME_ZONE = "Asia/Kolkata";
 
@@ -805,12 +807,79 @@ const formatTime = (value) => {
   });
 };
 
+// ========== UPDATED: formatDuration without seconds for general use ==========
 const formatDuration = (ms = 0) => {
   const safe = Math.max(0, Number(ms) || 0);
   const totalMinutes = Math.floor(safe / 60000);
   const h = Math.floor(totalMinutes / 60);
   const m = totalMinutes % 60;
-  return `${h}h ${m}m`;
+  
+  if (h > 0 && m > 0) {
+    return `${h}h ${m}m`;
+  }
+  if (h > 0) {
+    return `${h}h`;
+  }
+  if (m > 0) {
+    return `${m}m`;
+  }
+  return `0m`;
+};
+
+// ========== NEW: formatDurationWithSeconds for break timer only ==========
+const formatDurationWithSeconds = (ms = 0) => {
+  const safe = Math.max(0, Number(ms) || 0);
+  const totalSeconds = Math.floor(safe / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  
+  if (h > 0) {
+    return `${h}h ${m}m ${s}s`;
+  }
+  if (m > 0) {
+    return `${m}m ${s}s`;
+  }
+  return `${s}s`;
+};
+
+// ========== NEW: Get active break duration ==========
+const getActiveBreakDuration = (row) => {
+  if (!row?.breakStartAt || !row?.isOnBreak) return null;
+  const start = new Date(row.breakStartAt);
+  if (Number.isNaN(start.getTime())) return null;
+  const now = new Date();
+  const diffMs = now.getTime() - start.getTime();
+  return diffMs > 0 ? diffMs : 0;
+};
+
+// ========== UPDATED: Break Timer Component with seconds ==========
+const BreakTimer = ({ row }) => {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  
+  useEffect(() => {
+    if (!row?.isOnBreak || !row?.breakStartAt) {
+      setElapsedMs(0);
+      return;
+    }
+    
+    const updateTimer = () => {
+      const duration = getActiveBreakDuration(row);
+      setElapsedMs(duration || 0);
+    };
+    
+    updateTimer();
+    const interval = setInterval(updateTimer, 1000);
+    return () => clearInterval(interval);
+  }, [row?.isOnBreak, row?.breakStartAt]);
+  
+  if (!row?.isOnBreak || !row?.breakStartAt) return null;
+  
+  return (
+    <span className="text-[10px] font-medium text-amber-600 ml-1.5 animate-pulse">
+      ({formatDurationWithSeconds(elapsedMs)})
+    </span>
+  );
 };
 
 const getTransportLoginDifference = (transportArrivalTime, loginTime) => {
@@ -953,7 +1022,6 @@ const getFloorRosterStatusClass = (status) => {
   return "bg-slate-100 text-slate-600";
 };
 
-// Break type labels
 const getBreakTypeLabel = (type) => {
   const map = {
     "lunch": "Lunch",
@@ -1019,6 +1087,7 @@ const SuperAdminLoginStatus = () => {
           ...r,
           loginTime,
           logoutTime: r.logoutTime || r.shiftEndedAt || r.shiftEndAt || null,
+          breakStartAt: r.breakStartAt || null,
           isOnBreak:
             typeof r.isOnBreak === "boolean"
               ? r.isOnBreak
@@ -1169,7 +1238,6 @@ const SuperAdminLoginStatus = () => {
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 font-sans">
       <div className="mx-auto max-w-[1600px] space-y-6">
         
-        {/* Upper Dashboard Header Controller bar */}
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             <input
@@ -1215,13 +1283,11 @@ const SuperAdminLoginStatus = () => {
           </div>
         </div>
 
-        {/* High Fidelity Grid Table Area Container */}
         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
           <div className="overflow-x-auto">
             <table className="min-w-full table-auto border-collapse text-left">
               <thead>
                 <tr className="border-b border-slate-200 bg-[#F8FAFC] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
-                  {/* Sticky Table Header for Employee */}
                   <th className="sticky left-0 z-10 whitespace-nowrap bg-[#F8FAFC] border-r border-slate-200/80 px-6 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
                     <span className="flex items-center gap-2">
                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -1240,7 +1306,6 @@ const SuperAdminLoginStatus = () => {
                       <svg className="w-3.5 h-3.5 text-slate-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     </span>
                   </th>
-                  {/* Transport Arrival Header */}
                   <th className="whitespace-nowrap px-6 py-4">
                     <span className="flex items-center gap-2">
                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4-4m-4 4l4 4" /></svg>
@@ -1301,7 +1366,6 @@ const SuperAdminLoginStatus = () => {
   
                   return (
                     <tr key={row.userId} className="group hover:bg-slate-50/80 transition-colors">
-                      {/* Sticky Employee Row Body Cell */}
                       <td className="sticky left-0 z-10 whitespace-nowrap bg-white group-hover:bg-[#F8FAFC] border-r border-slate-200/80 px-6 py-4.5 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
                         <div className="flex items-center gap-3">
                           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EFF6FF] text-[#1D4ED8] font-bold text-sm border border-blue-100">
@@ -1311,17 +1375,16 @@ const SuperAdminLoginStatus = () => {
                         </div>
                       </td>
 
-                      {/* Department designation */}
                       <td className="px-6 py-4.5 text-[#64748B] whitespace-nowrap">
                         {row.department || "Ops - Meta"}
                       </td>
 
-                      {/* Presence Status Badges */}
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {row.isOnBreak ? (
                           <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-                            <span className="h-2 w-2 rounded-full bg-amber-500"></span>
+                            <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
                             {row.breakType ? getBreakTypeLabel(row.breakType) : "On Break"}
+                            <BreakTimer row={row} />
                           </div>
                         ) : row.loginTime ? (
                           <div className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-semibold text-[#137333] border border-emerald-200">
@@ -1336,7 +1399,6 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Transport Arrival Data Cell */}
                       <td className="px-6 py-4.5 whitespace-nowrap text-slate-400">
                         {row.transportArrivalTime ? (
                           <span className="text-[#1E293B] font-medium">{formatTime(row.transportArrivalTime)}</span>
@@ -1345,7 +1407,6 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Login Timestamp view */}
                       <td className="px-6 py-4.5 whitespace-nowrap font-medium text-[#1E293B]">
                         {loginTimes ? (
                           <div className="flex items-center gap-2">
@@ -1360,7 +1421,6 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Difference between transport arrival and login */}
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {arrivalLoginDifference ? (
                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${arrivalLoginDifference.toneClass}`}>
@@ -1371,7 +1431,6 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Logout Timestamp view */}
                       <td className="px-6 py-4.5 whitespace-nowrap font-medium text-[#1E293B]">
                         {logoutTimes ? (
                           <div className="flex flex-col text-left">
@@ -1386,14 +1445,12 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Floor Roster Status Circle */}
                       <td className="px-6 py-4.5 whitespace-nowrap text-center">
                         <div className={`inline-flex h-7 w-10 items-center justify-center rounded-full font-bold text-xs shadow-sm ${getFloorRosterStatusClass(row.floorRosterStatus)}`}>
                           {row.floorRosterStatus || "P"}
                         </div>
                       </td>
 
-                      {/* Total Hours Worked */}
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {row.loginTime ? (
                           <div className="flex items-center gap-2 font-bold text-[#1E293B]">
@@ -1405,7 +1462,6 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* 9H Circular Indicator Progress */}
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {!row.loginTime ? (
                           <span className="text-slate-400">—</span>
@@ -1420,7 +1476,6 @@ const SuperAdminLoginStatus = () => {
                         )}
                       </td>
 
-                      {/* Break Used Time Container - Updated with 3 break types */}
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {row.loginTime ? (
                           <div className="flex flex-col gap-0.5 font-medium text-[#475569] text-xs">
