@@ -899,7 +899,7 @@ import announcementRoutes from "./routes/announcement.routes.js";
 import employeeExitRoutes from "./routes/employeeExit.routes.js";
 import attendanceAuditRoutes from "./routes/attendanceAudit.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
-import { isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
+import { isFloorStatus, isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 import ticketRoutes from "./routes/ticket.routes.js";
 import salarySlipRoutes from "./routes/salarySlip.routes.js";
 dotenv.config();
@@ -1028,6 +1028,7 @@ app.use((req, res, next) => {
   }
 
   if (isPrivilegedUser(req.user || {})) return next();
+  if (isFloorStatus(req.user || {})) return next();
   if (normalizeDepartment(req.user?.department) === "Transport") return next();
 
   if (allowedIPs.includes(clientIp)) return next();

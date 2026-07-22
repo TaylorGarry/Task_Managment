@@ -1064,11 +1064,13 @@ import { Toaster } from "react-hot-toast";
 import { disconnectSocket, updateSocketAuth } from "./socket.js";
 import TicketManagement from "./pages/TicketManagement.jsx";
 import SalarySlips from "./pages/SalarySlips.jsx";
+import FloorStatusDashboard from "./pages/FloorStatusDashboard.jsx";
 import { subscribeUserToPush } from "./utils/pushNotifications.js";
 import {
   canManageAdminPanels,
   getRoleType,
   isAgent,
+  isFloorStatus,
   isHrDepartment,
   isAccountsDepartment,
   isSuperAdmin,
@@ -1193,6 +1195,15 @@ const AttendanceUpdateRoute = ({ children }) => {
 const AttendanceSnapshotRoute = ({ children }) => {
   const { user } = useSelector((state) => state.auth);
   if (!user) return <Navigate to="/login" replace />;
+  return children;
+};
+
+const FloorStatusRoute = ({ children }) => {
+  const { user } = useSelector((state) => state.auth);
+  if (!user) return <Navigate to="/login" replace />;
+  if (!isFloorStatus(user) && !isSuperAdmin(user)) {
+    return <Navigate to={(isAgent(user) || getRoleType(user) === "supervisor") ? "/dashboard" : "/admin/admintask"} replace />;
+  }
   return children;
 };
 
@@ -1375,16 +1386,22 @@ function App() {
     location.pathname.startsWith("/tickets") ||
     location.pathname.startsWith("/salary-slips") ||
     location.pathname === "/login";
+  const isFloorStatusUser = isFloorStatus(user);
 
   useEffect(() => {
+    if (isFloorStatusUser) {
+      disconnectSocket();
+      return;
+    }
     if (user?._id || user?.id) {
       updateSocketAuth();
       return;
     }
     disconnectSocket();
-  }, [user?._id, user?.id, user?.token]);
+  }, [isFloorStatusUser, user?._id, user?.id, user?.token]);
 
   useEffect(() => {
+    if (isFloorStatusUser) return;
     if (!(user?._id || user?.id)) return;
 
     const initPushNotifications = async () => {
@@ -1392,10 +1409,42 @@ function App() {
     };
 
     initPushNotifications();
-  }, [user?._id, user?.id, user?.token]);
+  }, [isFloorStatusUser, user?._id, user?.id, user?.token]);
 
   if (user && isTransportDepartment && !isTransportAllowedPath) {
     return <Navigate to="/attendance-update" replace />;
+  }
+
+  if (user && isFloorStatusUser) {
+    return (
+      <Routes>
+        <Route
+          path="/floor-status"
+          element={
+            <FloorStatusRoute>
+              <FloorStatusDashboard />
+            </FloorStatusRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/floor-status" replace />} />
+      </Routes>
+    );
+  }
+
+  if (location.pathname === "/floor-status") {
+    return (
+      <Routes>
+        <Route
+          path="/floor-status"
+          element={
+            <FloorStatusRoute>
+              <FloorStatusDashboard />
+            </FloorStatusRoute>
+          }
+        />
+        <Route path="*" element={<Navigate to="/floor-status" replace />} />
+      </Routes>
+    );
   }
 
   if (isAdminLeavePath) {
@@ -1481,6 +1530,14 @@ function App() {
 
         <Route path="/login" element={<Login />} />
         <Route path="/employee-onboarding" element={<EmployeeOnboardingUpload />} />
+        <Route
+          path="/floor-status"
+          element={
+            <FloorStatusRoute>
+              <FloorStatusDashboard />
+            </FloorStatusRoute>
+          }
+        />
 
         <Route
           path="/upload-roster"

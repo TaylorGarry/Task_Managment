@@ -40,7 +40,9 @@ export const authMiddleware = async (req, res, next) => {
     user.normalizedDepartment = normalizedDepartment;
     user.roleType = getRoleType(user);
     user.legacyAccountType = user.accountType;
-    if (isHrDepartment(user) && user.accountType !== "superAdmin") {
+    if (user.accountType === "floorStatus") {
+      user.accountType = "floorStatus";
+    } else if (isHrDepartment(user) && user.accountType !== "superAdmin") {
       user.accountType = "HR";
     } else if (user.accountType === "agent" || user.accountType === "supervisor") {
       user.accountType = "employee";

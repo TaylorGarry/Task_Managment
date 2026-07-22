@@ -53,6 +53,8 @@ import EmployeeExitITChecklist from "./Modals/EmployeeExitITChecklist.modal.js";
 import EmployeeExitHRChecklist from "./Modals/EmployeeExitHRChecklist.modal.js";
 import EmployeeExitAuditLog from "./Modals/EmployeeExitAuditLog.modal.js";
 import EmployeeExitNotification from "./Modals/EmployeeExitNotification.modal.js";
+import User from "./Modals/User.modal.js";
+import bcrypt from "bcrypt";
 // Disable noisy debug logs across the API.
 // Set `DISABLE_CONSOLE_LOG=false` to re-enable.
 const disableConsoleLog = String(process.env.DISABLE_CONSOLE_LOG ?? "true").toLowerCase();
@@ -60,6 +62,36 @@ if (disableConsoleLog === "true" || disableConsoleLog === "1" || disableConsoleL
   // eslint-disable-next-line no-console
   console.log = () => {};
 }
+
+const ensureFloorStatusAccount = async () => {
+  const username = "FloorStatus";
+  const existing = await User.findOne({ username });
+  if (existing) {
+    const updates = {};
+    if (existing.accountType !== "floorStatus") updates.accountType = "floorStatus";
+    if (existing.isActive === false) updates.isActive = true;
+    if (existing.active === false) updates.active = true;
+    if (Object.keys(updates).length > 0) {
+      await User.updateOne({ _id: existing._id }, { $set: updates });
+    }
+    return;
+  }
+
+  const password = String(process.env.FLOOR_STATUS_PASSWORD || "FloorStatus@123");
+  const hashedPassword = await bcrypt.hash(password, 10);
+  await User.create({
+    username,
+    password: hashedPassword,
+    accountType: "floorStatus",
+    department: "Operations",
+    isCoreTeam: true,
+    isTeamLeader: false,
+    isActive: true,
+    active: true,
+    realName: "Floor Status",
+    pseudoName: "FloorStatus",
+  });
+};
 
 connectDB()
   .then(async () => {
@@ -74,6 +106,7 @@ connectDB()
       await EmployeeExitHRChecklist.syncIndexes();
       await EmployeeExitAuditLog.syncIndexes();
       await EmployeeExitNotification.syncIndexes();
+      await ensureFloorStatusAccount();
       
     } catch (err) {
       console.error("❌ Error syncing indexes:", err);

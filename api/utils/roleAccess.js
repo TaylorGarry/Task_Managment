@@ -47,6 +47,7 @@ export const getRoleType = (userLike = {}) => {
   const accountType = String(userLike?.accountType || "").trim().toLowerCase();
 
   if (accountType === "superadmin") return "superAdmin";
+  if (accountType === "floorstatus") return "floorStatus";
   if (accountType === "supervisor") return "supervisor";
   if (accountType === "agent") return "agent";
 
@@ -69,6 +70,7 @@ export const isTeamLeaderUser = (userLike = {}) => {
 };
 
 export const isSuperAdmin = (userLike = {}) => getRoleType(userLike) === "superAdmin";
+export const isFloorStatus = (userLike = {}) => getRoleType(userLike) === "floorStatus";
 export const isSupervisor = (userLike = {}) => getRoleType(userLike) === "supervisor";
 export const isAgent = (userLike = {}) => getRoleType(userLike) === "agent";
 
@@ -84,6 +86,10 @@ export const toStorageAccountType = (requestedRole = "", isTeamLeader = false) =
 
   if (normalized === "superadmin") {
     return { accountType: "superAdmin", isTeamLeader: false, roleType: "superAdmin" };
+  }
+
+  if (normalized === "floorstatus" || normalized === "floor status") {
+    return { accountType: "floorStatus", isTeamLeader: false, roleType: "floorStatus" };
   }
 
   if (normalized === "supervisor") {
