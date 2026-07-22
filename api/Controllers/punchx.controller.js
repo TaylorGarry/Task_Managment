@@ -1269,6 +1269,7 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
   const emptyRosterSnapshot = () => ({
     presentCount: 0,
     rosterStatusByUserId: new Map(),
+    departmentStatusByUserId: new Map(),
     rosterShiftStartHourByUserId: new Map(),
     rosterShiftEndHourByUserId: new Map(),
     transportArrivalTimeByUserId: new Map(),
@@ -1357,6 +1358,7 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
 
   const presentIds = new Set();
   const rosterStatusByUserId = new Map();
+  const departmentStatusByUserId = new Map();
   const rosterShiftStartHourByUserId = new Map();
   const rosterShiftEndHourByUserId = new Map();
   const transportArrivalTimeByUserId = new Map();
@@ -1377,15 +1379,14 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
     if (!presentKey || presentIds.has(presentKey)) continue;
 
     const matchingDay = row?.matchingDay;
-    const effectiveStatus = String(
-      matchingDay?.status ||
-      matchingDay?.departmentStatus ||
-      matchingDay?.transportStatus ||
-      "P"
-    ).trim().toUpperCase();
+    const rosterStatus = String(matchingDay?.status || "P").trim().toUpperCase();
+    const departmentStatus = String(matchingDay?.departmentStatus || "").trim().toUpperCase();
 
     if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
-      rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
+      rosterStatusByUserId.set(matchedUserId, rosterStatus || "P");
+    }
+    if (matchedUserId && !departmentStatusByUserId.has(matchedUserId)) {
+      departmentStatusByUserId.set(matchedUserId, departmentStatus);
     }
     if (matchedUserId) {
       if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
@@ -1401,7 +1402,7 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
       }
     }
 
-    if (effectiveStatus === "P") {
+    if (rosterStatus === "P") {
       presentIds.add(presentKey);
     }
   }
@@ -1409,6 +1410,7 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
   return {
     presentCount: presentIds.size,
     rosterStatusByUserId,
+    departmentStatusByUserId,
     rosterShiftStartHourByUserId,
     rosterShiftEndHourByUserId,
     transportArrivalTimeByUserId,
@@ -2210,6 +2212,7 @@ export const getManagerTeamStatus = async (req, res) => {
         logoutTime: session?.shiftEndAt || null,
         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
+        floorDepartmentStatus: rosterSnapshot.departmentStatusByUserId.get(String(member._id)) || "",
         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(member._id)) || null,
         isOnBreak: Boolean(openBreak),
         lateByMs,
@@ -2318,6 +2321,7 @@ const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateK
         logoutTime: session?.shiftEndAt || null,
         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
+        floorDepartmentStatus: rosterSnapshot.departmentStatusByUserId.get(String(emp._id)) || "",
         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(emp._id)) || null,
         isOnBreak: Boolean(openBreak),
         breakType: openBreak?.type || "",
@@ -2402,6 +2406,7 @@ export const getFloorStatusDashboard = async (req, res) => {
       name: row.pseudoName || row.username || "",
       department: row.department || "",
       floorRosterStatus: row.floorRosterStatus || "",
+      floorDepartmentStatus: row.floorDepartmentStatus || "",
       isOnBreak: Boolean(row.isOnBreak),
       breakType: row.breakType || "",
       breakStartAt: row.breakStartAt || null,
@@ -2410,9 +2415,10 @@ export const getFloorStatusDashboard = async (req, res) => {
       loginTime: row.loginTime || null,
     });
     const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
+    const isDepartmentPresent = (row = {}) => String(row.floorDepartmentStatus || "").trim().toUpperCase() === "P";
     const rosterPresentRows = rows.filter(isRosterPresent);
     const onBreakRows = rosterPresentRows.filter((row) => row.isOnBreak).map(toFloorRow);
-    const notLoggedInRows = rosterPresentRows.filter((row) => !row.loginTime).map(toFloorRow);
+    const notLoggedInRows = rosterPresentRows.filter((row) => !row.loginTime && isDepartmentPresent(row)).map(toFloorRow);
 
     return res.status(200).json({
       ...payload,
