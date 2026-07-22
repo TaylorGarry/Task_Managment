@@ -1457,6 +1457,7 @@ const toMs = (start, end) => {
 };
 
 const NINE_HOURS_MS = 9 * 60 * 60 * 1000;
+const VALID_BREAK_TYPES = ["lunch", "bio_1", "bio_2", "manual"];
 
 const formatIstDateTime = (value) => {
   if (!value) return "";
@@ -1483,7 +1484,7 @@ const getBreakUsage = (session, now = getNow()) => {
     const openDuration = !br?.endAt ? toMs(br?.startAt, now) : 0;
     const durationMs = Math.max(0, baseDuration + openDuration);
     
-    if (br?.type === "lunch") lunchBreakMs += durationMs;
+    if (br?.type === "lunch" || br?.type === "manual") lunchBreakMs += durationMs;
     else if (br?.type === "bio_1") bioBreak1Ms += durationMs;
     else if (br?.type === "bio_2") bioBreak2Ms += durationMs;
   }
@@ -1796,8 +1797,7 @@ export const startBreak = async (req, res) => {
     const userId = req.user?._id;
     const { type = "lunch", reason = "" } = req.body || {};
     
-    const validBreakTypes = ["lunch", "bio_1", "bio_2"];
-    if (!validBreakTypes.includes(type)) {
+    if (!VALID_BREAK_TYPES.includes(type)) {
       return res.status(400).json({ 
         message: "Invalid break type. Allowed: lunch, bio_1, bio_2" 
       });
