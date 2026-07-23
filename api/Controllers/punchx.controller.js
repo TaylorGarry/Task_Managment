@@ -2764,30 +2764,246 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
 
 //for counting total week off in employee login status in ongoing month
 // Add this function to your controller file
+// export const getMonthlyWOUtilization = async (req, res) => {
+//   try {
+//     const user = req.user || {};
+//     const role = String(user?.roleType || user?.accountType || "").toLowerCase();
+    
+//     // Check if user has HR role (add this to your check)
+//     const isHR = role === "hr" || role === "humanresources";
+//     const isSuperAdmin = role === "superadmin";
+    
+//     // Allow only SuperAdmin or HR to access this endpoint
+//     if (!isSuperAdmin && !isHR) {
+//       return res.status(403).json({ 
+//         success: false,
+//         message: "Access denied. Only SuperAdmin or HR can access this data." 
+//       });
+//     }
+
+//     // Get month and year from query params
+//     const { month, year, department } = req.query;
+//     const currentDate = new Date();
+//     const targetMonth = month ? parseInt(month) - 1 : currentDate.getMonth();
+//     const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+
+//     // Validate month and year
+//     if (targetMonth < 0 || targetMonth > 11) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid month. Month must be between 1 and 12"
+//       });
+//     }
+
+//     if (targetYear < 2000 || targetYear > 2100) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid year"
+//       });
+//     }
+
+//     // Get all dates in the month
+//     const startDate = new Date(targetYear, targetMonth, 1);
+//     const endDate = new Date(targetYear, targetMonth + 1, 0);
+    
+//     // Build employee query - SuperAdmin and HR can see all employees
+//     const employeeQuery = {
+//       accountType: { $in: ["employee", "agent", "supervisor"] },
+//       isActive: { $ne: false },
+//     };
+
+//     // Department filter if provided
+//     if (department) {
+//       employeeQuery.department = department;
+//     }
+
+//     const employees = await User.find(employeeQuery)
+//       .select("_id empId username realName pseudoName department accountType isTeamLeader")
+//       .sort({ department: 1, realName: 1 })
+//       .lean();
+
+//     if (employees.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No employees found",
+//         summary: {
+//           month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+//           year: targetYear,
+//           totalEmployees: 0,
+//           totalWOUtilized: 0,
+//           employeesWithWO: 0,
+//           employeesWithoutWO: 0,
+//           averageWOPerEmployee: 0,
+//           totalWorkingDays: 0
+//         },
+//         results: []
+//       });
+//     }
+
+//     // Generate all date keys for the month
+//     const dateKeys = [];
+//     let current = new Date(startDate);
+//     while (current <= endDate) {
+//       dateKeys.push(getNyDateKey(current));
+//       current.setDate(current.getDate() + 1);
+//     }
+
+//     // Initialize WO tracking for each employee
+//     const woData = new Map();
+//     employees.forEach(emp => {
+//       woData.set(String(emp._id), {
+//         totalWO: 0,
+//         woDates: [],
+//         departmentStatusByDate: {},
+//         employee: emp
+//       });
+//     });
+
+//     // Process each day of the month
+//     for (const dateKey of dateKeys) {
+//       const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+//         countAllRosterEmployees: true, // SuperAdmin/HR can see all employees
+//       });
+      
+//       // Update WO counts for each employee
+//       for (const [empId, woCount] of rosterSnapshot.woCountByUserId || []) {
+//         if (woData.has(empId)) {
+//           const data = woData.get(empId);
+//           data.totalWO += woCount;
+//           if (woCount > 0) {
+//             data.woDates.push(dateKey);
+//           }
+//           // Store department status for this date
+//           const deptStatus = rosterSnapshot.departmentStatusByUserId?.get(empId) || "";
+//           data.departmentStatusByDate[dateKey] = {
+//             status: deptStatus,
+//             isWO: deptStatus === "WO"
+//           };
+//           woData.set(empId, data);
+//         }
+//       }
+//     }
+
+//     // Build response with all employee data
+//     const results = employees.map(emp => {
+//       const empId = String(emp._id);
+//       const data = woData.get(empId) || { totalWO: 0, woDates: [], departmentStatusByDate: {} };
+      
+//       // Calculate working days in month (excluding weekends if needed)
+//       // You can modify this to exclude Saturdays and Sundays if needed
+//       const workingDays = dateKeys.length;
+      
+//       return {
+//         employeeId: emp._id,
+//         empId: emp.empId || "",
+//         username: emp.username || "",
+//         realName: emp.realName || "",
+//         pseudoName: emp.pseudoName || "",
+//         department: emp.department || "",
+//         accountType: emp.accountType || "",
+//         isTeamLeader: Boolean(emp.isTeamLeader),
+//         totalWOUsed: data.totalWO,
+//         woDates: data.woDates.sort(), // Dates when WO was taken
+//         departmentStatusByDate: data.departmentStatusByDate,
+//         workingDays: workingDays,
+//         woPercentage: workingDays > 0 
+//           ? Number(((data.totalWO / workingDays) * 100).toFixed(1))
+//           : 0
+//       };
+//     });
+
+//     // Summary statistics
+//     const totalWO = results.reduce((sum, r) => sum + r.totalWOUsed, 0);
+//     const employeesWithWO = results.filter(r => r.totalWOUsed > 0).length;
+    
+//     const summary = {
+//       month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+//       year: targetYear,
+//       totalEmployees: results.length,
+//       totalWOUtilized: totalWO,
+//       employeesWithWO: employeesWithWO,
+//       employeesWithoutWO: results.length - employeesWithWO,
+//       averageWOPerEmployee: results.length > 0 
+//         ? Number((totalWO / results.length).toFixed(2))
+//         : 0,
+//       totalWorkingDays: dateKeys.length,
+//       // Department-wise breakdown
+//       departmentWise: {}
+//     };
+
+//     // Add department-wise breakdown
+//     results.forEach(emp => {
+//       const dept = emp.department || "Unassigned";
+//       if (!summary.departmentWise[dept]) {
+//         summary.departmentWise[dept] = {
+//           totalEmployees: 0,
+//           totalWO: 0,
+//           averageWO: 0,
+//           employees: []
+//         };
+//       }
+//       summary.departmentWise[dept].totalEmployees += 1;
+//       summary.departmentWise[dept].totalWO += emp.totalWOUsed;
+//       summary.departmentWise[dept].employees.push({
+//         name: emp.realName || emp.pseudoName || emp.username,
+//         empId: emp.empId,
+//         woUsed: emp.totalWOUsed
+//       });
+//     });
+
+//     // Calculate average for each department
+//     Object.keys(summary.departmentWise).forEach(dept => {
+//       const deptData = summary.departmentWise[dept];
+//       deptData.averageWO = Number((deptData.totalWO / deptData.totalEmployees).toFixed(2));
+//       // Sort employees within department by WO used (highest first)
+//       deptData.employees.sort((a, b) => b.woUsed - a.woUsed);
+//     });
+
+//     // Sort results by total WO used (highest first)
+//     results.sort((a, b) => b.totalWOUsed - a.totalWOUsed);
+
+//     return res.status(200).json({
+//       success: true,
+//       summary,
+//       results
+//     });
+
+//   } catch (error) {
+//     console.error("Error in getMonthlyWOUtilization:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch monthly WO utilization",
+//       error: error.message
+//     });
+//   }
+// };
+
+
+
+
+
 export const getMonthlyWOUtilization = async (req, res) => {
   try {
     const user = req.user || {};
     const role = String(user?.roleType || user?.accountType || "").toLowerCase();
     
-    // Check if user has HR role (add this to your check)
     const isHR = role === "hr" || role === "humanresources";
     const isSuperAdmin = role === "superadmin";
+    const isSupervisor = role === "supervisor" || user?.isTeamLeader === true;
     
-    // Allow only SuperAdmin or HR to access this endpoint
-    if (!isSuperAdmin && !isHR) {
+    // Allow SuperAdmin, HR, and Supervisor
+    if (!isSuperAdmin && !isHR && !isSupervisor) {
       return res.status(403).json({ 
         success: false,
-        message: "Access denied. Only SuperAdmin or HR can access this data." 
+        message: "Access denied. Only SuperAdmin, HR, or Supervisor can access this data." 
       });
     }
 
-    // Get month and year from query params
     const { month, year, department } = req.query;
     const currentDate = new Date();
     const targetMonth = month ? parseInt(month) - 1 : currentDate.getMonth();
     const targetYear = year ? parseInt(year) : currentDate.getFullYear();
 
-    // Validate month and year
     if (targetMonth < 0 || targetMonth > 11) {
       return res.status(400).json({
         success: false,
@@ -2802,30 +3018,50 @@ export const getMonthlyWOUtilization = async (req, res) => {
       });
     }
 
-    // Get all dates in the month
     const startDate = new Date(targetYear, targetMonth, 1);
     const endDate = new Date(targetYear, targetMonth + 1, 0);
     
-    // Build employee query - SuperAdmin and HR can see all employees
-    const employeeQuery = {
+    // Build employee query
+    let employeeQuery = {
       accountType: { $in: ["employee", "agent", "supervisor"] },
       isActive: { $ne: false },
     };
 
-    // Department filter if provided
     if (department) {
       employeeQuery.department = department;
     }
 
-    const employees = await User.find(employeeQuery)
-      .select("_id empId username realName pseudoName department accountType isTeamLeader")
-      .sort({ department: 1, realName: 1 })
-      .lean();
+    let employees = [];
 
-    if (employees.length === 0) {
+    if (isSuperAdmin || isHR) {
+      // SuperAdmin and HR see all employees
+      employees = await User.find(employeeQuery)
+        .select("_id empId username realName pseudoName department accountType isTeamLeader")
+        .sort({ department: 1, realName: 1 })
+        .lean();
+    } else if (isSupervisor) {
+      // ========== FIX: Get employees where reportingManager = supervisor's ID ==========
+      const supervisorId = user?._id ? String(user._id) : "";
+      
+      console.log('[WO DEBUG] Supervisor ID:', supervisorId);
+      
+      // Query employees where reportingManager matches supervisor ID
+      employeeQuery.reportingManager = supervisorId;
+      
+      employees = await User.find(employeeQuery)
+        .select("_id empId username realName pseudoName department accountType isTeamLeader")
+        .sort({ department: 1, realName: 1 })
+        .lean();
+      
+      console.log('[WO DEBUG] Employees found for supervisor:', employees.length);
+      console.log('[WO DEBUG] Employee names:', employees.map(e => e.username));
+    }
+
+    // If no employees found
+    if (!employees || employees.length === 0) {
       return res.status(200).json({
         success: true,
-        message: "No employees found",
+        message: "No employees found for this supervisor",
         summary: {
           month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
           year: targetYear,
@@ -2861,9 +3097,12 @@ export const getMonthlyWOUtilization = async (req, res) => {
 
     // Process each day of the month
     for (const dateKey of dateKeys) {
+      // ========== IMPORTANT: Pass employees to get roster data ==========
       const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
-        countAllRosterEmployees: true, // SuperAdmin/HR can see all employees
+        countAllRosterEmployees: false, // Don't count all, only for these employees
       });
+      
+      console.log(`[WO DEBUG] Date ${dateKey} - WO Count Map:`, Object.fromEntries(rosterSnapshot.woCountByUserId || new Map()));
       
       // Update WO counts for each employee
       for (const [empId, woCount] of rosterSnapshot.woCountByUserId || []) {
@@ -2889,8 +3128,6 @@ export const getMonthlyWOUtilization = async (req, res) => {
       const empId = String(emp._id);
       const data = woData.get(empId) || { totalWO: 0, woDates: [], departmentStatusByDate: {} };
       
-      // Calculate working days in month (excluding weekends if needed)
-      // You can modify this to exclude Saturdays and Sundays if needed
       const workingDays = dateKeys.length;
       
       return {
@@ -2903,7 +3140,7 @@ export const getMonthlyWOUtilization = async (req, res) => {
         accountType: emp.accountType || "",
         isTeamLeader: Boolean(emp.isTeamLeader),
         totalWOUsed: data.totalWO,
-        woDates: data.woDates.sort(), // Dates when WO was taken
+        woDates: data.woDates.sort(),
         departmentStatusByDate: data.departmentStatusByDate,
         workingDays: workingDays,
         woPercentage: workingDays > 0 
@@ -2927,7 +3164,6 @@ export const getMonthlyWOUtilization = async (req, res) => {
         ? Number((totalWO / results.length).toFixed(2))
         : 0,
       totalWorkingDays: dateKeys.length,
-      // Department-wise breakdown
       departmentWise: {}
     };
 
@@ -2955,12 +3191,16 @@ export const getMonthlyWOUtilization = async (req, res) => {
     Object.keys(summary.departmentWise).forEach(dept => {
       const deptData = summary.departmentWise[dept];
       deptData.averageWO = Number((deptData.totalWO / deptData.totalEmployees).toFixed(2));
-      // Sort employees within department by WO used (highest first)
       deptData.employees.sort((a, b) => b.woUsed - a.woUsed);
     });
 
     // Sort results by total WO used (highest first)
     results.sort((a, b) => b.totalWOUsed - a.totalWOUsed);
+
+    console.log('[WO DEBUG] Final Results:', results.map(r => ({ 
+      username: r.username, 
+      totalWOUsed: r.totalWOUsed 
+    })));
 
     return res.status(200).json({
       success: true,

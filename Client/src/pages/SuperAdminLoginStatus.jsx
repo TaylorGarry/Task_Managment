@@ -1,12 +1,12 @@
-
 // import React, { useEffect, useMemo, useState } from "react";
+
 // import axios from "axios";
 // import { getRoleType } from "../utils/roleAccess.js";
 // import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
 // // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-//  const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
- 
+// const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+
 // const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 // const IST_TIME_ZONE = "Asia/Kolkata";
 // const OPERATIONAL_DAY_START_HOUR_IST = 12;
@@ -311,6 +311,101 @@
 //   return map[type] || type;
 // };
 
+// // ========== NEW: Modal for WO Details ==========
+// const WODetailsModal = ({ isOpen, onClose, employee, monthlyData }) => {
+//   if (!isOpen || !employee) return null;
+
+//   return (
+//     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+//       <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+//         <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+//           <h3 className="text-xl font-bold text-[#0F172A]">
+//             WO Details - {employee.pseudoName ||employee.realName || employee.username}
+//           </h3>
+//           <button
+//             onClick={onClose}
+//             className="rounded-full p-2 hover:bg-slate-100 transition"
+//           >
+//             <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+//             </svg>
+//           </button>
+//         </div>
+
+//         <div className="mt-4 space-y-4">
+//           <div className="grid grid-cols-2 gap-4">
+//             <div className="rounded-lg bg-blue-50 p-3">
+//               <p className="text-sm text-slate-600">Total WO Used</p>
+//               <p className="text-2xl font-bold text-blue-700">{employee.totalWOUsed}</p>
+//             </div>
+//             <div className="rounded-lg bg-purple-50 p-3">
+//               <p className="text-sm text-slate-600">WO Percentage</p>
+//               <p className="text-2xl font-bold text-purple-700">{employee.woPercentage}%</p>
+//             </div>
+//           </div>
+
+//           <div>
+//             <h4 className="mb-2 text-sm font-semibold text-slate-700">WO Dates</h4>
+//             {employee.woDates && employee.woDates.length > 0 ? (
+//               <div className="flex flex-wrap gap-2">
+//                 {employee.woDates.map((date, idx) => (
+//                   <span
+//                     key={idx}
+//                     className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800"
+//                   >
+//                     {date}
+//                   </span>
+//                 ))}
+//               </div>
+//             ) : (
+//               <p className="text-sm text-slate-500">No WO taken this month</p>
+//             )}
+//           </div>
+
+//           {employee.departmentStatusByDate && (
+//             <div>
+//               <h4 className="mb-2 text-sm font-semibold text-slate-700">Daily Status</h4>
+//               <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200">
+//                 <table className="min-w-full text-sm">
+//                   <thead className="bg-slate-50">
+//                     <tr>
+//                       <th className="px-3 py-2 text-left">Date</th>
+//                       <th className="px-3 py-2 text-left">Status</th>
+//                     </tr>
+//                   </thead>
+//                   <tbody>
+//                     {Object.entries(employee.departmentStatusByDate || {})
+//                       .sort((a, b) => a[0].localeCompare(b[0]))
+//                       .map(([date, data]) => (
+//                         <tr key={date} className="border-t border-slate-100">
+//                           <td className="px-3 py-2">{date}</td>
+//                           <td className="px-3 py-2">
+//                             <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${data.isWO ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+//                               {data.status || "—"}
+//                             </span>
+//                           </td>
+//                         </tr>
+//                       ))}
+//                   </tbody>
+//                 </table>
+//               </div>
+//             </div>
+//           )}
+//         </div>
+
+//         <div className="mt-6 flex justify-end border-t border-slate-200 pt-4">
+//           <button
+//             onClick={onClose}
+//             className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+//           >
+//             Close
+//           </button>
+//         </div>
+//       </div>
+//     </div>
+//   );
+// };
+
 // const SuperAdminLoginStatus = () => {
 //   const currentUser = useMemo(() => {
 //     try {
@@ -320,6 +415,9 @@
 //     }
 //   }, []);
 //   const isSuperAdminView = getRoleType(currentUser) === "superAdmin";
+//   const isHR = getRoleType(currentUser) === "hr";
+//   const canViewWO = isSuperAdminView || isHR;
+
 //   const [dateKey, setDateKey] = useState(getDefaultDateKey());
 //   const [isDateManuallySelected, setIsDateManuallySelected] = useState(false);
 //   const [loading, setLoading] = useState(false);
@@ -335,6 +433,12 @@
 //   const [nowMs, setNowMs] = useState(Date.now());
 //   const [lastSyncedAtMs, setLastSyncedAtMs] = useState(Date.now());
 
+//   // ========== NEW: State for WO Data ==========
+//   const [woData, setWoData] = useState(null);
+//   const [woLoading, setWoLoading] = useState(false);
+//   const [selectedEmployee, setSelectedEmployee] = useState(null);
+//   const [isModalOpen, setIsModalOpen] = useState(false);
+
 //   const token = useMemo(() => {
 //     try {
 //       const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -343,6 +447,55 @@
 //       return "";
 //     }
 //   }, []);
+
+//   // ========== NEW: Fetch Monthly WO Data ==========
+//   const fetchMonthlyWO = async () => {
+//     if (!canViewWO || !token) return;
+    
+//     setWoLoading(true);
+//     try {
+//       const currentDate = new Date();
+//       const month = currentDate.getMonth() + 1;
+//       const year = currentDate.getFullYear();
+      
+//       const response = await axios.get(`${API_URL}/punchx/monthly-wo-utilization`, {
+//         params: { 
+//           month, 
+//           year,
+//           department: dept !== "All" ? dept : undefined
+//         },
+//         headers: { Authorization: `Bearer ${token}` }
+//       });
+
+//       if (response.data.success) {
+//         setWoData(response.data);
+//       }
+//     } catch (err) {
+//       console.error("Failed to fetch WO data:", err);
+//     } finally {
+//       setWoLoading(false);
+//     }
+//   };
+
+//   // Fetch WO data when component mounts or department changes
+//   useEffect(() => {
+//     if (canViewWO) {
+//       fetchMonthlyWO();
+//     }
+//   }, [dept, canViewWO]);
+
+//   // ========== NEW: Get WO count for an employee ==========
+//   const getEmployeeWOCount = (userId) => {
+//     if (!woData?.results) return 0;
+//     const employee = woData.results.find(emp => String(emp.employeeId) === String(userId));
+//     return employee?.totalWOUsed || 0;
+//   };
+
+//   // ========== NEW: Get employee WO details for modal ==========
+//   const getEmployeeWODetails = (userId) => {
+//     if (!woData?.results) return null;
+//     return woData.results.find(emp => String(emp.employeeId) === String(userId)) || null;
+//   };
 
 //   const loadData = async (force = false) => {
 //     if (!token) return;
@@ -514,6 +667,15 @@
 //     setPage(1);
 //   }, [query, dept, status, pageSize, dateKey]);
 
+//   // ========== NEW: Handle WO click ==========
+//   const handleWOClick = (row) => {
+//     const employeeDetails = getEmployeeWODetails(row.userId);
+//     if (employeeDetails) {
+//       setSelectedEmployee(employeeDetails);
+//       setIsModalOpen(true);
+//     }
+//   };
+
 //   return (
 //     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 font-sans">
 //       <div className="mx-auto max-w-[1600px] space-y-6">
@@ -634,6 +796,17 @@
 //                       Breaks Used
 //                     </span>
 //                   </th>
+//                   {/* ========== NEW: Total WO Used Column ========== */}
+//                   {canViewWO && (
+//                     <th className="whitespace-nowrap px-6 py-4 ">
+//                       <span className="flex items-center gap-2 text-[#4C5A6D]">
+//                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+//                         </svg>
+//                         Total WO Used
+//                       </span>
+//                     </th>
+//                   )}
 //                 </tr>
 //               </thead>
 //               <tbody className="divide-y divide-slate-100 text-[13px] text-[#334155]">
@@ -643,6 +816,7 @@
 //                   const loginTimes = formatDateTime(row.loginTime);
 //                   const logoutTimes = formatDateTime(row.logoutTime);
 //                   const arrivalLoginDifference = getTransportLoginDifference(row.transportArrivalTime, row.loginTime);
+//                   const woCount = getEmployeeWOCount(row.userId);
   
 //                   return (
 //                     <tr key={row.userId} className="group hover:bg-slate-50/80 transition-colors">
@@ -767,6 +941,29 @@
 //                           <span className="text-slate-400">—</span>
 //                         )}
 //                       </td>
+
+//                       {/* ========== NEW: Total WO Used Column Data ========== */}
+//                       {canViewWO && (
+//                         <td className="px-6 py-4.5 whitespace-nowrap">
+//                           {woLoading ? (
+//                             <div className="flex items-center justify-center">
+//                               <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+//                             </div>
+//                           ) : woCount > 0 ? (
+//                             <button
+//                               onClick={() => handleWOClick(row)}
+//                               className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition group"
+//                             >
+//                               <span className="text-lg">{woCount}</span>
+//                               <svg className="w-4 h-4 text-blue-500 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+//                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+//                               </svg>
+//                             </button>
+//                           ) : (
+//                             <span className="text-sm text-slate-400">0</span>
+//                           )}
+//                         </td>
+//                       )}
 //                     </tr>
 //                   );
 //                 })}
@@ -818,11 +1015,23 @@
 //           </div>
 //         </div>
 //       </div>
+
+//       {/* ========== NEW: WO Details Modal ========== */}
+//       <WODetailsModal
+//         isOpen={isModalOpen}
+//         onClose={() => {
+//           setIsModalOpen(false);
+//           setSelectedEmployee(null);
+//         }}
+//         employee={selectedEmployee}
+//         monthlyData={woData}
+//       />
 //     </div>
 //   );
 // };
 
 // export default SuperAdminLoginStatus;
+
 
 
 
@@ -915,7 +1124,6 @@ const formatTime = (value) => {
   });
 };
 
-// ========== UPDATED: formatDuration without seconds for general use ==========
 const formatDuration = (ms = 0) => {
   const safe = Math.max(0, Number(ms) || 0);
   const totalMinutes = Math.floor(safe / 60000);
@@ -934,7 +1142,6 @@ const formatDuration = (ms = 0) => {
   return `0m`;
 };
 
-// ========== NEW: formatDurationWithSeconds for break timer only ==========
 const formatDurationWithSeconds = (ms = 0) => {
   const safe = Math.max(0, Number(ms) || 0);
   const totalSeconds = Math.floor(safe / 1000);
@@ -951,7 +1158,6 @@ const formatDurationWithSeconds = (ms = 0) => {
   return `${s}s`;
 };
 
-// ========== NEW: Get active break duration ==========
 const getActiveBreakDuration = (row) => {
   if (!row?.breakStartAt || !row?.isOnBreak) return null;
   const start = new Date(row.breakStartAt);
@@ -961,7 +1167,6 @@ const getActiveBreakDuration = (row) => {
   return diffMs > 0 ? diffMs : 0;
 };
 
-// ========== UPDATED: Break Timer Component with seconds ==========
 const BreakTimer = ({ row }) => {
   const [elapsedMs, setElapsedMs] = useState(0);
   
@@ -1140,7 +1345,7 @@ const getBreakTypeLabel = (type) => {
   return map[type] || type;
 };
 
-// ========== NEW: Modal for WO Details ==========
+// ========== Modal for WO Details ==========
 const WODetailsModal = ({ isOpen, onClose, employee, monthlyData }) => {
   if (!isOpen || !employee) return null;
 
@@ -1149,7 +1354,7 @@ const WODetailsModal = ({ isOpen, onClose, employee, monthlyData }) => {
       <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between border-b border-slate-200 pb-4">
           <h3 className="text-xl font-bold text-[#0F172A]">
-            WO Details - {employee.pseudoName ||employee.realName || employee.username}
+            WO Details - {employee.realName || employee.pseudoName || employee.username}
           </h3>
           <button
             onClick={onClose}
@@ -1243,9 +1448,14 @@ const SuperAdminLoginStatus = () => {
       return {};
     }
   }, []);
-  const isSuperAdminView = getRoleType(currentUser) === "superAdmin";
-  const isHR = getRoleType(currentUser) === "hr";
-  const canViewWO = isSuperAdminView || isHR;
+  
+  const userRole = getRoleType(currentUser);
+  const isSuperAdminView = userRole === "superAdmin";
+  const isHR = userRole === "hr";
+  const isSupervisor = userRole === "supervisor" || currentUser?.isTeamLeader === true;
+  
+  // Allow WO view for SuperAdmin, HR, and Supervisor/TeamLeader
+  const canViewWO = isSuperAdminView || isHR || isSupervisor;
 
   const [dateKey, setDateKey] = useState(getDefaultDateKey());
   const [isDateManuallySelected, setIsDateManuallySelected] = useState(false);
@@ -1262,7 +1472,7 @@ const SuperAdminLoginStatus = () => {
   const [nowMs, setNowMs] = useState(Date.now());
   const [lastSyncedAtMs, setLastSyncedAtMs] = useState(Date.now());
 
-  // ========== NEW: State for WO Data ==========
+  // ========== State for WO Data ==========
   const [woData, setWoData] = useState(null);
   const [woLoading, setWoLoading] = useState(false);
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -1277,7 +1487,7 @@ const SuperAdminLoginStatus = () => {
     }
   }, []);
 
-  // ========== NEW: Fetch Monthly WO Data ==========
+  // ========== Fetch Monthly WO Data ==========
   const fetchMonthlyWO = async () => {
     if (!canViewWO || !token) return;
     
@@ -1287,7 +1497,10 @@ const SuperAdminLoginStatus = () => {
       const month = currentDate.getMonth() + 1;
       const year = currentDate.getFullYear();
       
-      const response = await axios.get(`${API_URL}/punchx/monthly-wo-utilization`, {
+      // Use the same endpoint for both SuperAdmin and Supervisor
+      const endpoint = `${API_URL}/punchx/monthly-wo-utilization`;
+      
+      const response = await axios.get(endpoint, {
         params: { 
           month, 
           year,
@@ -1313,14 +1526,14 @@ const SuperAdminLoginStatus = () => {
     }
   }, [dept, canViewWO]);
 
-  // ========== NEW: Get WO count for an employee ==========
+  // ========== Get WO count for an employee ==========
   const getEmployeeWOCount = (userId) => {
     if (!woData?.results) return 0;
     const employee = woData.results.find(emp => String(emp.employeeId) === String(userId));
     return employee?.totalWOUsed || 0;
   };
 
-  // ========== NEW: Get employee WO details for modal ==========
+  // ========== Get employee WO details for modal ==========
   const getEmployeeWODetails = (userId) => {
     if (!woData?.results) return null;
     return woData.results.find(emp => String(emp.employeeId) === String(userId)) || null;
@@ -1496,7 +1709,7 @@ const SuperAdminLoginStatus = () => {
     setPage(1);
   }, [query, dept, status, pageSize, dateKey]);
 
-  // ========== NEW: Handle WO click ==========
+  // ========== Handle WO click ==========
   const handleWOClick = (row) => {
     const employeeDetails = getEmployeeWODetails(row.userId);
     if (employeeDetails) {
@@ -1505,10 +1718,26 @@ const SuperAdminLoginStatus = () => {
     }
   };
 
+  // Determine page title based on role
+  const pageTitle = isSuperAdminView 
+    ? "SuperAdmin - Daily Login Status" 
+    : "Team Login Status";
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 font-sans">
       <div className="mx-auto max-w-[1600px] space-y-6">
         
+        {/* Page Title */}
+        <div className="flex items-center justify-between">
+          <h1 className="text-2xl font-bold text-[#0F172A]">{pageTitle}</h1>
+          {canViewWO && woData?.summary && (
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-slate-600">Month: <strong>{woData.summary.month} {woData.summary.year}</strong></span>
+              <span className="text-slate-600">Total WO: <strong className="text-blue-600">{woData.summary.totalWOUtilized}</strong></span>
+            </div>
+          )}
+        </div>
+
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-center gap-3">
             <input
@@ -1568,8 +1797,7 @@ const SuperAdminLoginStatus = () => {
                   <th className="whitespace-nowrap px-6 py-4">
                     <span className="flex items-center gap-2">
                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                      Department
-                    </span>
+                      Department                    </span>
                   </th>
                   <th className="whitespace-nowrap px-6 py-4">
                     <span className="flex items-center gap-2">
@@ -1607,6 +1835,17 @@ const SuperAdminLoginStatus = () => {
                       Floor Roster
                     </span>
                   </th>
+                  {/* ========== Total WO Used Column after Floor Roster ========== */}
+                  {canViewWO && (
+                    <th className="whitespace-nowrap px-6 py-4">
+                      <span className="flex items-center gap-2 text-[#475569]">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Total WO Used
+                      </span>
+                    </th>
+                  )}
                   <th className="whitespace-nowrap px-6 py-4">
                     <span className="flex items-center gap-2">
                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -1625,17 +1864,6 @@ const SuperAdminLoginStatus = () => {
                       Breaks Used
                     </span>
                   </th>
-                  {/* ========== NEW: Total WO Used Column ========== */}
-                  {canViewWO && (
-                    <th className="whitespace-nowrap px-6 py-4 ">
-                      <span className="flex items-center gap-2 text-[#4C5A6D]">
-                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
-                        Total WO Used
-                      </span>
-                    </th>
-                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-[13px] text-[#334155]">
@@ -1734,6 +1962,29 @@ const SuperAdminLoginStatus = () => {
                         </div>
                       </td>
 
+                      {/* ========== Total WO Used Column Data after Floor Roster ========== */}
+                      {canViewWO && (
+                        <td className="px-6 py-4.5 whitespace-nowrap">
+                          {woLoading ? (
+                            <div className="flex items-center justify-center">
+                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+                            </div>
+                          ) : woCount > 0 ? (
+                            <button
+                              onClick={() => handleWOClick(row)}
+                              className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition group"
+                            >
+                              <span className="text-lg">{woCount}</span>
+                              <svg className="w-4 h-4 text-blue-500 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          ) : (
+                            <span className="text-sm text-slate-400">0</span>
+                          )}
+                        </td>
+                      )}
+
                       <td className="px-6 py-4.5 whitespace-nowrap">
                         {row.loginTime ? (
                           <div className="flex items-center gap-2 font-bold text-[#1E293B]">
@@ -1770,29 +2021,6 @@ const SuperAdminLoginStatus = () => {
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
-
-                      {/* ========== NEW: Total WO Used Column Data ========== */}
-                      {canViewWO && (
-                        <td className="px-6 py-4.5 whitespace-nowrap">
-                          {woLoading ? (
-                            <div className="flex items-center justify-center">
-                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
-                            </div>
-                          ) : woCount > 0 ? (
-                            <button
-                              onClick={() => handleWOClick(row)}
-                              className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition group"
-                            >
-                              <span className="text-lg">{woCount}</span>
-                              <svg className="w-4 h-4 text-blue-500 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </button>
-                          ) : (
-                            <span className="text-sm text-slate-400">0</span>
-                          )}
-                        </td>
-                      )}
                     </tr>
                   );
                 })}
@@ -1845,7 +2073,7 @@ const SuperAdminLoginStatus = () => {
         </div>
       </div>
 
-      {/* ========== NEW: WO Details Modal ========== */}
+      {/* ========== WO Details Modal ========== */}
       <WODetailsModal
         isOpen={isModalOpen}
         onClose={() => {
