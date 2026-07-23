@@ -1232,6 +1232,191 @@ const normalizeRosterName = (value = "") =>
     .replace(/[._\-()/,]+/g, " ")
     .replace(/\s+/g, " ");
 
+// const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
+//   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
+//   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
+//   const targetObjectIds = (employees || []).map((employee) => employee?._id).filter(Boolean);
+//   const userIdByEmpId = new Map();
+//   const userIdByName = new Map();
+
+//   for (const employee of employees || []) {
+//     const userId = String(employee?._id || "").trim();
+//     if (!userId) continue;
+
+//     const empId = String(employee?.empId || "").trim().toLowerCase();
+//     if (empId && !userIdByEmpId.has(empId)) {
+//       userIdByEmpId.set(empId, userId);
+//     }
+
+//     const nameKeys = [
+//       employee?.pseudoName,
+//       employee?.realName,
+//       employee?.username,
+//       `${employee?.pseudoName || ""} ${employee?.department || ""}`,
+//       `${employee?.realName || ""} ${employee?.department || ""}`,
+//     ]
+//       .map(normalizeRosterName)
+//       .filter(Boolean);
+
+//     for (const nameKey of nameKeys) {
+//       if (!userIdByName.has(nameKey)) {
+//         userIdByName.set(nameKey, userId);
+//       }
+//     }
+//   }
+
+//   const dayStartMs = parseDateKeyStartMs(dateKey);
+//   const emptyRosterSnapshot = () => ({
+//     presentCount: 0,
+//     rosterStatusByUserId: new Map(),
+//     departmentStatusByUserId: new Map(),
+//     rosterShiftStartHourByUserId: new Map(),
+//     rosterShiftEndHourByUserId: new Map(),
+//     transportArrivalTimeByUserId: new Map(),
+//   });
+//   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) {
+//     return emptyRosterSnapshot();
+//   }
+
+//   const dayStart = new Date(dayStartMs);
+//   const dayEnd = new Date(dayStartMs + 24 * 60 * 60 * 1000 - 1);
+//   const rosterQuery = {
+//     $or: [
+//       {
+//         rosterStartDate: { $lte: dayEnd },
+//         rosterEndDate: { $gte: dayStart },
+//       },
+//       {
+//         weeks: {
+//           $elemMatch: {
+//             startDate: { $lte: dayEnd },
+//             endDate: { $gte: dayStart },
+//           },
+//         },
+//       },
+//     ],
+//   };
+
+//   if (!countAllRosterEmployees && targetIds.size) {
+//     rosterQuery["weeks.employees.userId"] = { $in: targetObjectIds };
+//   }
+
+//   const pipeline = [
+//     { $match: rosterQuery },
+//     {
+//       $project: {
+//         weeks: {
+//           $filter: {
+//             input: "$weeks",
+//             as: "week",
+//             cond: {
+//               $and: [
+//                 { $lte: ["$$week.startDate", dayEnd] },
+//                 { $gte: ["$$week.endDate", dayStart] },
+//               ],
+//             },
+//           },
+//         },
+//       },
+//     },
+//     { $unwind: "$weeks" },
+//     { $unwind: "$weeks.employees" },
+//   ];
+
+//   if (!countAllRosterEmployees && targetObjectIds.length) {
+//     pipeline.push({ $match: { "weeks.employees.userId": { $in: targetObjectIds } } });
+//   }
+
+//   pipeline.push(
+//     {
+//       $project: {
+//         rosterUserId: "$weeks.employees.userId",
+//         rosterEmpId: "$weeks.employees.empId",
+//         rosterName: "$weeks.employees.name",
+//         shiftStartHour: "$weeks.employees.shiftStartHour",
+//         shiftEndHour: "$weeks.employees.shiftEndHour",
+//         matchingDay: {
+//           $first: {
+//             $filter: {
+//               input: "$weeks.employees.dailyStatus",
+//               as: "day",
+//               cond: {
+//                 $and: [
+//                   { $gte: ["$$day.date", dayStart] },
+//                   { $lte: ["$$day.date", dayEnd] },
+//                 ],
+//               },
+//             },
+//           },
+//         },
+//       },
+//     },
+//     { $match: { matchingDay: { $ne: null } } }
+//   );
+
+//   const rosterRows = await Roster.aggregate(pipeline).allowDiskUse(true);
+
+//   const presentIds = new Set();
+//   const rosterStatusByUserId = new Map();
+//   const departmentStatusByUserId = new Map();
+//   const rosterShiftStartHourByUserId = new Map();
+//   const rosterShiftEndHourByUserId = new Map();
+//   const transportArrivalTimeByUserId = new Map();
+//   for (const row of rosterRows || []) {
+//     const rosterUserId = String(row?.rosterUserId || "").trim();
+//     const rosterEmpId = String(row?.rosterEmpId || "").trim().toLowerCase();
+//     const rosterNameKey = normalizeRosterName(row?.rosterName || "");
+//     const matchedUserId =
+//       (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
+//       userIdByEmpId.get(rosterEmpId) ||
+//       userIdByName.get(rosterNameKey) ||
+//       "";
+//     const presentKey = matchedUserId ||
+//       (countAllRosterEmployees
+//         ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
+//         : "");
+
+//     if (!presentKey || presentIds.has(presentKey)) continue;
+
+//     const matchingDay = row?.matchingDay;
+//     const rosterStatus = String(matchingDay?.status || "P").trim().toUpperCase();
+//     const departmentStatus = String(matchingDay?.departmentStatus || "").trim().toUpperCase();
+
+//     if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
+//       rosterStatusByUserId.set(matchedUserId, rosterStatus || "P");
+//     }
+//     if (matchedUserId && !departmentStatusByUserId.has(matchedUserId)) {
+//       departmentStatusByUserId.set(matchedUserId, departmentStatus);
+//     }
+//     if (matchedUserId) {
+//       if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
+//         transportArrivalTimeByUserId.set(matchedUserId, matchingDay.transportArrivalTime);
+//       }
+//       const rosterStartHour = Number(row?.shiftStartHour);
+//       const rosterEndHour = Number(row?.shiftEndHour);
+//       if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
+//         rosterShiftStartHourByUserId.set(matchedUserId, rosterStartHour);
+//       }
+//       if (Number.isFinite(rosterEndHour) && !rosterShiftEndHourByUserId.has(matchedUserId)) {
+//         rosterShiftEndHourByUserId.set(matchedUserId, rosterEndHour);
+//       }
+//     }
+
+//     if (rosterStatus === "P") {
+//       presentIds.add(presentKey);
+//     }
+//   }
+
+//   return {
+//     presentCount: presentIds.size,
+//     rosterStatusByUserId,
+//     departmentStatusByUserId,
+//     rosterShiftStartHourByUserId,
+//     rosterShiftEndHourByUserId,
+//     transportArrivalTimeByUserId,
+//   };
+// };
+
 const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
@@ -1270,10 +1455,12 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
     presentCount: 0,
     rosterStatusByUserId: new Map(),
     departmentStatusByUserId: new Map(),
+    woCountByUserId: new Map(),
     rosterShiftStartHourByUserId: new Map(),
     rosterShiftEndHourByUserId: new Map(),
     transportArrivalTimeByUserId: new Map(),
   });
+  
   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) {
     return emptyRosterSnapshot();
   }
@@ -1359,9 +1546,11 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
   const presentIds = new Set();
   const rosterStatusByUserId = new Map();
   const departmentStatusByUserId = new Map();
+  const woCountByUserId = new Map();
   const rosterShiftStartHourByUserId = new Map();
   const rosterShiftEndHourByUserId = new Map();
   const transportArrivalTimeByUserId = new Map();
+  
   for (const row of rosterRows || []) {
     const rosterUserId = String(row?.rosterUserId || "").trim();
     const rosterEmpId = String(row?.rosterEmpId || "").trim().toLowerCase();
@@ -1376,22 +1565,38 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
         ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
         : "");
 
-    if (!presentKey || presentIds.has(presentKey)) continue;
+    if (!presentKey) continue;
 
     const matchingDay = row?.matchingDay;
     const rosterStatus = String(matchingDay?.status || "P").trim().toUpperCase();
     const departmentStatus = String(matchingDay?.departmentStatus || "").trim().toUpperCase();
 
-    if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
-      rosterStatusByUserId.set(matchedUserId, rosterStatus || "P");
-    }
-    if (matchedUserId && !departmentStatusByUserId.has(matchedUserId)) {
-      departmentStatusByUserId.set(matchedUserId, departmentStatus);
-    }
+    // Track for each matched user
     if (matchedUserId) {
+      // Set roster status
+      if (!rosterStatusByUserId.has(matchedUserId)) {
+        rosterStatusByUserId.set(matchedUserId, rosterStatus || "P");
+      }
+      
+      // Set department status
+      if (!departmentStatusByUserId.has(matchedUserId)) {
+        departmentStatusByUserId.set(matchedUserId, departmentStatus);
+      }
+      
+      // Count WO - CRITICAL FIX: Count when departmentStatus is "WO"
+      const isWO = departmentStatus === "WO";
+      if (isWO) {
+        const currentWO = woCountByUserId.get(matchedUserId) || 0;
+        woCountByUserId.set(matchedUserId, currentWO + 1);
+        console.log(`WO found for user ${matchedUserId} on ${dateKey}: ${departmentStatus}`); // Debug log
+      }
+      
+      // Transport arrival time
       if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
         transportArrivalTimeByUserId.set(matchedUserId, matchingDay.transportArrivalTime);
       }
+      
+      // Shift hours
       const rosterStartHour = Number(row?.shiftStartHour);
       const rosterEndHour = Number(row?.shiftEndHour);
       if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
@@ -1402,15 +1607,19 @@ const getRosterPresentCountForUsers = async (employees = [], dateKey = "", optio
       }
     }
 
+    // Track present count based on roster status
     if (rosterStatus === "P") {
       presentIds.add(presentKey);
     }
   }
 
+  console.log('WO Count Map:', Object.fromEntries(woCountByUserId)); // Debug log
+
   return {
     presentCount: presentIds.size,
     rosterStatusByUserId,
     departmentStatusByUserId,
+    woCountByUserId,
     rosterShiftStartHourByUserId,
     rosterShiftEndHourByUserId,
     transportArrivalTimeByUserId,
@@ -2548,6 +2757,223 @@ export const exportSuperAdminDailyStatusExcel = async (req, res) => {
     return res.status(500).json({
       message: "Failed to export superAdmin daily login status",
       error: error.message,
+    });
+  }
+};
+
+
+//for counting total week off in employee login status in ongoing month
+// Add this function to your controller file
+export const getMonthlyWOUtilization = async (req, res) => {
+  try {
+    const user = req.user || {};
+    const role = String(user?.roleType || user?.accountType || "").toLowerCase();
+    
+    // Check if user has HR role (add this to your check)
+    const isHR = role === "hr" || role === "humanresources";
+    const isSuperAdmin = role === "superadmin";
+    
+    // Allow only SuperAdmin or HR to access this endpoint
+    if (!isSuperAdmin && !isHR) {
+      return res.status(403).json({ 
+        success: false,
+        message: "Access denied. Only SuperAdmin or HR can access this data." 
+      });
+    }
+
+    // Get month and year from query params
+    const { month, year, department } = req.query;
+    const currentDate = new Date();
+    const targetMonth = month ? parseInt(month) - 1 : currentDate.getMonth();
+    const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+
+    // Validate month and year
+    if (targetMonth < 0 || targetMonth > 11) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid month. Month must be between 1 and 12"
+      });
+    }
+
+    if (targetYear < 2000 || targetYear > 2100) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid year"
+      });
+    }
+
+    // Get all dates in the month
+    const startDate = new Date(targetYear, targetMonth, 1);
+    const endDate = new Date(targetYear, targetMonth + 1, 0);
+    
+    // Build employee query - SuperAdmin and HR can see all employees
+    const employeeQuery = {
+      accountType: { $in: ["employee", "agent", "supervisor"] },
+      isActive: { $ne: false },
+    };
+
+    // Department filter if provided
+    if (department) {
+      employeeQuery.department = department;
+    }
+
+    const employees = await User.find(employeeQuery)
+      .select("_id empId username realName pseudoName department accountType isTeamLeader")
+      .sort({ department: 1, realName: 1 })
+      .lean();
+
+    if (employees.length === 0) {
+      return res.status(200).json({
+        success: true,
+        message: "No employees found",
+        summary: {
+          month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+          year: targetYear,
+          totalEmployees: 0,
+          totalWOUtilized: 0,
+          employeesWithWO: 0,
+          employeesWithoutWO: 0,
+          averageWOPerEmployee: 0,
+          totalWorkingDays: 0
+        },
+        results: []
+      });
+    }
+
+    // Generate all date keys for the month
+    const dateKeys = [];
+    let current = new Date(startDate);
+    while (current <= endDate) {
+      dateKeys.push(getNyDateKey(current));
+      current.setDate(current.getDate() + 1);
+    }
+
+    // Initialize WO tracking for each employee
+    const woData = new Map();
+    employees.forEach(emp => {
+      woData.set(String(emp._id), {
+        totalWO: 0,
+        woDates: [],
+        departmentStatusByDate: {},
+        employee: emp
+      });
+    });
+
+    // Process each day of the month
+    for (const dateKey of dateKeys) {
+      const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+        countAllRosterEmployees: true, // SuperAdmin/HR can see all employees
+      });
+      
+      // Update WO counts for each employee
+      for (const [empId, woCount] of rosterSnapshot.woCountByUserId || []) {
+        if (woData.has(empId)) {
+          const data = woData.get(empId);
+          data.totalWO += woCount;
+          if (woCount > 0) {
+            data.woDates.push(dateKey);
+          }
+          // Store department status for this date
+          const deptStatus = rosterSnapshot.departmentStatusByUserId?.get(empId) || "";
+          data.departmentStatusByDate[dateKey] = {
+            status: deptStatus,
+            isWO: deptStatus === "WO"
+          };
+          woData.set(empId, data);
+        }
+      }
+    }
+
+    // Build response with all employee data
+    const results = employees.map(emp => {
+      const empId = String(emp._id);
+      const data = woData.get(empId) || { totalWO: 0, woDates: [], departmentStatusByDate: {} };
+      
+      // Calculate working days in month (excluding weekends if needed)
+      // You can modify this to exclude Saturdays and Sundays if needed
+      const workingDays = dateKeys.length;
+      
+      return {
+        employeeId: emp._id,
+        empId: emp.empId || "",
+        username: emp.username || "",
+        realName: emp.realName || "",
+        pseudoName: emp.pseudoName || "",
+        department: emp.department || "",
+        accountType: emp.accountType || "",
+        isTeamLeader: Boolean(emp.isTeamLeader),
+        totalWOUsed: data.totalWO,
+        woDates: data.woDates.sort(), // Dates when WO was taken
+        departmentStatusByDate: data.departmentStatusByDate,
+        workingDays: workingDays,
+        woPercentage: workingDays > 0 
+          ? Number(((data.totalWO / workingDays) * 100).toFixed(1))
+          : 0
+      };
+    });
+
+    // Summary statistics
+    const totalWO = results.reduce((sum, r) => sum + r.totalWOUsed, 0);
+    const employeesWithWO = results.filter(r => r.totalWOUsed > 0).length;
+    
+    const summary = {
+      month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+      year: targetYear,
+      totalEmployees: results.length,
+      totalWOUtilized: totalWO,
+      employeesWithWO: employeesWithWO,
+      employeesWithoutWO: results.length - employeesWithWO,
+      averageWOPerEmployee: results.length > 0 
+        ? Number((totalWO / results.length).toFixed(2))
+        : 0,
+      totalWorkingDays: dateKeys.length,
+      // Department-wise breakdown
+      departmentWise: {}
+    };
+
+    // Add department-wise breakdown
+    results.forEach(emp => {
+      const dept = emp.department || "Unassigned";
+      if (!summary.departmentWise[dept]) {
+        summary.departmentWise[dept] = {
+          totalEmployees: 0,
+          totalWO: 0,
+          averageWO: 0,
+          employees: []
+        };
+      }
+      summary.departmentWise[dept].totalEmployees += 1;
+      summary.departmentWise[dept].totalWO += emp.totalWOUsed;
+      summary.departmentWise[dept].employees.push({
+        name: emp.realName || emp.pseudoName || emp.username,
+        empId: emp.empId,
+        woUsed: emp.totalWOUsed
+      });
+    });
+
+    // Calculate average for each department
+    Object.keys(summary.departmentWise).forEach(dept => {
+      const deptData = summary.departmentWise[dept];
+      deptData.averageWO = Number((deptData.totalWO / deptData.totalEmployees).toFixed(2));
+      // Sort employees within department by WO used (highest first)
+      deptData.employees.sort((a, b) => b.woUsed - a.woUsed);
+    });
+
+    // Sort results by total WO used (highest first)
+    results.sort((a, b) => b.totalWOUsed - a.totalWOUsed);
+
+    return res.status(200).json({
+      success: true,
+      summary,
+      results
+    });
+
+  } catch (error) {
+    console.error("Error in getMonthlyWOUtilization:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch monthly WO utilization",
+      error: error.message
     });
   }
 };

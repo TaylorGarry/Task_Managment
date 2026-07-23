@@ -5,10 +5,11 @@
 // import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
 // // const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
-// const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
-
+//  const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+ 
 // const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 // const IST_TIME_ZONE = "Asia/Kolkata";
+// const OPERATIONAL_DAY_START_HOUR_IST = 12;
 
 // const toDateKey = (date) => {
 //   const d = new Date(date);
@@ -24,7 +25,31 @@
 //   return yyyy && mm && dd ? `${yyyy}-${mm}-${dd}` : "";
 // };
 
-// const getDefaultDateKey = () => toDateKey(new Date());
+// const addDaysToDateKey = (dateKey = "", days = 0) => {
+//   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateKey || ""))) return dateKey;
+//   const date = new Date(`${dateKey}T00:00:00+05:30`);
+//   date.setDate(date.getDate() + days);
+//   return toDateKey(date);
+// };
+
+// const getIstHour = (date = new Date()) => {
+//   const parts = new Intl.DateTimeFormat("en-US", {
+//     timeZone: IST_TIME_ZONE,
+//     hour12: false,
+//     hour: "2-digit",
+//   }).formatToParts(date);
+//   const hour = Number(parts.find((p) => p.type === "hour")?.value);
+//   return Number.isFinite(hour) ? hour : null;
+// };
+
+// const getDefaultDateKey = () => {
+//   const now = new Date();
+//   const todayKey = toDateKey(now);
+//   const hour = getIstHour(now);
+//   return Number.isFinite(hour) && hour < OPERATIONAL_DAY_START_HOUR_IST
+//     ? addDaysToDateKey(todayKey, -1)
+//     : todayKey;
+// };
 
 // const formatDateTime = (value) => {
 //   if (!value) return null;
@@ -61,12 +86,79 @@
 //   });
 // };
 
+// // ========== UPDATED: formatDuration without seconds for general use ==========
 // const formatDuration = (ms = 0) => {
 //   const safe = Math.max(0, Number(ms) || 0);
 //   const totalMinutes = Math.floor(safe / 60000);
 //   const h = Math.floor(totalMinutes / 60);
 //   const m = totalMinutes % 60;
-//   return `${h}h ${m}m`;
+  
+//   if (h > 0 && m > 0) {
+//     return `${h}h ${m}m`;
+//   }
+//   if (h > 0) {
+//     return `${h}h`;
+//   }
+//   if (m > 0) {
+//     return `${m}m`;
+//   }
+//   return `0m`;
+// };
+
+// // ========== NEW: formatDurationWithSeconds for break timer only ==========
+// const formatDurationWithSeconds = (ms = 0) => {
+//   const safe = Math.max(0, Number(ms) || 0);
+//   const totalSeconds = Math.floor(safe / 1000);
+//   const h = Math.floor(totalSeconds / 3600);
+//   const m = Math.floor((totalSeconds % 3600) / 60);
+//   const s = totalSeconds % 60;
+  
+//   if (h > 0) {
+//     return `${h}h ${m}m ${s}s`;
+//   }
+//   if (m > 0) {
+//     return `${m}m ${s}s`;
+//   }
+//   return `${s}s`;
+// };
+
+// // ========== NEW: Get active break duration ==========
+// const getActiveBreakDuration = (row) => {
+//   if (!row?.breakStartAt || !row?.isOnBreak) return null;
+//   const start = new Date(row.breakStartAt);
+//   if (Number.isNaN(start.getTime())) return null;
+//   const now = new Date();
+//   const diffMs = now.getTime() - start.getTime();
+//   return diffMs > 0 ? diffMs : 0;
+// };
+
+// // ========== UPDATED: Break Timer Component with seconds ==========
+// const BreakTimer = ({ row }) => {
+//   const [elapsedMs, setElapsedMs] = useState(0);
+  
+//   useEffect(() => {
+//     if (!row?.isOnBreak || !row?.breakStartAt) {
+//       setElapsedMs(0);
+//       return;
+//     }
+    
+//     const updateTimer = () => {
+//       const duration = getActiveBreakDuration(row);
+//       setElapsedMs(duration || 0);
+//     };
+    
+//     updateTimer();
+//     const interval = setInterval(updateTimer, 1000);
+//     return () => clearInterval(interval);
+//   }, [row?.isOnBreak, row?.breakStartAt]);
+  
+//   if (!row?.isOnBreak || !row?.breakStartAt) return null;
+  
+//   return (
+//     <span className="text-[10px] font-medium text-amber-600 ml-1.5 animate-pulse">
+//       ({formatDurationWithSeconds(elapsedMs)})
+//     </span>
+//   );
 // };
 
 // const getTransportLoginDifference = (transportArrivalTime, loginTime) => {
@@ -82,7 +174,6 @@
 //     return { label: "Same time", toneClass: "bg-emerald-50 text-emerald-700 border-emerald-100" };
 //   }
 
-//   // 10 minutes = 10 * 60 * 1000 = 600,000 milliseconds
 //   const isWithinTenMinutes = absDiffMs <= 600000;
 
 //   return {
@@ -210,6 +301,16 @@
 //   return "bg-slate-100 text-slate-600";
 // };
 
+// const getBreakTypeLabel = (type) => {
+//   const map = {
+//     "lunch": "Lunch",
+//     "bio_1": "Short Break 1",
+//     "bio_2": "Short Break 2",
+//     "manual": "Lunch",
+//   };
+//   return map[type] || type;
+// };
+
 // const SuperAdminLoginStatus = () => {
 //   const currentUser = useMemo(() => {
 //     try {
@@ -258,14 +359,15 @@
 //       const normalizedRows = merged.map((r) => {
 //         const loginTime = r.loginTime || r.shiftStartedAt || r.shiftStartAt || null;
 //         const serverLateByMs = Number(r.lateByMs || 0);
-//         const explicitManualBreakMs = Number(r.manualBreakMs);
-//         const hasExplicitSplit = Number.isFinite(explicitManualBreakMs);
 //         const totalBreakMs = Number(r.totalBreakMs || 0);
-//         const manualBreakMs = hasExplicitSplit ? explicitManualBreakMs : totalBreakMs;
+//         const lunchBreakMs = Number(r.lunchBreakMs || 0);
+//         const bioBreak1Ms = Number(r.bioBreak1Ms || 0);
+//         const bioBreak2Ms = Number(r.bioBreak2Ms || 0);
 //         return {
 //           ...r,
 //           loginTime,
 //           logoutTime: r.logoutTime || r.shiftEndedAt || r.shiftEndAt || null,
+//           breakStartAt: r.breakStartAt || null,
 //           isOnBreak:
 //             typeof r.isOnBreak === "boolean"
 //               ? r.isOnBreak
@@ -278,7 +380,9 @@
 //           }),
 //           totalWorkedMs: Number(r.totalWorkedMs || 0),
 //           totalBreakMs,
-//           manualBreakMs,
+//           lunchBreakMs,
+//           bioBreak1Ms,
+//           bioBreak2Ms,
 //           hasCompletedNineHours:
 //             typeof r.hasCompletedNineHours === "boolean"
 //               ? r.hasCompletedNineHours
@@ -414,7 +518,6 @@
 //     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 font-sans">
 //       <div className="mx-auto max-w-[1600px] space-y-6">
         
-//         {/* Upper Dashboard Header Controller bar */}
 //         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
 //           <div className="flex flex-wrap items-center gap-3">
 //             <input
@@ -460,13 +563,11 @@
 //           </div>
 //         </div>
 
-//         {/* High Fidelity Grid Table Area Container */}
 //         <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
 //           <div className="overflow-x-auto">
 //             <table className="min-w-full table-auto border-collapse text-left">
 //               <thead>
 //                 <tr className="border-b border-slate-200 bg-[#F8FAFC] text-[11px] font-bold uppercase tracking-wider text-[#475569]">
-//                   {/* Sticky Table Header for Employee */}
 //                   <th className="sticky left-0 z-10 whitespace-nowrap bg-[#F8FAFC] border-r border-slate-200/80 px-6 py-4 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
 //                     <span className="flex items-center gap-2">
 //                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
@@ -485,7 +586,6 @@
 //                       <svg className="w-3.5 h-3.5 text-slate-400 cursor-pointer" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
 //                     </span>
 //                   </th>
-//                   {/* Transport Arrival Header */}
 //                   <th className="whitespace-nowrap px-6 py-4">
 //                     <span className="flex items-center gap-2">
 //                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4-4m-4 4l4 4" /></svg>
@@ -531,7 +631,7 @@
 //                   <th className="whitespace-nowrap px-6 py-4">
 //                     <span className="flex items-center gap-2">
 //                       <svg className="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M14 12a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
-//                       Break Used
+//                       Breaks Used
 //                     </span>
 //                   </th>
 //                 </tr>
@@ -546,7 +646,6 @@
   
 //                   return (
 //                     <tr key={row.userId} className="group hover:bg-slate-50/80 transition-colors">
-//                       {/* Sticky Employee Row Body Cell */}
 //                       <td className="sticky left-0 z-10 whitespace-nowrap bg-white group-hover:bg-[#F8FAFC] border-r border-slate-200/80 px-6 py-4.5 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)] transition-colors">
 //                         <div className="flex items-center gap-3">
 //                           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#EFF6FF] text-[#1D4ED8] font-bold text-sm border border-blue-100">
@@ -556,17 +655,16 @@
 //                         </div>
 //                       </td>
 
-//                       {/* Department designation */}
 //                       <td className="px-6 py-4.5 text-[#64748B] whitespace-nowrap">
 //                         {row.department || "Ops - Meta"}
 //                       </td>
 
-//                       {/* Presence Status Badges */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap">
 //                         {row.isOnBreak ? (
 //                           <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-700 border border-amber-200">
-//                             <span className="h-2 w-2 rounded-full bg-amber-500"></span>
-//                             On Break
+//                             <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+//                             {row.breakType ? getBreakTypeLabel(row.breakType) : "On Break"}
+//                             <BreakTimer row={row} />
 //                           </div>
 //                         ) : row.loginTime ? (
 //                           <div className="inline-flex items-center gap-1.5 rounded-full bg-[#E6F4EA] px-2.5 py-1 text-xs font-semibold text-[#137333] border border-emerald-200">
@@ -581,7 +679,6 @@
 //                         )}
 //                       </td>
 
-//                       {/* Transport Arrival Data Cell */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap text-slate-400">
 //                         {row.transportArrivalTime ? (
 //                           <span className="text-[#1E293B] font-medium">{formatTime(row.transportArrivalTime)}</span>
@@ -590,7 +687,6 @@
 //                         )}
 //                       </td>
 
-//                       {/* Login Timestamp view */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap font-medium text-[#1E293B]">
 //                         {loginTimes ? (
 //                           <div className="flex items-center gap-2">
@@ -605,7 +701,6 @@
 //                         )}
 //                       </td>
 
-//                       {/* Difference between transport arrival and login */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap">
 //                         {arrivalLoginDifference ? (
 //                           <span className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-semibold ${arrivalLoginDifference.toneClass}`}>
@@ -616,7 +711,6 @@
 //                         )}
 //                       </td>
 
-//                       {/* Logout Timestamp view */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap font-medium text-[#1E293B]">
 //                         {logoutTimes ? (
 //                           <div className="flex flex-col text-left">
@@ -631,14 +725,12 @@
 //                         )}
 //                       </td>
 
-//                       {/* Floor Roster Status Circle */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap text-center">
 //                         <div className={`inline-flex h-7 w-10 items-center justify-center rounded-full font-bold text-xs shadow-sm ${getFloorRosterStatusClass(row.floorRosterStatus)}`}>
 //                           {row.floorRosterStatus || "P"}
 //                         </div>
 //                       </td>
 
-//                       {/* Total Hours Worked */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap">
 //                         {row.loginTime ? (
 //                           <div className="flex items-center gap-2 font-bold text-[#1E293B]">
@@ -650,7 +742,6 @@
 //                         )}
 //                       </td>
 
-//                       {/* 9H Circular Indicator Progress */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap">
 //                         {!row.loginTime ? (
 //                           <span className="text-slate-400">—</span>
@@ -665,13 +756,12 @@
 //                         )}
 //                       </td>
 
-//                       {/* Break Used Time Container */}
 //                       <td className="px-6 py-4.5 whitespace-nowrap">
 //                         {row.loginTime ? (
-//                           <div className="flex items-center gap-2 font-medium text-[#475569]">
-//                             <span>M: {formatDuration(row.manualBreakMs || 0)}</span>
-//                             <span className="text-slate-300">|</span>
-//                             <span>T: {formatDuration(row.totalBreakMs || 0)}</span>
+//                           <div className="flex flex-col gap-0.5 font-medium text-[#475569] text-xs">
+//                             <span className="text-emerald-600">Lunch: {formatDuration(row.lunchBreakMs || 0)}</span>
+//                             <span className="text-blue-600">Short Break 1: {formatDuration(row.bioBreak1Ms || 0)}</span>
+//                             <span className="text-purple-600">Short Break 2: {formatDuration(row.bioBreak2Ms || 0)}</span>
 //                           </div>
 //                         ) : (
 //                           <span className="text-slate-400">—</span>
@@ -738,21 +828,14 @@
 
 
 
-
-
-
-
-
-
-
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { getRoleType } from "../utils/roleAccess.js";
 import { getDailyStatus } from "../utils/dailyStatusApi.js";
 
-// const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
- const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
- 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:4000/api/v1";
+// const API_URL = import.meta.env.VITE_API_URL || "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+
 const PAGE_SIZE_OPTIONS = [5, 10, 20, 30, 50];
 const IST_TIME_ZONE = "Asia/Kolkata";
 const OPERATIONAL_DAY_START_HOUR_IST = 12;
@@ -1057,6 +1140,101 @@ const getBreakTypeLabel = (type) => {
   return map[type] || type;
 };
 
+// ========== NEW: Modal for WO Details ==========
+const WODetailsModal = ({ isOpen, onClose, employee, monthlyData }) => {
+  if (!isOpen || !employee) return null;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+      <div className="w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between border-b border-slate-200 pb-4">
+          <h3 className="text-xl font-bold text-[#0F172A]">
+            WO Details - {employee.pseudoName ||employee.realName || employee.username}
+          </h3>
+          <button
+            onClick={onClose}
+            className="rounded-full p-2 hover:bg-slate-100 transition"
+          >
+            <svg className="w-5 h-5 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="rounded-lg bg-blue-50 p-3">
+              <p className="text-sm text-slate-600">Total WO Used</p>
+              <p className="text-2xl font-bold text-blue-700">{employee.totalWOUsed}</p>
+            </div>
+            <div className="rounded-lg bg-purple-50 p-3">
+              <p className="text-sm text-slate-600">WO Percentage</p>
+              <p className="text-2xl font-bold text-purple-700">{employee.woPercentage}%</p>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="mb-2 text-sm font-semibold text-slate-700">WO Dates</h4>
+            {employee.woDates && employee.woDates.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {employee.woDates.map((date, idx) => (
+                  <span
+                    key={idx}
+                    className="rounded-full bg-amber-100 px-3 py-1 text-sm font-medium text-amber-800"
+                  >
+                    {date}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No WO taken this month</p>
+            )}
+          </div>
+
+          {employee.departmentStatusByDate && (
+            <div>
+              <h4 className="mb-2 text-sm font-semibold text-slate-700">Daily Status</h4>
+              <div className="max-h-48 overflow-y-auto rounded-lg border border-slate-200">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Date</th>
+                      <th className="px-3 py-2 text-left">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(employee.departmentStatusByDate || {})
+                      .sort((a, b) => a[0].localeCompare(b[0]))
+                      .map(([date, data]) => (
+                        <tr key={date} className="border-t border-slate-100">
+                          <td className="px-3 py-2">{date}</td>
+                          <td className="px-3 py-2">
+                            <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${data.isWO ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                              {data.status || "—"}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 flex justify-end border-t border-slate-200 pt-4">
+          <button
+            onClick={onClose}
+            className="rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const SuperAdminLoginStatus = () => {
   const currentUser = useMemo(() => {
     try {
@@ -1066,6 +1244,9 @@ const SuperAdminLoginStatus = () => {
     }
   }, []);
   const isSuperAdminView = getRoleType(currentUser) === "superAdmin";
+  const isHR = getRoleType(currentUser) === "hr";
+  const canViewWO = isSuperAdminView || isHR;
+
   const [dateKey, setDateKey] = useState(getDefaultDateKey());
   const [isDateManuallySelected, setIsDateManuallySelected] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -1081,6 +1262,12 @@ const SuperAdminLoginStatus = () => {
   const [nowMs, setNowMs] = useState(Date.now());
   const [lastSyncedAtMs, setLastSyncedAtMs] = useState(Date.now());
 
+  // ========== NEW: State for WO Data ==========
+  const [woData, setWoData] = useState(null);
+  const [woLoading, setWoLoading] = useState(false);
+  const [selectedEmployee, setSelectedEmployee] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
   const token = useMemo(() => {
     try {
       const user = JSON.parse(localStorage.getItem("user") || "{}");
@@ -1089,6 +1276,55 @@ const SuperAdminLoginStatus = () => {
       return "";
     }
   }, []);
+
+  // ========== NEW: Fetch Monthly WO Data ==========
+  const fetchMonthlyWO = async () => {
+    if (!canViewWO || !token) return;
+    
+    setWoLoading(true);
+    try {
+      const currentDate = new Date();
+      const month = currentDate.getMonth() + 1;
+      const year = currentDate.getFullYear();
+      
+      const response = await axios.get(`${API_URL}/punchx/monthly-wo-utilization`, {
+        params: { 
+          month, 
+          year,
+          department: dept !== "All" ? dept : undefined
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (response.data.success) {
+        setWoData(response.data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch WO data:", err);
+    } finally {
+      setWoLoading(false);
+    }
+  };
+
+  // Fetch WO data when component mounts or department changes
+  useEffect(() => {
+    if (canViewWO) {
+      fetchMonthlyWO();
+    }
+  }, [dept, canViewWO]);
+
+  // ========== NEW: Get WO count for an employee ==========
+  const getEmployeeWOCount = (userId) => {
+    if (!woData?.results) return 0;
+    const employee = woData.results.find(emp => String(emp.employeeId) === String(userId));
+    return employee?.totalWOUsed || 0;
+  };
+
+  // ========== NEW: Get employee WO details for modal ==========
+  const getEmployeeWODetails = (userId) => {
+    if (!woData?.results) return null;
+    return woData.results.find(emp => String(emp.employeeId) === String(userId)) || null;
+  };
 
   const loadData = async (force = false) => {
     if (!token) return;
@@ -1260,6 +1496,15 @@ const SuperAdminLoginStatus = () => {
     setPage(1);
   }, [query, dept, status, pageSize, dateKey]);
 
+  // ========== NEW: Handle WO click ==========
+  const handleWOClick = (row) => {
+    const employeeDetails = getEmployeeWODetails(row.userId);
+    if (employeeDetails) {
+      setSelectedEmployee(employeeDetails);
+      setIsModalOpen(true);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-6 font-sans">
       <div className="mx-auto max-w-[1600px] space-y-6">
@@ -1380,6 +1625,17 @@ const SuperAdminLoginStatus = () => {
                       Breaks Used
                     </span>
                   </th>
+                  {/* ========== NEW: Total WO Used Column ========== */}
+                  {canViewWO && (
+                    <th className="whitespace-nowrap px-6 py-4 ">
+                      <span className="flex items-center gap-2 text-[#4C5A6D]">
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        Total WO Used
+                      </span>
+                    </th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-[13px] text-[#334155]">
@@ -1389,6 +1645,7 @@ const SuperAdminLoginStatus = () => {
                   const loginTimes = formatDateTime(row.loginTime);
                   const logoutTimes = formatDateTime(row.logoutTime);
                   const arrivalLoginDifference = getTransportLoginDifference(row.transportArrivalTime, row.loginTime);
+                  const woCount = getEmployeeWOCount(row.userId);
   
                   return (
                     <tr key={row.userId} className="group hover:bg-slate-50/80 transition-colors">
@@ -1513,6 +1770,29 @@ const SuperAdminLoginStatus = () => {
                           <span className="text-slate-400">—</span>
                         )}
                       </td>
+
+                      {/* ========== NEW: Total WO Used Column Data ========== */}
+                      {canViewWO && (
+                        <td className="px-6 py-4.5 whitespace-nowrap">
+                          {woLoading ? (
+                            <div className="flex items-center justify-center">
+                              <div className="h-5 w-5 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></div>
+                            </div>
+                          ) : woCount > 0 ? (
+                            <button
+                              onClick={() => handleWOClick(row)}
+                              className="flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-100 transition group"
+                            >
+                              <span className="text-lg">{woCount}</span>
+                              <svg className="w-4 h-4 text-blue-500 group-hover:translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </button>
+                          ) : (
+                            <span className="text-sm text-slate-400">0</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   );
                 })}
@@ -1564,6 +1844,17 @@ const SuperAdminLoginStatus = () => {
           </div>
         </div>
       </div>
+
+      {/* ========== NEW: WO Details Modal ========== */}
+      <WODetailsModal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setSelectedEmployee(null);
+        }}
+        employee={selectedEmployee}
+        monthlyData={woData}
+      />
     </div>
   );
 };

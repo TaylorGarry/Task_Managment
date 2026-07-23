@@ -12,6 +12,7 @@ import {
   postActivity,
   startBreak,
   startShift,
+  getMonthlyWOUtilization,
 } from "../Controllers/punchx.controller.js";
 import { cacheGetResponse, invalidateCacheTag } from "../Middlewares/responseCache.middleware.js";
 
@@ -41,6 +42,16 @@ router.get(
   cacheGetResponse({ keyPrefix: "floor-status", ttlMs: 10 * 1000, tag: "attendance" }),
   getFloorStatusDashboard
 );
-router.get("/superadmin/daily-status/export", exportSuperAdminDailyStatusExcel);
+router.get("/superadmin/daily-status/export", exportSuperAdminDailyStatusExcel); 
+
+router.get(
+  '/monthly-wo-utilization',
+  cacheGetResponse({ 
+    keyPrefix: "monthly-wo", 
+    ttlMs: 5 * 60 * 1000, // 5 minutes cache
+    tag: "attendance" 
+  }),
+  getMonthlyWOUtilization
+);
 
 export default router;
