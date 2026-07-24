@@ -92,7 +92,7 @@ const upload = multer({
 });
 
 export const uploadSingleFile = (req, res, next) => {
-  const uploadMiddleware = upload.single('file');
+  const uploadMiddleware = upload.single('excelFile');
   
   uploadMiddleware(req, res, (err) => {
     if (err) {
