@@ -21018,6 +21018,787 @@ export const updateOpsMetaRoster = async (req, res) => {
   }
 };
 
+// export const rosterUploadFromExcel = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     const accountType = String(user?.accountType || "").trim().toLowerCase();
+//     const roleType = getRoleType(user || {});
+//     const normalizedDepartment = normalizeDepartment(user?.department);
+//     const isSuperAdmin = roleType === "superAdmin";
+//     const isHR = accountType === "hr";
+//     const isAdmin = accountType === "admin";
+//     const allowedEmployeeDepartments = ["Operations", "Marketing", "Customer Service", "Developer", "Ticketing", "SEO"];
+//     const isAllowedDepartmentEmployee =
+//       (roleType === "agent" || roleType === "supervisor") &&
+//       allowedEmployeeDepartments.includes(normalizedDepartment);
+//     const isHrOrSuperAdmin = isSuperAdmin || isHR;
+
+//     if (!isSuperAdmin && !isHR && !isAdmin && !isAllowedDepartmentEmployee) {
+//       return res.status(403).json({
+//         success: false,
+//         message: "Access denied. Only superAdmin, admin, HR, or Operations/Marketing/Customer Service/Developer/Ticketing/SEO employees can upload roster."
+//       });
+//     }
+
+//     const { startDate, endDate } = req.body;
+
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Date range is required. Please select start date and end date."
+//       });
+//     }
+
+//     const parseDateOnlyToUtcNoon = (value) => {
+//       const raw = String(value || "").trim();
+//       const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+//       if (!m) return new Date(NaN);
+//       const y = Number.parseInt(m[1], 10);
+//       const mo = Number.parseInt(m[2], 10);
+//       const d = Number.parseInt(m[3], 10);
+//       if (!Number.isFinite(y) || !Number.isFinite(mo) || !Number.isFinite(d)) return new Date(NaN);
+//       return new Date(Date.UTC(y, mo - 1, d, 12, 0, 0, 0));
+//     };
+
+//     const selectedStartDate = parseDateOnlyToUtcNoon(startDate);
+//     const selectedEndDate = parseDateOnlyToUtcNoon(endDate);
+//     selectedStartDate.setUTCHours(0, 0, 0, 0);
+//     selectedEndDate.setUTCHours(0, 0, 0, 0);
+
+//     if (isNaN(selectedStartDate.getTime()) || isNaN(selectedEndDate.getTime())) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid date format. Please use YYYY-MM-DD format."
+//       });
+//     }
+
+//     if (selectedStartDate > selectedEndDate) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Start date cannot be after end date."
+//       });
+//     }
+
+//     const toDateKey = (value) => {
+//       const d = value instanceof Date ? value : new Date(value);
+//       if (Number.isNaN(d.getTime())) return "";
+//       const y = d.getUTCFullYear();
+//       const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+//       const day = String(d.getUTCDate()).padStart(2, "0");
+//       return `${y}-${m}-${day}`;
+//     };
+//     const normalizeText = (value) => String(value || "").trim().toLowerCase();
+//     const buildEmployeeKey = (emp) => {
+//       const rawUserId = String(emp?.userId || "").trim();
+//       if (rawUserId && rawUserId !== "null" && rawUserId !== "undefined") {
+//         return `uid:${rawUserId}`;
+//       }
+//       return `name:${normalizeText(emp?.name)}|dept:${normalizeText(emp?.department)}`;
+//     };
+//     const upsertEmployees = (existingEmployees = [], incomingEmployees = []) => {
+//       const merged = [];
+//       const keyIndexMap = new Map();
+//       let unknownCounter = 0;
+
+//       const addOrUpdate = (employee, preferExistingId = false) => {
+//         if (!employee) return;
+//         const key = buildEmployeeKey(employee) || `__unknown__${unknownCounter++}`;
+//         const existingIndex = keyIndexMap.get(key);
+
+//         if (existingIndex === undefined) {
+//           keyIndexMap.set(key, merged.length);
+//           merged.push(employee);
+//           return;
+//         }
+
+//         const existingRow = merged[existingIndex];
+//         const nextRow = {
+//           ...(existingRow?.toObject ? existingRow.toObject() : existingRow),
+//           ...(employee?.toObject ? employee.toObject() : employee),  
+//         };
+
+//         // Preserve empId from existing if new one doesn't have it
+//         if ((!employee?.empId || String(employee.empId).trim() === "") && existingRow?.empId) {
+//           nextRow.empId = existingRow.empId;
+//         }
+
+//         if (preferExistingId && existingRow?._id && !employee?._id) {
+//           nextRow._id = existingRow._id;
+//         }
+//         if ((!employee?.userId || String(employee.userId).trim() === "") && existingRow?.userId) {
+//           nextRow.userId = existingRow.userId;
+//         }
+
+//         merged[existingIndex] = nextRow;
+//       };
+
+//       (existingEmployees || []).forEach((emp) => addOrUpdate(emp, false));
+//       (incomingEmployees || []).forEach((emp) => addOrUpdate(emp, true));
+//       return merged.filter(Boolean);
+//     };
+
+//     const totalDays = Math.round((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24)) + 1;
+
+//     if (!isSuperAdmin && totalDays !== 7) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Date range must be exactly 7 days for roster upload."
+//       });
+//     }
+
+//     const today = new Date();
+//     today.setHours(0, 0, 0, 0);
+
+//     // DATE VALIDATION BASED ON USER ROLE
+//     if (isAllowedDepartmentEmployee) {
+//       const tomorrow = new Date(today);
+//       tomorrow.setDate(tomorrow.getDate() + 1);
+
+//       if (selectedStartDate < tomorrow) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Operations, Marketing, Customer Service, Developer, Ticketing, and SEO employees can only upload roster for future weeks starting from tomorrow. Cannot upload for today or past dates."
+//         });
+//       }
+//     }
+//     else if (isAdmin) {
+//       if (selectedStartDate < today) {
+//         return res.status(400).json({
+//           success: false,
+//           message: "Admin can only upload roster for today or future dates. Cannot upload for past dates."
+//         });
+//       }
+//     }
+//     else if (isHrOrSuperAdmin) {
+//       console.log(`Admin ${user.username} uploading roster for date range: ${startDate} to ${endDate}`);
+//     }
+
+//     const {
+//       month: rosterMonth,
+//       year: rosterYear,
+//       anchorDateForWeekNumber,
+//     } = getRosterMonthMetaFromRange(selectedStartDate, selectedEndDate);
+
+//     // Excel file check
+//     if (!req.file) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file is required"
+//       });
+//     }
+
+//     // Excel parsing
+//     const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+//     const sheetName = workbook.SheetNames[0];
+//     const worksheet = workbook.Sheets[sheetName];
+//     const excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+//     // Check if first row is info text, then use second row as headers
+//     let headerRowIndex = 0;
+//     let dataStartRowIndex = 1;
+
+//     if (excelData[0] && excelData[0][0] && excelData[0][0].toString().includes('IMPORTANT')) {
+//       headerRowIndex = 1;
+//       dataStartRowIndex = 2;
+//     }
+
+//     const headers = excelData[headerRowIndex];
+//     const dataRows = excelData.slice(dataStartRowIndex);
+
+//     // Clean headers
+//     const cleanHeaders = headers.map(header => {
+//       if (!header) return '';
+//       return header.toString().replace(/^\uFEFF/, '').trim();
+//     });
+
+//     // Convert to array of objects
+//     const formattedData = dataRows.map(row => {
+//       const obj = {};
+//       cleanHeaders.forEach((header, index) => {
+//         if (header) {
+//           obj[header] = row[index] ?? '';
+//         }
+//       });
+//       return obj;
+//     }).filter(row => row.Name && row.Name.toString().trim() !== '');
+
+//     if (!formattedData || formattedData.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Excel file is empty or has no data"
+//       });
+//     }
+
+//     // Column mapping - Employee ID mapping
+//     const columnMap = {};
+//     const availableColumns = Object.keys(formattedData[0]);
+
+//     availableColumns.forEach(col => {
+//       const colLower = col.toLowerCase().trim();
+//       if (colLower === 'employee id' || colLower === 'empid' || colLower === 'emp_id' || colLower === 'employeeid') {
+//         columnMap['Employee ID'] = col;
+//       }
+//       else if (colLower === 'name') columnMap['Name'] = col;
+//       else if (colLower === 'department') columnMap['Department'] = col;
+//       else if (colLower === 'transport') columnMap['Transport'] = col;
+//       else if (colLower === 'team leader') columnMap['Team Leader'] = col;
+//       else if (colLower === 'shift start hour') columnMap['Shift Start Hour'] = col;
+//       else if (colLower === 'shift end hour') columnMap['Shift End Hour'] = col;
+//       else if (colLower === 'cab route') columnMap['CAB Route'] = col;
+//     });
+
+//     // Check required columns
+//     const requiredColumns = ['Name', 'Department', 'Transport', 'Team Leader', 'Shift Start Hour', 'Shift End Hour'];
+//     const missingColumns = requiredColumns.filter(col => !columnMap[col]);
+
+//     if (missingColumns.length > 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: `Missing required columns: ${missingColumns.join(', ')}`
+//       });
+//     }
+
+//     // Identify date columns
+//     const excelDateColumns = [];
+//     const datePattern = /^\d{1,2}\/\d{1,2}/;
+
+//     for (const col of availableColumns) {
+//       if (datePattern.test(col)) {
+//         excelDateColumns.push(col);
+//       }
+//     }
+
+//     const expectedDateColumns = isSuperAdmin ? totalDays : 7;
+//     if (excelDateColumns.length !== expectedDateColumns) {
+//       return res.status(400).json({
+//         success: false,
+//         message: isSuperAdmin
+//           ? `Excel date columns must match selected date range (${totalDays} days). Found: ${excelDateColumns.length}`
+//           : `Excel must have exactly 7 date columns. Found: ${excelDateColumns.length}`
+//       });
+//     }
+
+//     // Process employees data
+//     const employeesData = [];
+//     const processedEmployees = new Set();
+//     const errors = [];
+
+//     for (const [index, row] of formattedData.entries()) {
+//       try {
+//         const name = (row[columnMap['Name']] || "").toString().trim();
+//         if (!name) continue;
+
+//         const department = (row[columnMap['Department']] || "").toString().trim();
+//         if (!department) {
+//           errors.push(`Row ${index + dataStartRowIndex + 1}: Department is required`);
+//           continue;
+//         }
+
+//         // Get Employee ID from Excel (if present)
+//         const excelEmployeeId = columnMap['Employee ID'] ? (row[columnMap['Employee ID']] || "").toString().trim() : "";
+
+//         const username = name.toLowerCase().replace(/\s+/g, '.');
+//         const employeeKey = `${username}-${startDate}-${endDate}`;
+
+//         if (processedEmployees.has(employeeKey)) continue;
+//         processedEmployees.add(employeeKey);
+
+//         // Find user by empId first, then by username
+//         let userRecord = null;
+        
+//         // First try to find by empId from Excel
+//         if (excelEmployeeId) {
+//           userRecord = await User.findOne({ empId: excelEmployeeId });
+//           if (userRecord) {
+//             console.log(`Found user by empId: ${excelEmployeeId} -> ${userRecord.username}`);
+//           }
+//         }
+        
+//         // If not found by empId, try by username
+//         if (!userRecord) {
+//           userRecord = await User.findOne({ username: username });
+//           if (userRecord) {
+//             console.log(`Found user by username: ${username}`);
+//           }
+//         }
+        
+//         // If still not found, try by name
+//         if (!userRecord) {
+//           userRecord = await User.findOne({ 
+//             $or: [
+//               { name: name },
+//               { username: { $regex: new RegExp(`^${name.split(' ')[0].toLowerCase()}`, 'i') } }
+//             ]
+//           });
+//         }
+
+//         // Transport validation
+//         const transportValue = (row[columnMap['Transport']] || "").toString().trim();
+//         const transportUpper = transportValue.toUpperCase();
+//         const normalizedTransport = transportUpper === "YES" ? "Yes" : transportUpper === "NO" ? "No" : "";
+
+//         const cabRouteValue = row[columnMap['CAB Route']] || "";
+//         const teamLeader = (row[columnMap['Team Leader']] || "").toString().trim();
+
+//         // Daily status
+//         const dailyStatus = [];
+//         const statusSeed = parseDateOnlyToUtcNoon(startDate);
+
+//         for (let i = 0; i < excelDateColumns.length; i++) {
+//           const rawStatus = (row[excelDateColumns[i]] || "P").toString().trim();
+//           const status = rawStatus.toUpperCase();
+
+//           const validStatus = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FWO", "H", "LWD", "HD", "EXIT", ""];
+//           if (!validStatus.includes(status)) {
+//             errors.push(`Row ${index + dataStartRowIndex + 1}: Invalid status "${rawStatus}"`);
+//             continue;
+//           }
+
+//           const statusDate = new Date(statusSeed);
+//           statusDate.setUTCDate(statusDate.getUTCDate() + i);
+
+//           dailyStatus.push({
+//             date: statusDate,
+//             status: status || "P"
+//           });
+//         }
+
+//         if (errors.length > 0) continue;
+
+//         // Week-off count validation
+//         if (!isSuperAdmin) {
+//           const woCount = dailyStatus.filter(d => d.status === "WO").length;
+//           if (woCount > 2) {
+//             errors.push(`Row ${index + dataStartRowIndex + 1}: Cannot have more than 2 week-offs`);
+//             continue;
+//           }
+//         } else {
+//           for (let startIdx = 0; startIdx < dailyStatus.length; startIdx += 7) {
+//             const chunk = dailyStatus.slice(startIdx, startIdx + 7);
+//             const chunkWoCount = chunk.filter(d => d.status === "WO").length;
+//             if (chunkWoCount > 2) {
+//               errors.push(`Row ${index + dataStartRowIndex + 1}: Cannot have more than 2 week-offs in any 7-day block`);
+//               break;
+//             }
+//           }
+//           if (errors.length > 0) continue;
+//         }
+
+//         // Shift hours
+//         const parseShiftHour = (raw) => {
+//           if (raw === null || raw === undefined) return NaN;
+//           if (typeof raw === "string") {
+//             const trimmed = raw.trim();
+//             if (!trimmed) return NaN;
+//             const hm = trimmed.match(/^(\d{1,2})(?::(\d{2}))?$/);
+//             if (hm) return Number(hm[1]);
+
+//             const num = Number(trimmed);
+//             if (Number.isFinite(num)) raw = num;
+//             else return NaN;
+//           }
+
+//           if (typeof raw === "number") {
+//             if (!Number.isFinite(raw)) return NaN;
+//             if (raw >= 0 && raw < 1) {
+//               const hours = Math.floor(raw * 24 + 1e-9);
+//               return hours;
+//             }
+//             return Math.trunc(raw);
+//           }
+
+//           if (raw instanceof Date) {
+//             return raw.getHours();
+//           }
+
+//           return NaN;
+//         };
+
+//         const shiftStartHour = parseShiftHour(row[columnMap['Shift Start Hour']]);
+//         const shiftEndHour = parseShiftHour(row[columnMap['Shift End Hour']]);
+
+//         if (!Number.isFinite(shiftStartHour) || !Number.isFinite(shiftEndHour)) {
+//           errors.push(`Row ${index + dataStartRowIndex + 1}: Invalid shift hours`);
+//           continue;
+//         }
+
+//         if (shiftStartHour < 0 || shiftStartHour > 23 || shiftEndHour < 0 || shiftEndHour > 23) {
+//           errors.push(`Row ${index + dataStartRowIndex + 1}: Shift hours must be between 0 and 23`);
+//           continue;
+//         }
+
+//         employeesData.push({
+//           userId: userRecord?._id || null,
+//           empId: userRecord?.empId || excelEmployeeId || "",
+//           name: name,
+//           department: department,
+//           username: username,
+//           transport: normalizedTransport,
+//           cabRoute: cabRouteValue,
+//           shiftStartHour: shiftStartHour,
+//           shiftEndHour: shiftEndHour,
+//           dailyStatus: dailyStatus,
+//           teamLeader: teamLeader
+//         });
+//       } catch (rowError) {
+//         errors.push(`Row ${index + dataStartRowIndex + 1}: ${rowError.message}`);
+//       }
+//     }
+
+//     if (errors.length > 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Validation errors found",
+//         errors: errors.slice(0, 10)
+//       });
+//     }
+
+//     if (employeesData.length === 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "No valid employee data found"
+//       });
+//     }
+
+//     // Get unique departments from Excel
+//     const departments = [...new Set(employeesData.map(emp => emp.department))];
+
+//     // Department-wise overlap check - Check all months in range
+//     const monthsInRange = getAllMonthsInRange(selectedStartDate, selectedEndDate);
+//     const isMultiMonth = monthsInRange.length > 1;
+//     const overlappingWeeksByDept = [];
+
+//     for (const dept of departments) {
+//       for (const { month, year } of monthsInRange) {
+//         const existingRosterWithOverlap = await Roster.findOne({
+//           month,
+//           year,
+//           'weeks.employees': {
+//             $elemMatch: { department: dept }
+//           },
+//           'weeks': {
+//             $elemMatch: {
+//               $or: [
+//                 {
+//                   startDate: { $lte: selectedEndDate },
+//                   endDate: { $gte: selectedStartDate }
+//                 }
+//               ]
+//             }
+//           }
+//         });
+
+//         if (existingRosterWithOverlap) {
+//           const overlappingWeeks = existingRosterWithOverlap.weeks.filter(w => {
+//             if (!w) return false;
+//             const wStart = new Date(w.startDate);
+//             const wEnd = new Date(w.endDate);
+//             const hasDepartment = (w.employees || []).some(emp => emp && emp.department === dept);
+
+//             return hasDepartment && (wStart <= selectedEndDate && wEnd >= selectedStartDate);
+//           });
+
+//           if (overlappingWeeks.length > 0) {
+//             overlappingWeeksByDept.push({
+//               department: dept,
+//               month,
+//               year,
+//               weeks: overlappingWeeks
+//             });
+//           }
+//         }
+//       }
+//     }
+
+//     if (overlappingWeeksByDept.length > 0) {
+//       // HR/SuperAdmin can re-upload an existing week for the exact same date range.
+//       if (isHrOrSuperAdmin && !isMultiMonth) {
+//         const startKey = toDateKey(selectedStartDate);
+//         const endKey = toDateKey(selectedEndDate);
+
+//         const existingRoster = await Roster.findOne({ month: rosterMonth, year: rosterYear });
+//         if (existingRoster) {
+//           const matchedWeekIndexes = (existingRoster.weeks || [])
+//             .map((w, idx) => ({ w, idx }))
+//             .filter(({ w }) => {
+//               if (!w) return false;
+//               return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
+//             })
+//             .map(({ idx }) => idx);
+
+//           if (matchedWeekIndexes.length > 0) {
+//             const primaryIndex = matchedWeekIndexes[0];
+//             const existingEmployees = matchedWeekIndexes.flatMap((weekIdx) =>
+//               ((existingRoster.weeks?.[weekIdx]?.employees || []).filter((emp) => emp !== null))
+//             );
+
+//             existingRoster.weeks[primaryIndex].employees = upsertEmployees(existingEmployees, employeesData);
+//             for (let i = matchedWeekIndexes.length - 1; i >= 1; i -= 1) {
+//               existingRoster.weeks.splice(matchedWeekIndexes[i], 1);
+//             }
+//             existingRoster.updatedBy = user._id;
+//             existingRoster.markModified("weeks");
+//             await existingRoster.save();
+
+//             return res.status(200).json({
+//               success: true,
+//               message: `Roster updated successfully for ${startDate} to ${endDate}`,
+//               data: {
+//                 summary: {
+//                   totalEmployees: existingRoster.weeks[primaryIndex].employees.length,
+//                   weekNumber: existingRoster.weeks[primaryIndex].weekNumber,
+//                   month: rosterMonth,
+//                   year: rosterYear,
+//                   departments: departments,
+//                   uploadedBy: {
+//                     username: user.username,
+//                     accountType: user.accountType,
+//                     department: user.department
+//                   }
+//                 },
+//                 employees: employeesData.map(emp => ({
+//                   empId: emp.empId || '',
+//                   name: emp.name,
+//                   department: emp.department,
+//                   transport: emp.transport,
+//                   cabRoute: emp.cabRoute,
+//                   teamLeader: emp.teamLeader,
+//                   shiftStartHour: emp.shiftStartHour,
+//                   shiftEndHour: emp.shiftEndHour
+//                 }))
+//               }
+//             });
+//           }
+//         }
+//       }
+
+//       // For multi-month or non-HR/SuperAdmin, prevent upload if overlaps exist
+//       const allOverlappingEndDates = overlappingWeeksByDept.flatMap(d =>
+//         d.weeks.map(w => new Date(w.endDate))
+//       );
+//       const latestEndDate = new Date(Math.max(...allOverlappingEndDates));
+
+//       const nextWeekStartDate = new Date(latestEndDate);
+//       nextWeekStartDate.setDate(nextWeekStartDate.getDate() + 1);
+//       const nextWeekEndDate = new Date(nextWeekStartDate);
+//       nextWeekEndDate.setDate(nextWeekEndDate.getDate() + 6);
+
+//       return res.status(400).json({
+//         success: false,
+//         message: isMultiMonth
+//           ? `❌ Multi-month roster uploads cannot replace existing rosters. Please upload separate rosters for each month.`
+//           : `❌ Date range must be the same as your previous roster`,
+//         suggestion: `✅ Next available week: ${nextWeekStartDate.toISOString().split('T')[0]} to ${nextWeekEndDate.toISOString().split('T')[0]}`,
+//         overlappingDepartments: overlappingWeeksByDept
+//       });
+//     }
+
+//     // Save to database - Handle multiple months if range spans across months
+
+//     if (isMultiMonth) {
+//       // Split employees data by month
+//       const monthlyData = splitEmployeesByMonth(employeesData, selectedStartDate, selectedEndDate);
+
+//       const savedRosters = [];
+//       const allSummaries = [];
+
+//       for (const monthData of Object.values(monthlyData)) {
+//         if (monthData.employees.length === 0) continue;
+
+//         const { month, year, employees: monthEmployees } = monthData;
+
+//         // Check for overlaps in this specific month
+//         const monthStart = new Date(Date.UTC(year, month - 1, 1));
+//         const monthEnd = new Date(Date.UTC(year, month, 0));
+
+//         const existingRoster = await Roster.findOne({
+//           month,
+//           year,
+//           'weeks': {
+//             $elemMatch: {
+//               startDate: { $lte: selectedEndDate },
+//               endDate: { $gte: selectedStartDate }
+//             }
+//           }
+//         });
+
+//         if (existingRoster && !isHrOrSuperAdmin) {
+//           return res.status(400).json({
+//             success: false,
+//             message: `Cannot upload roster spanning multiple months. Please upload separate rosters for each month.`
+//           });
+//         }
+
+//         let roster = await Roster.findOne({ month, year });
+
+//         if (!roster) {
+//           roster = new Roster({
+//             month,
+//             year,
+//             rosterStartDate: selectedStartDate,
+//             rosterEndDate: selectedEndDate,
+//             weeks: [],
+//             createdBy: user._id,
+//           });
+//         } else {
+//           roster.updatedBy = user._id;
+//         }
+
+//         // Calculate week number for this month
+//         const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0, 0));
+//         const anchorDate = monthEmployees[0]?.dailyStatus[0]?.date || selectedStartDate;
+//         const anchorDayOfMonth = new Date(anchorDate).getUTCDate();
+//         const weekNumber = Math.max(
+//           1,
+//           Math.ceil((firstDayOfMonth.getUTCDay() + anchorDayOfMonth) / 7)
+//         );
+
+//         // Create week data for this month
+//         const weekStart = monthEmployees[0].dailyStatus[0].date;
+//         const weekEnd = monthEmployees[0].dailyStatus[monthEmployees[0].dailyStatus.length - 1].date;
+
+//         roster.weeks.push({
+//           weekNumber,
+//           startDate: weekStart,
+//           endDate: weekEnd,
+//           employees: monthEmployees
+//         });
+
+//         await roster.save();
+//         savedRosters.push(roster);
+
+//         allSummaries.push({
+//           totalEmployees: monthEmployees.length,
+//           weekNumber,
+//           month,
+//           year,
+//           departments: [...new Set(monthEmployees.map(emp => emp.department))],
+//           uploadedBy: {
+//             username: user.username,
+//             accountType: user.accountType,
+//             department: user.department
+//           }
+//         });
+//       }
+
+//       return res.status(200).json({
+//         success: true,
+//         message: `Roster uploaded successfully for ${startDate} to ${endDate} across ${savedRosters.length} month(s)`,
+//         data: {
+//           summaries: allSummaries,
+//           employees: employeesData.map(emp => ({
+//             empId: emp.empId || '',
+//             name: emp.name,
+//             department: emp.department,
+//             transport: emp.transport,
+//             cabRoute: emp.cabRoute,
+//             teamLeader: emp.teamLeader,
+//             shiftStartHour: emp.shiftStartHour,
+//             shiftEndHour: emp.shiftEndHour
+//           }))
+//         }
+//       });
+//     } else {
+//       // Single month logic (existing code)
+//       let roster = await Roster.findOne({
+//         month: rosterMonth,
+//         year: rosterYear
+//       });
+
+//       if (!roster) {
+//         roster = new Roster({
+//           month: rosterMonth,
+//           year: rosterYear,
+//           rosterStartDate: selectedStartDate,
+//           rosterEndDate: selectedEndDate,
+//           weeks: [],
+//           createdBy: user._id,
+//         });
+//       } else {
+//         roster.updatedBy = user._id;
+//       }
+
+//       const firstDayOfTargetMonth = new Date(
+//         Date.UTC(rosterYear, rosterMonth - 1, 1, 12, 0, 0, 0)
+//       );
+//       const anchorDayOfMonth = anchorDateForWeekNumber.getUTCDate();
+//       const weekNumber = Math.max(
+//         1,
+//         Math.ceil((firstDayOfTargetMonth.getUTCDay() + anchorDayOfMonth) / 7)
+//       );
+
+//       const startKey = toDateKey(selectedStartDate);
+//       const endKey = toDateKey(selectedEndDate);
+//       const matchedWeekIndexes = (roster.weeks || [])
+//         .map((w, idx) => ({ w, idx }))
+//         .filter(({ w }) => {
+//           if (!w) return false;
+//           return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
+//         })
+//         .map(({ idx }) => idx);
+
+//       if (matchedWeekIndexes.length > 0) {
+//         const primaryIndex = matchedWeekIndexes[0];
+//         const existingEmployees = matchedWeekIndexes.flatMap((weekIdx) =>
+//           ((roster.weeks?.[weekIdx]?.employees || []).filter((emp) => emp !== null))
+//         );
+//         roster.weeks[primaryIndex].employees = upsertEmployees(existingEmployees, employeesData);
+//         roster.weeks[primaryIndex].weekNumber = Number.parseInt(roster.weeks[primaryIndex].weekNumber, 10) || weekNumber;
+//         roster.weeks[primaryIndex].startDate = selectedStartDate;
+//         roster.weeks[primaryIndex].endDate = selectedEndDate;
+//         for (let i = matchedWeekIndexes.length - 1; i >= 1; i -= 1) {
+//           roster.weeks.splice(matchedWeekIndexes[i], 1);
+//         }
+//       } else {
+//         roster.weeks.push({
+//           weekNumber: weekNumber,
+//           startDate: selectedStartDate,
+//           endDate: selectedEndDate,
+//           employees: employeesData
+//         });
+//       }
+
+//       await roster.save();
+
+//       return res.status(200).json({
+//         success: true,
+//         message: `Roster uploaded successfully for ${startDate} to ${endDate}`,
+//         data: {
+//           summary: {
+//             totalEmployees: employeesData.length,
+//             weekNumber: weekNumber,
+//             month: rosterMonth,
+//             year: rosterYear,
+//             departments: departments,
+//             uploadedBy: {
+//               username: user.username,
+//               accountType: user.accountType,
+//               department: user.department
+//             }
+//           },
+//           employees: employeesData.map(emp => ({
+//             empId: emp.empId || '',
+//             name: emp.name,
+//             department: emp.department,
+//             transport: emp.transport,
+//             cabRoute: emp.cabRoute,
+//             teamLeader: emp.teamLeader,
+//             shiftStartHour: emp.shiftStartHour,
+//             shiftEndHour: emp.shiftEndHour
+//           }))
+//         }
+//       });
+//     }
+
+//   } catch (error) {
+//     console.error("Error uploading roster from Excel:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: error.message || "Failed to upload roster from Excel"
+//     });
+//   }
+// };
+
 export const rosterUploadFromExcel = async (req, res) => {
   try {
     const user = req.user;
@@ -21117,7 +21898,6 @@ export const rosterUploadFromExcel = async (req, res) => {
           ...(employee?.toObject ? employee.toObject() : employee),  
         };
 
-        // Preserve empId from existing if new one doesn't have it
         if ((!employee?.empId || String(employee.empId).trim() === "") && existingRow?.empId) {
           nextRow.empId = existingRow.empId;
         }
@@ -21139,6 +21919,7 @@ export const rosterUploadFromExcel = async (req, res) => {
 
     const totalDays = Math.round((selectedEndDate - selectedStartDate) / (1000 * 60 * 60 * 24)) + 1;
 
+    // Allow multi-month uploads for all users, but enforce 7-day range for non-SuperAdmin
     if (!isSuperAdmin && totalDays !== 7) {
       return res.status(400).json({
         success: false,
@@ -21193,7 +21974,6 @@ export const rosterUploadFromExcel = async (req, res) => {
     const worksheet = workbook.Sheets[sheetName];
     const excelData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
-    // Check if first row is info text, then use second row as headers
     let headerRowIndex = 0;
     let dataStartRowIndex = 1;
 
@@ -21205,13 +21985,11 @@ export const rosterUploadFromExcel = async (req, res) => {
     const headers = excelData[headerRowIndex];
     const dataRows = excelData.slice(dataStartRowIndex);
 
-    // Clean headers
     const cleanHeaders = headers.map(header => {
       if (!header) return '';
       return header.toString().replace(/^\uFEFF/, '').trim();
     });
 
-    // Convert to array of objects
     const formattedData = dataRows.map(row => {
       const obj = {};
       cleanHeaders.forEach((header, index) => {
@@ -21229,7 +22007,6 @@ export const rosterUploadFromExcel = async (req, res) => {
       });
     }
 
-    // Column mapping - Employee ID mapping
     const columnMap = {};
     const availableColumns = Object.keys(formattedData[0]);
 
@@ -21247,7 +22024,6 @@ export const rosterUploadFromExcel = async (req, res) => {
       else if (colLower === 'cab route') columnMap['CAB Route'] = col;
     });
 
-    // Check required columns
     const requiredColumns = ['Name', 'Department', 'Transport', 'Team Leader', 'Shift Start Hour', 'Shift End Hour'];
     const missingColumns = requiredColumns.filter(col => !columnMap[col]);
 
@@ -21258,7 +22034,6 @@ export const rosterUploadFromExcel = async (req, res) => {
       });
     }
 
-    // Identify date columns
     const excelDateColumns = [];
     const datePattern = /^\d{1,2}\/\d{1,2}/;
 
@@ -21278,7 +22053,6 @@ export const rosterUploadFromExcel = async (req, res) => {
       });
     }
 
-    // Process employees data
     const employeesData = [];
     const processedEmployees = new Set();
     const errors = [];
@@ -21294,7 +22068,6 @@ export const rosterUploadFromExcel = async (req, res) => {
           continue;
         }
 
-        // Get Employee ID from Excel (if present)
         const excelEmployeeId = columnMap['Employee ID'] ? (row[columnMap['Employee ID']] || "").toString().trim() : "";
 
         const username = name.toLowerCase().replace(/\s+/g, '.');
@@ -21303,10 +22076,8 @@ export const rosterUploadFromExcel = async (req, res) => {
         if (processedEmployees.has(employeeKey)) continue;
         processedEmployees.add(employeeKey);
 
-        // Find user by empId first, then by username
         let userRecord = null;
         
-        // First try to find by empId from Excel
         if (excelEmployeeId) {
           userRecord = await User.findOne({ empId: excelEmployeeId });
           if (userRecord) {
@@ -21314,7 +22085,6 @@ export const rosterUploadFromExcel = async (req, res) => {
           }
         }
         
-        // If not found by empId, try by username
         if (!userRecord) {
           userRecord = await User.findOne({ username: username });
           if (userRecord) {
@@ -21322,7 +22092,6 @@ export const rosterUploadFromExcel = async (req, res) => {
           }
         }
         
-        // If still not found, try by name
         if (!userRecord) {
           userRecord = await User.findOne({ 
             $or: [
@@ -21332,7 +22101,6 @@ export const rosterUploadFromExcel = async (req, res) => {
           });
         }
 
-        // Transport validation
         const transportValue = (row[columnMap['Transport']] || "").toString().trim();
         const transportUpper = transportValue.toUpperCase();
         const normalizedTransport = transportUpper === "YES" ? "Yes" : transportUpper === "NO" ? "No" : "";
@@ -21340,7 +22108,6 @@ export const rosterUploadFromExcel = async (req, res) => {
         const cabRouteValue = row[columnMap['CAB Route']] || "";
         const teamLeader = (row[columnMap['Team Leader']] || "").toString().trim();
 
-        // Daily status
         const dailyStatus = [];
         const statusSeed = parseDateOnlyToUtcNoon(startDate);
 
@@ -21365,7 +22132,6 @@ export const rosterUploadFromExcel = async (req, res) => {
 
         if (errors.length > 0) continue;
 
-        // Week-off count validation
         if (!isSuperAdmin) {
           const woCount = dailyStatus.filter(d => d.status === "WO").length;
           if (woCount > 2) {
@@ -21384,7 +22150,6 @@ export const rosterUploadFromExcel = async (req, res) => {
           if (errors.length > 0) continue;
         }
 
-        // Shift hours
         const parseShiftHour = (raw) => {
           if (raw === null || raw === undefined) return NaN;
           if (typeof raw === "string") {
@@ -21460,59 +22225,175 @@ export const rosterUploadFromExcel = async (req, res) => {
       });
     }
 
-    // Get unique departments from Excel
     const departments = [...new Set(employeesData.map(emp => emp.department))];
 
-    // Department-wise overlap check - Check all months in range
+    // Get months in range
     const monthsInRange = getAllMonthsInRange(selectedStartDate, selectedEndDate);
     const isMultiMonth = monthsInRange.length > 1;
+
+    // =============================================
+    // 🔥 MULTI-MONTH HANDLING
+    // =============================================
+    if (isMultiMonth) {
+      console.log(`📅 Processing multi-month roster upload from ${startDate} to ${endDate}`);
+      
+      // Split employees data by month
+      const monthlyData = splitEmployeesByMonth(employeesData, selectedStartDate, selectedEndDate);
+
+      const savedRosters = [];
+      const allSummaries = [];
+
+      for (const monthKey of Object.keys(monthlyData).sort()) {
+        const monthData = monthlyData[monthKey];
+        if (monthData.employees.length === 0) continue;
+
+        const { month, year, employees: monthEmployees } = monthData;
+        
+        // Check if roster exists for this month
+        let roster = await Roster.findOne({ month, year });
+
+        if (!roster) {
+          roster = new Roster({
+            month,
+            year,
+            rosterStartDate: selectedStartDate,
+            rosterEndDate: selectedEndDate,
+            weeks: [],
+            createdBy: user._id,
+          });
+        } else {
+          roster.updatedBy = user._id;
+        }
+
+        // Get the start and end date for this month's portion
+        const monthStartDate = new Date(Date.UTC(year, month - 1, 1));
+        const monthEndDate = new Date(Date.UTC(year, month, 0));
+        const actualStart = selectedStartDate > monthStartDate ? selectedStartDate : monthStartDate;
+        const actualEnd = selectedEndDate < monthEndDate ? selectedEndDate : monthEndDate;
+
+        // Calculate week number
+        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0, 0));
+        const anchorDate = monthEmployees[0]?.dailyStatus[0]?.date || actualStart;
+        const anchorDayOfMonth = new Date(anchorDate).getUTCDate();
+        const weekNumber = Math.max(
+          1,
+          Math.ceil((firstDayOfMonth.getUTCDay() + anchorDayOfMonth) / 7)
+        );
+
+        // Create week data for this month
+        const weekStart = actualStart;
+        const weekEnd = actualEnd;
+
+        // Check if week already exists for this date range
+        const startKey = toDateKey(weekStart);
+        const endKey = toDateKey(weekEnd);
+        const existingWeekIndex = (roster.weeks || []).findIndex(w => 
+          w && toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey
+        );
+
+        if (existingWeekIndex !== -1) {
+          // Update existing week
+          const existingEmployees = roster.weeks[existingWeekIndex].employees || [];
+          roster.weeks[existingWeekIndex].employees = upsertEmployees(existingEmployees, monthEmployees);
+          roster.weeks[existingWeekIndex].weekNumber = weekNumber;
+        } else {
+          // Add new week
+          roster.weeks.push({
+            weekNumber,
+            startDate: weekStart,
+            endDate: weekEnd,
+            employees: monthEmployees
+          });
+        }
+
+        roster.markModified("weeks");
+        await roster.save();
+        savedRosters.push(roster);
+
+        allSummaries.push({
+          totalEmployees: monthEmployees.length,
+          weekNumber,
+          month,
+          year,
+          departments: [...new Set(monthEmployees.map(emp => emp.department))],
+          uploadedBy: {
+            username: user.username,
+            accountType: user.accountType,
+            department: user.department
+          }
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        message: `Roster uploaded successfully for ${startDate} to ${endDate} across ${savedRosters.length} month(s)`,
+        data: {
+          summaries: allSummaries,
+          employees: employeesData.map(emp => ({
+            empId: emp.empId || '',
+            name: emp.name,
+            department: emp.department,
+            transport: emp.transport,
+            cabRoute: emp.cabRoute,
+            teamLeader: emp.teamLeader,
+            shiftStartHour: emp.shiftStartHour,
+            shiftEndHour: emp.shiftEndHour
+          }))
+        }
+      });
+    }
+
+    // =============================================
+    // 📅 SINGLE-MONTH HANDLING (Your existing code)
+    // =============================================
+    // This runs when isMultiMonth is false (date range is within a single month)
+    
+    // Check for overlapping weeks for single month
     const overlappingWeeksByDept = [];
 
     for (const dept of departments) {
-      for (const { month, year } of monthsInRange) {
-        const existingRosterWithOverlap = await Roster.findOne({
-          month,
-          year,
-          'weeks.employees': {
-            $elemMatch: { department: dept }
-          },
-          'weeks': {
-            $elemMatch: {
-              $or: [
-                {
-                  startDate: { $lte: selectedEndDate },
-                  endDate: { $gte: selectedStartDate }
-                }
-              ]
-            }
+      const existingRosterWithOverlap = await Roster.findOne({
+        month: rosterMonth,
+        year: rosterYear,
+        'weeks.employees': {
+          $elemMatch: { department: dept }
+        },
+        'weeks': {
+          $elemMatch: {
+            $or: [
+              {
+                startDate: { $lte: selectedEndDate },
+                endDate: { $gte: selectedStartDate }
+              }
+            ]
           }
+        }
+      });
+
+      if (existingRosterWithOverlap) {
+        const overlappingWeeks = existingRosterWithOverlap.weeks.filter(w => {
+          if (!w) return false;
+          const wStart = new Date(w.startDate);
+          const wEnd = new Date(w.endDate);
+          const hasDepartment = (w.employees || []).some(emp => emp && emp.department === dept);
+
+          return hasDepartment && (wStart <= selectedEndDate && wEnd >= selectedStartDate);
         });
 
-        if (existingRosterWithOverlap) {
-          const overlappingWeeks = existingRosterWithOverlap.weeks.filter(w => {
-            if (!w) return false;
-            const wStart = new Date(w.startDate);
-            const wEnd = new Date(w.endDate);
-            const hasDepartment = (w.employees || []).some(emp => emp && emp.department === dept);
-
-            return hasDepartment && (wStart <= selectedEndDate && wEnd >= selectedStartDate);
+        if (overlappingWeeks.length > 0) {
+          overlappingWeeksByDept.push({
+            department: dept,
+            month: rosterMonth,
+            year: rosterYear,
+            weeks: overlappingWeeks
           });
-
-          if (overlappingWeeks.length > 0) {
-            overlappingWeeksByDept.push({
-              department: dept,
-              month,
-              year,
-              weeks: overlappingWeeks
-            });
-          }
         }
       }
     }
 
     if (overlappingWeeksByDept.length > 0) {
-      // HR/SuperAdmin can re-upload an existing week for the exact same date range.
-      if (isHrOrSuperAdmin && !isMultiMonth) {
+      // HR/SuperAdmin can re-upload an existing week for the exact same date range
+      if (isHrOrSuperAdmin) {
         const startKey = toDateKey(selectedStartDate);
         const endKey = toDateKey(selectedEndDate);
 
@@ -21572,7 +22453,7 @@ export const rosterUploadFromExcel = async (req, res) => {
         }
       }
 
-      // For multi-month or non-HR/SuperAdmin, prevent upload if overlaps exist
+      // For non-HR/SuperAdmin, prevent upload if overlaps exist
       const allOverlappingEndDates = overlappingWeeksByDept.flatMap(d =>
         d.weeks.map(w => new Date(w.endDate))
       );
@@ -21585,210 +22466,101 @@ export const rosterUploadFromExcel = async (req, res) => {
 
       return res.status(400).json({
         success: false,
-        message: isMultiMonth
-          ? `❌ Multi-month roster uploads cannot replace existing rosters. Please upload separate rosters for each month.`
-          : `❌ Date range must be the same as your previous roster`,
+        message: `❌ Date range must be the same as your previous roster`,
         suggestion: `✅ Next available week: ${nextWeekStartDate.toISOString().split('T')[0]} to ${nextWeekEndDate.toISOString().split('T')[0]}`,
         overlappingDepartments: overlappingWeeksByDept
       });
     }
 
-    // Save to database - Handle multiple months if range spans across months
+    // Save to database - Single month
+    let roster = await Roster.findOne({
+      month: rosterMonth,
+      year: rosterYear
+    });
 
-    if (isMultiMonth) {
-      // Split employees data by month
-      const monthlyData = splitEmployeesByMonth(employeesData, selectedStartDate, selectedEndDate);
+    if (!roster) {
+      roster = new Roster({
+        month: rosterMonth,
+        year: rosterYear,
+        rosterStartDate: selectedStartDate,
+        rosterEndDate: selectedEndDate,
+        weeks: [],
+        createdBy: user._id,
+      });
+    } else {
+      roster.updatedBy = user._id;
+    }
 
-      const savedRosters = [];
-      const allSummaries = [];
+    const firstDayOfTargetMonth = new Date(
+      Date.UTC(rosterYear, rosterMonth - 1, 1, 12, 0, 0, 0)
+    );
+    const anchorDayOfMonth = anchorDateForWeekNumber.getUTCDate();
+    const weekNumber = Math.max(
+      1,
+      Math.ceil((firstDayOfTargetMonth.getUTCDay() + anchorDayOfMonth) / 7)
+    );
 
-      for (const monthData of Object.values(monthlyData)) {
-        if (monthData.employees.length === 0) continue;
+    const startKey = toDateKey(selectedStartDate);
+    const endKey = toDateKey(selectedEndDate);
+    const matchedWeekIndexes = (roster.weeks || [])
+      .map((w, idx) => ({ w, idx }))
+      .filter(({ w }) => {
+        if (!w) return false;
+        return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
+      })
+      .map(({ idx }) => idx);
 
-        const { month, year, employees: monthEmployees } = monthData;
+    if (matchedWeekIndexes.length > 0) {
+      const primaryIndex = matchedWeekIndexes[0];
+      const existingEmployees = matchedWeekIndexes.flatMap((weekIdx) =>
+        ((roster.weeks?.[weekIdx]?.employees || []).filter((emp) => emp !== null))
+      );
+      roster.weeks[primaryIndex].employees = upsertEmployees(existingEmployees, employeesData);
+      roster.weeks[primaryIndex].weekNumber = Number.parseInt(roster.weeks[primaryIndex].weekNumber, 10) || weekNumber;
+      roster.weeks[primaryIndex].startDate = selectedStartDate;
+      roster.weeks[primaryIndex].endDate = selectedEndDate;
+      for (let i = matchedWeekIndexes.length - 1; i >= 1; i -= 1) {
+        roster.weeks.splice(matchedWeekIndexes[i], 1);
+      }
+    } else {
+      roster.weeks.push({
+        weekNumber: weekNumber,
+        startDate: selectedStartDate,
+        endDate: selectedEndDate,
+        employees: employeesData
+      });
+    }
 
-        // Check for overlaps in this specific month
-        const monthStart = new Date(Date.UTC(year, month - 1, 1));
-        const monthEnd = new Date(Date.UTC(year, month, 0));
+    await roster.save();
 
-        const existingRoster = await Roster.findOne({
-          month,
-          year,
-          'weeks': {
-            $elemMatch: {
-              startDate: { $lte: selectedEndDate },
-              endDate: { $gte: selectedStartDate }
-            }
-          }
-        });
-
-        if (existingRoster && !isHrOrSuperAdmin) {
-          return res.status(400).json({
-            success: false,
-            message: `Cannot upload roster spanning multiple months. Please upload separate rosters for each month.`
-          });
-        }
-
-        let roster = await Roster.findOne({ month, year });
-
-        if (!roster) {
-          roster = new Roster({
-            month,
-            year,
-            rosterStartDate: selectedStartDate,
-            rosterEndDate: selectedEndDate,
-            weeks: [],
-            createdBy: user._id,
-          });
-        } else {
-          roster.updatedBy = user._id;
-        }
-
-        // Calculate week number for this month
-        const firstDayOfMonth = new Date(Date.UTC(year, month - 1, 1, 12, 0, 0, 0));
-        const anchorDate = monthEmployees[0]?.dailyStatus[0]?.date || selectedStartDate;
-        const anchorDayOfMonth = new Date(anchorDate).getUTCDate();
-        const weekNumber = Math.max(
-          1,
-          Math.ceil((firstDayOfMonth.getUTCDay() + anchorDayOfMonth) / 7)
-        );
-
-        // Create week data for this month
-        const weekStart = monthEmployees[0].dailyStatus[0].date;
-        const weekEnd = monthEmployees[0].dailyStatus[monthEmployees[0].dailyStatus.length - 1].date;
-
-        roster.weeks.push({
-          weekNumber,
-          startDate: weekStart,
-          endDate: weekEnd,
-          employees: monthEmployees
-        });
-
-        await roster.save();
-        savedRosters.push(roster);
-
-        allSummaries.push({
-          totalEmployees: monthEmployees.length,
-          weekNumber,
-          month,
-          year,
-          departments: [...new Set(monthEmployees.map(emp => emp.department))],
+    return res.status(200).json({
+      success: true,
+      message: `Roster uploaded successfully for ${startDate} to ${endDate}`,
+      data: {
+        summary: {
+          totalEmployees: employeesData.length,
+          weekNumber: weekNumber,
+          month: rosterMonth,
+          year: rosterYear,
+          departments: departments,
           uploadedBy: {
             username: user.username,
             accountType: user.accountType,
             department: user.department
           }
-        });
+        },
+        employees: employeesData.map(emp => ({
+          empId: emp.empId || '',
+          name: emp.name,
+          department: emp.department,
+          transport: emp.transport,
+          cabRoute: emp.cabRoute,
+          teamLeader: emp.teamLeader,
+          shiftStartHour: emp.shiftStartHour,
+          shiftEndHour: emp.shiftEndHour
+        }))
       }
-
-      return res.status(200).json({
-        success: true,
-        message: `Roster uploaded successfully for ${startDate} to ${endDate} across ${savedRosters.length} month(s)`,
-        data: {
-          summaries: allSummaries,
-          employees: employeesData.map(emp => ({
-            empId: emp.empId || '',
-            name: emp.name,
-            department: emp.department,
-            transport: emp.transport,
-            cabRoute: emp.cabRoute,
-            teamLeader: emp.teamLeader,
-            shiftStartHour: emp.shiftStartHour,
-            shiftEndHour: emp.shiftEndHour
-          }))
-        }
-      });
-    } else {
-      // Single month logic (existing code)
-      let roster = await Roster.findOne({
-        month: rosterMonth,
-        year: rosterYear
-      });
-
-      if (!roster) {
-        roster = new Roster({
-          month: rosterMonth,
-          year: rosterYear,
-          rosterStartDate: selectedStartDate,
-          rosterEndDate: selectedEndDate,
-          weeks: [],
-          createdBy: user._id,
-        });
-      } else {
-        roster.updatedBy = user._id;
-      }
-
-      const firstDayOfTargetMonth = new Date(
-        Date.UTC(rosterYear, rosterMonth - 1, 1, 12, 0, 0, 0)
-      );
-      const anchorDayOfMonth = anchorDateForWeekNumber.getUTCDate();
-      const weekNumber = Math.max(
-        1,
-        Math.ceil((firstDayOfTargetMonth.getUTCDay() + anchorDayOfMonth) / 7)
-      );
-
-      const startKey = toDateKey(selectedStartDate);
-      const endKey = toDateKey(selectedEndDate);
-      const matchedWeekIndexes = (roster.weeks || [])
-        .map((w, idx) => ({ w, idx }))
-        .filter(({ w }) => {
-          if (!w) return false;
-          return toDateKey(w.startDate) === startKey && toDateKey(w.endDate) === endKey;
-        })
-        .map(({ idx }) => idx);
-
-      if (matchedWeekIndexes.length > 0) {
-        const primaryIndex = matchedWeekIndexes[0];
-        const existingEmployees = matchedWeekIndexes.flatMap((weekIdx) =>
-          ((roster.weeks?.[weekIdx]?.employees || []).filter((emp) => emp !== null))
-        );
-        roster.weeks[primaryIndex].employees = upsertEmployees(existingEmployees, employeesData);
-        roster.weeks[primaryIndex].weekNumber = Number.parseInt(roster.weeks[primaryIndex].weekNumber, 10) || weekNumber;
-        roster.weeks[primaryIndex].startDate = selectedStartDate;
-        roster.weeks[primaryIndex].endDate = selectedEndDate;
-        for (let i = matchedWeekIndexes.length - 1; i >= 1; i -= 1) {
-          roster.weeks.splice(matchedWeekIndexes[i], 1);
-        }
-      } else {
-        roster.weeks.push({
-          weekNumber: weekNumber,
-          startDate: selectedStartDate,
-          endDate: selectedEndDate,
-          employees: employeesData
-        });
-      }
-
-      await roster.save();
-
-      return res.status(200).json({
-        success: true,
-        message: `Roster uploaded successfully for ${startDate} to ${endDate}`,
-        data: {
-          summary: {
-            totalEmployees: employeesData.length,
-            weekNumber: weekNumber,
-            month: rosterMonth,
-            year: rosterYear,
-            departments: departments,
-            uploadedBy: {
-              username: user.username,
-              accountType: user.accountType,
-              department: user.department
-            }
-          },
-          employees: employeesData.map(emp => ({
-            empId: emp.empId || '',
-            name: emp.name,
-            department: emp.department,
-            transport: emp.transport,
-            cabRoute: emp.cabRoute,
-            teamLeader: emp.teamLeader,
-            shiftStartHour: emp.shiftStartHour,
-            shiftEndHour: emp.shiftEndHour
-          }))
-        }
-      });
-    }
+    });
 
   } catch (error) {
     console.error("Error uploading roster from Excel:", error);
