@@ -1,4 +1,49 @@
 // import mongoose from "mongoose";
+// import { getRoleType } from "../utils/roleAccess.js";
+
+// const requiresShiftDetails = function () {
+//   const roleType = getRoleType(this);
+//   return roleType !== "superAdmin" && roleType !== "floorStatus" && !this.isCoreTeam;
+// };
+
+// const employeeDocumentSchema = new mongoose.Schema(
+//   {
+//     name: { type: String, trim: true, default: "" },
+//     url: { type: String, trim: true, default: "" },
+//     publicId: { type: String, trim: true, default: "" },
+//     fileName: { type: String, trim: true, default: "" },
+//     mimeType: { type: String, trim: true, default: "" },
+//     size: { type: Number, default: 0 },
+//     uploaded: { type: Boolean, default: false },
+//     uploadedAt: { type: Date, default: null },
+//     uploadedIp: { type: String, trim: true, default: "" },
+//   },
+//   { _id: false }
+// );
+
+// const policySignaturePartySchema = new mongoose.Schema(
+//   {
+//     signed: { type: Boolean, default: false },
+//     signedAt: { type: Date, default: null },
+//     signedIp: { type: String, trim: true, default: "" },
+//     signatureUrl: { type: String, trim: true, default: "" },
+//     signaturePublicId: { type: String, trim: true, default: "" },
+//     signedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+//   },
+//   { _id: false }
+// );
+
+// const policySignatureSchema = new mongoose.Schema(
+//   {
+//     documentUrl: { type: String, trim: true, required: true },
+//     employee: { type: policySignaturePartySchema, default: () => ({}) },
+//     hr: { type: policySignaturePartySchema, default: () => ({}) },
+//     signedPdfUrl: { type: String, trim: true, default: "" },
+//     signedPdfPublicId: { type: String, trim: true, default: "" },
+//     signedPdfGeneratedAt: { type: Date, default: null },
+//   },
+//   { _id: false }
+// );
 
 // const userSchema = new mongoose.Schema(
 //   {
@@ -8,53 +53,275 @@
 //       unique: true,
 //       trim: true,
 //     },
+
 //     password: {
 //       type: String,
 //       required: true,
 //     },
+
 //     accountType: {
 //       type: String,
-//       enum: ["employee", "admin"],
+//       enum: [
+//         "employee",
+//         "admin",
+//         "superAdmin",
+//         "HR",
+//         "Operations",
+//         "AM",
+//         "agent",
+//         "supervisor",
+//         "floorStatus",
+//       ],
 //       default: "employee",
 //     },
+
 //     department: {
 //       type: String,
 //       required: true,
 //       trim: true,
 //     },
+
 //     shift: {
 //       type: String,
 //       enum: ["Start", "Mid", "End"],
-//       required: function() { return !this.isCoreTeam; },
+//       required: requiresShiftDetails,
 //     },
+
 //     shiftStartHour: {
 //       type: Number,
-//       required: function() { return !this.isCoreTeam; },
+//       required: requiresShiftDetails,
 //     },
+
 //     shiftEndHour: {
 //       type: Number,
-//       required: function() { return !this.isCoreTeam; },
+//       required: requiresShiftDetails,
 //     },
+
 //     isCoreTeam: {
 //       type: Boolean,
 //       default: false,
 //     },
+
+//     isTeamLeader: {
+//       type: Boolean,
+//       default: false,
+//     },
+
+//     isActive: {
+//       type: Boolean,
+//       default: true,
+//     },
+
+//     active: {
+//       type: Boolean,
+//       default: true,
+//     },
+
+//     employmentStatus: {
+//       type: String,
+//       enum: ["Active", "Exited", ""],
+//       default: "Active",
+//     },
+
+//     realName: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     pseudoName: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     empId: {
+//       type: String,
+//       trim: true,
+//       sparse: true,
+//     },
+
+//     dateOfJoining: {
+//       type: Date,
+//       default: null,
+//     },
+//      sessionHistoryStartAt: {
+//       type: Date,
+//       default: null,
+//     },
+//     dob: {
+//       type: Date,
+//       default: null,
+//     },
+
+//     permanentAddress: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     currentAddress: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     bloodGroup: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+//     contactNumber: {
+//     type: String,
+//     trim: true,
+//     default: "",
+//     },
+//     emergencyContactNumber: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     emergencyContactName: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     emergencyContactRelation: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     personalEmailId: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     transportOffice: {
+//       type: String,
+//       enum: ["Yes", "No", ""],
+//       default: "No",
+//     },
+
+//     docsStatus: {
+//       type: String,
+//       enum: ["Yes", "No", "Pending", ""],
+//       default: "No",
+//     },
+
+//     employmentType: {
+//       type: String,
+//       enum: ["fresher", "experienced", ""],
+//       default: "",
+//     },
+
+//     documents: {
+//       type: [employeeDocumentSchema],
+//       default: [],
+//     },
+
+//     designation: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     officeLocation: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     reportingManager: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "User",
+//       default: null,
+//     },
+
+//     profilePhotoUrl: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     profilePhotoPublicId: {
+//       type: String,
+//       trim: true,
+//       default: "",
+//     },
+
+//     ctc: {
+//       type: Number,
+//       default: null,
+//     },
+
+//     inHandSalary: {
+//       type: Number,
+//       default: null,
+//     },
+
+//     transportAllowance: {
+//       type: Number,
+//       default: null,
+//     },
+
+//     policyDocuments: {
+//       type: [String],
+//       default: [],
+//     },
+
+//     policySignatures: {
+//       type: [policySignatureSchema],
+//       default: [],
+//     },
+
+//     policyAgreement: {
+//       agreed: { type: Boolean, default: false },
+//       agreedAt: { type: Date, default: null },
+//       agreedIp: { type: String, default: "" },
+//       version: { type: String, default: "v1" },
+//     },
+
+//     hrDocumentOverrideUntil: {
+//       type: Date,
+//       default: null,
+//     },
+//     hrDocumentOverrideBy: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "User",
+//       default: null,
+//     },
+//     hrGlobalDocumentOverrideUntil: {
+//       type: Date,
+//       default: null,
+//     },
+//     hrGlobalDocumentOverrideBy: {
+//       type: mongoose.Schema.Types.ObjectId,
+//       ref: "User",
+//       default: null,
+//     },
 //   },
 //   { timestamps: true }
 // );
+
+// userSchema.index({ empId: 1 }, { unique: true, sparse: true });
+// userSchema.index({ reportingManager: 1 });
 
 // const User = mongoose.model("User", userSchema);
 // export default User;
 
 
 
+
+
+
+
+
 import mongoose from "mongoose";
 import { getRoleType } from "../utils/roleAccess.js";
-
-const requiresShiftDetails = function () {
-  const roleType = getRoleType(this);
-  return roleType !== "superAdmin" && roleType !== "floorStatus" && !this.isCoreTeam;
-};
 
 const employeeDocumentSchema = new mongoose.Schema(
   {
@@ -95,6 +362,18 @@ const policySignatureSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const accountDetailsSchema = new mongoose.Schema(
+  {
+    panNumber: { type: String, trim: true, default: "" },
+    aadhaarNumber: { type: String, trim: true, default: "" },
+    uanNumber: { type: String, trim: true, default: "" },
+    bankAccountNumber: { type: String, trim: true, default: "" },
+    ifscCode: { type: String, trim: true, default: "" },
+    accountHolderName: { type: String, trim: true, default: "" },
+  },
+  { _id: false }
+);
+
 const userSchema = new mongoose.Schema(
   {
     username: {
@@ -120,7 +399,6 @@ const userSchema = new mongoose.Schema(
         "AM",
         "agent",
         "supervisor",
-        "floorStatus",
       ],
       default: "employee",
     },
@@ -134,17 +412,23 @@ const userSchema = new mongoose.Schema(
     shift: {
       type: String,
       enum: ["Start", "Mid", "End"],
-      required: requiresShiftDetails,
+      required: function () {
+        return getRoleType(this) !== "superAdmin" && !this.isCoreTeam;
+      },
     },
 
     shiftStartHour: {
       type: Number,
-      required: requiresShiftDetails,
+      required: function () {
+        return getRoleType(this) !== "superAdmin" && !this.isCoreTeam;
+      },
     },
 
     shiftEndHour: {
       type: Number,
-      required: requiresShiftDetails,
+      required: function () {
+        return getRoleType(this) !== "superAdmin" && !this.isCoreTeam;
+      },
     },
 
     isCoreTeam: {
@@ -333,6 +617,11 @@ const userSchema = new mongoose.Schema(
       agreedAt: { type: Date, default: null },
       agreedIp: { type: String, default: "" },
       version: { type: String, default: "v1" },
+    },
+
+    accountDetails: {
+      type: accountDetailsSchema,
+      default: () => ({}),
     },
 
     hrDocumentOverrideUntil: {
