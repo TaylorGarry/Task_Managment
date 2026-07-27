@@ -2608,26 +2608,81 @@ export const getFloorStatusDashboard = async (req, res) => {
     });
 
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
-    const toFloorRow = (row = {}) => ({
-      userId: row.userId,
-      username: row.username || "",
-      pseudoName: row.pseudoName || "",
-      name: row.pseudoName || row.username || "",
-      department: row.department || "",
-      floorRosterStatus: row.floorRosterStatus || "",
-      floorDepartmentStatus: row.floorDepartmentStatus || "",
-      isOnBreak: Boolean(row.isOnBreak),
-      breakType: row.breakType || "",
-      breakStartAt: row.breakStartAt || null,
-      totalBreakMs: row.totalBreakMs || 0,
-      totalWorkedMs: row.totalWorkedMs || 0,
-      loginTime: row.loginTime || null,
-    });
+    
+    const toFloorRow = (row = {}) => {
+      let formattedLogoutTime = null;
+      if (row.logoutTime) {
+        const logoutDate = new Date(row.logoutTime);
+        formattedLogoutTime = logoutDate.toLocaleString('en-IN', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        });
+      }
+
+      return {
+        userId: row.userId,
+        username: row.username || "",
+        pseudoName: row.pseudoName || "",
+        name: row.pseudoName || row.username || "",
+        department: row.department || "",
+        floorRosterStatus: row.floorRosterStatus || "",
+        floorDepartmentStatus: row.floorDepartmentStatus || "",
+        isOnBreak: Boolean(row.isOnBreak),
+        breakType: row.breakType || "",
+        breakStartAt: row.breakStartAt || null,
+        totalBreakMs: row.totalBreakMs || 0,
+        totalWorkedMs: row.totalWorkedMs || 0,
+        loginTime: row.loginTime || null,
+        logoutTime: row.logoutTime || null,
+        formattedLogoutTime: formattedLogoutTime,
+        isActive: row.isActive || false,
+        status: !row.loginTime ? 'Never Logged In' : 
+                (row.logoutTime || !row.isActive) ? 'Logged Out' : 'Logged In',
+        loggedOutAt: formattedLogoutTime,
+        hasRoster: String(row.floorRosterStatus || "").trim().toUpperCase() === "P",
+      };
+    };
+    
     const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
     const isDepartmentPresent = (row = {}) => String(row.floorDepartmentStatus || "").trim().toUpperCase() === "P";
+    const isDepartmentEmpty = (row = {}) => String(row.floorDepartmentStatus || "").trim() === "";
+    
     const rosterPresentRows = rows.filter(isRosterPresent);
+    
+    // ✅ FIX: Get ALL employees on break regardless of roster status
+    const allOnBreakRows = rows.filter((row) => row.isOnBreak).map(toFloorRow);
+    
+    // ✅ FIX: Get on break employees WITH roster (for backward compatibility)
     const onBreakRows = rosterPresentRows.filter((row) => row.isOnBreak).map(toFloorRow);
-    const notLoggedInRows = rosterPresentRows.filter((row) => !row.loginTime && isDepartmentPresent(row)).map(toFloorRow);
+    
+    // ✅ NEW: Get on break employees WITHOUT roster
+    const onBreakWithoutRoster = allOnBreakRows.filter(row => !row.hasRoster);
+    
+    // Not logged in rows (only those with roster present)
+    const notLoggedInRows = rosterPresentRows.filter((row) => {
+      // Skip if on break
+      if (row.isOnBreak) return false;
+      
+      // Condition 1: Roster P + dept status empty + not logged in
+      const condition1 = isDepartmentEmpty(row) && !row.loginTime;
+      
+      // Condition 2: Roster P + dept P + logged in but logged out
+      const condition2 = isDepartmentPresent(row) && row.loginTime && (!row.isActive || row.logoutTime);
+      
+      // Condition 3: Roster P + dept P + never logged in
+      const condition3 = isDepartmentPresent(row) && !row.loginTime;
+      
+      return condition1 || condition2 || condition3;
+    }).map(toFloorRow);
+
+    // Separate logged out from never logged in
+    const loggedOutRows = notLoggedInRows.filter(row => row.logoutTime);
+    const neverLoggedInRows = notLoggedInRows.filter(row => !row.loginTime);
 
     return res.status(200).json({
       ...payload,
@@ -2635,11 +2690,29 @@ export const getFloorStatusDashboard = async (req, res) => {
       summary: {
         ...(payload.summary || {}),
         totalEmployees: rosterPresentRows.length,
-        onBreakCount: onBreakRows.length,
+        // ✅ FIX: Show ALL on break employees in count
+        onBreakCount: allOnBreakRows.length,
+        onBreakWithRosterCount: onBreakRows.length,
+        onBreakWithoutRosterCount: onBreakWithoutRoster.length,
         notLoggedInCount: notLoggedInRows.length,
+        notLoggedInDetails: {
+          loggedOutCount: loggedOutRows.length,
+          neverLoggedInCount: neverLoggedInRows.length,
+          loggedOutEmployees: loggedOutRows.map(row => ({
+            name: row.name,
+            loggedOutAt: row.formattedLogoutTime,
+            logoutTime: row.logoutTime,
+            loginTime: row.loginTime
+          }))
+        }
       },
-      onBreakRows,
+      // ✅ FIX: Include all on break employees in the response
+      onBreakRows: allOnBreakRows, // Now includes ALL employees on break
+      onBreakWithRoster: onBreakRows, // Employees on break WITH roster
+      onBreakWithoutRoster: onBreakWithoutRoster, // Employees on break WITHOUT roster
       notLoggedInRows,
+      loggedOutRows,
+      neverLoggedInRows,
       generatedAt: new Date().toISOString(),
     });
   } catch (error) {
@@ -2649,6 +2722,64 @@ export const getFloorStatusDashboard = async (req, res) => {
     });
   }
 };
+
+
+// export const getFloorStatusDashboard = async (req, res) => {
+//   try {
+//     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
+//     const isAllowed = role === "floorstatus" || role === "superadmin";
+
+//     if (!isAllowed) {
+//       return res.status(403).json({ message: "Only floorStatus or superAdmin can access this dashboard" });
+//     }
+
+//     const payload = await buildDailyStatusPayload({
+//       requester: { ...(req.user || {}), roleType: "superAdmin", accountType: "superAdmin" },
+//       dateKey: req.query?.dateKey,
+//     });
+
+//     const rows = Array.isArray(payload.rows) ? payload.rows : [];
+//     const toFloorRow = (row = {}) => ({
+//       userId: row.userId,
+//       username: row.username || "",
+//       pseudoName: row.pseudoName || "",
+//       name: row.pseudoName || row.username || "",
+//       department: row.department || "",
+//       floorRosterStatus: row.floorRosterStatus || "",
+//       floorDepartmentStatus: row.floorDepartmentStatus || "",
+//       isOnBreak: Boolean(row.isOnBreak),
+//       breakType: row.breakType || "",
+//       breakStartAt: row.breakStartAt || null,
+//       totalBreakMs: row.totalBreakMs || 0,
+//       totalWorkedMs: row.totalWorkedMs || 0,
+//       loginTime: row.loginTime || null,
+//     });
+//     const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
+//     const isDepartmentPresent = (row = {}) => String(row.floorDepartmentStatus || "").trim().toUpperCase() === "P";
+//     const rosterPresentRows = rows.filter(isRosterPresent);
+//     const onBreakRows = rosterPresentRows.filter((row) => row.isOnBreak).map(toFloorRow);
+//     const notLoggedInRows = rosterPresentRows.filter((row) => !row.loginTime && isDepartmentPresent(row)).map(toFloorRow);
+
+//     return res.status(200).json({
+//       ...payload,
+//       rows: rosterPresentRows.map(toFloorRow),
+//       summary: {
+//         ...(payload.summary || {}),
+//         totalEmployees: rosterPresentRows.length,
+//         onBreakCount: onBreakRows.length,
+//         notLoggedInCount: notLoggedInRows.length,
+//       },
+//       onBreakRows,
+//       notLoggedInRows,
+//       generatedAt: new Date().toISOString(),
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       message: "Failed to fetch floor status dashboard",
+//       error: error.message,
+//     });
+//   }
+// };
 
 // ========== UPDATED: exportSuperAdminDailyStatusExcel ==========
 export const exportSuperAdminDailyStatusExcel = async (req, res) => {
