@@ -1,4 +1,3 @@
-
 // import React, { useEffect, useMemo, useRef, useState } from "react";
 // import {
 //   Table, TableBody, TableCell, TableContainer,
@@ -87,7 +86,6 @@
 //   return `${formatHour(start)}-${formatHour(end)}`;
 // };
 
-// // Predefined document categories with separate Appointment Letter and Offer Letter
 // const DOCUMENT_CATEGORIES = [
 //   { id: "resume", name: "Resume", icon: <Description />, required: true, category: "Personal" },
 //   { id: "photo", name: "Photo", icon: <Image />, required: true, category: "Personal" },
@@ -133,6 +131,19 @@
 //     boxShadow: "0 4px 12px 0 rgba(0, 0, 0, 0.05)",
 //   },
 // }));
+
+// // Stats Card Component
+// const StatsCard = ({ title, value, icon, color }) => (
+//   <div className="flex items-center gap-4 rounded-2xl border border-slate-100 bg-white px-5 py-4 shadow-sm">
+//     <div className={`rounded-xl p-3 ${color}`}>
+//       {icon}
+//     </div>
+//     <div>
+//       <p className="text-2xl font-bold text-slate-900">{value}</p>
+//       <p className="text-sm font-medium text-slate-600">{title}</p>
+//     </div>
+//   </div>
+// );
 
 // const ManageEmployee = () => {
 //   const dispatch = useDispatch();
@@ -224,6 +235,11 @@
 //     currentUser?.hrGlobalDocumentOverrideUntil &&
 //       new Date(currentUser.hrGlobalDocumentOverrideUntil).getTime() > Date.now()
 //   );
+
+//   // Calculate stats from localEmployees - dynamically updated
+//   const totalEmployees = localEmployees.length;
+//   const activeEmployees = localEmployees.filter(emp => emp.isActive !== false).length;
+//   const inactiveEmployees = localEmployees.filter(emp => emp.isActive === false).length;
 
 //   const groupedDocuments = useMemo(() => {
 //     const visibleDocs = DOCUMENT_CATEGORIES.filter((doc) =>
@@ -732,8 +748,15 @@
 //     frontCtx.font = "500 46px Arial";
 //     frontCtx.fillText(designation || "Employee", 384, 905);
 //     frontCtx.font = "500 38px Arial";
-//     frontCtx.fillText(`Emp ID        : ${empId || "N/A"}`, 384, 1010);
-//     frontCtx.fillText(`Blood Group   : ${bloodGroup}`, 384, 1070);
+//     frontCtx.textAlign = "left";
+//     frontCtx.fillText("Emp ID", 170, 1010);
+//     frontCtx.fillText("Blood Group", 170, 1070);
+//     frontCtx.textAlign = "center";
+//     frontCtx.fillText(":", 415, 1010);
+//     frontCtx.fillText(":", 415, 1070);
+//     frontCtx.textAlign = "left";
+//     frontCtx.fillText(empId || "N/A", 442, 1010);
+//     frontCtx.fillText(bloodGroup, 442, 1070);
 
 //     backCtx.fillStyle = "#1f4e79";
 //     backCtx.textAlign = "left";
@@ -1138,1721 +1161,1743 @@
 
 //   return (
 //     <div className="min-h-screen bg-slate-50/50 px-8 py-6 sm:px-6 lg:px-8">
-//   {/* Employee Table */}
-//   <StyledCard>
-//     <div className="border-b px-4 py-3" style={{ borderColor: "#eaeaea" }}>
-//       <div className="flex flex-wrap items-center justify-between gap-3">
-//         <div>
-//           <p className="text-sm font-semibold text-slate-800">Employee Details</p>
-//           <p className="text-xs text-slate-500">Export complete employee data with document status columns</p>
-//         </div>
-//         <Button
-//           variant="contained"
-//           size="small"
-//           onClick={handleExportEmployeeDetails}
-//           disabled={isExportingEmployees}
-//           startIcon={isExportingEmployees ? <CircularProgress size={14} sx={{ color: "#fff" }} /> : <Download sx={{ fontSize: 16 }} />}
-//           sx={{
-//             textTransform: "none",
-//             borderRadius: "10px",
-//             backgroundColor: "#2563eb",
-//             "&:hover": { backgroundColor: "#1d4ed8" },
-//           }}
-//         >
-//           {isExportingEmployees ? "Exporting..." : "Export Employee Details"}
-//         </Button>
-//       </div>
-//       <div className="mt-3 flex flex-wrap items-center gap-3">
-//         <TextField
-//           fullWidth
-//           size="small"
-//           // placeholder="Search employee by name, username, or pseudo name..."
-//           value={employeeSearch}
-//           onChange={(e) => setEmployeeSearch(e.target.value)}
-//           sx={{
-//             maxWidth: { xs: "100%", md: 420 },
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "999px",
-//               background:
-//                 "linear-gradient(90deg, rgba(248,250,252,0.95) 0%, rgba(241,245,249,0.95) 100%)",
-//               "& fieldset": { borderColor: "#dbe2ea" },
-//               "&:hover fieldset": { borderColor: "#93c5fd" },
-//               "&.Mui-focused fieldset": { borderColor: "#2563eb", borderWidth: "2px" },
-//             },
-//           }}
-//           InputProps={{
-//             startAdornment: (
-//               <InputAdornment position="start">
-//                 <Search sx={{ fontSize: 18, color: "#2563eb" }} />
-//               </InputAdornment>
-//             ),
-//             endAdornment: employeeSearch ? (
-//               <InputAdornment position="end">
-//                 <IconButton
-//                   size="small"
-//                   onClick={() => setEmployeeSearch("")}
-//                   aria-label="clear employee search"
-//                 >
-//                   <Close sx={{ fontSize: 16 }} />
-//                 </IconButton>
-//               </InputAdornment>
-//             ) : null,
-//           }}
+//       {/* Stats Cards - Total, Active, Inactive only (Pending Removed) */}
+//       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+//         <StatsCard
+//           title="Total Employees"
+//           value={totalEmployees}
+//           icon={<People sx={{ fontSize: 24, color: "#2563eb" }} />}
+//           color="bg-blue-50"
 //         />
-//         <Chip
-//           size="small"
-//           label={`${localEmployees.length} result${localEmployees.length === 1 ? "" : "s"}`}
-//           sx={{
-//             borderRadius: "999px",
-//             backgroundColor: "#eff6ff",
-//             color: "#1d4ed8",
-//             fontWeight: 600,
-//           }}
+//         <StatsCard
+//           title="Active Employees"
+//           value={activeEmployees}
+//           icon={<CheckCircle sx={{ fontSize: 24, color: "#16a34a" }} />}
+//           color="bg-emerald-50"
+//         />
+//         <StatsCard
+//           title="Inactive Employees"
+//           value={inactiveEmployees}
+//           icon={<Cancel sx={{ fontSize: 24, color: "#dc2626" }} />}
+//           color="bg-rose-50"
 //         />
 //       </div>
-//       {isSearchingEmployees && <LinearProgress sx={{ mt: 2, borderRadius: 999 }} />}
-//     </div>
-//     <TableContainer>
-//       <Table>
-//         <TableHead>
-//             <TableRow sx={{ backgroundColor: "#fafcff" }}>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Employee</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>ID</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Department</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Designation</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Pseudo Name</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Shift</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Status</TableCell>
-//               <TableCell sx={{ fontWeight: 600, color: "#1e293b" }} align="center">Action</TableCell>
-//             </TableRow>
-//         </TableHead>
-//         <TableBody>
-//           {localEmployees
-//             .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-//             .map((user) => (
-//               <TableRow
-//                 key={user._id}
-//                 hover
-//                 sx={{ "&:hover": { backgroundColor: "#fafcff" } }}
-//               >
-//                 <TableCell>
-//                   <div className="flex items-center gap-3">
-//                     <Avatar
-//                       src={user.profilePhotoUrl || ""}
-//                       sx={{
-//                         width: 40,
-//                         height: 40,
-//                         bgcolor: "#eff6ff",
-//                         color: "#3b82f6",
-//                         fontWeight: 600
-//                       }}
-//                     >
-//                       {user.realName?.charAt(0) || user.username?.charAt(0) || "U"}
-//                     </Avatar>
-//                     <div>
-//                       <p className="font-medium text-slate-900">{user.realName || user.username}</p>
-//                     </div>
-//                   </div>
-//                 </TableCell>
-//                 <TableCell>
-//                   <span className="font-mono text-sm text-slate-700">{user.empId || "—"}</span>
-//                 </TableCell>
-//                 <TableCell>
-//                   <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
-//                     {user.department || "N/A"}
-//                   </span>
-//                 </TableCell>
-//                 <TableCell className="text-sm text-slate-600">{user.designation || "—"}</TableCell>
-//                 <TableCell className="text-sm text-slate-600">{user.pseudoName || "—"}</TableCell>
-//                 <TableCell>
-//                   <div className="flex items-center gap-1.5">
-//                     <AccessTime sx={{ fontSize: 14, color: "#f59e0b" }} />
-//                     <span className="text-sm text-slate-600">
-//                       {user.shiftLabel || getShiftLabel(user.shiftStartHour, user.shiftEndHour) || "—"}
-//                     </span>
-//                   </div>
-//                 </TableCell>
-//                 <TableCell>
-//                   <div className="flex gap-1.5">
-//                     <span
-//                       className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-//                         user.isActive === false
-//                           ? "bg-rose-50 text-rose-700"
-//                           : "bg-emerald-50 text-emerald-700"
-//                       }`}
-//                     >
-//                       {user.isActive === false ? "Inactive" : "Active"}
-//                     </span>
-//                     {user.isCoreTeam && (
-//                       <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">
-//                         Core
-//                       </span>
-//                     )}
-//                   </div>
-//                 </TableCell>
-//                 <TableCell align="center">
-//                   <div className="flex items-center justify-center gap-1">
+
+//       {/* Employee Table */}
+//       <StyledCard>
+//         <div className="border-b px-4 py-3" style={{ borderColor: "#eaeaea" }}>
+//           <div className="flex flex-wrap items-center justify-between gap-3">
+//             <div>
+//               <p className="text-sm font-semibold text-slate-800">Employee Details</p>
+//               <p className="text-xs text-slate-500">Export complete employee data with document status columns</p>
+//             </div>
+//             <Button
+//               variant="contained"
+//               size="small"
+//               onClick={handleExportEmployeeDetails}
+//               disabled={isExportingEmployees}
+//               startIcon={isExportingEmployees ? <CircularProgress size={14} sx={{ color: "#fff" }} /> : <Download sx={{ fontSize: 16 }} />}
+//               sx={{
+//                 textTransform: "none",
+//                 borderRadius: "10px",
+//                 backgroundColor: "#2563eb",
+//                 "&:hover": { backgroundColor: "#1d4ed8" },
+//               }}
+//             >
+//               {isExportingEmployees ? "Exporting..." : "Export Employee Details"}
+//             </Button>
+//           </div>
+//           <div className="mt-3 flex flex-wrap items-center gap-3">
+//             <TextField
+//               fullWidth
+//               size="small"
+//               value={employeeSearch}
+//               onChange={(e) => setEmployeeSearch(e.target.value)}
+//               sx={{
+//                 maxWidth: { xs: "100%", md: 420 },
+//                 "& .MuiOutlinedInput-root": {
+//                   borderRadius: "999px",
+//                   background:
+//                     "linear-gradient(90deg, rgba(248,250,252,0.95) 0%, rgba(241,245,249,0.95) 100%)",
+//                   "& fieldset": { borderColor: "#dbe2ea" },
+//                   "&:hover fieldset": { borderColor: "#93c5fd" },
+//                   "&.Mui-focused fieldset": { borderColor: "#2563eb", borderWidth: "2px" },
+//                 },
+//               }}
+//               InputProps={{
+//                 startAdornment: (
+//                   <InputAdornment position="start">
+//                     <Search sx={{ fontSize: 18, color: "#2563eb" }} />
+//                   </InputAdornment>
+//                 ),
+//                 endAdornment: employeeSearch ? (
+//                   <InputAdornment position="end">
 //                     <IconButton
-//                       onClick={() => handleOpenDialog(user)}
-//                       sx={{
-//                         color: "#64748b",
-//                         "&:hover": { backgroundColor: "#eff6ff", color: "#3b82f6" }
-//                       }}
+//                       size="small"
+//                       onClick={() => setEmployeeSearch("")}
+//                       aria-label="clear employee search"
 //                     >
-//                       <Edit sx={{ fontSize: 20 }} />
+//                       <Close sx={{ fontSize: 16 }} />
 //                     </IconButton>
-//                     {isSuperAdminUser && (
-//                       <IconButton
-//                         onClick={() => setDeleteTarget(user)}
-//                         sx={{
-//                           color: "#ef4444",
-//                           "&:hover": { backgroundColor: "#fef2f2", color: "#dc2626" }
-//                         }}
-//                       >
-//                         <Delete sx={{ fontSize: 19 }} />
-//                       </IconButton>
-//                     )}
-//                   </div>
-//                 </TableCell>
-//               </TableRow>
-//             ))}
-//           {!isSearchingEmployees && localEmployees.length === 0 && (
-//             <TableRow>
-//               <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
-//                 <Typography variant="body2" sx={{ color: "#64748b" }}>
-//                   {employeeSearch.trim()
-//                     ? "No employees match this search."
-//                     : "No employees found."}
-//                 </Typography>
-//               </TableCell>
-//             </TableRow>
-//           )}
-//         </TableBody>
-//       </Table>
-//     </TableContainer>
-//     <TablePagination
-//       component="div"
-//       count={localEmployees.length}
-//       page={page}
-//       onPageChange={(e, newPage) => setPage(newPage)}
-//       rowsPerPage={rowsPerPage}
-//       onRowsPerPageChange={(e) => {
-//         setRowsPerPage(parseInt(e.target.value, 10));
-//         setPage(0);
-//       }}
-//       sx={{ borderTop: "1px solid #eaeaea" }}
-//     />
-//   </StyledCard>
-
-//   {/* Modern Edit Dialog */}
-//   <Dialog
-//     open={!!selectedUser}
-//     onClose={handleCloseDialog}
-//     fullWidth
-//     maxWidth="lg"
-//     PaperProps={{
-//       sx: {
-//         borderRadius: "32px",
-//         overflow: "hidden",
-//         height: "auto",
-//         maxHeight: "90vh",
-//       },
-//     }}
-//   >
-//     {/* Header */}
-//     <div className="bg-white px-6 py-5 border-b" style={{ borderBottomColor: "#eaeaea" }}>
-//       <div className="flex items-center justify-between">
-//         <div className="flex items-center gap-3">
-//           <Avatar
-//             src={formData.profilePhotoUrl || selectedUser?.profilePhotoUrl || ""}
-//             sx={{
-//               width: 48,
-//               height: 48,
-//               bgcolor: "#3b82f6",
-//               background: "linear-gradient(135deg, #3b82f6, #2563eb)"
-//             }}
-//           >
-//             <Edit sx={{ fontSize: 24 }} />
-//           </Avatar>
-//           <div>
-//             <h2 className="text-xl font-semibold text-slate-900">Edit Employee</h2>
-//             <p className="text-sm text-slate-500">
-//               {selectedUser?.realName || selectedUser?.username}
-//             </p>
-//           </div>
-//         </div>
-//         <div className="flex items-center gap-2">
-//           <Button
-//             variant="outlined"
-//             size="small"
-//             startIcon={<Badge />}
-//             onClick={downloadEmployeeIdCard}
-//             sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
-//           >
-//             Download ID Card
-//           </Button>
-//           <IconButton onClick={handleCloseDialog} sx={{ color: "#94a3b8" }}>
-//             <Close />
-//           </IconButton>
-//         </div>
-//       </div>
-//     </div>
-
-//     {/* Section Navigation */}
-//     <div className="bg-slate-50/50 px-6 py-3 border-b" style={{ borderBottomColor: "#eaeaea" }}>
-//       <div className="flex gap-1 overflow-x-auto">
-//         {sections.map((section) => (
-//           <button
-//             key={section.id}
-//             onClick={() => setActiveSection(section.id)}
-//             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
-//               activeSection === section.id
-//                 ? "bg-white text-blue-600 shadow-sm"
-//                 : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
-//             }`}
-//           >
-//             {section.icon}
-//             {section.label}
-//           </button>
-//         ))}
-//       </div>
-//     </div>
-
-//     {/* Content */}
-//     <DialogContent sx={{ p: 0, overflowY: "auto", maxHeight: "calc(90vh - 180px)" }}>
-//       {isSelectedUserInactive && (
-//         <div className="px-6 pt-4">
-//           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
-//             <label className="block text-xs font-medium text-amber-800 mb-1.5">Account Status</label>
-//             <TextField
-//               select
-//               fullWidth
-//               name="isActive"
-//               value={formData.isActive ? "active" : "inactive"}
-//               onChange={(e) =>
-//                 setFormData((prev) => ({
-//                   ...prev,
-//                   isActive: e.target.value === "active",
-//                 }))
-//               }
-//               size="small"
-//               sx={{
-//                 "& .MuiOutlinedInput-root": {
-//                   borderRadius: "10px",
-//                   backgroundColor: "#fff",
-//                   "& fieldset": {
-//                     borderColor: "#f3d190",
-//                   },
-//                   "&:hover fieldset": {
-//                     borderColor: "#eab308",
-//                   },
-//                   "&.Mui-focused fieldset": {
-//                     borderColor: "#d97706",
-//                     borderWidth: "2px",
-//                   },
-//                 },
+//                   </InputAdornment>
+//                 ) : null,
 //               }}
-//             >
-// 	              <MenuItem value="active" disabled={!isSuperAdminUser}>Active</MenuItem>
-//               <MenuItem value="inactive">Inactive</MenuItem>
-//             </TextField>
-//           </div>
-//         </div>
-//       )}
-//       <fieldset
-//         disabled={isSelectedUserInactive}
-//         className={`border-0 m-0 min-w-0 p-0 ${isSelectedUserInactive ? "pointer-events-none select-none opacity-70" : ""}`}
-//       >
-//       {/* Basic Info Section */}
-//       {activeSection === "basic" && (
-//         <div className="p-6">
-//           <div
-//             className="mb-5 flex flex-wrap items-center gap-4 rounded-xl border p-4"
-//             style={{ borderColor: "#e2e8f0", backgroundColor: "#f8fafc" }}
-//           >
-//             <Avatar
-//               src={formData.profilePhotoUrl || ""}
-//               sx={{ width: 88, height: 88, bgcolor: "#dbeafe", color: "#1d4ed8", fontWeight: 700 }}
-//             >
-//               {(formData.realName || formData.username || "U").charAt(0)}
-//             </Avatar>
-//             <div className="flex-1 min-w-[220px]">
-//               <p className="text-sm font-semibold text-slate-800">Employee Profile Photo</p>
-//               <div className="mt-3 flex flex-wrap gap-2">
-//                 <Button
-//                   variant="contained"
-//                   size="small"
-//                   startIcon={<CameraAlt />}
-//                   onClick={openCamera}
-//                   disabled={uploadingProfilePhoto}
-//                   sx={{ textTransform: "none", borderRadius: "10px" }}
-//                 >
-//                   Capture Photo
-//                 </Button>
-//                 {formData.profilePhotoUrl && (
-//                   <Button
-//                     variant="outlined"
-//                     size="small"
-//                     onClick={() =>
-//                       {
-//                         setFormData((prev) => ({
-//                           ...prev,
-//                           profilePhotoUrl: "",
-//                           profilePhotoPublicId: "",
-//                         }));
-//                         setDocuments((prev) => ({
-//                           ...prev,
-//                           photo: null,
-//                         }));
-//                       }
-//                     }
-//                     sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
-//                   >
-//                     Remove
-//                   </Button>
-//                 )}
-//               </div>
-//             </div>
-//           </div>
-//           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Username</label>
-//               <TextField
-//                 fullWidth
-//                 name="username"
-//                 value={formData.username}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     backgroundColor: "#fff",
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Employee ID</label>
-//               <TextField
-//                 fullWidth
-//                 name="empId"
-//                 value={formData.empId}
-//                 onChange={handleChange}
-//                 size="small"
-//                 placeholder="EMP001"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Real Name</label>
-//               <TextField
-//                 fullWidth
-//                 name="realName"
-//                 value={formData.realName}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Pseudo Name</label>
-//               <TextField
-//                 fullWidth
-//                 name="pseudoName"
-//                 value={formData.pseudoName}
-//                 onChange={handleChange}
-//                 size="small"
-//                 placeholder="Optional"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Designation</label>
-//               <TextField
-//                 select
-//                 fullWidth
-//                 name="designation"
-//                 value={formData.designation}
-//                 onChange={handleChange}
-//                 size="small"
-//                 SelectProps={{
-//                   MenuProps: {
-//                     PaperProps: {
-//                       sx: { maxHeight: 260 },
-//                     },
-//                   },
-//                 }}
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               >
-//                 <MenuItem value="">Select designation</MenuItem>
-//                 {DESIGNATION_OPTIONS.map((item) => (
-//                   <MenuItem key={item} value={item}>
-//                     {item}
-//                   </MenuItem>
-//                 ))}
-//               </TextField>
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Date of Joining</label>
-//               <StyledDatePicker
-//                 value={formData.dateOfJoining}
-//                 onChange={(val) =>
-//                   setFormData((prev) => ({
-//                     ...prev,
-//                     dateOfJoining: val,
-//                   }))
-//                 }
-//                 placeholder="Select joining date"
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Office Location</label>
-//               <TextField
-//                 fullWidth
-//                 name="officeLocation"
-//                 value={formData.officeLocation}
-//                 onChange={handleChange}
-//                 size="small"
-//                 placeholder="Enter office location"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">DOB</label>
-//               <StyledDatePicker
-//                 value={formData.dob}
-//                 onChange={(val) =>
-//                   setFormData((prev) => ({
-//                     ...prev,
-//                     dob: val,
-//                   }))
-//                 }
-//                 placeholder="Select DOB"
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Blood Group</label>
-//               <TextField
-//                 fullWidth
-//                 name="bloodGroup"
-//                 value={formData.bloodGroup}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Contact Number</label>
-//               <TextField
-//                 fullWidth
-//                 name="contactNumber"
-//                 value={formData.contactNumber}
-//                 onChange={handleChange}
-//                 size="small"
-//                 placeholder="Enter contact number"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Personal Email ID</label>
-//               <TextField
-//                 fullWidth
-//                 name="personalEmailId"
-//                 value={formData.personalEmailId}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Name</label>
-//               <TextField
-//                 fullWidth
-//                 name="emergencyContactName"
-//                 value={formData.emergencyContactName}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Number</label>
-//               <TextField
-//                 fullWidth
-//                 name="emergencyContactNumber"
-//                 value={formData.emergencyContactNumber}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Relation</label>
-//               <TextField
-//                 fullWidth
-//                 name="emergencyContactRelation"
-//                 value={formData.emergencyContactRelation}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div className="md:col-span-2">
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Permanent Address</label>
-//               <TextField
-//                 fullWidth
-//                 name="permanentAddress"
-//                 value={formData.permanentAddress}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//             <div className="md:col-span-2">
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Current Address</label>
-//               <TextField
-//                 fullWidth
-//                 name="currentAddress"
-//                 value={formData.currentAddress}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//               />
-//             </div>
-//           </div>
-//         </div>
-//       )}
-
-// {activeSection === "work" && (
-//   <div className="p-6">
-//     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-//       <div>
-//         <label className="block text-xs font-medium text-slate-500 mb-1.5">Department</label>
-//         <TextField
-//           fullWidth
-//           name="department"
-//           value={formData.department}
-//           onChange={handleChange}
-//           size="small"
-//           sx={{
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "12px",
-//               "& fieldset": {
-//                 borderColor: "#eaeaea",
-//               },
-//               "&:hover fieldset": {
-//                 borderColor: "#cbd5e1",
-//               },
-//               "&.Mui-focused fieldset": {
-//                 borderColor: "#3b82f6",
-//                 borderWidth: "2px",
-//               },
-//             },
-//           }}
-//         />
-//       </div>
-//       <div>
-//         <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Status</label>
-//         <TextField
-//           select
-//           fullWidth
-//           name="isActive"
-//           value={formData.isActive ? "active" : "inactive"}
-//           onChange={(e) =>
-//             setFormData((prev) => ({
-//               ...prev,
-//               isActive: e.target.value === "active",
-//             }))
-//           }
-//           size="small"
-//           sx={{
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "12px",
-//               "& fieldset": {
-//                 borderColor: "#eaeaea",
-//               },
-//               "&:hover fieldset": {
-//                 borderColor: "#cbd5e1",
-//               },
-//               "&.Mui-focused fieldset": {
-//                 borderColor: "#3b82f6",
-//                 borderWidth: "2px",
-//               },
-//             },
-//           }}
-//         >
-//           <MenuItem value="active">Active</MenuItem>
-//           <MenuItem value="inactive">Inactive</MenuItem>
-//         </TextField>
-//       </div>
-//       <div>
-//         <label className="block text-xs font-medium text-slate-500 mb-1.5">Reporting Manager</label>
-//         <TextField
-//           select
-//           fullWidth
-//           name="reportingManager"
-//           value={formData.reportingManager}
-//           onChange={handleChange}
-//           size="small"
-//           sx={{
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "12px",
-//               "& fieldset": {
-//                 borderColor: "#eaeaea",
-//               },
-//               "&:hover fieldset": {
-//                 borderColor: "#cbd5e1",
-//               },
-//               "&.Mui-focused fieldset": {
-//                 borderColor: "#3b82f6",
-//                 borderWidth: "2px",
-//               },
-//             },
-//           }}
-//         >
-//           <MenuItem value="">— None —</MenuItem>
-//           {reportingManagerOptions.map((manager) => (
-//             <MenuItem key={manager._id} value={manager._id}>
-//               {manager.realName ? `${manager.realName} (${manager.username})` : manager.username}
-//             </MenuItem>
-//           ))}
-//         </TextField>
-//       </div>
-//       <div>
-//         <label className="block text-xs font-medium text-slate-500 mb-1.5">Shift Timing</label>
-//         <TextField
-//           select
-//           fullWidth
-//           name="shiftLabel"
-//           value={formData.shiftLabel}
-//           onChange={handleChange}
-//           size="small"
-//           sx={{
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "12px",
-//               "& fieldset": {
-//                 borderColor: "#eaeaea",
-//               },
-//               "&:hover fieldset": {
-//                 borderColor: "#cbd5e1",
-//               },
-//               "&.Mui-focused fieldset": {
-//                 borderColor: "#3b82f6",
-//                 borderWidth: "2px",
-//               },
-//             },
-//           }}
-//         >
-//           {shiftOptions.map((shift) => (
-//             <MenuItem key={shift.value} value={shift.value}>
-//               {shift.label}
-//             </MenuItem>
-//           ))}
-//         </TextField>
-//       </div>
-//       <div>
-//         <label className="block text-xs font-medium text-slate-500 mb-1.5">Transport Office</label>
-//         <TextField
-//           select
-//           fullWidth
-//           name="transportOffice"
-//           value={formData.transportOffice}
-//           onChange={handleChange}
-//           size="small"
-//           sx={{
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "12px",
-//               "& fieldset": {
-//                 borderColor: "#eaeaea",
-//               },
-//               "&:hover fieldset": {
-//                 borderColor: "#cbd5e1",
-//               },
-//               "&.Mui-focused fieldset": {
-//                 borderColor: "#3b82f6",
-//                 borderWidth: "2px",
-//               },
-//             },
-//           }}
-//         >
-//           <MenuItem value="No">Not Required</MenuItem>
-//           <MenuItem value="Yes">Required</MenuItem>
-//         </TextField>
-//       </div>
-//       {canManagePayroll && (
-//         <>
-//           <div>
-//             <label className="block text-xs font-medium text-slate-500 mb-1.5">CTC</label>
-//             <TextField
-//               fullWidth
-//               name="ctc"
-//               value={formData.ctc}
-//               onChange={handleChange}
+//             />
+//             <Chip
 //               size="small"
-//               type="number"
-//               placeholder="Enter CTC amount"
-//               inputProps={{ min: 0, step: "0.01" }}
+//               label={`${localEmployees.length} result${localEmployees.length === 1 ? "" : "s"}`}
 //               sx={{
-//                 "& .MuiOutlinedInput-root": {
-//                   borderRadius: "12px",
-//                   "& fieldset": {
-//                     borderColor: "#eaeaea",
-//                   },
-//                   "&:hover fieldset": {
-//                     borderColor: "#cbd5e1",
-//                   },
-//                   "&.Mui-focused fieldset": {
-//                     borderColor: "#3b82f6",
-//                     borderWidth: "2px",
-//                   },
-//                 },
+//                 borderRadius: "999px",
+//                 backgroundColor: "#eff6ff",
+//                 color: "#1d4ed8",
+//                 fontWeight: 600,
 //               }}
 //             />
 //           </div>
-//           <div>
-//             <label className="block text-xs font-medium text-slate-500 mb-1.5">In Hand</label>
-//             <TextField
-//               fullWidth
-//               name="inHandSalary"
-//               value={formData.inHandSalary}
-//               onChange={handleChange}
-//               size="small"
-//               type="number"
-//               placeholder="Enter in-hand salary"
-//               inputProps={{ min: 0, step: "0.01" }}
-//               sx={{
-//                 "& .MuiOutlinedInput-root": {
-//                   borderRadius: "12px",
-//                   "& fieldset": {
-//                     borderColor: "#eaeaea",
-//                   },
-//                   "&:hover fieldset": {
-//                     borderColor: "#cbd5e1",
-//                   },
-//                   "&.Mui-focused fieldset": {
-//                     borderColor: "#3b82f6",
-//                     borderWidth: "2px",
-//                   },
-//                 },
-//               }}
-//             />
-//           </div>
-//           <div>
-//             <label className="block text-xs font-medium text-slate-500 mb-1.5">Transport Allowance</label>
-//             <TextField
-//               fullWidth
-//               name="transportAllowance"
-//               value={formData.transportAllowance}
-//               onChange={handleChange}
-//               size="small"
-//               type="number"
-//               placeholder="Enter transport allowance"
-//               inputProps={{ min: 0, step: "0.01" }}
-//               sx={{
-//                 "& .MuiOutlinedInput-root": {
-//                   borderRadius: "12px",
-//                   "& fieldset": {
-//                     borderColor: "#eaeaea",
-//                   },
-//                   "&:hover fieldset": {
-//                     borderColor: "#cbd5e1",
-//                   },
-//                   "&.Mui-focused fieldset": {
-//                     borderColor: "#3b82f6",
-//                     borderWidth: "2px",
-//                   },
-//                 },
-//               }}
-//             />
-//           </div>
-//         </>
-//       )}
-//       <div>
-//         <label className="block text-xs font-medium text-slate-500 mb-1.5">Candidate Type</label>
-//         <TextField
-//           select
-//           fullWidth
-//           name="employmentType"
-//           value={formData.employmentType}
-//           onChange={handleChange}
-//           size="small"
-//           sx={{
-//             "& .MuiOutlinedInput-root": {
-//               borderRadius: "12px",
-//               "& fieldset": {
-//                 borderColor: "#eaeaea",
-//               },
-//               "&:hover fieldset": {
-//                 borderColor: "#cbd5e1",
-//               },
-//               "&.Mui-focused fieldset": {
-//                 borderColor: "#3b82f6",
-//                 borderWidth: "2px",
-//               },
-//             },
-//           }}
-//         >
-//           <MenuItem value="fresher">Fresher</MenuItem>
-//           <MenuItem value="experienced">Experienced</MenuItem>
-//         </TextField>
-//       </div>
-//     </div>
-//     {/* Checkboxes in Row Layout */}
-//     <div className="flex flex-wrap items-center gap-6 mt-5">
-//       <label className="flex items-center gap-2 cursor-pointer">
-//         <input
-//           type="checkbox"
-//           name="isCoreTeam"
-//           checked={formData.isCoreTeam}
-//           onChange={handleChange}
-//           className="w-4 h-4 rounded   text-blue-600 focus:ring-blue-500"
-//         />
-//         <span className="text-sm font-medium text-slate-700"> Core Team Member</span>
-//       </label>
-//       <label className="flex items-center gap-2 cursor-pointer">
-//         <input
-//           type="checkbox"
-//           name="isTeamLeader"
-//           checked={formData.isTeamLeader}
-//           onChange={handleChange}
-//           className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
-//         />
-//         <span className="text-sm font-medium text-slate-700"> Team Leader Eligible</span>
-//       </label>
-//     </div>
-//   </div>
-// )}
-
-//       {/* Documents Section */}
-//       {activeSection === "documents" && (
-//         <div className="p-6">
-//           <div className="mb-6 rounded-xl border p-4" style={{ borderColor: "#eaeaea", backgroundColor: "#f0f9ff" }}>
-//             {isSuperAdminUser && (
-//               <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3" style={{ borderColor: "#e2e8f0" }}>
-//                 <div className="flex items-center gap-2">
-// 	                  <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
-// 	                    {isHrDepartment(selectedUser || {}) ? "Global HR Window" : "HR Re-upload Window"}
-// 	                  </span>
-// 	                  <span
-// 	                    className={`rounded-lg px-2 py-1 text-xs font-semibold ${
-// 	                      (isHrDepartment(selectedUser || {}) ? isHrGlobalOverrideActive : isHrOverrideActive)
-// 	                        ? "bg-emerald-100 text-emerald-700"
-// 	                        : "bg-slate-100 text-slate-600"
-// 	                    }`}
-// 	                  >
-// 	                    {(isHrDepartment(selectedUser || {}) ? isHrGlobalOverrideActive : isHrOverrideActive)
-// 	                      ? formatRemaining(
-// 	                          isHrDepartment(selectedUser || {})
-// 	                            ? selectedUser?.hrGlobalDocumentOverrideUntil
-// 	                            : selectedUser?.hrDocumentOverrideUntil
-// 	                        )
-//                       : "00:00"}
-//                   </span>
-//                 </div>
-//                 <div className="flex items-center gap-2">
-//                   <Button
-//                     variant="contained"
-//                     size="small"
-//                     disabled={grantingOverride}
-//                     onClick={() => handleSetHrOverride(true)}
-//                     sx={{ textTransform: "none", borderRadius: "10px" }}
+//           {isSearchingEmployees && <LinearProgress sx={{ mt: 2, borderRadius: 999 }} />}
+//         </div>
+//         <TableContainer>
+//           <Table>
+//             <TableHead>
+//                 <TableRow sx={{ backgroundColor: "#fafcff" }}>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Employee</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>ID</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Department</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Designation</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Pseudo Name</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Shift</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }}>Status</TableCell>
+//                   <TableCell sx={{ fontWeight: 600, color: "#1e293b" }} align="center">Action</TableCell>
+//                 </TableRow>
+//             </TableHead>
+//             <TableBody>
+//               {localEmployees
+//                 .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+//                 .map((user) => (
+//                   <TableRow
+//                     key={user._id}
+//                     hover
+//                     sx={{ "&:hover": { backgroundColor: "#fafcff" } }}
 //                   >
-//                     Allow 30m
-//                   </Button>
-//                   <Button
-//                     variant="outlined"
-//                     size="small"
-//                     disabled={grantingOverride}
-//                     onClick={() => handleSetHrOverride(false)}
-//                     sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
-//                   >
-//                     Revoke
-//                   </Button>
-//                 </div>
-//               </div>
-//             )}
-
-//             <p className="text-sm font-semibold text-cyan-900">Policy Documents (Consent Required)</p>
-//             <p className="mt-1 text-xs text-cyan-700">
-//               Static company policies for every employee. Employee signs from dashboard, HR can co-sign from here.
-//             </p>
-
-//             <div className="mt-3 space-y-2">
-//               {policyDocuments.length === 0 && (
-//                 <p className="text-xs text-slate-500">No policy documents assigned.</p>
-//               )}
-//               {policyDocuments.map((doc, idx) => {
-//                 const employeeSigned = Boolean(doc?.signatureStatus?.employee?.signed);
-//                 const hrSigned = Boolean(doc?.signatureStatus?.hr?.signed);
-//                 const employeeSignUrl = doc?.signatureStatus?.employee?.signatureUrl || "";
-//                 const hrSignUrl = doc?.signatureStatus?.hr?.signatureUrl || "";
-//                 const signedPdfUrl = doc?.signatureStatus?.signedPdfUrl || "";
-//                 const policyPreviewUrl = signedPdfUrl || doc.url;
-//                 return (
-//                   <div
-//                     key={`${doc.url}-${idx}`}
-//                     className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2"
-//                     style={{ borderColor: "#eaeaea" }}
-//                   >
-//                     <button
-//                       type="button"
-//                       onClick={() =>
-//                         setPreviewDoc({
-//                           name: doc.name || `Policy ${idx + 1}`,
-//                           url: policyPreviewUrl,
-//                         })
-//                       }
-//                       className="max-w-[50%] truncate text-left text-sm font-medium text-cyan-700 hover:underline"
-//                     >
-//                       {doc.name || `Policy ${idx + 1}`}
-//                     </button>
-//                     <div className="flex items-center gap-2">
-//                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${employeeSigned ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-//                         Employee {employeeSigned ? "Signed" : "Pending"}
-//                       </span>
-//                       <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${hrSigned ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-//                         HR {hrSigned ? "Signed" : "Pending"}
-//                       </span>
-//                       {employeeSigned && hrSigned && signedPdfUrl && (
-//                         <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
-//                           Signed PDF Ready
-//                         </span>
-//                       )}
-//                       {employeeSignUrl && (
-//                         <Button
-//                           variant="text"
-//                           size="small"
-//                           onClick={() => setPreviewDoc({ name: `Employee Signature - ${doc.name}`, url: employeeSignUrl })}
-//                           sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
+//                     <TableCell>
+//                       <div className="flex items-center gap-3">
+//                         <Avatar
+//                           src={user.profilePhotoUrl || ""}
+//                           sx={{
+//                             width: 40,
+//                             height: 40,
+//                             bgcolor: "#eff6ff",
+//                             color: "#3b82f6",
+//                             fontWeight: 600
+//                           }}
 //                         >
-//                           See Emp Sign
-//                         </Button>
-//                       )}
-//                       {hrSignUrl && (
-//                         <Button
-//                           variant="text"
-//                           size="small"
-//                           onClick={() => setPreviewDoc({ name: `HR Signature - ${doc.name}`, url: hrSignUrl })}
-//                           sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
-//                         >
-//                           See HR Sign
-//                         </Button>
-//                       )}
-//                       {(employeeSigned || hrSigned) && policyPreviewUrl && (
-//                         <Button
-//                           variant="text"
-//                           size="small"
-//                           onClick={() => setPreviewDoc({ name: `Signed Policy - ${doc.name}`, url: policyPreviewUrl })}
-//                           sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
-//                         >
-//                           See Signed PDF
-//                         </Button>
-//                       )}
-//                       {policyPreviewUrl && (
-//                         <Button
-//                           component="a"
-//                           href={policyPreviewUrl}
-//                           target="_blank"
-//                           rel="noreferrer"
-//                           variant="text"
-//                           size="small"
-//                           sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
-//                         >
-//                           Download PDF
-//                         </Button>
-//                       )}
-//                       <Button
-//                         variant="outlined"
-//                         size="small"
-//                         onClick={() => {
-//                           setHrSignModal({ open: true, doc, party: "employee" });
-//                           setHrSignatureDataUrl("");
-//                           setHrSignatureHasStroke(false);
-//                         }}
-//                         sx={{ 
-//                           textTransform: "none", 
-//                           borderRadius: "10px", 
-//                           minWidth: "104px",
-//                           borderColor: "#eaeaea",
-//                           "&:hover": { borderColor: "#cbd5e1" }
-//                         }}
-//                       >
-//                         {employeeSigned ? "Edit Emp Sign" : "Emp Sign"}
-//                       </Button>
-//                       <Button
-//                         variant="outlined"
-//                         size="small"
-//                         onClick={() => {
-//                           setHrSignModal({ open: true, doc, party: "hr" });
-//                           setHrSignatureDataUrl("");
-//                           setHrSignatureHasStroke(false);
-//                         }}
-//                         sx={{ 
-//                           textTransform: "none", 
-//                           borderRadius: "10px", 
-//                           minWidth: "88px",
-//                           borderColor: "#eaeaea",
-//                           "&:hover": { borderColor: "#cbd5e1" }
-//                         }}
-//                       >
-//                         {hrSigned ? "Edit HR Sign" : "HR Sign"}
-//                       </Button>
-//                     </div>
-//                   </div>
-//                 );
-//               })}
-//             </div>
-//           </div>
-//           <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: "#eff6ff", border: "1px solid #eaeaea" }}>
-//             <div className="flex items-center justify-between mb-2">
-//               <span className="text-sm font-medium text-blue-900">Document Upload Status</span>
-//               <span className="text-xs text-blue-700">
-//                 {Object.values(documents).filter((doc) => doc !== null && (!isFresher || !isPreviousEmploymentDoc(doc?.name || ""))).length} / {totalVisibleDocs} Uploaded
-//               </span>
-//             </div>
-//             <LinearProgress 
-//               variant="determinate" 
-//               value={
-//                 totalVisibleDocs > 0
-//                   ? (Object.values(documents).filter((doc) => doc !== null && (!isFresher || !isPreviousEmploymentDoc(doc?.name || ""))).length / totalVisibleDocs) * 100
-//                   : 0
-//               }
-//               sx={{ height: 6, borderRadius: 3, backgroundColor: "#bfdbfe", "& .MuiLinearProgress-bar": { backgroundColor: "#3b82f6" } }}
-//             />
-//           </div>
-
-//           {isFresher && (
-//             <div className="mb-6 rounded-xl border p-3" style={{ borderColor: "#eaeaea", backgroundColor: "#f8fafc" }}>
-//               <p className="text-xs font-medium text-slate-700">
-//                 Previous Employment documents are disabled for fresher candidates.
-//               </p>
-//             </div>
-//           )}
-
-//           {/* Document Categories */}
-//           {visibleDocCategories.map(([category, docs]) => (
-//             <div key={category} className="mb-8">
-//               <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
-//                 <FolderOpen sx={{ fontSize: 18, color: "#3b82f6" }} />
-//                 {category}
-//               </h3>
-//               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-//                 {docs.map((doc) => {
-//                   const uploadedDoc = documents[doc.id];
-//                   const isUploading = uploadStates[doc.id];
-//                   const requiredForEmployee = getDocRequired(doc);
-//                   const lockedForHr = isDocLockedForHr(uploadedDoc);
-                  
-//                   return (
-//                     <div
-//                       key={doc.id}
-//                       className={`p-4 rounded-xl border transition-all ${
-//                         uploadedDoc
-//                           ? "border-green-200 bg-green-50/30"
-//                           : requiredForEmployee
-//                           ? "border-amber-200 bg-amber-50/30"
-//                           : "border-slate-200 bg-white"
-//                       }`}
-//                       style={{ borderColor: uploadedDoc ? "#86efac" : requiredForEmployee ? "#fed7aa" : "#eaeaea" }}
-//                     >
-//                       <div className="flex items-start justify-between">
-//                         <div className="flex items-start gap-3 flex-1">
-//                           <div className={`p-2 rounded-lg ${
-//                             uploadedDoc
-//                               ? "bg-green-100"
-//                               : requiredForEmployee
-//                               ? "bg-amber-100"
-//                               : "bg-slate-100"
-//                           }`}>
-//                             {doc.icon}
-//                           </div>
-//                           <div className="flex-1">
-//                             <div className="flex items-center gap-2">
-//                               <p className="text-sm font-medium text-slate-900">{doc.name}</p>
-//                               {requiredForEmployee && (
-//                                 <span className="text-xs text-red-500">*</span>
-//                               )}
-//                             </div>
-//                             <p className="text-xs text-slate-500 mt-1">
-//                               {getDocumentStatusText(uploadedDoc, requiredForEmployee)}
-//                             </p>
-//                             {uploadedDoc && (
-//                               <div className="mt-2">
-//                                 <p className="text-xs text-slate-500 truncate">
-//                                   {uploadedDoc.fileName}
-//                                 </p>
-//                                 <p className="text-[11px] text-slate-500 mt-0.5">
-//                                   IP: {uploadedDoc.uploadedIp || "N/A"}
-//                                 </p>
-//                                 <p className="text-[11px] text-slate-500">
-//                                   Uploaded: {uploadedDoc.uploadedAt ? new Date(uploadedDoc.uploadedAt).toLocaleString() : "N/A"}
-//                                 </p>
-//                               </div>
-//                             )}
-//                           </div>
-//                         </div>
-//                         <div className="flex items-center gap-1">
-//                           {uploadedDoc && (
-//                             <>
-//                               <Tooltip title="Preview">
-//                                 <IconButton
-//                                   size="small"
-//                                   onClick={() => setPreviewDoc(uploadedDoc)}
-//                                   sx={{ color: "#3b82f6" }}
-//                                 >
-//                                   <RemoveRedEye sx={{ fontSize: 18 }} />
-//                                 </IconButton>
-//                               </Tooltip>
-//                               <Tooltip title="Remove">
-//                                 <IconButton
-//                                   size="small"
-//                                   onClick={() => removeDocument(doc.id)}
-//                                   disabled={lockedForHr}
-//                                   sx={{ color: "#ef4444" }}
-//                                 >
-//                                   <Delete sx={{ fontSize: 18 }} />
-//                                 </IconButton>
-//                               </Tooltip>
-//                             </>
-//                           )}
-//                           <Button
-//                             variant={uploadedDoc ? "outlined" : "contained"}
-//                             size="small"
-//                             onClick={() => handleFileSelect(doc.id)}
-//                             disabled={isUploading || lockedForHr}
-//                             startIcon={isUploading ? <CircularProgress size={16} /> : <Upload />}
-//                             sx={{
-//                               textTransform: "none",
-//                               borderRadius: "10px",
-//                               fontSize: "0.75rem",
-//                               borderColor: "#eaeaea",
-//                               ...(uploadedDoc && {
-//                                 borderColor: "#cbd5e1",
-//                                 color: "#475569",
-//                                 "&:hover": { borderColor: "#94a3b8" }
-//                               })
-//                             }}
-//                           >
-//                             {isUploading ? "Uploading..." : lockedForHr ? "Locked" : uploadedDoc ? "Replace" : "Upload"}
-//                           </Button>
-//                           <input
-//                             id={`file-input-${doc.id}`}
-//                             type="file"
-//                             style={{ display: "none" }}
-//                             onChange={(e) => {
-//                               if (e.target.files?.[0]) {
-//                                 uploadDocument(doc.id, e.target.files[0]);
-//                                 e.target.value = "";
-//                               }
-//                             }}
-//                             accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
-//                           />
+//                           {user.realName?.charAt(0) || user.username?.charAt(0) || "U"}
+//                         </Avatar>
+//                         <div>
+//                           <p className="font-medium text-slate-900">{user.realName || user.username}</p>
 //                         </div>
 //                       </div>
-//                     </div>
-//                   );
-//                 })}
-//               </div>
-//             </div>
-//           ))}
-//         </div>
-//       )}
+//                     </TableCell>
+//                     <TableCell>
+//                       <span className="font-mono text-sm text-slate-700">{user.empId || "—"}</span>
+//                     </TableCell>
+//                     <TableCell>
+//                       <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+//                         {user.department || "N/A"}
+//                       </span>
+//                     </TableCell>
+//                     <TableCell className="text-sm text-slate-600">{user.designation || "—"}</TableCell>
+//                     <TableCell className="text-sm text-slate-600">{user.pseudoName || "—"}</TableCell>
+//                     <TableCell>
+//                       <div className="flex items-center gap-1.5">
+//                         <AccessTime sx={{ fontSize: 14, color: "#f59e0b" }} />
+//                         <span className="text-sm text-slate-600">
+//                           {user.shiftLabel || getShiftLabel(user.shiftStartHour, user.shiftEndHour) || "—"}
+//                         </span>
+//                       </div>
+//                     </TableCell>
+//                     <TableCell>
+//                       <div className="flex gap-1.5">
+//                         <span
+//                           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+//                             user.isActive === false
+//                               ? "bg-rose-50 text-rose-700"
+//                               : "bg-emerald-50 text-emerald-700"
+//                           }`}
+//                         >
+//                           {user.isActive === false ? "Inactive" : "Active"}
+//                         </span>
+//                         {user.isCoreTeam && (
+//                           <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-600">
+//                             Core
+//                           </span>
+//                         )}
+//                       </div>
+//                     </TableCell>
+//                     <TableCell align="center">
+//                       <div className="flex items-center justify-center gap-1">
+//                         <IconButton
+//                           onClick={() => handleOpenDialog(user)}
+//                           sx={{
+//                             color: "#64748b",
+//                             "&:hover": { backgroundColor: "#eff6ff", color: "#3b82f6" }
+//                           }}
+//                         >
+//                           <Edit sx={{ fontSize: 20 }} />
+//                         </IconButton>
+//                         {isSuperAdminUser && (
+//                           <IconButton
+//                             onClick={() => setDeleteTarget(user)}
+//                             sx={{
+//                               color: "#ef4444",
+//                               "&:hover": { backgroundColor: "#fef2f2", color: "#dc2626" }
+//                             }}
+//                           >
+//                             <Delete sx={{ fontSize: 19 }} />
+//                           </IconButton>
+//                         )}
+//                       </div>
+//                     </TableCell>
+//                   </TableRow>
+//                 ))}
+//               {!isSearchingEmployees && localEmployees.length === 0 && (
+//                 <TableRow>
+//                   <TableCell colSpan={8} align="center" sx={{ py: 4 }}>
+//                     <Typography variant="body2" sx={{ color: "#64748b" }}>
+//                       {employeeSearch.trim()
+//                         ? "No employees match this search."
+//                         : "No employees found."}
+//                     </Typography>
+//                   </TableCell>
+//                 </TableRow>
+//               )}
+//             </TableBody>
+//           </Table>
+//         </TableContainer>
+//         <TablePagination
+//           component="div"
+//           count={localEmployees.length}
+//           page={page}
+//           onPageChange={(e, newPage) => setPage(newPage)}
+//           rowsPerPage={rowsPerPage}
+//           onRowsPerPageChange={(e) => {
+//             setRowsPerPage(parseInt(e.target.value, 10));
+//             setPage(0);
+//           }}
+//           sx={{ borderTop: "1px solid #eaeaea" }}
+//         />
+//       </StyledCard>
 
-//       {/* Security Section */}
-//       {activeSection === "security" && (
-//         <div className="p-6">
-//           <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "#fffbeb", border: "1px solid #eaeaea" }}>
-//             <div className="flex items-start gap-2">
-//               <Security sx={{ fontSize: 18, color: "#f59e0b" }} />
+//       {/* Modern Edit Dialog */}
+//       <Dialog
+//         open={!!selectedUser}
+//         onClose={handleCloseDialog}
+//         fullWidth
+//         maxWidth="lg"
+//         PaperProps={{
+//           sx: {
+//             borderRadius: "32px",
+//             overflow: "hidden",
+//             height: "auto",
+//             maxHeight: "90vh",
+//           },
+//         }}
+//       >
+//         {/* Header */}
+//         <div className="bg-white px-6 py-5 border-b" style={{ borderBottomColor: "#eaeaea" }}>
+//           <div className="flex items-center justify-between">
+//             <div className="flex items-center gap-3">
+//               <Avatar
+//                 src={formData.profilePhotoUrl || selectedUser?.profilePhotoUrl || ""}
+//                 sx={{
+//                   width: 48,
+//                   height: 48,
+//                   bgcolor: "#3b82f6",
+//                   background: "linear-gradient(135deg, #3b82f6, #2563eb)"
+//                 }}
+//               >
+//                 <Edit sx={{ fontSize: 24 }} />
+//               </Avatar>
 //               <div>
-//                 <p className="text-sm font-medium text-amber-800">Password Change</p>
-//                 <p className="text-xs text-amber-700 mt-0.5">
-//                   Leave fields blank to keep current password unchanged
+//                 <h2 className="text-xl font-semibold text-slate-900">Edit Employee</h2>
+//                 <p className="text-sm text-slate-500">
+//                   {selectedUser?.realName || selectedUser?.username}
 //                 </p>
 //               </div>
 //             </div>
-//           </div>
-
-//           <div className="space-y-4">
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">New Password</label>
-//               <TextField
-//                 fullWidth
-//                 name="password"
-//                 type={showPassword ? "text" : "password"}
-//                 value={formData.password}
-//                 onChange={handleChange}
+//             <div className="flex items-center gap-2">
+//               <Button
+//                 variant="outlined"
 //                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//                 InputProps={{
-//                   endAdornment: (
-//                     <InputAdornment position="end">
-//                       <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
-//                         {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-//                       </IconButton>
-//                     </InputAdornment>
-//                   ),
-//                 }}
-//               />
+//                 startIcon={<Badge />}
+//                 onClick={downloadEmployeeIdCard}
+//                 sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
+//               >
+//                 Download ID Card
+//               </Button>
+//               <IconButton onClick={handleCloseDialog} sx={{ color: "#94a3b8" }}>
+//                 <Close />
+//               </IconButton>
 //             </div>
-//             <div>
-//               <label className="block text-xs font-medium text-slate-500 mb-1.5">Confirm Password</label>
-//               <TextField
-//                 fullWidth
-//                 name="confirmPassword"
-//                 type={showConfirmPassword ? "text" : "password"}
-//                 value={formData.confirmPassword}
-//                 onChange={handleChange}
-//                 size="small"
-//                 sx={{
-//                   "& .MuiOutlinedInput-root": {
-//                     borderRadius: "12px",
-//                     "& fieldset": {
-//                       borderColor: "#eaeaea",
-//                     },
-//                     "&:hover fieldset": {
-//                       borderColor: "#cbd5e1",
-//                     },
-//                     "&.Mui-focused fieldset": {
-//                       borderColor: "#3b82f6",
-//                       borderWidth: "2px",
-//                     },
-//                   },
-//                 }}
-//                 InputProps={{
-//                   endAdornment: (
-//                     <InputAdornment position="end">
-//                       <IconButton onClick={toggleConfirmPasswordVisibility} edge="end" size="small">
-//                         {showConfirmPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
-//                       </IconButton>
-//                     </InputAdornment>
-//                   ),
-//                 }}
-//               />
-//             </div>
-            
-//             {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
-//               <Alert severity="error" sx={{ borderRadius: "12px" }}>
-//                 Passwords do not match
-//               </Alert>
-//             )}
-//             {formData.password && formData.password.length < 6 && (
-//               <Alert severity="warning" sx={{ borderRadius: "12px" }}>
-//                 Password must be at least 6 characters long
-//               </Alert>
-//             )}
 //           </div>
 //         </div>
-//       )}
-//       </fieldset>
-//     </DialogContent>
 
-//     <DialogActions sx={{ p: 3, borderTop: "1px solid #eaeaea", gap: 2 }}>
-//       <Button
-//         onClick={handleCloseDialog}
-//         variant="outlined"
-//         sx={{
-//           textTransform: "none",
-//           borderRadius: "12px",
-//           px: 3,
-//           color: "#64748b",
-//           borderColor: "#eaeaea",
-//           "&:hover": { borderColor: "#cbd5e1", backgroundColor: "#f8fafc" }
+//         {/* Section Navigation */}
+//         <div className="bg-slate-50/50 px-6 py-3 border-b" style={{ borderBottomColor: "#eaeaea" }}>
+//           <div className="flex gap-1 overflow-x-auto">
+//             {sections.map((section) => (
+//               <button
+//                 key={section.id}
+//                 onClick={() => setActiveSection(section.id)}
+//                 className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl transition-all whitespace-nowrap ${
+//                   activeSection === section.id
+//                     ? "bg-white text-blue-600 shadow-sm"
+//                     : "text-slate-600 hover:text-slate-900 hover:bg-white/60"
+//                 }`}
+//               >
+//                 {section.icon}
+//                 {section.label}
+//               </button>
+//             ))}
+//           </div>
+//         </div>
+
+//         {/* Content */}
+//         <DialogContent sx={{ p: 0, overflowY: "auto", maxHeight: "calc(90vh - 180px)" }}>
+//           {isSelectedUserInactive && (
+//             <div className="px-6 pt-4">
+//               <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+//                 <label className="block text-xs font-medium text-amber-800 mb-1.5">Account Status</label>
+//                 <TextField
+//                   select
+//                   fullWidth
+//                   name="isActive"
+//                   value={formData.isActive ? "active" : "inactive"}
+//                   onChange={(e) =>
+//                     setFormData((prev) => ({
+//                       ...prev,
+//                       isActive: e.target.value === "active",
+//                     }))
+//                   }
+//                   size="small"
+//                   sx={{
+//                     "& .MuiOutlinedInput-root": {
+//                       borderRadius: "10px",
+//                       backgroundColor: "#fff",
+//                       "& fieldset": {
+//                         borderColor: "#f3d190",
+//                       },
+//                       "&:hover fieldset": {
+//                         borderColor: "#eab308",
+//                       },
+//                       "&.Mui-focused fieldset": {
+//                         borderColor: "#d97706",
+//                         borderWidth: "2px",
+//                       },
+//                     },
+//                   }}
+//                 >
+//                   <MenuItem value="active" disabled={!isSuperAdminUser}>Active</MenuItem>
+//                   <MenuItem value="inactive">Inactive</MenuItem>
+//                 </TextField>
+//               </div>
+//             </div>
+//           )}
+//           <fieldset
+//             disabled={isSelectedUserInactive}
+//             className={`border-0 m-0 min-w-0 p-0 ${isSelectedUserInactive ? "pointer-events-none select-none opacity-70" : ""}`}
+//           >
+//           {/* Basic Info Section */}
+//           {activeSection === "basic" && (
+//             <div className="p-6">
+//               <div
+//                 className="mb-5 flex flex-wrap items-center gap-4 rounded-xl border p-4"
+//                 style={{ borderColor: "#e2e8f0", backgroundColor: "#f8fafc" }}
+//               >
+//                 <Avatar
+//                   src={formData.profilePhotoUrl || ""}
+//                   sx={{ width: 88, height: 88, bgcolor: "#dbeafe", color: "#1d4ed8", fontWeight: 700 }}
+//                 >
+//                   {(formData.realName || formData.username || "U").charAt(0)}
+//                 </Avatar>
+//                 <div className="flex-1 min-w-[220px]">
+//                   <p className="text-sm font-semibold text-slate-800">Employee Profile Photo</p>
+//                   <div className="mt-3 flex flex-wrap gap-2">
+//                     <Button
+//                       variant="contained"
+//                       size="small"
+//                       startIcon={<CameraAlt />}
+//                       onClick={openCamera}
+//                       disabled={uploadingProfilePhoto}
+//                       sx={{ textTransform: "none", borderRadius: "10px" }}
+//                     >
+//                       Capture Photo
+//                     </Button>
+//                     {formData.profilePhotoUrl && (
+//                       <Button
+//                         variant="outlined"
+//                         size="small"
+//                         onClick={() =>
+//                           {
+//                             setFormData((prev) => ({
+//                               ...prev,
+//                               profilePhotoUrl: "",
+//                               profilePhotoPublicId: "",
+//                             }));
+//                             setDocuments((prev) => ({
+//                               ...prev,
+//                               photo: null,
+//                             }));
+//                           }
+//                         }
+//                         sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
+//                       >
+//                         Remove
+//                       </Button>
+//                     )}
+//                   </div>
+//                 </div>
+//               </div>
+//               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Username</label>
+//                   <TextField
+//                     fullWidth
+//                     name="username"
+//                     value={formData.username}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         backgroundColor: "#fff",
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Employee ID</label>
+//                   <TextField
+//                     fullWidth
+//                     name="empId"
+//                     value={formData.empId}
+//                     onChange={handleChange}
+//                     size="small"
+//                     placeholder="EMP001"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Real Name</label>
+//                   <TextField
+//                     fullWidth
+//                     name="realName"
+//                     value={formData.realName}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Pseudo Name</label>
+//                   <TextField
+//                     fullWidth
+//                     name="pseudoName"
+//                     value={formData.pseudoName}
+//                     onChange={handleChange}
+//                     size="small"
+//                     placeholder="Optional"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Designation</label>
+//                   <TextField
+//                     select
+//                     fullWidth
+//                     name="designation"
+//                     value={formData.designation}
+//                     onChange={handleChange}
+//                     size="small"
+//                     SelectProps={{
+//                       MenuProps: {
+//                         PaperProps: {
+//                           sx: { maxHeight: 260 },
+//                         },
+//                       },
+//                     }}
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   >
+//                     <MenuItem value="">Select designation</MenuItem>
+//                     {DESIGNATION_OPTIONS.map((item) => (
+//                       <MenuItem key={item} value={item}>
+//                         {item}
+//                       </MenuItem>
+//                     ))}
+//                   </TextField>
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Date of Joining</label>
+//                   <StyledDatePicker
+//                     value={formData.dateOfJoining}
+//                     onChange={(val) =>
+//                       setFormData((prev) => ({
+//                         ...prev,
+//                         dateOfJoining: val,
+//                       }))
+//                     }
+//                     placeholder="Select joining date"
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Office Location</label>
+//                   <TextField
+//                     fullWidth
+//                     name="officeLocation"
+//                     value={formData.officeLocation}
+//                     onChange={handleChange}
+//                     size="small"
+//                     placeholder="Enter office location"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">DOB</label>
+//                   <StyledDatePicker
+//                     value={formData.dob}
+//                     onChange={(val) =>
+//                       setFormData((prev) => ({
+//                         ...prev,
+//                         dob: val,
+//                       }))
+//                     }
+//                     placeholder="Select DOB"
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Blood Group</label>
+//                   <TextField
+//                     fullWidth
+//                     name="bloodGroup"
+//                     value={formData.bloodGroup}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Contact Number</label>
+//                   <TextField
+//                     fullWidth
+//                     name="contactNumber"
+//                     value={formData.contactNumber}
+//                     onChange={handleChange}
+//                     size="small"
+//                     placeholder="Enter contact number"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Personal Email ID</label>
+//                   <TextField
+//                     fullWidth
+//                     name="personalEmailId"
+//                     value={formData.personalEmailId}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Name</label>
+//                   <TextField
+//                     fullWidth
+//                     name="emergencyContactName"
+//                     value={formData.emergencyContactName}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Number</label>
+//                   <TextField
+//                     fullWidth
+//                     name="emergencyContactNumber"
+//                     value={formData.emergencyContactNumber}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Emergency Contact Relation</label>
+//                   <TextField
+//                     fullWidth
+//                     name="emergencyContactRelation"
+//                     value={formData.emergencyContactRelation}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div className="md:col-span-2">
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Permanent Address</label>
+//                   <TextField
+//                     fullWidth
+//                     name="permanentAddress"
+//                     value={formData.permanentAddress}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div className="md:col-span-2">
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Current Address</label>
+//                   <TextField
+//                     fullWidth
+//                     name="currentAddress"
+//                     value={formData.currentAddress}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//               </div>
+//             </div>
+//           )}
+
+//           {activeSection === "work" && (
+//             <div className="p-6">
+//               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Department</label>
+//                   <TextField
+//                     fullWidth
+//                     name="department"
+//                     value={formData.department}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Account Status</label>
+//                   <TextField
+//                     select
+//                     fullWidth
+//                     name="isActive"
+//                     value={formData.isActive ? "active" : "inactive"}
+//                     onChange={(e) =>
+//                       setFormData((prev) => ({
+//                         ...prev,
+//                         isActive: e.target.value === "active",
+//                       }))
+//                     }
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   >
+//                     <MenuItem value="active">Active</MenuItem>
+//                     <MenuItem value="inactive">Inactive</MenuItem>
+//                   </TextField>
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Reporting Manager</label>
+//                   <TextField
+//                     select
+//                     fullWidth
+//                     name="reportingManager"
+//                     value={formData.reportingManager}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   >
+//                     <MenuItem value="">— None —</MenuItem>
+//                     {reportingManagerOptions.map((manager) => (
+//                       <MenuItem key={manager._id} value={manager._id}>
+//                         {manager.realName ? `${manager.realName} (${manager.username})` : manager.username}
+//                       </MenuItem>
+//                     ))}
+//                   </TextField>
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Shift Timing</label>
+//                   <TextField
+//                     select
+//                     fullWidth
+//                     name="shiftLabel"
+//                     value={formData.shiftLabel}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   >
+//                     {shiftOptions.map((shift) => (
+//                       <MenuItem key={shift.value} value={shift.value}>
+//                         {shift.label}
+//                       </MenuItem>
+//                     ))}
+//                   </TextField>
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Transport Office</label>
+//                   <TextField
+//                     select
+//                     fullWidth
+//                     name="transportOffice"
+//                     value={formData.transportOffice}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   >
+//                     <MenuItem value="No">Not Required</MenuItem>
+//                     <MenuItem value="Yes">Required</MenuItem>
+//                   </TextField>
+//                 </div>
+//                 {canManagePayroll && (
+//                   <>
+//                     <div>
+//                       <label className="block text-xs font-medium text-slate-500 mb-1.5">CTC</label>
+//                       <TextField
+//                         fullWidth
+//                         name="ctc"
+//                         value={formData.ctc}
+//                         onChange={handleChange}
+//                         size="small"
+//                         type="number"
+//                         placeholder="Enter CTC amount"
+//                         inputProps={{ min: 0, step: "0.01" }}
+//                         sx={{
+//                           "& .MuiOutlinedInput-root": {
+//                             borderRadius: "12px",
+//                             "& fieldset": {
+//                               borderColor: "#eaeaea",
+//                             },
+//                             "&:hover fieldset": {
+//                               borderColor: "#cbd5e1",
+//                             },
+//                             "&.Mui-focused fieldset": {
+//                               borderColor: "#3b82f6",
+//                               borderWidth: "2px",
+//                             },
+//                           },
+//                         }}
+//                       />
+//                     </div>
+//                     <div>
+//                       <label className="block text-xs font-medium text-slate-500 mb-1.5">In Hand</label>
+//                       <TextField
+//                         fullWidth
+//                         name="inHandSalary"
+//                         value={formData.inHandSalary}
+//                         onChange={handleChange}
+//                         size="small"
+//                         type="number"
+//                         placeholder="Enter in-hand salary"
+//                         inputProps={{ min: 0, step: "0.01" }}
+//                         sx={{
+//                           "& .MuiOutlinedInput-root": {
+//                             borderRadius: "12px",
+//                             "& fieldset": {
+//                               borderColor: "#eaeaea",
+//                             },
+//                             "&:hover fieldset": {
+//                               borderColor: "#cbd5e1",
+//                             },
+//                             "&.Mui-focused fieldset": {
+//                               borderColor: "#3b82f6",
+//                               borderWidth: "2px",
+//                             },
+//                           },
+//                         }}
+//                       />
+//                     </div>
+//                     <div>
+//                       <label className="block text-xs font-medium text-slate-500 mb-1.5">Transport Allowance</label>
+//                       <TextField
+//                         fullWidth
+//                         name="transportAllowance"
+//                         value={formData.transportAllowance}
+//                         onChange={handleChange}
+//                         size="small"
+//                         type="number"
+//                         placeholder="Enter transport allowance"
+//                         inputProps={{ min: 0, step: "0.01" }}
+//                         sx={{
+//                           "& .MuiOutlinedInput-root": {
+//                             borderRadius: "12px",
+//                             "& fieldset": {
+//                               borderColor: "#eaeaea",
+//                             },
+//                             "&:hover fieldset": {
+//                               borderColor: "#cbd5e1",
+//                             },
+//                             "&.Mui-focused fieldset": {
+//                               borderColor: "#3b82f6",
+//                               borderWidth: "2px",
+//                             },
+//                           },
+//                         }}
+//                       />
+//                     </div>
+//                   </>
+//                 )}
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Candidate Type</label>
+//                   <TextField
+//                     select
+//                     fullWidth
+//                     name="employmentType"
+//                     value={formData.employmentType}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                   >
+//                     <MenuItem value="fresher">Fresher</MenuItem>
+//                     <MenuItem value="experienced">Experienced</MenuItem>
+//                   </TextField>
+//                 </div>
+//               </div>
+//               {/* Checkboxes in Row Layout */}
+//               <div className="flex flex-wrap items-center gap-6 mt-5">
+//                 <label className="flex items-center gap-2 cursor-pointer">
+//                   <input
+//                     type="checkbox"
+//                     name="isCoreTeam"
+//                     checked={formData.isCoreTeam}
+//                     onChange={handleChange}
+//                     className="w-4 h-4 rounded   text-blue-600 focus:ring-blue-500"
+//                   />
+//                   <span className="text-sm font-medium text-slate-700"> Core Team Member</span>
+//                 </label>
+//                 <label className="flex items-center gap-2 cursor-pointer">
+//                   <input
+//                     type="checkbox"
+//                     name="isTeamLeader"
+//                     checked={formData.isTeamLeader}
+//                     onChange={handleChange}
+//                     className="w-4 h-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+//                   />
+//                   <span className="text-sm font-medium text-slate-700"> Team Leader Eligible</span>
+//                 </label>
+//               </div>
+//             </div>
+//           )}
+
+//           {/* Documents Section */}
+//           {activeSection === "documents" && (
+//             <div className="p-6">
+//               <div className="mb-6 rounded-xl border p-4" style={{ borderColor: "#eaeaea", backgroundColor: "#f0f9ff" }}>
+//                 {isSuperAdminUser && (
+//                   <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white p-3" style={{ borderColor: "#e2e8f0" }}>
+//                     <div className="flex items-center gap-2">
+//                       <span className="rounded-lg bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">
+//                         {isHrDepartment(selectedUser || {}) ? "Global HR Window" : "HR Re-upload Window"}
+//                       </span>
+//                       <span
+//                         className={`rounded-lg px-2 py-1 text-xs font-semibold ${
+//                           (isHrDepartment(selectedUser || {}) ? isHrGlobalOverrideActive : isHrOverrideActive)
+//                             ? "bg-emerald-100 text-emerald-700"
+//                             : "bg-slate-100 text-slate-600"
+//                         }`}
+//                       >
+//                         {(isHrDepartment(selectedUser || {}) ? isHrGlobalOverrideActive : isHrOverrideActive)
+//                           ? formatRemaining(
+//                               isHrDepartment(selectedUser || {})
+//                                 ? selectedUser?.hrGlobalDocumentOverrideUntil
+//                                 : selectedUser?.hrDocumentOverrideUntil
+//                             )
+//                           : "00:00"}
+//                       </span>
+//                     </div>
+//                     <div className="flex items-center gap-2">
+//                       <Button
+//                         variant="contained"
+//                         size="small"
+//                         disabled={grantingOverride}
+//                         onClick={() => handleSetHrOverride(true)}
+//                         sx={{ textTransform: "none", borderRadius: "10px" }}
+//                       >
+//                         Allow 30m
+//                       </Button>
+//                       <Button
+//                         variant="outlined"
+//                         size="small"
+//                         disabled={grantingOverride}
+//                         onClick={() => handleSetHrOverride(false)}
+//                         sx={{ textTransform: "none", borderRadius: "10px", borderColor: "#e2e8f0" }}
+//                       >
+//                         Revoke
+//                       </Button>
+//                     </div>
+//                   </div>
+//                 )}
+
+//                 <p className="text-sm font-semibold text-cyan-900">Policy Documents (Consent Required)</p>
+//                 <p className="mt-1 text-xs text-cyan-700">
+//                   Static company policies for every employee. Employee signs from dashboard, HR can co-sign from here.
+//                 </p>
+
+//                 <div className="mt-3 space-y-2">
+//                   {policyDocuments.length === 0 && (
+//                     <p className="text-xs text-slate-500">No policy documents assigned.</p>
+//                   )}
+//                   {policyDocuments.map((doc, idx) => {
+//                     const employeeSigned = Boolean(doc?.signatureStatus?.employee?.signed);
+//                     const hrSigned = Boolean(doc?.signatureStatus?.hr?.signed);
+//                     const employeeSignUrl = doc?.signatureStatus?.employee?.signatureUrl || "";
+//                     const hrSignUrl = doc?.signatureStatus?.hr?.signatureUrl || "";
+//                     const signedPdfUrl = doc?.signatureStatus?.signedPdfUrl || "";
+//                     const policyPreviewUrl = signedPdfUrl || doc.url;
+//                     return (
+//                       <div
+//                         key={`${doc.url}-${idx}`}
+//                         className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-white px-3 py-2"
+//                         style={{ borderColor: "#eaeaea" }}
+//                       >
+//                         <button
+//                           type="button"
+//                           onClick={() =>
+//                             setPreviewDoc({
+//                               name: doc.name || `Policy ${idx + 1}`,
+//                               url: policyPreviewUrl,
+//                             })
+//                           }
+//                           className="max-w-[50%] truncate text-left text-sm font-medium text-cyan-700 hover:underline"
+//                         >
+//                           {doc.name || `Policy ${idx + 1}`}
+//                         </button>
+//                         <div className="flex items-center gap-2">
+//                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${employeeSigned ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+//                             Employee {employeeSigned ? "Signed" : "Pending"}
+//                           </span>
+//                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${hrSigned ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+//                             HR {hrSigned ? "Signed" : "Pending"}
+//                           </span>
+//                           {employeeSigned && hrSigned && signedPdfUrl && (
+//                             <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-semibold text-blue-700">
+//                               Signed PDF Ready
+//                             </span>
+//                           )}
+//                           {employeeSignUrl && (
+//                             <Button
+//                               variant="text"
+//                               size="small"
+//                               onClick={() => setPreviewDoc({ name: `Employee Signature - ${doc.name}`, url: employeeSignUrl })}
+//                               sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
+//                             >
+//                               See Emp Sign
+//                             </Button>
+//                           )}
+//                           {hrSignUrl && (
+//                             <Button
+//                               variant="text"
+//                               size="small"
+//                               onClick={() => setPreviewDoc({ name: `HR Signature - ${doc.name}`, url: hrSignUrl })}
+//                               sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
+//                             >
+//                               See HR Sign
+//                             </Button>
+//                           )}
+//                           {(employeeSigned || hrSigned) && policyPreviewUrl && (
+//                             <Button
+//                               variant="text"
+//                               size="small"
+//                               onClick={() => setPreviewDoc({ name: `Signed Policy - ${doc.name}`, url: policyPreviewUrl })}
+//                               sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
+//                             >
+//                               See Signed PDF
+//                             </Button>
+//                           )}
+//                           {policyPreviewUrl && (
+//                             <Button
+//                               component="a"
+//                               href={policyPreviewUrl}
+//                               target="_blank"
+//                               rel="noreferrer"
+//                               variant="text"
+//                               size="small"
+//                               sx={{ textTransform: "none", minWidth: "auto", fontSize: "0.7rem" }}
+//                             >
+//                               Download PDF
+//                             </Button>
+//                           )}
+//                           <Button
+//                             variant="outlined"
+//                             size="small"
+//                             onClick={() => {
+//                               setHrSignModal({ open: true, doc, party: "employee" });
+//                               setHrSignatureDataUrl("");
+//                               setHrSignatureHasStroke(false);
+//                             }}
+//                             sx={{ 
+//                               textTransform: "none", 
+//                               borderRadius: "10px", 
+//                               minWidth: "104px",
+//                               borderColor: "#eaeaea",
+//                               "&:hover": { borderColor: "#cbd5e1" }
+//                             }}
+//                           >
+//                             {employeeSigned ? "Edit Emp Sign" : "Emp Sign"}
+//                           </Button>
+//                           <Button
+//                             variant="outlined"
+//                             size="small"
+//                             onClick={() => {
+//                               setHrSignModal({ open: true, doc, party: "hr" });
+//                               setHrSignatureDataUrl("");
+//                               setHrSignatureHasStroke(false);
+//                             }}
+//                             sx={{ 
+//                               textTransform: "none", 
+//                               borderRadius: "10px", 
+//                               minWidth: "88px",
+//                               borderColor: "#eaeaea",
+//                               "&:hover": { borderColor: "#cbd5e1" }
+//                             }}
+//                           >
+//                             {hrSigned ? "Edit HR Sign" : "HR Sign"}
+//                           </Button>
+//                         </div>
+//                       </div>
+//                     );
+//                   })}
+//                 </div>
+//               </div>
+//               <div className="mb-6 p-4 rounded-xl" style={{ backgroundColor: "#eff6ff", border: "1px solid #eaeaea" }}>
+//                 <div className="flex items-center justify-between mb-2">
+//                   <span className="text-sm font-medium text-blue-900">Document Upload Status</span>
+//                   <span className="text-xs text-blue-700">
+//                     {Object.values(documents).filter((doc) => doc !== null && (!isFresher || !isPreviousEmploymentDoc(doc?.name || ""))).length} / {totalVisibleDocs} Uploaded
+//                   </span>
+//                 </div>
+//                 <LinearProgress 
+//                   variant="determinate" 
+//                   value={
+//                     totalVisibleDocs > 0
+//                       ? (Object.values(documents).filter((doc) => doc !== null && (!isFresher || !isPreviousEmploymentDoc(doc?.name || ""))).length / totalVisibleDocs) * 100
+//                       : 0
+//                   }
+//                   sx={{ height: 6, borderRadius: 3, backgroundColor: "#bfdbfe", "& .MuiLinearProgress-bar": { backgroundColor: "#3b82f6" } }}
+//                 />
+//               </div>
+
+//               {isFresher && (
+//                 <div className="mb-6 rounded-xl border p-3" style={{ borderColor: "#eaeaea", backgroundColor: "#f8fafc" }}>
+//                   <p className="text-xs font-medium text-slate-700">
+//                     Previous Employment documents are disabled for fresher candidates.
+//                   </p>
+//                 </div>
+//               )}
+
+//               {/* Document Categories */}
+//               {visibleDocCategories.map(([category, docs]) => (
+//                 <div key={category} className="mb-8">
+//                   <h3 className="text-sm font-semibold text-slate-700 mb-3 flex items-center gap-2">
+//                     <FolderOpen sx={{ fontSize: 18, color: "#3b82f6" }} />
+//                     {category}
+//                   </h3>
+//                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+//                     {docs.map((doc) => {
+//                       const uploadedDoc = documents[doc.id];
+//                       const isUploading = uploadStates[doc.id];
+//                       const requiredForEmployee = getDocRequired(doc);
+//                       const lockedForHr = isDocLockedForHr(uploadedDoc);
+                      
+//                       return (
+//                         <div
+//                           key={doc.id}
+//                           className={`p-4 rounded-xl border transition-all ${
+//                             uploadedDoc
+//                               ? "border-green-200 bg-green-50/30"
+//                               : requiredForEmployee
+//                               ? "border-amber-200 bg-amber-50/30"
+//                               : "border-slate-200 bg-white"
+//                           }`}
+//                           style={{ borderColor: uploadedDoc ? "#86efac" : requiredForEmployee ? "#fed7aa" : "#eaeaea" }}
+//                         >
+//                           <div className="flex items-start justify-between">
+//                             <div className="flex items-start gap-3 flex-1">
+//                               <div className={`p-2 rounded-lg ${
+//                                 uploadedDoc
+//                                   ? "bg-green-100"
+//                                   : requiredForEmployee
+//                                   ? "bg-amber-100"
+//                                   : "bg-slate-100"
+//                               }`}>
+//                                 {doc.icon}
+//                               </div>
+//                               <div className="flex-1">
+//                                 <div className="flex items-center gap-2">
+//                                   <p className="text-sm font-medium text-slate-900">{doc.name}</p>
+//                                   {requiredForEmployee && (
+//                                     <span className="text-xs text-red-500">*</span>
+//                                   )}
+//                                 </div>
+//                                 <p className="text-xs text-slate-500 mt-1">
+//                                   {getDocumentStatusText(uploadedDoc, requiredForEmployee)}
+//                                 </p>
+//                                 {uploadedDoc && (
+//                                   <div className="mt-2">
+//                                     <p className="text-xs text-slate-500 truncate">
+//                                       {uploadedDoc.fileName}
+//                                     </p>
+//                                     <p className="text-[11px] text-slate-500 mt-0.5">
+//                                       IP: {uploadedDoc.uploadedIp || "N/A"}
+//                                     </p>
+//                                     <p className="text-[11px] text-slate-500">
+//                                       Uploaded: {uploadedDoc.uploadedAt ? new Date(uploadedDoc.uploadedAt).toLocaleString() : "N/A"}
+//                                     </p>
+//                                   </div>
+//                                 )}
+//                               </div>
+//                             </div>
+//                             <div className="flex items-center gap-1">
+//                               {uploadedDoc && (
+//                                 <>
+//                                   <Tooltip title="Preview">
+//                                     <IconButton
+//                                       size="small"
+//                                       onClick={() => setPreviewDoc(uploadedDoc)}
+//                                       sx={{ color: "#3b82f6" }}
+//                                     >
+//                                       <RemoveRedEye sx={{ fontSize: 18 }} />
+//                                     </IconButton>
+//                                   </Tooltip>
+//                                   <Tooltip title="Remove">
+//                                     <IconButton
+//                                       size="small"
+//                                       onClick={() => removeDocument(doc.id)}
+//                                       disabled={lockedForHr}
+//                                       sx={{ color: "#ef4444" }}
+//                                     >
+//                                       <Delete sx={{ fontSize: 18 }} />
+//                                     </IconButton>
+//                                   </Tooltip>
+//                                 </>
+//                               )}
+//                               <Button
+//                                 variant={uploadedDoc ? "outlined" : "contained"}
+//                                 size="small"
+//                                 onClick={() => handleFileSelect(doc.id)}
+//                                 disabled={isUploading || lockedForHr}
+//                                 startIcon={isUploading ? <CircularProgress size={16} /> : <Upload />}
+//                                 sx={{
+//                                   textTransform: "none",
+//                                   borderRadius: "10px",
+//                                   fontSize: "0.75rem",
+//                                   borderColor: "#eaeaea",
+//                                   ...(uploadedDoc && {
+//                                     borderColor: "#cbd5e1",
+//                                     color: "#475569",
+//                                     "&:hover": { borderColor: "#94a3b8" }
+//                                   })
+//                                 }}
+//                               >
+//                                 {isUploading ? "Uploading..." : lockedForHr ? "Locked" : uploadedDoc ? "Replace" : "Upload"}
+//                               </Button>
+//                               <input
+//                                 id={`file-input-${doc.id}`}
+//                                 type="file"
+//                                 style={{ display: "none" }}
+//                                 onChange={(e) => {
+//                                   if (e.target.files?.[0]) {
+//                                     uploadDocument(doc.id, e.target.files[0]);
+//                                     e.target.value = "";
+//                                   }
+//                                 }}
+//                                 accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+//                               />
+//                             </div>
+//                           </div>
+//                         </div>
+//                       );
+//                     })}
+//                   </div>
+//                 </div>
+//               ))}
+//             </div>
+//           )}
+
+//           {/* Security Section */}
+//           {activeSection === "security" && (
+//             <div className="p-6">
+//               <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "#fffbeb", border: "1px solid #eaeaea" }}>
+//                 <div className="flex items-start gap-2">
+//                   <Security sx={{ fontSize: 18, color: "#f59e0b" }} />
+//                   <div>
+//                     <p className="text-sm font-medium text-amber-800">Password Change</p>
+//                     <p className="text-xs text-amber-700 mt-0.5">
+//                       Leave fields blank to keep current password unchanged
+//                     </p>
+//                   </div>
+//                 </div>
+//               </div>
+
+//               <div className="space-y-4">
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">New Password</label>
+//                   <TextField
+//                     fullWidth
+//                     name="password"
+//                     type={showPassword ? "text" : "password"}
+//                     value={formData.password}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                     InputProps={{
+//                       endAdornment: (
+//                         <InputAdornment position="end">
+//                           <IconButton onClick={togglePasswordVisibility} edge="end" size="small">
+//                             {showPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+//                           </IconButton>
+//                         </InputAdornment>
+//                       ),
+//                     }}
+//                   />
+//                 </div>
+//                 <div>
+//                   <label className="block text-xs font-medium text-slate-500 mb-1.5">Confirm Password</label>
+//                   <TextField
+//                     fullWidth
+//                     name="confirmPassword"
+//                     type={showConfirmPassword ? "text" : "password"}
+//                     value={formData.confirmPassword}
+//                     onChange={handleChange}
+//                     size="small"
+//                     sx={{
+//                       "& .MuiOutlinedInput-root": {
+//                         borderRadius: "12px",
+//                         "& fieldset": {
+//                           borderColor: "#eaeaea",
+//                         },
+//                         "&:hover fieldset": {
+//                           borderColor: "#cbd5e1",
+//                         },
+//                         "&.Mui-focused fieldset": {
+//                           borderColor: "#3b82f6",
+//                           borderWidth: "2px",
+//                         },
+//                       },
+//                     }}
+//                     InputProps={{
+//                       endAdornment: (
+//                         <InputAdornment position="end">
+//                           <IconButton onClick={toggleConfirmPasswordVisibility} edge="end" size="small">
+//                             {showConfirmPassword ? <VisibilityOff fontSize="small" /> : <Visibility fontSize="small" />}
+//                           </IconButton>
+//                         </InputAdornment>
+//                       ),
+//                     }}
+//                   />
+//                 </div>
+                
+//                 {formData.password && formData.confirmPassword && formData.password !== formData.confirmPassword && (
+//                   <Alert severity="error" sx={{ borderRadius: "12px" }}>
+//                     Passwords do not match
+//                   </Alert>
+//                 )}
+//                 {formData.password && formData.password.length < 6 && (
+//                   <Alert severity="warning" sx={{ borderRadius: "12px" }}>
+//                     Password must be at least 6 characters long
+//                   </Alert>
+//                 )}
+//               </div>
+//             </div>
+//           )}
+//           </fieldset>
+//         </DialogContent>
+
+//         <DialogActions sx={{ p: 3, borderTop: "1px solid #eaeaea", gap: 2 }}>
+//           <Button
+//             onClick={handleCloseDialog}
+//             variant="outlined"
+//             sx={{
+//               textTransform: "none",
+//               borderRadius: "12px",
+//               px: 3,
+//               color: "#64748b",
+//               borderColor: "#eaeaea",
+//               "&:hover": { borderColor: "#cbd5e1", backgroundColor: "#f8fafc" }
+//             }}
+//           >
+//             Cancel
+//           </Button>
+//           <Button
+//             variant="contained"
+//             onClick={handleSave}
+//             disabled={(isSelectedUserInactive && !isSuperAdminUser) || isSaving || (formData.password && (formData.password !== formData.confirmPassword || formData.password.length < 6))}
+//             startIcon={isSaving ? <CircularProgress size={18} /> : <Save />}
+//             sx={{
+//               textTransform: "none",
+//               borderRadius: "12px",
+//               px: 4,
+//               backgroundColor: "#3b82f6",
+//               "&:hover": { backgroundColor: "#2563eb" }
+//             }}
+//           >
+//             {isSaving ? "Saving..." : "Save Changes"}
+//           </Button>
+//         </DialogActions>
+//       </Dialog>
+
+//       <Dialog
+//         open={cameraOpen}
+//         onClose={closeCamera}
+//         fullWidth
+//         maxWidth="md"
+//         PaperProps={{ sx: { borderRadius: "20px", overflow: "hidden" } }}
+//       >
+//         <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
+//           <div className="flex items-center justify-between">
+//             <div>
+//               <p className="font-medium text-slate-900">Capture Employee Photo</p>
+//               <p className="text-xs text-slate-500">Use local PC camera and upload to Cloudinary</p>
+//             </div>
+//             <IconButton onClick={closeCamera} size="small">
+//               <Close />
+//             </IconButton>
+//           </div>
+//         </DialogTitle>
+//         <DialogContent sx={{ p: 2, backgroundColor: "#f8fafc" }}>
+//           <div className="rounded-xl border bg-black" style={{ borderColor: "#e2e8f0" }}>
+//             <video
+//               ref={videoRef}
+//               autoPlay
+//               playsInline
+//               muted
+//               style={{ width: "100%", maxHeight: "58vh", objectFit: "cover", borderRadius: "12px" }}
+//             />
+//           </div>
+//           {cameraLoading && (
+//             <p className="mt-2 text-xs text-slate-500">Initializing camera...</p>
+//           )}
+//         </DialogContent>
+//         <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
+//           <Button onClick={closeCamera}>Cancel</Button>
+//           <Button
+//             variant="contained"
+//             onClick={captureProfilePhoto}
+//             disabled={cameraLoading || uploadingProfilePhoto}
+//             startIcon={uploadingProfilePhoto ? <CircularProgress size={16} /> : <CameraAlt />}
+//           >
+//             {uploadingProfilePhoto ? "Uploading..." : "Capture & Upload"}
+//           </Button>
+//         </DialogActions>
+//       </Dialog>
+
+//       {/* Document Preview Dialog */}
+//       <Dialog
+//         open={Boolean(previewDoc)}
+//         onClose={() => setPreviewDoc(null)}
+//         fullWidth
+//         maxWidth="md"
+//         PaperProps={{ sx: { borderRadius: "24px", overflow: "hidden" } }}
+//       >
+//         <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
+//           <div className="flex items-center justify-between">
+//             <div className="flex items-center gap-2">
+//               <Description sx={{ color: "#3b82f6" }} />
+//               <span className="font-medium">{previewDoc?.name || "Document Preview"}</span>
+//             </div>
+//             <IconButton onClick={() => setPreviewDoc(null)} size="small">
+//               <Close />
+//             </IconButton>
+//           </div>
+//         </DialogTitle>
+//         <DialogContent sx={{ p: 0, backgroundColor: "#fafcff" }}>
+//           {previewDoc?.url ? (
+//             <iframe
+//               src={previewDoc.url}
+//               title={previewDoc.name || "Document"}
+//               style={{ width: "100%", height: "70vh", border: "none" }}
+//             />
+//           ) : (
+//             <div className="flex h-96 items-center justify-center">
+//               <p className="text-slate-400">No preview available</p>
+//             </div>
+//           )}
+//         </DialogContent>
+//         <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
+//           <Button onClick={() => setPreviewDoc(null)}>Close</Button>
+//           {previewDoc?.url && (
+//             <Button
+//               component="a"
+//               href={previewDoc.url}
+//               target="_blank"
+//               variant="contained"
+//               startIcon={<Download />}
+//             >
+//               Download
+//             </Button>
+//           )}
+//         </DialogActions>
+//       </Dialog>
+
+//       <Dialog
+//         open={hrSignModal.open}
+//         onClose={() => setHrSignModal({ open: false, doc: null, party: "hr" })}
+//         fullWidth
+//         maxWidth="md"
+//         PaperProps={{ sx: { borderRadius: "24px", overflow: "hidden" } }}
+//       >
+//         <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
+//           <div className="flex items-center justify-between">
+//             <div>
+//               <p className="font-medium text-slate-900">
+//                 {hrSignModal.party === "employee" ? "Employee Signature Capture" : "HR Policy Signature"}
+//               </p>
+//               <p className="text-xs text-slate-500">{hrSignModal.doc?.name || "Policy Document"}</p>
+//             </div>
+//             <IconButton onClick={() => setHrSignModal({ open: false, doc: null, party: "hr" })} size="small">
+//               <Close />
+//             </IconButton>
+//           </div>
+//         </DialogTitle>
+//         <DialogContent sx={{ p: 2, backgroundColor: "#fafcff" }}>
+//           {hrSignModal.doc?.url && (
+//             <iframe
+//               src={hrSignModal.doc.url}
+//               title="Policy"
+//               style={{ width: "100%", height: "45vh", border: "1px solid #eaeaea", borderRadius: 12, background: "#fff" }}
+//             />
+//           )}
+//           <div className="mt-4 rounded-xl border p-3" style={{ borderColor: "#eaeaea", backgroundColor: "#fff" }}>
+//             <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">HR Signature</p>
+//             <SignaturePadCanvas
+//               onChange={(dataUrl, hasStroke) => {
+//                 setHrSignatureDataUrl(dataUrl);
+//                 setHrSignatureHasStroke(hasStroke);
+//               }}
+//               disabled={savingHrSignature}
+//             />
+//           </div>
+//         </DialogContent>
+//         <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
+//           <Button onClick={() => setHrSignModal({ open: false, doc: null, party: "hr" })}>Cancel</Button>
+//           <Button
+//             onClick={submitHrSignature}
+//             variant="contained"
+//             disabled={savingHrSignature || !hrSignatureHasStroke}
+//           >
+//             {savingHrSignature
+//               ? "Saving..."
+//               : hrSignModal.party === "employee"
+//               ? "Save Employee Sign"
+//               : "Sign as HR"}
+//           </Button>
+//         </DialogActions>
+//       </Dialog>
+
+//       <DialogBox open={openDialogBox} onClose={() => setOpenDialogBox(false)} />
+//       <ConfirmActionModal
+//         open={Boolean(deleteTarget)}
+//         title="Delete Employee"
+//         description={`Delete ${deleteTarget?.realName || deleteTarget?.username || "this employee"}? This action cannot be undone.`}
+//         confirmText="Delete"
+//         cancelText="Cancel"
+//         danger
+//         loading={deletingEmployee}
+//         onClose={() => {
+//           if (!deletingEmployee) setDeleteTarget(null);
 //         }}
-//       >
-//         Cancel
-//       </Button>
-//       <Button
-//         variant="contained"
-//         onClick={handleSave}
-//         disabled={(isSelectedUserInactive && !isSuperAdminUser) || isSaving || (formData.password && (formData.password !== formData.confirmPassword || formData.password.length < 6))}
-//         startIcon={isSaving ? <CircularProgress size={18} /> : <Save />}
-//         sx={{
-//           textTransform: "none",
-//           borderRadius: "12px",
-//           px: 4,
-//           backgroundColor: "#3b82f6",
-//           "&:hover": { backgroundColor: "#2563eb" }
-//         }}
-//       >
-//         {isSaving ? "Saving..." : "Save Changes"}
-//       </Button>
-//     </DialogActions>
-//   </Dialog>
-
-//   <Dialog
-//     open={cameraOpen}
-//     onClose={closeCamera}
-//     fullWidth
-//     maxWidth="md"
-//     PaperProps={{ sx: { borderRadius: "20px", overflow: "hidden" } }}
-//   >
-//     <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
-//       <div className="flex items-center justify-between">
-//         <div>
-//           <p className="font-medium text-slate-900">Capture Employee Photo</p>
-//           <p className="text-xs text-slate-500">Use local PC camera and upload to Cloudinary</p>
-//         </div>
-//         <IconButton onClick={closeCamera} size="small">
-//           <Close />
-//         </IconButton>
-//       </div>
-//     </DialogTitle>
-//     <DialogContent sx={{ p: 2, backgroundColor: "#f8fafc" }}>
-//       <div className="rounded-xl border bg-black" style={{ borderColor: "#e2e8f0" }}>
-//         <video
-//           ref={videoRef}
-//           autoPlay
-//           playsInline
-//           muted
-//           style={{ width: "100%", maxHeight: "58vh", objectFit: "cover", borderRadius: "12px" }}
-//         />
-//       </div>
-//       {cameraLoading && (
-//         <p className="mt-2 text-xs text-slate-500">Initializing camera...</p>
-//       )}
-//     </DialogContent>
-//     <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
-//       <Button onClick={closeCamera}>Cancel</Button>
-//       <Button
-//         variant="contained"
-//         onClick={captureProfilePhoto}
-//         disabled={cameraLoading || uploadingProfilePhoto}
-//         startIcon={uploadingProfilePhoto ? <CircularProgress size={16} /> : <CameraAlt />}
-//       >
-//         {uploadingProfilePhoto ? "Uploading..." : "Capture & Upload"}
-//       </Button>
-//     </DialogActions>
-//   </Dialog>
-
-//   {/* Document Preview Dialog */}
-//   <Dialog
-//     open={Boolean(previewDoc)}
-//     onClose={() => setPreviewDoc(null)}
-//     fullWidth
-//     maxWidth="md"
-//     PaperProps={{ sx: { borderRadius: "24px", overflow: "hidden" } }}
-//   >
-//     <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
-//       <div className="flex items-center justify-between">
-//         <div className="flex items-center gap-2">
-//           <Description sx={{ color: "#3b82f6" }} />
-//           <span className="font-medium">{previewDoc?.name || "Document Preview"}</span>
-//         </div>
-//         <IconButton onClick={() => setPreviewDoc(null)} size="small">
-//           <Close />
-//         </IconButton>
-//       </div>
-//     </DialogTitle>
-//     <DialogContent sx={{ p: 0, backgroundColor: "#fafcff" }}>
-//       {previewDoc?.url ? (
-//         <iframe
-//           src={previewDoc.url}
-//           title={previewDoc.name || "Document"}
-//           style={{ width: "100%", height: "70vh", border: "none" }}
-//         />
-//       ) : (
-//         <div className="flex h-96 items-center justify-center">
-//           <p className="text-slate-400">No preview available</p>
-//         </div>
-//       )}
-//     </DialogContent>
-//     <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
-//       <Button onClick={() => setPreviewDoc(null)}>Close</Button>
-//       {previewDoc?.url && (
-//         <Button
-//           component="a"
-//           href={previewDoc.url}
-//           target="_blank"
-//           variant="contained"
-//           startIcon={<Download />}
-//         >
-//           Download
-//         </Button>
-//       )}
-//     </DialogActions>
-//   </Dialog>
-
-//   <Dialog
-//     open={hrSignModal.open}
-//     onClose={() => setHrSignModal({ open: false, doc: null, party: "hr" })}
-//     fullWidth
-//     maxWidth="md"
-//     PaperProps={{ sx: { borderRadius: "24px", overflow: "hidden" } }}
-//   >
-//     <DialogTitle sx={{ borderBottom: "1px solid #eaeaea", py: 2 }}>
-//       <div className="flex items-center justify-between">
-//         <div>
-//           <p className="font-medium text-slate-900">
-//             {hrSignModal.party === "employee" ? "Employee Signature Capture" : "HR Policy Signature"}
-//           </p>
-//           <p className="text-xs text-slate-500">{hrSignModal.doc?.name || "Policy Document"}</p>
-//         </div>
-//         <IconButton onClick={() => setHrSignModal({ open: false, doc: null, party: "hr" })} size="small">
-//           <Close />
-//         </IconButton>
-//       </div>
-//     </DialogTitle>
-//     <DialogContent sx={{ p: 2, backgroundColor: "#fafcff" }}>
-//       {hrSignModal.doc?.url && (
-//         <iframe
-//           src={hrSignModal.doc.url}
-//           title="Policy"
-//           style={{ width: "100%", height: "45vh", border: "1px solid #eaeaea", borderRadius: 12, background: "#fff" }}
-//         />
-//       )}
-//       <div className="mt-4 rounded-xl border p-3" style={{ borderColor: "#eaeaea", backgroundColor: "#fff" }}>
-//         <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">HR Signature</p>
-//         <SignaturePadCanvas
-//           onChange={(dataUrl, hasStroke) => {
-//             setHrSignatureDataUrl(dataUrl);
-//             setHrSignatureHasStroke(hasStroke);
-//           }}
-//           disabled={savingHrSignature}
-//         />
-//       </div>
-//     </DialogContent>
-//     <DialogActions sx={{ p: 2, borderTop: "1px solid #eaeaea" }}>
-//       <Button onClick={() => setHrSignModal({ open: false, doc: null, party: "hr" })}>Cancel</Button>
-//       <Button
-//         onClick={submitHrSignature}
-//         variant="contained"
-//         disabled={savingHrSignature || !hrSignatureHasStroke}
-//       >
-//         {savingHrSignature
-//           ? "Saving..."
-//           : hrSignModal.party === "employee"
-//           ? "Save Employee Sign"
-//           : "Sign as HR"}
-//       </Button>
-//     </DialogActions>
-//   </Dialog>
-
-//   <DialogBox open={openDialogBox} onClose={() => setOpenDialogBox(false)} />
-//   <ConfirmActionModal
-//     open={Boolean(deleteTarget)}
-//     title="Delete Employee"
-//     description={`Delete ${deleteTarget?.realName || deleteTarget?.username || "this employee"}? This action cannot be undone.`}
-//     confirmText="Delete"
-//     cancelText="Cancel"
-//     danger
-//     loading={deletingEmployee}
-//     onClose={() => {
-//       if (!deletingEmployee) setDeleteTarget(null);
-//     }}
-//     onConfirm={confirmDeleteEmployee}
-//   />
-// </div>
+//         onConfirm={confirmDeleteEmployee}
+//       />
+//     </div>
 //   );
 // };
 
-// export default ManageEmployee;
+// export default ManageEmployee;       
+
 
 
 
@@ -2946,6 +2991,7 @@ const getShiftLabel = (start, end) => {
   return `${formatHour(start)}-${formatHour(end)}`;
 };
 
+// Predefined document categories with separate Appointment Letter and Offer Letter
 const DOCUMENT_CATEGORIES = [
   { id: "resume", name: "Resume", icon: <Description />, required: true, category: "Personal" },
   { id: "photo", name: "Photo", icon: <Image />, required: true, category: "Personal" },
@@ -2975,6 +3021,24 @@ const PREVIOUS_EMPLOYMENT_DOC_NAMES = new Set(
 
 const isPreviousEmploymentDoc = (name = "") =>
   PREVIOUS_EMPLOYMENT_DOC_NAMES.has(String(name || "").trim().toLowerCase());
+
+const ACCOUNT_DETAILS_INITIAL = {
+  panNumber: "",
+  aadhaarNumber: "",
+  uanNumber: "",
+  bankAccountNumber: "",
+  ifscCode: "",
+  accountHolderName: "",
+};
+
+const ACCOUNT_DETAIL_FIELDS = [
+  { name: "panNumber", label: "PAN Number" },
+  { name: "aadhaarNumber", label: "Aadhaar Number" },
+  { name: "uanNumber", label: "UAN Number" },
+  { name: "bankAccountNumber", label: "Bank Account Number" },
+  { name: "ifscCode", label: "IFSC Code" },
+  { name: "accountHolderName", label: "Account Holder Name" },
+];
 
 const parseOptionalAmount = (value) => {
   if (value === "" || value === null || value === undefined) return null;
@@ -3043,6 +3107,7 @@ const ManageEmployee = () => {
     isCoreTeam: false,
     isTeamLeader: false,
     isActive: true,
+    accountDetails: ACCOUNT_DETAILS_INITIAL,
     password: "",
     confirmPassword: ""
   });
@@ -3079,7 +3144,8 @@ const ManageEmployee = () => {
     { id: "basic", label: "Basic Info", icon: <Person sx={{ fontSize: 18 }} /> },
     { id: "work", label: "Work Details", icon: <Work sx={{ fontSize: 18 }} /> },
     { id: "documents", label: "Documents", icon: <Description sx={{ fontSize: 18 }} /> },
-    { id: "security", label: "Security", icon: <Security sx={{ fontSize: 18 }} /> }
+    { id: "security", label: "Security", icon: <Security sx={{ fontSize: 18 }} /> },
+    { id: "account", label: "Account", icon: <CreditCard sx={{ fontSize: 18 }} /> }
   ];
 
   const isHrUser = isHrDepartment(currentUser || {});
@@ -3249,6 +3315,10 @@ const ManageEmployee = () => {
       isCoreTeam: user.isCoreTeam || false,
       isTeamLeader: Boolean(user.isTeamLeader),
       isActive: user.isActive !== false,
+      accountDetails: {
+        ...ACCOUNT_DETAILS_INITIAL,
+        ...(user.accountDetails || {}),
+      },
       password: "",
       confirmPassword: ""
     });
@@ -3322,6 +3392,7 @@ const ManageEmployee = () => {
       isCoreTeam: false,
       isTeamLeader: false,
       isActive: true,
+      accountDetails: ACCOUNT_DETAILS_INITIAL,
       password: "",
       confirmPassword: ""
     });
@@ -3350,6 +3421,17 @@ const ManageEmployee = () => {
         return next;
       });
     }
+  };
+
+  const handleAccountDetailsChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({
+      ...prev,
+      accountDetails: {
+        ...(prev.accountDetails || ACCOUNT_DETAILS_INITIAL),
+        [name]: name === "ifscCode" ? value.toUpperCase() : value,
+      },
+    }));
   };
 
   const stopCameraStream = () => {
@@ -3937,6 +4019,7 @@ const ManageEmployee = () => {
         ctc: parseOptionalAmount(formData.ctc),
         inHandSalary: parseOptionalAmount(formData.inHandSalary),
         transportAllowance: parseOptionalAmount(formData.transportAllowance),
+        accountDetails: formData.accountDetails || ACCOUNT_DETAILS_INITIAL,
         reportingManager: formData.reportingManager || null,
         documents: documentsArray,
         policyDocuments: STATIC_POLICY_DOCS,
@@ -5551,6 +5634,52 @@ const ManageEmployee = () => {
                     Password must be at least 6 characters long
                   </Alert>
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeSection === "account" && (
+            <div className="p-6">
+              <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "#f0f9ff", border: "1px solid #eaeaea" }}>
+                <div className="flex items-start gap-2">
+                  <CreditCard sx={{ fontSize: 18, color: "#0284c7" }} />
+                  <div>
+                    <p className="text-sm font-medium text-sky-900">Account Details</p>
+                    <p className="text-xs text-sky-700 mt-0.5">
+                      PAN, Aadhaar, UAN and bank details linked to this employee.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {ACCOUNT_DETAIL_FIELDS.map((field) => (
+                  <div key={field.name}>
+                    <label className="block text-xs font-medium text-slate-500 mb-1.5">{field.label}</label>
+                    <TextField
+                      fullWidth
+                      name={field.name}
+                      value={formData.accountDetails?.[field.name] || ""}
+                      onChange={handleAccountDetailsChange}
+                      size="small"
+                      sx={{
+                        "& .MuiOutlinedInput-root": {
+                          borderRadius: "12px",
+                          "& fieldset": {
+                            borderColor: "#eaeaea",
+                          },
+                          "&:hover fieldset": {
+                            borderColor: "#cbd5e1",
+                          },
+                          "&.Mui-focused fieldset": {
+                            borderColor: "#3b82f6",
+                            borderWidth: "2px",
+                          },
+                        },
+                      }}
+                    />
+                  </div>
+                ))}
               </div>
             </div>
           )}

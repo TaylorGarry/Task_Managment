@@ -1,4 +1,3 @@
-
 // import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 // import axios from "axios";
 // import { getRoleType, normalizeDepartment } from "../../utils/roleAccess.js";
@@ -178,6 +177,10 @@
 //       const res = await axios.get(`${API_URL}/employee/dashboard-summary`, {
 //         headers: { Authorization: `Bearer ${token}` },
 //       });
+      
+//       console.log("📊 Dashboard API Response:", res.data);
+//       console.log("🎂 Birthdays in response:", res.data?.birthdays);
+      
 //       return res.data;
 //     } catch (err) {
 //       return thunkAPI.rejectWithValue(
@@ -543,8 +546,15 @@
 //         state.error = null;
 //       })
 //       .addCase(fetchEmployeeDashboardSummary.fulfilled, (state, action) => {
+//         // STORE COMPLETE RESPONSE WITH BIRTHDAYS
 //         state.employeeDashboardSummary = action.payload;
+        
+//         console.log("✅ Stored employeeDashboardSummary:", state.employeeDashboardSummary);
+//         console.log("✅ Stored birthdays:", state.employeeDashboardSummary?.birthdays);
+        
 //         const profile = action.payload?.profile || {};
+//         const birthdays = action.payload?.birthdays || {};
+        
 //         if (state.user) {
 //           const nextUser = {
 //             ...state.user,
@@ -720,16 +730,13 @@
 
 
 
-
-
-
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { getRoleType, normalizeDepartment } from "../../utils/roleAccess.js";
 
-// const API_URL = "http://localhost:4000/api/v1";
+const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 const EMPLOYEE_SEARCH_THROTTLE_MS = 1200;
 
 const normalizeEmployeeSearch = (value = "") =>
@@ -1298,6 +1305,7 @@ const authSlice = createSlice({
             documents: Array.isArray(profile.documents)
               ? profile.documents
               : state.user.documents || [],
+            accountDetails: profile.accountDetails || state.user.accountDetails || {},
           };
           state.user = nextUser;
           localStorage.setItem("user", JSON.stringify(nextUser));
