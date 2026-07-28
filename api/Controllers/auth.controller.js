@@ -4422,7 +4422,7 @@ export const exportEmployeeDetailsExcel = async (req, res) => {
 
     const employees = await User.find({ accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } })
       .select(
-        "_id username realName pseudoName empId accountType department designation officeLocation reportingManager dateOfJoining isActive isCoreTeam isTeamLeader shiftStartHour shiftEndHour transportOffice docsStatus employmentType ctc inHandSalary transportAllowance policyDocuments policyAgreement hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil documents createdAt updatedAt"
+        "_id username realName pseudoName empId accountType department designation officeLocation reportingManager dateOfJoining isActive isCoreTeam isTeamLeader shiftStartHour shiftEndHour transportOffice docsStatus employmentType ctc inHandSalary transportAllowance policyDocuments policyAgreement hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil documents accountDetails createdAt updatedAt"
       )
       .lean();
 
@@ -4464,6 +4464,9 @@ export const exportEmployeeDetailsExcel = async (req, res) => {
         docStatusByName.set(name, hasDoc ? "Yes" : "No");
       }
 
+      // Get account details
+      const accountDetails = emp?.accountDetails || {};
+      
       const row = {
         "S No": index + 1,
         "Employee ID": emp?.empId || "",
@@ -4495,6 +4498,13 @@ export const exportEmployeeDetailsExcel = async (req, res) => {
         "HR Override Until": formatDateTime(emp?.hrDocumentOverrideUntil),
         "HR Global Override Active": emp?.hrGlobalDocumentOverrideUntil ? "Yes" : "No",
         "HR Global Override Until": formatDateTime(emp?.hrGlobalDocumentOverrideUntil),
+        // ===== NEW ACCOUNT DETAILS FIELDS =====
+        "PAN Number": accountDetails?.panNumber || "",
+        "Aadhaar Number": accountDetails?.aadhaarNumber || "",
+        "UAN Number": accountDetails?.uanNumber || "",
+        "Bank Account Number": accountDetails?.bankAccountNumber || "",
+        "IFSC Code": accountDetails?.ifscCode || "",
+        "Account Holder Name": accountDetails?.accountHolderName || "",
         "Created At": formatDateTime(emp?.createdAt),
         "Updated At": formatDateTime(emp?.updatedAt),
       };
@@ -4520,6 +4530,115 @@ export const exportEmployeeDetailsExcel = async (req, res) => {
     return res.status(500).json({ message: "Failed to export employee details", error: error.message });
   }
 };
+
+
+// export const exportEmployeeDetailsExcel = async (req, res) => {
+//   try {
+//     const requester = req.user;
+//     if (!isPrivilegedUser(requester || {})) {
+//       return res.status(403).json({ message: "Only superAdmin, admin and HR can export employees" });
+//     }
+
+//     const employees = await User.find({ accountType: { $in: SUPER_ADMIN_VISIBLE_ROLES } })
+//       .select(
+//         "_id username realName pseudoName empId accountType department designation officeLocation reportingManager dateOfJoining isActive isCoreTeam isTeamLeader shiftStartHour shiftEndHour transportOffice docsStatus employmentType ctc inHandSalary transportAllowance policyDocuments policyAgreement hrDocumentOverrideUntil hrGlobalDocumentOverrideUntil documents createdAt updatedAt"
+//       )
+//       .lean();
+
+//     const managerIds = [
+//       ...new Set(
+//         employees
+//           .map((e) => e?.reportingManager)
+//           .filter((id) => mongoose.Types.ObjectId.isValid(String(id || "")))
+//           .map((id) => String(id))
+//       ),
+//     ];
+
+//     const managerMap = new Map();
+//     if (managerIds.length) {
+//       const managers = await User.find({ _id: { $in: managerIds } })
+//         .select("_id username realName")
+//         .lean();
+//       for (const m of managers) {
+//         managerMap.set(String(m._id), m);
+//       }
+//     }
+
+//     const discoveredDocNames = new Set(DEFAULT_EMPLOYEE_DOC_NAMES.map((doc) => String(doc || "").trim()));
+//     for (const employee of employees) {
+//       for (const doc of Array.isArray(employee?.documents) ? employee.documents : []) {
+//         const name = String(doc?.name || "").trim();
+//         if (name) discoveredDocNames.add(name);
+//       }
+//     }
+//     const docColumns = [...discoveredDocNames];
+
+//     const rows = employees.map((emp, index) => {
+//       const manager = managerMap.get(String(emp?.reportingManager || ""));
+//       const docStatusByName = new Map();
+//       for (const doc of Array.isArray(emp?.documents) ? emp.documents : []) {
+//         const name = String(doc?.name || "").trim();
+//         if (!name) continue;
+//         const hasDoc = Boolean(doc?.uploaded || String(doc?.url || "").trim());
+//         docStatusByName.set(name, hasDoc ? "Yes" : "No");
+//       }
+
+//       const row = {
+//         "S No": index + 1,
+//         "Employee ID": emp?.empId || "",
+//         "Username": emp?.username || "",
+//         "Real Name": emp?.realName || "",
+//         "Pseudo Name": emp?.pseudoName || "",
+//         "Account Type": emp?.accountType || "",
+//         "Department": emp?.department || "",
+//         "Designation": emp?.designation || "",
+//         "Office Location": emp?.officeLocation || "",
+//         "Reporting Manager": manager?.realName || manager?.username || "",
+//         "Date Of Joining": formatDateOnly(emp?.dateOfJoining),
+//         "Account Status": emp?.isActive === false ? "Inactive" : "Active",
+//         "Core Team": emp?.isCoreTeam ? "Yes" : "No",
+//         "Team Leader": emp?.isTeamLeader ? "Yes" : "No",
+//         "Shift": getShiftLabelFromHours(emp?.shiftStartHour, emp?.shiftEndHour),
+//         "Shift Start Hour": Number.isFinite(Number(emp?.shiftStartHour)) ? Number(emp.shiftStartHour) : "",
+//         "Shift End Hour": Number.isFinite(Number(emp?.shiftEndHour)) ? Number(emp.shiftEndHour) : "",
+//         "Transport Office": emp?.transportOffice || "",
+//         "Docs Status": emp?.docsStatus || "",
+//         "Employment Type": emp?.employmentType || "",
+//         "CTC": emp?.ctc ?? "",
+//         "In Hand Salary": emp?.inHandSalary ?? "",
+//         "Transport Allowance": emp?.transportAllowance ?? "",
+//         "Policy Assigned": Array.isArray(emp?.policyDocuments) && emp.policyDocuments.length ? "Yes" : "No",
+//         "Policy Agreed": emp?.policyAgreement?.agreed ? "Yes" : "No",
+//         "Policy Agreed At": formatDateTime(emp?.policyAgreement?.agreedAt),
+//         "HR Override Active": emp?.hrDocumentOverrideUntil ? "Yes" : "No",
+//         "HR Override Until": formatDateTime(emp?.hrDocumentOverrideUntil),
+//         "HR Global Override Active": emp?.hrGlobalDocumentOverrideUntil ? "Yes" : "No",
+//         "HR Global Override Until": formatDateTime(emp?.hrGlobalDocumentOverrideUntil),
+//         "Created At": formatDateTime(emp?.createdAt),
+//         "Updated At": formatDateTime(emp?.updatedAt),
+//       };
+
+//       for (const docName of docColumns) {
+//         row[`Doc - ${docName}`] = docStatusByName.get(docName) || "No";
+//       }
+//       return row;
+//     });
+
+//     const worksheet = XLSX.utils.json_to_sheet(rows);
+//     const workbook = XLSX.utils.book_new();
+//     XLSX.utils.book_append_sheet(workbook, worksheet, "Employees");
+
+//     const fileName = `Employee_Details_${new Date().toISOString().slice(0, 10)}.xlsx`;
+//     const buffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+//     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+//     res.setHeader("Content-Disposition", `attachment; filename=${fileName}`);
+//     return res.send(buffer);
+//   } catch (error) {
+//     console.error("Export employee details excel error:", error);
+//     return res.status(500).json({ message: "Failed to export employee details", error: error.message });
+//   }
+// };
 
 export const getReportingManagers = async (req, res) => {
   try {
