@@ -3901,7 +3901,7 @@ const syncRosterEmployeeFieldsFromUser = async ({
       const manager = await User.findById(reportingManager)
         .select("username realName pseudoName")
         .lean();
-      managerLabel = manager?.realName || manager?.username || manager?.pseudoName || "";
+      managerLabel = manager?.pseudoName || manager?.username || manager?.realName || "";
     }
   }
 
