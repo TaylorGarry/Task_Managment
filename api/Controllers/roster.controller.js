@@ -18955,7 +18955,7 @@ export const getAllRosters = async (req, res) => {
 
     const rosterQuery = Roster.find(filter)
       .select(baseProjection)
-      .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
+    //   .sort({ rosterStartDate: -1, rosterEndDate: -1, year: -1, month: -1 })
       .skip(skip)
       .limit(safeLimit)
       .populate('createdBy', 'username email')
