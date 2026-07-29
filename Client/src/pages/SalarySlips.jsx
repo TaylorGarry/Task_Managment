@@ -1,3 +1,5 @@
+
+
 // import React, { useEffect, useMemo, useState } from "react";
 
 // import { useSelector } from "react-redux";
@@ -112,6 +114,13 @@
 //   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
 //   const [salaryRecords, setSalaryRecords] = useState([]);
 
+//   // ===== Failed Employees Modal States =====
+//   const [showFailedModal, setShowFailedModal] = useState(false);
+//   const [failedEmployees, setFailedEmployees] = useState([]);
+//   const [selectedBatch, setSelectedBatch] = useState(null);
+//   const [downloadingFailed, setDownloadingFailed] = useState(false);
+//   const [loadingFailed, setLoadingFailed] = useState(false);
+
 //   const canUpload = isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
 //   const isHRorAccounts = isSuperAdmin(user) || isHrDepartment(user) || isAccountsDepartment(user);
 
@@ -145,12 +154,10 @@
 
 //   // Create employee list from salary records if employees state is empty
 //   const employeeList = useMemo(() => {
-//     // If we have employees from the status API, use them
 //     if (employees.length > 0) {
 //       return employees;
 //     }
     
-//     // Otherwise, create employee list from salary records
 //     const employeeMap = new Map();
 //     salaryRecords.forEach(record => {
 //       const key = record.employeeCode || record._id;
@@ -158,7 +165,7 @@
 //         employeeMap.set(key, {
 //           employeeId: record.employee?._id || record._id,
 //           employeeCode: record.employeeCode || 'N/A',
-//           employeeName: record.employee?.username|| record.employee?.realName || 'Unknown',
+//           employeeName: record.employee?.username || record.employee?.realName || 'Unknown',
 //           department: record.department || record.employee?.department || 'N/A',
 //           designation: record.designation || 'N/A',
 //           hasSalarySlip: true,
@@ -171,7 +178,6 @@
 //     return Array.from(employeeMap.values());
 //   }, [employees, salaryRecords]);
 
-//   // Filter employees for HR/Accounts view
 //   const filteredEmployees = useMemo(() => {
 //     return employeeList.filter(emp => {
 //       const matchesSearch = emp.employeeName?.toLowerCase().includes(employeeSearchTerm.toLowerCase()) ||
@@ -183,7 +189,6 @@
 //     });
 //   }, [employeeList, employeeSearchTerm, employeeFilterStatus]);
 
-//   // Create a map of employeeCode to salary record for quick lookup
 //   const salaryRecordsMap = useMemo(() => {
 //     const map = new Map();
 //     salaryRecords.forEach(record => {
@@ -203,6 +208,100 @@
 //     return map;
 //   }, [salaryRecords]);
 
+//   // ===== Fetch Failed Employees - Using upload result data =====
+//   const fetchFailedEmployees = async (batchId) => {
+//     setLoadingFailed(true);
+//     try {
+//       // First check if we have the data from upload result
+//       if (uploadResult?.failedEmployees && uploadResult.failedEmployees.length > 0) {
+//         const failedData = uploadResult.failedEmployees.map(item => ({
+//           employeeName: item.employeeName || item.employee || 'Unknown',
+//           employeeCode: item.employeeCode || 'N/A',
+//           reason: item.reason || 'Unknown error',
+//           existsInSystem: false,
+//           hasUserAccount: false
+//         }));
+//         setFailedEmployees(failedData);
+//         setSelectedBatch({
+//           batchId: batchId,
+//           month: month,
+//           year: year,
+//           fileName: uploadResult.batch?.fileName || 'Unknown',
+//           totalFailed: failedData.length
+//         });
+//         setShowFailedModal(true);
+//         setLoadingFailed(false);
+//         return;
+//       }
+
+//       // Fallback: Try API call
+//       const response = await salaryApi.get(`/api/payroll/batch/${batchId}/failed-employees`);
+//       const data = response.data?.data;
+      
+//       if (data && data.failedEmployees && data.failedEmployees.length > 0) {
+//         setFailedEmployees(data.failedEmployees);
+//         setSelectedBatch(data);
+//       } else {
+//         setFailedEmployees([]);
+//         setSelectedBatch(data || {});
+//       }
+//       setShowFailedModal(true);
+//     } catch (error) {
+//       console.error('Failed to fetch failed employees:', error);
+//       toast.error(error.response?.data?.message || 'Failed to fetch failed employees');
+//     } finally {
+//       setLoadingFailed(false);
+//     }
+//   };
+
+//   // ===== Download Failed Employees CSV =====
+//   const downloadFailedEmployees = async (batchId) => {
+//     setDownloadingFailed(true);
+//     try {
+//       // If we have data from upload result, create CSV directly
+//       if (uploadResult?.failedEmployees && uploadResult.failedEmployees.length > 0) {
+//         let csv = 'Sl. No.,Employee Name,Employee Code,Reason\n';
+//         uploadResult.failedEmployees.forEach((item, index) => {
+//           csv += `${index + 1},${item.employeeName || item.employee || 'Unknown'},${item.employeeCode || 'N/A'},${item.reason || 'Unknown error'}\n`;
+//         });
+        
+//         const blob = new Blob([csv], { type: 'text/csv' });
+//         const url = window.URL.createObjectURL(blob);
+//         const link = document.createElement('a');
+//         link.href = url;
+//         link.download = `failed-employees-${month}-${year}.csv`;
+//         document.body.appendChild(link);
+//         link.click();
+//         link.remove();
+//         window.URL.revokeObjectURL(url);
+//         toast.success('Failed employees list downloaded successfully');
+//         setDownloadingFailed(false);
+//         return;
+//       }
+
+//       // Fallback: API call
+//       const response = await salaryApi.get(`/api/payroll/batch/${batchId}/failed-employees/download`, {
+//         responseType: 'blob'
+//       });
+      
+//       const blob = new Blob([response.data], { type: 'text/csv' });
+//       const url = window.URL.createObjectURL(blob);
+//       const link = document.createElement('a');
+//       link.href = url;
+//       link.download = `failed-employees-${selectedMonth}-${selectedYear}.csv`;
+//       document.body.appendChild(link);
+//       link.click();
+//       link.remove();
+//       window.URL.revokeObjectURL(url);
+      
+//       toast.success('Failed employees list downloaded successfully');
+//     } catch (error) {
+//       toast.error(error.response?.data?.message || 'Failed to download failed employees list');
+//     } finally {
+//       setDownloadingFailed(false);
+//     }
+//   };
+
 //   const fetchSalaryData = async () => {
 //     setLoading(true);
 //     try {
@@ -219,7 +318,6 @@
 //     }
 //   };
 
-//   // Fetch employee salary status for HR/Accounts
 //   const fetchEmployeeSalaryStatus = async () => {
 //     if (!isHRorAccounts) return;
 //     try {
@@ -237,13 +335,11 @@
 //       });
 //     } catch (error) {
 //       console.error("Failed to fetch employee status:", error);
-//       // Don't show toast error here, we'll fallback to salary records
 //     } finally {
 //       setLoading(false);
 //     }
 //   };
 
-//   // Fetch salary records for employees
 //   const fetchEmployeeSalarySlips = async () => {
 //     if (!isHRorAccounts) return;
 //     try {
@@ -253,7 +349,6 @@
 //       const records = Array.isArray(response.data?.data) ? response.data.data : [];
 //       setSalaryRecords(records);
       
-//       // If employees array is empty, update stats from salary records
 //       if (employees.length === 0 && records.length > 0) {
 //         setEmployeeStats({
 //           total: records.length,
@@ -335,7 +430,6 @@
 //     }
 //   };
 
-//   // Download employee salary slip (HR/Accounts)
 //   const downloadEmployeeSlip = async (recordId, employeeName) => {
 //     setDownloadingId(recordId);
 //     try {
@@ -599,19 +693,55 @@
 //                     </p>
 //                   </div>
 //                 </div>
-//                 {Array.isArray(uploadResult.failedRecords) && uploadResult.failedRecords.length > 0 && (
-//                   <div className="mt-2 max-h-28 overflow-y-auto rounded-lg bg-red-50 p-2 text-xs text-red-700">
-//                     {uploadResult.failedRecords.slice(0, 5).map((item, index) => (
-//                       <p key={`${item.employee || "row"}-${index}`} className="flex items-center gap-1">
-//                         <AlertCircle className="h-3 w-3" />
-//                         {item.employee || "Unknown employee"}: {item.reason}
-//                       </p>
-//                     ))}
-//                     {uploadResult.failedRecords.length > 5 && (
-//                       <p className="mt-1 text-red-600">
-//                         +{uploadResult.failedRecords.length - 5} more failed rows
-//                       </p>
-//                     )}
+                
+//                 {/* ===== FIX: Show all failed employees from upload result ===== */}
+//                 {uploadResult.failedEmployees && uploadResult.failedEmployees.length > 0 && (
+//                   <div className="mt-2">
+//                     <p className="text-xs font-semibold text-red-600 mb-1">
+//                       Failed Employees ({uploadResult.failedEmployees.length}):
+//                     </p>
+//                     <div className="max-h-28 overflow-y-auto rounded-lg bg-red-50 p-2 text-xs text-red-700">
+//                       {uploadResult.failedEmployees.slice(0, 10).map((item, index) => (
+//                         <p key={index} className="flex items-center gap-1">
+//                           <AlertCircle className="h-3 w-3 flex-shrink-0" />
+//                           <span className="font-medium">{item.employeeName || item.employee || 'Unknown'}</span>
+//                           {item.employeeCode && item.employeeCode !== 'N/A' && (
+//                             <span className="text-red-500">({item.employeeCode})</span>
+//                           )}
+//                           <span className="text-red-400">-</span>
+//                           <span className="truncate">{item.reason || 'Unknown error'}</span>
+//                         </p>
+//                       ))}
+//                       {uploadResult.failedEmployees.length > 10 && (
+//                         <p className="mt-1 text-red-600 font-medium">
+//                           +{uploadResult.failedEmployees.length - 10} more failed employees
+//                           <button 
+//                             onClick={() => {
+//                               // Use upload result data directly
+//                               const failedData = uploadResult.failedEmployees.map(item => ({
+//                                 employeeName: item.employeeName || item.employee || 'Unknown',
+//                                 employeeCode: item.employeeCode || 'N/A',
+//                                 reason: item.reason || 'Unknown error',
+//                                 existsInSystem: false,
+//                                 hasUserAccount: false
+//                               }));
+//                               setFailedEmployees(failedData);
+//                               setSelectedBatch({
+//                                 batchId: uploadResult.batch?._id || 'unknown',
+//                                 month: month,
+//                                 year: year,
+//                                 fileName: uploadResult.batch?.fileName || 'Unknown',
+//                                 totalFailed: failedData.length
+//                               });
+//                               setShowFailedModal(true);
+//                             }}
+//                             className="ml-2 text-blue-600 hover:underline"
+//                           >
+//                             View all
+//                           </button>
+//                         </p>
+//                       )}
+//                     </div>
 //                   </div>
 //                 )}
 //               </div>
@@ -737,7 +867,7 @@
 //                         Available
 //                       </span>
 //                       <button
-//                         onClick={() => handleDownload(slip)}
+//                         // onClick={() => handleDownload(slip)}
 //                         disabled={downloadingId === slip._id}
 //                         className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
 //                       >
@@ -846,7 +976,6 @@
 //                     </tr>
 //                   ) : (
 //                     filteredEmployees.map((emp) => {
-//                       // Find salary record for this employee
 //                       let salaryRecord = salaryRecordsMap.get(emp.employeeCode) || 
 //                                         salaryRecordsMap.get(emp.employeeId);
                       
@@ -966,9 +1095,13 @@
 //                         </td>
 //                         <td className="px-4 py-2.5">
 //                           {failedCount > 0 ? (
-//                             <span className="text-red-600 text-xs font-medium">
+//                             <button
+//                               onClick={() => fetchFailedEmployees(batch._id)}
+//                               className="text-red-600 hover:text-red-700 text-xs font-medium hover:underline inline-flex items-center gap-1"
+//                             >
+//                               <AlertCircle className="h-3 w-3" />
 //                               {failedCount} failed
-//                             </span>
+//                             </button>
 //                           ) : (
 //                             <span className="text-emerald-600 text-xs">None</span>
 //                           )}
@@ -982,17 +1115,144 @@
 //           </section>
 //         )}
 //       </div>
+
+//       {/* ===== Failed Employees Modal ===== */}
+//       {showFailedModal && selectedBatch && (
+//         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+//           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
+//             {/* Modal Header */}
+//             <div className="flex items-center justify-between p-4 border-b border-slate-200">
+//               <div>
+//                 <h3 className="text-lg font-semibold text-slate-900">Failed Employees</h3>
+//                 <p className="text-sm text-slate-500">
+//                   {selectedBatch.monthName || MONTHS.find(m => m.value === selectedBatch.month)?.label || selectedBatch.month} {selectedBatch.year} - {selectedBatch.fileName}
+//                 </p>
+//               </div>
+//               <button
+//                 onClick={() => setShowFailedModal(false)}
+//                 className="text-slate-400 hover:text-slate-600"
+//               >
+//                 <X className="h-5 w-5" />
+//               </button>
+//             </div>
+            
+//             {/* Modal Body */}
+//             <div className="flex-1 overflow-y-auto p-4">
+//               {/* Summary Stats */}
+//               <div className="grid grid-cols-4 gap-3 mb-4">
+//                 <div className="bg-red-50 rounded-lg p-3 text-center">
+//                   <p className="text-2xl font-bold text-red-600">{failedEmployees.length}</p>
+//                   <p className="text-xs text-red-600">Total Failed</p>
+//                 </div>
+//                 <div className="bg-yellow-50 rounded-lg p-3 text-center">
+//                   <p className="text-2xl font-bold text-yellow-600">
+//                     {failedEmployees.filter(e => e.existsInSystem).length}
+//                   </p>
+//                   <p className="text-xs text-yellow-600">Exists in System</p>
+//                 </div>
+//                 <div className="bg-orange-50 rounded-lg p-3 text-center">
+//                   <p className="text-2xl font-bold text-orange-600">
+//                     {failedEmployees.filter(e => e.existsInSystem && !e.hasUserAccount).length}
+//                   </p>
+//                   <p className="text-xs text-orange-600">No User Account</p>
+//                 </div>
+//                 <div className="bg-gray-50 rounded-lg p-3 text-center">
+//                   <p className="text-2xl font-bold text-gray-600">
+//                     {failedEmployees.filter(e => !e.existsInSystem).length}
+//                   </p>
+//                   <p className="text-xs text-gray-600">Not in System</p>
+//                 </div>
+//               </div>
+              
+//               {/* Failed Employees Table */}
+//               <div className="overflow-x-auto">
+//                 <table className="min-w-full divide-y divide-gray-200">
+//                   <thead className="bg-gray-50">
+//                     <tr>
+//                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">#</th>
+//                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Employee Name</th>
+//                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Employee Code</th>
+//                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Reason</th>
+//                       <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+//                     </tr>
+//                   </thead>
+//                   <tbody className="divide-y divide-gray-200">
+//                     {loadingFailed ? (
+//                       <tr>
+//                         <td colSpan="5" className="px-3 py-4 text-center">
+//                           <Loader2 className="h-5 w-5 animate-spin mx-auto text-blue-600" />
+//                         </td>
+//                       </tr>
+//                     ) : failedEmployees.length === 0 ? (
+//                       <tr>
+//                         <td colSpan="5" className="px-3 py-4 text-center text-gray-500 text-sm">
+//                           No failed employees found
+//                         </td>
+//                       </tr>
+//                     ) : (
+//                       failedEmployees.map((emp, index) => (
+//                         <tr key={index} className="hover:bg-gray-50">
+//                           <td className="px-3 py-2 text-sm text-gray-500">{index + 1}</td>
+//                           <td className="px-3 py-2 text-sm font-medium text-gray-900">{emp.employeeName}</td>
+//                           <td className="px-3 py-2 text-sm text-gray-500">{emp.employeeCode}</td>
+//                           <td className="px-3 py-2 text-sm text-red-600">{emp.reason}</td>
+//                           <td className="px-3 py-2">
+//                             <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+//                               emp.existsInSystem 
+//                                 ? emp.hasUserAccount 
+//                                   ? 'bg-green-100 text-green-800' 
+//                                   : 'bg-yellow-100 text-yellow-800'
+//                                 : 'bg-red-100 text-red-800'
+//                             }`}>
+//                               {emp.existsInSystem 
+//                                 ? emp.hasUserAccount 
+//                                   ? '✅ Has Account' 
+//                                   : '⚠️ No Account'
+//                                 : '❌ Not Found'}
+//                             </span>
+//                           </td>
+//                         </tr>
+//                       ))
+//                     )}
+//                   </tbody>
+//                 </table>
+//               </div>
+//             </div>
+            
+//             {/* Modal Footer */}
+//             <div className="flex items-center justify-between p-4 border-t border-slate-200">
+//               <div className="text-sm text-slate-500">
+//                 Total: {failedEmployees.length} failed employees
+//               </div>
+//               <div className="flex gap-2">
+//                 <button
+//                   onClick={() => downloadFailedEmployees(selectedBatch.batchId)}
+//                   disabled={downloadingFailed}
+//                   className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
+//                 >
+//                   {downloadingFailed ? (
+//                     <Loader2 className="h-4 w-4 animate-spin" />
+//                   ) : (
+//                     <Download className="h-4 w-4" />
+//                   )}
+//                   Download CSV
+//                 </button>
+//                 <button
+//                   onClick={() => setShowFailedModal(false)}
+//                   className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition"
+//                 >
+//                   Close
+//                 </button>
+//               </div>
+//             </div>
+//           </div>
+//         </div>
+//       )}
 //     </main>
 //   );
 // };
 
 // export default SalarySlips;
-
-
-
-
-
-
 
 
 
@@ -1019,7 +1279,9 @@ import {
   Eye,
   UserCheck,
   RefreshCw,
-  XCircle
+  XCircle,
+  Mail,
+  Send
 } from "lucide-react";
 import axios from "axios";
 import {
@@ -1091,6 +1353,7 @@ const SalarySlips = () => {
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sendingId, setSendingId] = useState("");
   const [downloadingId, setDownloadingId] = useState("");
   const [slips, setSlips] = useState([]);
   const [batches, setBatches] = useState([]);
@@ -1109,6 +1372,7 @@ const SalarySlips = () => {
   const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
   const [salaryRecords, setSalaryRecords] = useState([]);
+  const [sendingBulk, setSendingBulk] = useState(false);
 
   // ===== Failed Employees Modal States =====
   const [showFailedModal, setShowFailedModal] = useState(false);
@@ -1167,7 +1431,8 @@ const SalarySlips = () => {
           hasSalarySlip: true,
           hasUserAccount: true,
           status: 'Uploaded',
-          salaryRecordId: record._id
+          salaryRecordId: record._id,
+          email: record.employee?.email || null
         });
       }
     });
@@ -1208,7 +1473,6 @@ const SalarySlips = () => {
   const fetchFailedEmployees = async (batchId) => {
     setLoadingFailed(true);
     try {
-      // First check if we have the data from upload result
       if (uploadResult?.failedEmployees && uploadResult.failedEmployees.length > 0) {
         const failedData = uploadResult.failedEmployees.map(item => ({
           employeeName: item.employeeName || item.employee || 'Unknown',
@@ -1230,7 +1494,6 @@ const SalarySlips = () => {
         return;
       }
 
-      // Fallback: Try API call
       const response = await salaryApi.get(`/api/payroll/batch/${batchId}/failed-employees`);
       const data = response.data?.data;
       
@@ -1254,7 +1517,6 @@ const SalarySlips = () => {
   const downloadFailedEmployees = async (batchId) => {
     setDownloadingFailed(true);
     try {
-      // If we have data from upload result, create CSV directly
       if (uploadResult?.failedEmployees && uploadResult.failedEmployees.length > 0) {
         let csv = 'Sl. No.,Employee Name,Employee Code,Reason\n';
         uploadResult.failedEmployees.forEach((item, index) => {
@@ -1275,7 +1537,6 @@ const SalarySlips = () => {
         return;
       }
 
-      // Fallback: API call
       const response = await salaryApi.get(`/api/payroll/batch/${batchId}/failed-employees/download`, {
         responseType: 'blob'
       });
@@ -1379,7 +1640,7 @@ const SalarySlips = () => {
     const formData = new FormData();
     formData.append("month", month);
     formData.append("year", year);
-    formData.append("file", file);
+    formData.append("excelFile", file);
 
     setUploading(true);
     try {
@@ -1404,50 +1665,218 @@ const SalarySlips = () => {
     }
   };
 
-  const handleDownload = async (slip) => {
-    setDownloadingId(slip._id);
+  // ===== DOWNLOAD MY SALARY SLIP PDF (Only HR/Accounts/SuperAdmin) =====
+ // ===== DOWNLOAD MY SALARY SLIP PDF (Only HR/Accounts/SuperAdmin) =====
+const downloadMySlipPdf = async (slip) => {
+  // Only HR/Accounts can download
+  if (!isHRorAccounts) {
+    toast.error("You are not authorized to download salary slips");
+    return;
+  }
+
+  setDownloadingId(slip._id);
+  let loadingToast = null;
+  
+  try {
+    loadingToast = toast.loading('Downloading salary slip...');
+    
+    // Use the correct endpoint for PDF download
+    const response = await salaryApi.get(`/api/payroll/my-slips/${slip._id}/download-pdf`, {
+      responseType: 'blob',
+      timeout: 30000
+    });
+
+    // Check if response is actually a PDF
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.includes('application/pdf')) {
+      // If not PDF, it might be an error response as blob
+      const text = await response.data.text();
+      try {
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message || 'Failed to download salary slip');
+      } catch {
+        throw new Error('Invalid response format. Please try again.');
+      }
+    }
+
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const sanitizedName = (slip.employeeName || 'Employee').replace(/[^a-zA-Z0-9]/g, '_');
+    link.download = `Salary_Slip_${sanitizedName}_${slip.monthName}_${slip.year}.pdf`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    if (loadingToast) toast.dismiss(loadingToast);
+    toast.success('Salary slip downloaded successfully');
+    
+  } catch (error) {
+    console.error('Download my salary PDF error:', error);
+    if (loadingToast) toast.dismiss(loadingToast);
+    
+    let errorMessage = "Failed to download salary slip. Please try again.";
+    if (error.response?.status === 403) {
+      errorMessage = "You are not authorized to download this salary slip.";
+    } else if (error.response?.status === 404) {
+      errorMessage = "Salary slip not found.";
+    } else if (error.response?.status === 500) {
+      errorMessage = "Server error. Please try again later.";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(errorMessage);
+  } finally {
+    setDownloadingId("");
+  }
+};
+
+// ===== DOWNLOAD EMPLOYEE SALARY SLIP PDF (Only HR/Accounts/SuperAdmin) =====
+const downloadEmployeeSlipPdf = async (recordId, employeeName) => {
+  // Only HR/Accounts can download
+  if (!isHRorAccounts) {
+    toast.error("You are not authorized to download salary slips");
+    return;
+  }
+
+  if (!recordId) {
+    toast.error("Invalid salary record ID");
+    return;
+  }
+
+  setDownloadingId(recordId);
+  let loadingToast = null;
+  
+  try {
+    loadingToast = toast.loading(`Downloading salary slip for ${employeeName || 'Employee'}...`);
+    
+    // Use the correct endpoint for PDF download
+    const response = await salaryApi.get(`/api/payroll/employee-slips/${recordId}/download-pdf`, {
+      responseType: 'blob',
+      timeout: 30000
+    });
+
+    // Check if response is actually a PDF
+    const contentType = response.headers['content-type'] || '';
+    if (!contentType.includes('application/pdf')) {
+      // If not PDF, it might be an error response as blob
+      const text = await response.data.text();
+      try {
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message || 'Failed to download salary slip');
+      } catch {
+        throw new Error('Invalid response format. Please try again.');
+      }
+    }
+
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    const monthLabel = MONTHS.find(m => m.value === selectedMonth)?.label || selectedMonth;
+    const sanitizedName = (employeeName || 'Employee').replace(/[^a-zA-Z0-9]/g, '_');
+    link.download = `Salary_Slip_${sanitizedName}_${monthLabel}_${selectedYear}.pdf`;
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    if (loadingToast) toast.dismiss(loadingToast);
+    toast.success(`Salary slip downloaded successfully for ${employeeName}`);
+    
+  } catch (error) {
+    console.error('Download employee salary PDF error:', error);
+    if (loadingToast) toast.dismiss(loadingToast);
+    
+    let errorMessage = "Failed to download salary slip. Please try again.";
+    if (error.response?.status === 403) {
+      errorMessage = "You are not authorized to download this salary slip.";
+    } else if (error.response?.status === 404) {
+      errorMessage = "Salary slip not found.";
+    } else if (error.response?.status === 500) {
+      errorMessage = "Server error. Please try again later.";
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    toast.error(errorMessage);
+  } finally {
+    setDownloadingId("");
+  }
+};
+
+  // ===== SEND MY SALARY SLIP TO EMAIL =====
+  const handleSendToEmail = async (slip) => {
+    setSendingId(slip._id);
     try {
-      const res = await salaryApi.get(`/api/payroll/my-slips/${slip._id}/download`, {
-        responseType: "blob",
-      });
-      const blob = new Blob([res.data], { type: "application/pdf" });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `salary-slip-${slip.year}-${String(slip.month).padStart(2, "0")}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
+      const response = await salaryApi.post(`/api/payroll/my-slips/${slip._id}/send`);
+      
+      if (response.data.success) {
+        toast.success(`Salary slip sent to ${response.data.data?.sentTo || 'your email'}`);
+      } else {
+        toast.error(response.data.message || 'Failed to send salary slip');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Unable to download salary slip");
+      console.error('Send email error:', error);
+      toast.error(error.response?.data?.message || "Unable to send salary slip to email");
     } finally {
-      setDownloadingId("");
+      setSendingId("");
     }
   };
 
-  const downloadEmployeeSlip = async (recordId, employeeName) => {
-    setDownloadingId(recordId);
+  // ===== SEND EMPLOYEE SALARY SLIP TO EMAIL (HR/Accounts) =====
+  const handleSendEmployeeSlip = async (recordId, employeeName) => {
+    setSendingId(recordId);
     try {
-      const response = await salaryApi.get(`/api/payroll/download/${recordId}`, {
-        responseType: 'blob'
-      });
+      const response = await salaryApi.post(`/api/payroll/employee-slips/${recordId}/send`);
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `salary-slip-${employeeName}-${selectedMonth}-${selectedYear}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      
-      toast.success('Salary slip downloaded successfully');
+      if (response.data.success) {
+        toast.success(`Salary slip sent to ${response.data.data?.sentTo || employeeName}`);
+      } else {
+        toast.error(response.data.message || 'Failed to send salary slip');
+      }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Failed to download salary slip');
+      console.error('Send employee salary error:', error);
+      toast.error(error.response?.data?.message || "Unable to send salary slip to employee email");
     } finally {
-      setDownloadingId('');
+      setSendingId("");
+    }
+  };
+
+  // ===== SEND BULK SALARY SLIPS =====
+  const handleSendBulkSalarySlips = async () => {
+    if (!window.confirm(`Send salary slips for ${MONTHS.find(m => m.value === selectedMonth)?.label} ${selectedYear} to all employees?`)) {
+      return;
+    }
+
+    setSendingBulk(true);
+    try {
+      const response = await salaryApi.post("/api/payroll/bulk-send", {
+        month: selectedMonth,
+        year: selectedYear
+      });
+
+      if (response.data.success) {
+        const data = response.data.data;
+        toast.success(`Bulk salary slips sent: ${data.successCount} successful, ${data.failedCount} failed`);
+        
+        if (data.failedList && data.failedList.length > 0) {
+          const failedNames = data.failedList.map(item => item.employeeName).join(', ');
+          toast.error(`Failed to send to: ${failedNames}`);
+        }
+      } else {
+        toast.error(response.data.message || 'Failed to send bulk salary slips');
+      }
+    } catch (error) {
+      console.error('Bulk send error:', error);
+      toast.error(error.response?.data?.message || "Unable to send bulk salary slips");
+    } finally {
+      setSendingBulk(false);
     }
   };
 
@@ -1690,7 +2119,6 @@ const SalarySlips = () => {
                   </div>
                 </div>
                 
-                {/* ===== FIX: Show all failed employees from upload result ===== */}
                 {uploadResult.failedEmployees && uploadResult.failedEmployees.length > 0 && (
                   <div className="mt-2">
                     <p className="text-xs font-semibold text-red-600 mb-1">
@@ -1713,7 +2141,6 @@ const SalarySlips = () => {
                           +{uploadResult.failedEmployees.length - 10} more failed employees
                           <button 
                             onClick={() => {
-                              // Use upload result data directly
                               const failedData = uploadResult.failedEmployees.map(item => ({
                                 employeeName: item.employeeName || item.employee || 'Unknown',
                                 employeeCode: item.employeeCode || 'N/A',
@@ -1751,7 +2178,7 @@ const SalarySlips = () => {
             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">My Salary Slips</h2>
-                <p className="text-xs text-slate-500">Download your salary slips in PDF format</p>
+                <p className="text-xs text-slate-500">Send your salary slips to your registered email</p>
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
@@ -1858,23 +2285,42 @@ const SalarySlips = () => {
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      <span className="mr-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
-                        Available
-                      </span>
-                      <button
-                        onClick={() => handleDownload(slip)}
-                        disabled={downloadingId === slip._id}
-                        className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-semibold text-blue-700 transition hover:bg-blue-100 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
-                      >
-                        {downloadingId === slip._id ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Download className="h-3.5 w-3.5" />
-                        )}
-                        Download PDF
-                      </button>
-                    </div>
+                   <div className="flex items-center gap-2">
+  <span className="mr-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+    Available
+  </span>
+  
+  {/* Send to Email - Visible to ALL users */}
+  <button
+    onClick={() => handleSendToEmail(slip)}
+    // disabled={sendingId === slip._id}
+    disabled={true}
+    className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition hover:bg-blue-700 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+  >
+    {sendingId === slip._id ? (
+      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+    ) : (
+      <Mail className="h-3.5 w-3.5" />
+    )}
+    Send to Email
+  </button>
+  
+  {/* Download - ONLY for HR/Accounts/SuperAdmin */}
+  {isHRorAccounts && (
+    <button
+      onClick={() => downloadMySlipPdf(slip)}
+      disabled={downloadingId === slip._id}
+      className="inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 hover:shadow-sm disabled:cursor-not-allowed disabled:opacity-70"
+    >
+      {downloadingId === slip._id ? (
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+      ) : (
+        <Download className="h-3.5 w-3.5" />
+      )}
+      Download
+    </button>
+  )}
+</div>
                   </div>
                 ))
               )}
@@ -1888,7 +2334,7 @@ const SalarySlips = () => {
             <div className="flex flex-col gap-3 border-b border-slate-100 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <h2 className="text-base font-semibold text-slate-900">Employee Salary Status</h2>
-                <p className="text-xs text-slate-500">View and download salary slips for all employees</p>
+                <p className="text-xs text-slate-500">View, download, and send salary slips to employees</p>
               </div>
               
               <div className="flex flex-wrap items-center gap-2">
@@ -1918,6 +2364,19 @@ const SalarySlips = () => {
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
                   Refresh
+                </button>
+                {/* Bulk Send Button */}
+                <button
+                  onClick={handleSendBulkSalarySlips}
+                  disabled={sendingBulk || employeeList.length === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {sendingBulk ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5" />
+                  )}
+                  Send All
                 </button>
               </div>
             </div>
@@ -1979,6 +2438,7 @@ const SalarySlips = () => {
                         <tr key={emp.employeeId || emp._id} className="hover:bg-gray-50 transition">
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="text-sm font-medium text-gray-900">{emp.employeeName}</div>
+                            {emp.email && <div className="text-xs text-gray-400">{emp.email}</div>}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.employeeCode || 'N/A'}</td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{emp.department || 'N/A'}</td>
@@ -1993,21 +2453,40 @@ const SalarySlips = () => {
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                             {(emp.hasSalarySlip || salaryRecord) && (salaryRecord || emp.salaryRecordId) ? (
-                              <button
-                                onClick={() => downloadEmployeeSlip(
-                                  salaryRecord?._id || emp.salaryRecordId, 
-                                  emp.employeeName
-                                )}
-                                disabled={downloadingId === (salaryRecord?._id || emp.salaryRecordId)}
-                                className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition"
-                              >
-                                {downloadingId === (salaryRecord?._id || emp.salaryRecordId) ? (
-                                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                                ) : (
-                                  <Download className="h-3 w-3 mr-1" />
-                                )}
-                                Download
-                              </button>
+                              <div className="flex items-center gap-2">
+                                {/* Send Email Button */}
+                                <button
+                                  onClick={() => handleSendEmployeeSlip(
+                                    salaryRecord?._id || emp.salaryRecordId, 
+                                    emp.employeeName
+                                  )}
+                                  disabled={sendingId === (salaryRecord?._id || emp.salaryRecordId)}
+                                  className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition"
+                                >
+                                  {sendingId === (salaryRecord?._id || emp.salaryRecordId) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                  ) : (
+                                    <Mail className="h-3 w-3 mr-1" />
+                                  )}
+                                  Send Email
+                                </button>
+                                {/* Download Button - HR/Accounts only */}
+                                <button
+                                  onClick={() => downloadEmployeeSlipPdf(
+                                    salaryRecord?._id || emp.salaryRecordId, 
+                                    emp.employeeName
+                                  )}
+                                  disabled={downloadingId === (salaryRecord?._id || emp.salaryRecordId)}
+                                  className="inline-flex items-center px-3 py-1 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 transition"
+                                >
+                                  {downloadingId === (salaryRecord?._id || emp.salaryRecordId) ? (
+                                    <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                                  ) : (
+                                    <Download className="h-3 w-3 mr-1" />
+                                  )}
+                                  Download
+                                </button>
+                              </div>
                             ) : (
                               <span className="text-xs text-gray-400">
                                 {!emp.hasUserAccount ? 'No account' : 'Not uploaded'}
