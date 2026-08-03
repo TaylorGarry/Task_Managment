@@ -86,8 +86,6 @@
 
 
 
-
-
 import express from "express";
 import { authMiddleware } from "../Middlewares/auth.middleware.js";
 import { uploadSingleFile } from "../Middlewares/upload.middleware.js";
@@ -95,11 +93,11 @@ import {
   downloadMySalarySlip,
   getMySalarySlips,
   getSalaryBatches,
-  uploadSalaryExcel,
+  uploadSalaryExcel, 
   getEmployeeSalarySlips,
   getEmployeeSalaryStatus,
   downloadEmployeeSalarySlip,
-  downloadMySalarySlipPdf,  // ADD THIS IMPORT
+  downloadMySalarySlipPdf,  
   getBatchFailedEmployees,
   getEmployeeSalaryDetails,
   downloadFailedEmployees,
@@ -109,7 +107,6 @@ import {
 
 const router = express.Router();
 
-// Upload salary Excel file (HR/Accounts only)
 router.post(
   "/upload",
   authMiddleware,
@@ -117,9 +114,7 @@ router.post(
   uploadSalaryExcel
 );
 
-// ========== Employee Routes ==========
 
-// Get current user's salary slips
 router.get("/my-slips", authMiddleware, getMySalarySlips);
 
 // Send current user's salary slip to their email
@@ -127,8 +122,6 @@ router.post("/my-slips/:id/send", authMiddleware, downloadMySalarySlip);
 
 // DOWNLOAD current user's salary slip as PDF (Only for HR/Accounts/SuperAdmin)
 router.get("/my-slips/:id/download-pdf", authMiddleware, downloadMySalarySlipPdf);
-
-// ========== HR/Accounts/SuperAdmin Only Routes ==========
 
 // Get salary upload batches
 router.get("/batches", authMiddleware, getSalaryBatches);
@@ -160,7 +153,6 @@ router.get("/batch/:batchId/failed-employees", authMiddleware, getBatchFailedEmp
 // Download failed employees as CSV
 router.get("/batch/:batchId/failed-employees/download", authMiddleware, downloadFailedEmployees);
 
-// ========== Backward Compatibility (Deprecated) ==========
 // These endpoints are kept for backward compatibility
 router.get("/my-slips/:id/download", authMiddleware, downloadMySalarySlip);
 router.get("/download/:id", authMiddleware, downloadEmployeeSalarySlip);
