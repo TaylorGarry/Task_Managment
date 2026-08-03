@@ -1057,7 +1057,8 @@ const findEmployeeForSalaryRow = async ({
   return { employee, lookupValue };
 };
 
-// Extract salary data from row
+
+
 const extractSalaryData = (row, headers) => {
   const columnMap = {
     grossSalary: getColumnIndex(headers, 'GROSS SALARY'),
@@ -1090,10 +1091,17 @@ const extractSalaryData = (row, headers) => {
     totalUl: getColumnIndex(headers, 'Total UL'),
     ncns: getColumnIndex(headers, 'NCNS'),
     totalNcns: getColumnIndex(headers, 'Total NCNS'),
-    gTotal: getColumnIndex(headers, 'G Total')
+    gTotal: getColumnIndex(headers, 'G Total'),
+    
+    // ===== NEW: Bank & Personal Details Column Mappings =====
+    bankAccountNo: getColumnIndex(headers, 'Bank A/c No.'),
+    panNo: getColumnIndex(headers, 'PAN NO.'),
+    uanNo: getColumnIndex(headers, 'UAN NO.'),
+    aadhaarNo: getColumnIndex(headers, 'Aadhaar No.'),
   };
 
   return {
+    // Salary details
     grossSalary: parseNumber(row[columnMap.grossSalary]),
     basicSalary: parseNumber(row[columnMap.basicSalary]),
     hra: parseNumber(row[columnMap.hra]),
@@ -1125,8 +1133,92 @@ const extractSalaryData = (row, headers) => {
     ncns: parseIntValue(row[columnMap.ncns]),
     totalNcns: parseIntValue(row[columnMap.totalNcns]),
     gTotal: parseNumber(row[columnMap.gTotal]),
+    
+    // ===== NEW: Bank & Personal Details Values =====
+    bankAccountNo: getValue(row, columnMap.bankAccountNo) || 'N/A',
+    panNo: getValue(row, columnMap.panNo) || 'N/A',
+    uanNo: getValue(row, columnMap.uanNo) || 'N/A',
+    aadhaarNo: getValue(row, columnMap.aadhaarNo) || 'N/A',
   };
 };
+// Extract salary data from row
+// const extractSalaryData = (row, headers) => {
+//   const columnMap = {
+//     grossSalary: getColumnIndex(headers, 'GROSS SALARY'),
+//     basicSalary: getColumnIndex(headers, 'BASIC SALARY'),
+//     hra: getColumnIndex(headers, 'HRA'),
+//     media: getColumnIndex(headers, 'MEDIA'),
+//     conv: getColumnIndex(headers, 'CONV'),
+//     totalSalary: getColumnIndex(headers, 'Total SALARY'),
+//     daysPayable: getColumnIndex(headers, 'DAYS PAYABLE'),
+//     basicPayable: getColumnIndex(headers, 'Basic Salary PAYABLE'),
+//     hraPayable: getColumnIndex(headers, 'HRA PAYABLE'),
+//     mediaPayable: getColumnIndex(headers, 'MEDI/A PAYABLE'),
+//     convPayable: getColumnIndex(headers, 'CONV PAYABLE'),
+//     salaryPayable: getColumnIndex(headers, 'Salary Payable'),
+//     otIncentive: getColumnIndex(headers, 'OT Incentive'),
+//     extraConveyance: getColumnIndex(headers, 'Extra Conveyance'),
+//     arrears: getColumnIndex(headers, 'Arrears'),
+//     epfPayable: getColumnIndex(headers, 'EPF Payable'),
+//     totalEarnings: getColumnIndex(headers, 'Total Earnigs'),
+//     advance: getColumnIndex(headers, 'ADVANCE'),
+//     ulNcnsDeduction: getColumnIndex(headers, 'UL/NCNS Deduction'),
+//     epfDeduction: getColumnIndex(headers, 'EPF Deduction'),
+//     esic: getColumnIndex(headers, 'ESIC'),
+//     lwf: getColumnIndex(headers, 'LWF Deduction'),
+//     tds: getColumnIndex(headers, 'T.D.S.'),
+//     totalDeduction: getColumnIndex(headers, 'TOTAL DEDUCTION'),
+//     netPay: getColumnIndex(headers, 'NET PAY'),
+//     perDaySalary: getColumnIndex(headers, 'Per Day Salary'),
+//     ul: getColumnIndex(headers, 'UL'),
+//     totalUl: getColumnIndex(headers, 'Total UL'),
+//     ncns: getColumnIndex(headers, 'NCNS'),
+//     totalNcns: getColumnIndex(headers, 'Total NCNS'),
+//     gTotal: getColumnIndex(headers, 'G Total'),
+//    bankAccountNo: getColumnIndex(headers, 'Bank A/c No.'),
+//     panNo: getColumnIndex(headers, 'PAN NO.'),
+//     uanNo: getColumnIndex(headers, 'UAN NO.'),
+//     aadhaarNo: getColumnIndex(headers, 'Aadhaar No.'),
+//   };
+
+//   return {
+//     grossSalary: parseNumber(row[columnMap.grossSalary]),
+//     basicSalary: parseNumber(row[columnMap.basicSalary]),
+//     hra: parseNumber(row[columnMap.hra]),
+//     media: parseNumber(row[columnMap.media]),
+//     conv: parseNumber(row[columnMap.conv]),
+//     totalSalary: parseNumber(row[columnMap.totalSalary]),
+//     daysPayable: parseIntValue(row[columnMap.daysPayable]),
+//     basicPayable: parseNumber(row[columnMap.basicPayable]),
+//     hraPayable: parseNumber(row[columnMap.hraPayable]),
+//     mediaPayable: parseNumber(row[columnMap.mediaPayable]),
+//     convPayable: parseNumber(row[columnMap.convPayable]),
+//     salaryPayable: parseNumber(row[columnMap.salaryPayable]),
+//     otIncentive: parseNumber(row[columnMap.otIncentive]),
+//     extraConveyance: parseNumber(row[columnMap.extraConveyance]),
+//     arrears: parseNumber(row[columnMap.arrears]),
+//     epfPayable: parseNumber(row[columnMap.epfPayable]),
+//     totalEarnings: parseNumber(row[columnMap.totalEarnings]),
+//     advance: parseNumber(row[columnMap.advance]),
+//     ulNcnsDeduction: parseNumber(row[columnMap.ulNcnsDeduction]),
+//     epfDeduction: parseNumber(row[columnMap.epfDeduction]),
+//     esic: parseNumber(row[columnMap.esic]),
+//     lwf: parseNumber(row[columnMap.lwf]),
+//     tds: parseNumber(row[columnMap.tds]),
+//     totalDeduction: parseNumber(row[columnMap.totalDeduction]),
+//     netPay: parseNumber(row[columnMap.netPay]),
+//     perDaySalary: parseNumber(row[columnMap.perDaySalary]),
+//     ul: parseIntValue(row[columnMap.ul]),
+//     totalUl: parseIntValue(row[columnMap.totalUl]),
+//     ncns: parseIntValue(row[columnMap.ncns]),
+//     totalNcns: parseIntValue(row[columnMap.totalNcns]),
+//     gTotal: parseNumber(row[columnMap.gTotal]),
+//     bankAccountNo: getValue(row, columnMap.bankAccountNo) || 'N/A',
+//     panNo: getValue(row, columnMap.panNo) || 'N/A',
+//     uanNo: getValue(row, columnMap.uanNo) || 'N/A',
+//     aadhaarNo: getValue(row, columnMap.aadhaarNo) || 'N/A',
+//   };
+// };
 
 // ==================== IMPORT SALARY EXCEL FUNCTION ====================
 
@@ -1532,6 +1624,7 @@ export const getSalaryBatches = async (req, res) => {
     });
   }
 };
+
 
 // Get employee salary slips
 export const getEmployeeSalarySlips = async (req, res) => {

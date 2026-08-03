@@ -692,17 +692,13 @@ export const generateSalarySlipPdf = async (record) => {
   const navyBlue = rgb(0.04, 0.25, 0.38);
   const black = rgb(0, 0, 0);
 
-  // Header Y position - increased to give more space
   const headerY = height - 50;
 
-  // ====== HEADER: Logo, Company Name, and Month in same line ======
   
-  // 1. Draw logo at left
   const logoX = margin;
   const logoY = headerY - 10;
   drawLogo(page, { x: logoX, y: logoY, boldFont, font });
 
-  // 2. Company Name - centered
   const companyName = "FD Business Service Private Limited";
   const companySize = 13;
   const companyWidth = boldFont.widthOfTextAtSize(companyName, companySize);
@@ -716,7 +712,6 @@ export const generateSalarySlipPdf = async (record) => {
     color: navyBlue,
   });
 
-  // 3. Current Month - right aligned
   const monthText = `${titleMonth}`;
   const monthSize = 12;
   const monthWidth = boldFont.widthOfTextAtSize(monthText, monthSize);
@@ -730,7 +725,6 @@ export const generateSalarySlipPdf = async (record) => {
     color: navyBlue,
   });
 
-  // 4. Address - centered below the header line
   const address = "118-119-120 Suncity Success Tower, Sector-65, Gurgaon 122101";
   const addressSize = 8.5;
   const addressWidth = boldFont.widthOfTextAtSize(address, addressSize);
@@ -744,7 +738,6 @@ export const generateSalarySlipPdf = async (record) => {
     color: black,
   });
 
-  // 5. Divider line below header
   const lineY = headerY - 32;
   page.drawLine({
     start: { x: margin, y: lineY },
@@ -755,7 +748,6 @@ export const generateSalarySlipPdf = async (record) => {
 
   const tableTopY = lineY - 10;
 
-  // Employee Information Table
   const employeeInfo = [
     ["Employee Name", cleanNameText(record.employeeName || getRowValue(salaryData, ["Employee Name"]))],
     ["Employee ID", record.employeeCode || getRowValue(salaryData, ["Emp. ID", "Emp ID"])],
