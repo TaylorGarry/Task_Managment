@@ -329,11 +329,11 @@ const AttendanceUpdateWrapper = ({ delegatedMode = false }) => {
   }
 
   return (
-    <div className="min-h-[calc(100vh-64px)] bg-gray-100">
+    <div className="min-h-[calc(100vh-64px)] ">
       {isAdminNavbarUser ? <AdminNavbar showOutlet={false} /> : <Navbar />}
       
-      <div className="container mx-auto px-2 pt-18 pb-2">
-        <div className="bg-white/95 rounded-2xl shadow-sm border border-slate-200 p-5">
+      <div className="container mx-auto px-6 pt-2">
+        <div className=" rounded-2xl shadow-sm border border-slate-200 p-5">
           <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
