@@ -898,6 +898,7 @@ import kraRoutes from "./routes/kra.routes.js";
 import announcementRoutes from "./routes/announcement.routes.js";
 import employeeExitRoutes from "./routes/employeeExit.routes.js";
 import attendanceAuditRoutes from "./routes/attendanceAudit.routes.js";
+// import aiAssistantRoutes from "./routes/aiAssistant.routes.js";
 import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isFloorStatus, isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 import ticketRoutes from "./routes/ticket.routes.js";
@@ -961,6 +962,7 @@ const allowedIPs = [
   "14.97.83.226",
   "127.0.0.1",
   "103.21.187.189",
+  "14.195.18.186",
   "::1",
 ];
 
@@ -1186,6 +1188,7 @@ app.use("/api/v1/announcements", announcementRoutes);
 app.use("/api/v1/employee-exit", employeeExitRoutes);
 app.use("/api/employee-exit", employeeExitRoutes);
 app.use("/api/v1/attendance", attendanceAuditRoutes);
+// app.use("/api/v1/ai-assistant", aiAssistantRoutes);
 app.use("/api/v1/tickets", ticketRoutes);
 app.use("/api/payroll", salarySlipRoutes);
 

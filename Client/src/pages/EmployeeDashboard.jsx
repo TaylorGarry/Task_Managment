@@ -1,4 +1,3 @@
-
 // import React, { useEffect, useState, useRef } from "react";
 // import { useDispatch, useSelector } from "react-redux";
 // import axios from "axios";
@@ -115,12 +114,24 @@
 //     await callPunchAction("/shift/end");
 //   };
 
-//   const handleStartBreak = async (type = "manual") => {
-//     await callPunchAction("/break/start", { type });
+//   const handleStartBreak = async (type = "lunch") => {
+//     try {
+//       await callPunchAction("/break/start", { type });
+//       toast.success(`${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} started`);
+//     } catch (error) {
+//       const errMsg = error?.response?.data?.message || "Failed to start break";
+//       toast.error(errMsg);
+//     }
 //   };
 
 //   const handleEndBreak = async () => {
-//     await callPunchAction("/break/end");
+//     try {
+//       await callPunchAction("/break/end");
+//       toast.success("Break ended");
+//     } catch (error) {
+//       const errMsg = error?.response?.data?.message || "Failed to end break";
+//       toast.error(errMsg);
+//     }
 //   };
 
 //   useEffect(() => {
@@ -479,12 +490,10 @@
 //   const openBreak = punchSession?.breaks?.find((b) => !b.endAt) || null;
 //   const liveBreakMs = openBreak?.startAt ? Math.max(0, breakNowMs - new Date(openBreak.startAt).getTime()) : 0;
   
-//   // --- FIX: toIstDateKey function correctly handles IST ---
 //   const toIstDateKey = (value) => {
 //     if (!value) return "";
 //     const d = new Date(value);
 //     if (Number.isNaN(d.getTime())) return "";
-//     // Convert to IST and get date part only
 //     const istDate = new Date(d.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
 //     const year = istDate.getFullYear();
 //     const month = String(istDate.getMonth() + 1).padStart(2, "0");
@@ -492,7 +501,6 @@
 //     return `${year}-${month}-${day}`;
 //   };
   
-//   // --- FIX: getEffectiveIstDate returns correct IST date ---
 //   const getEffectiveIstDate = () => {
 //     const now = new Date();
 //     const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
@@ -502,7 +510,6 @@
 //   const effectiveIstDate = getEffectiveIstDate();
 //   const todayIstKey = toIstDateKey(effectiveIstDate);
 
-//   // --- WORK ANNIVERSARY LOGIC ---
 //   const weeklyAnniversaries = Array.isArray(employeeDashboardSummary?.workAnniversaries?.weekly)
 //     ? employeeDashboardSummary.workAnniversaries.weekly
 //     : [];
@@ -524,12 +531,10 @@
 //     });
 //   };
 
-//   // --- BIRTHDAY LOGIC (Month/Day comparison only) ---
 //   const weeklyBirthdays = Array.isArray(employeeDashboardSummary?.birthdays?.weekly)
 //     ? employeeDashboardSummary.birthdays.weekly
 //     : [];
   
-//   // Get today's month and day in IST
 //   const getTodayMonthDay = () => {
 //     const now = new Date();
 //     const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
@@ -538,7 +543,6 @@
 //     return `${month}-${day}`;
 //   };
 
-//   // Get month-day from DOB
 //   const getDobMonthDay = (dob) => {
 //     if (!dob) return "";
 //     const d = new Date(dob);
@@ -550,7 +554,6 @@
 
 //   const todayKey = getTodayMonthDay();
 
-//   // Filter birthdays matching today's month-day
 //   const todayBirthdays = weeklyBirthdays.filter((item) => {
 //     const itemKey = getDobMonthDay(item?.dob);
 //     return itemKey === todayKey;
@@ -577,17 +580,29 @@
 //     return `${hh}:${mm}:${ss}`;
 //   })();
 
+//   const getRunningBreakLabel = () => {
+//     if (!openBreak) return "";
+//     const type = openBreak.type;
+//     if (type === "lunch") return "Lunch";
+//     if (type === "bio_1") return "Short Break 1";
+//     if (type === "bio_2") return "Short Break 2";
+//     return type;
+//   };
+
 //   return (
 //     <>
 //       <Toaster position="top-right" reverseOrder={false} />
 //       <Navbar />
+      
 //       {(isAgentUser || isSupervisorUser) && openBreak && (
 //         <div className="fixed inset-x-0 top-3 z-[9999] flex justify-center px-3">
 //           <div className="w-full max-w-3xl rounded-2xl border-2 border-amber-300 bg-gradient-to-r from-amber-50 via-orange-50 to-rose-50 px-4 py-3 shadow-2xl">
 //             <div className="flex flex-wrap items-center justify-between gap-3">
 //               <div>
 //                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-amber-700">Break Alert</p>
-//                 <p className="text-2xl font-extrabold text-rose-700">ON BREAK</p>
+//                 <p className="text-2xl font-extrabold text-rose-700">
+//                   ON {getRunningBreakLabel() || "BREAK"}
+//                 </p>
 //                 <p className="text-sm font-semibold text-slate-700">
 //                   Live Break Time: <span className="font-mono text-base">{liveBreakTimer}</span>
 //                 </p>
@@ -602,6 +617,7 @@
 //           </div>
 //         </div>
 //       )}
+
 //       <div className="p-8 bg-gradient-to-b from-sky-50 to-white min-h-screen relative">
 //         {announcementsLoading ? (
 //           <section className="mb-8 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm md:p-5">
@@ -686,7 +702,6 @@
 //           }
 //         `}</style>
 
-//         {/* --- WORK ANNIVERSARY SECTION --- */}
 //         {todayAnniversaries.length > 0 && (
 //           <section className="mb-8 rounded-2xl border border-violet-100 bg-white p-3 shadow-sm md:p-4">
 //             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
@@ -757,7 +772,6 @@
 //           </section>
 //         )}
 
-//         {/* --- BIRTHDAY SECTION (AGE AND DOB REMOVED) --- */}
 //         {todayBirthdays.length > 0 && (
 //           <section className="mb-8 rounded-2xl border border-pink-100 bg-white p-3 shadow-sm md:p-4">
 //             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
@@ -1154,6 +1168,7 @@
 // };
 
 // export default EmployeeDashboard;
+
 
 
 
@@ -1694,21 +1709,32 @@ useEffect(() => {
     ? employeeDashboardSummary.birthdays.weekly
     : [];
   
+  const getIstDateParts = (value) => {
+    const d = value instanceof Date ? value : new Date(value);
+    if (Number.isNaN(d.getTime())) return null;
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(d);
+    const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+    return {
+      year: partMap.year,
+      month: partMap.month,
+      day: partMap.day,
+    };
+  };
+
   const getTodayMonthDay = () => {
-    const now = new Date();
-    const istDate = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-    const month = String(istDate.getMonth() + 1).padStart(2, "0");
-    const day = String(istDate.getDate()).padStart(2, "0");
-    return `${month}-${day}`;
+    const parts = getIstDateParts(new Date());
+    return parts ? `${parts.month}-${parts.day}` : "";
   };
 
   const getDobMonthDay = (dob) => {
     if (!dob) return "";
-    const d = new Date(dob);
-    if (Number.isNaN(d.getTime())) return "";
-    const month = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${month}-${day}`;
+    const parts = getIstDateParts(dob);
+    return parts ? `${parts.month}-${parts.day}` : "";
   };
 
   const todayKey = getTodayMonthDay();
@@ -1936,7 +1962,7 @@ useEffect(() => {
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
               <h2 className="text-sm font-semibold text-pink-700 md:text-base">🎂 Happy Birthday!</h2>
               <p className="text-xs text-slate-500">
-                {formatBirthdayDate(effectiveIstDate)}
+                {formatBirthdayDate(new Date())}
               </p>
             </div>
 
