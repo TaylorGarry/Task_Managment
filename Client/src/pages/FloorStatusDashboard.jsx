@@ -1,6 +1,9 @@
 // import { useEffect, useMemo, useState } from "react";
 // import axios from "axios";
-// import { CalendarDays, Clock3, Coffee, UserRound } from "lucide-react";
+// import { CalendarDays, Clock3, Coffee, LogOut, UserRound } from "lucide-react";
+// import { useDispatch } from "react-redux";
+// import { useNavigate } from "react-router-dom";
+// import { logoutUser } from "../features/slices/authSlice.js";
 // import { getApiBaseUrl } from "../utils/apiUrl.js";
 // import "./FloorStatusDashboard.css";
 
@@ -97,11 +100,18 @@
 // };
 
 // const FloorStatusDashboard = () => {
+//   const dispatch = useDispatch();
+//   const navigate = useNavigate();
 //   const now = useNow();
 //   const pageSize = usePageSize();
 //   const [payload, setPayload] = useState({ summary: {}, onBreakRows: [], notLoggedInRows: [] });
 //   const [error, setError] = useState("");
 //   const [page, setPage] = useState(0);
+
+//   const handleLogout = async () => {
+//     await dispatch(logoutUser());
+//     navigate("/login", { replace: true });
+//   };
 
 //   useEffect(() => {
 //     let isMounted = true;
@@ -168,7 +178,13 @@
 //             <span>{formatClock(now)}</span>
 //           </div>
 //         </div>
-//         <div className="floor-status-live"><span />LIVE</div>
+//         <div className="floor-status-actions">
+//           <button type="button" className="floor-status-logout" onClick={handleLogout}>
+//             <LogOut size={22} strokeWidth={2.4} />
+//             Logout
+//           </button>
+//           <div className="floor-status-live"><span />LIVE</div>
+//         </div>
 //       </header>
 
 //       <section className="floor-status-kpis">
@@ -248,7 +264,9 @@
 
 // export default FloorStatusDashboard;
 
-import { useEffect, useMemo, useState } from "react";
+
+
+ import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { CalendarDays, Clock3, Coffee, LogOut, UserRound } from "lucide-react";
 import { useDispatch } from "react-redux";
@@ -297,7 +315,7 @@ const formatDateKey = (dateKey = "") => {
 };
 
 const getDisplayName = (row = {}) => row.pseudoName || row.name || row.username || "-";
-
+  
 const getBreakTypeLabel = (type = "") => {
   const map = {
     lunch: "Lunch",
@@ -349,7 +367,7 @@ const usePageSize = () => {
   return pageSize;
 };
 
-const FloorStatusDashboard = () => {
+const FloorStatusDashboard = ({ officeLocation = "", floorLabel = "" }) => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const now = useNow();
@@ -368,7 +386,7 @@ const FloorStatusDashboard = () => {
     const fetchStatus = async () => {
       try {
         const user = JSON.parse(localStorage.getItem("user") || "{}");
-        const res = await axios.get(`${API_URL}/punchx/floor-status`, {
+        const res = await axios.get(`${API_URL}/punchx/floor-status${officeLocation ? `?officeLocation=${encodeURIComponent(officeLocation)}` : ""}`, {
           headers: { Authorization: `Bearer ${user?.token || ""}` },
         });
         if (!isMounted) return;
@@ -383,10 +401,10 @@ const FloorStatusDashboard = () => {
     fetchStatus();
     const id = window.setInterval(fetchStatus, DATA_REFRESH_MS);
     return () => {
-      isMounted = false;
+      isMounted = false;     
       window.clearInterval(id);
     };
-  }, []);
+  }, [officeLocation]);
 
   const onBreakRows = Array.isArray(payload.onBreakRows) ? payload.onBreakRows : [];
   const notLoggedInRows = Array.isArray(payload.notLoggedInRows) ? payload.notLoggedInRows : [];
@@ -416,7 +434,7 @@ const FloorStatusDashboard = () => {
   return (
     <main className="floor-status-screen">
       <header className="floor-status-topbar">
-        <div className="floor-status-brand"><span>F</span>DBS</div>
+        <div className="floor-status-brand"><span>F</span>DBS{(floorLabel || payload.officeLocation) ? <small className="floor-status-location">{floorLabel || payload.officeLocation}</small> : null}</div>
         <div className="floor-status-clockline">
 	          <div className="floor-status-timepiece">
 	            <CalendarDays size={30} strokeWidth={2.2} />
@@ -513,3 +531,5 @@ const FloorStatusDashboard = () => {
 };
 
 export default FloorStatusDashboard;
+
+

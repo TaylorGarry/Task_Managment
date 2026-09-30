@@ -1883,7 +1883,7 @@ useEffect(() => {
             100% { transform: translateX(-50%); }
           }
           .announcement-marquee {
-            animation: announcement-marquee 22s linear infinite;
+            animation: announcement-marquee 90s linear infinite;
           }
         `}</style>
 

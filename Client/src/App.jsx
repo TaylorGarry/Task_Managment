@@ -1426,12 +1426,20 @@ function App() {
             </FloorStatusRoute>
           }
         />
+        <Route
+          path="/floor-status/uv"
+          element={
+            <FloorStatusRoute>
+              <FloorStatusDashboard officeLocation="Udyog Vihar" floorLabel="FLOOR 1" />
+            </FloorStatusRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/floor-status" replace />} />
       </Routes>
     );
   }
 
-  if (location.pathname === "/floor-status") {
+  if (location.pathname.startsWith ("/floor-status")) {
     return (
       <Routes>
         <Route
@@ -1439,6 +1447,14 @@ function App() {
           element={
             <FloorStatusRoute>
               <FloorStatusDashboard />
+            </FloorStatusRoute>
+          }
+        />
+         <Route
+          path="/floor-status/uv"
+          element={
+            <FloorStatusRoute>
+              <FloorStatusDashboard officeLocation="Udyog Vihar" floorLabel="FLOOR 1" />
             </FloorStatusRoute>
           }
         />
@@ -1535,6 +1551,14 @@ function App() {
           element={
             <FloorStatusRoute>
               <FloorStatusDashboard />
+            </FloorStatusRoute>
+          }
+        />
+        <Route
+          path="/floor-status/uv"
+          element={
+            <FloorStatusRoute>
+              <FloorStatusDashboard officeLocation="Udyog Vihar" floorLabel="FLOOR 1" />
             </FloorStatusRoute>
           }
         />
