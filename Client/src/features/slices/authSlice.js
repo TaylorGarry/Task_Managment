@@ -734,13 +734,20 @@ import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
 import axios from "axios";
 import { getRoleType, normalizeDepartment } from "../../utils/roleAccess.js";
 
-const API_URL = "http://localhost:4000/api/v1";
+// const API_URL = "http://localhost:4000/api/v1";
 // const API_URL = "https://crm-taskmanagement-api-7eos5.ondigitalocean.app/api/v1";
-// const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
+const API_URL = "https://fdbs-server-a9gqg.ondigitalocean.app/api/v1";
 const EMPLOYEE_SEARCH_THROTTLE_MS = 1200;
 
 const normalizeEmployeeSearch = (value = "") =>
   String(value || "").trim().toLowerCase();
+
+const clearAiAssistantStorage = () => {
+  localStorage.removeItem("aiAssistant:conversationId");
+  localStorage.removeItem("aiAssistant:messages");
+  sessionStorage.removeItem("aiAssistant:conversationId");
+  sessionStorage.removeItem("aiAssistant:messages");
+};
 
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
@@ -762,6 +769,7 @@ export const loginUser = createAsyncThunk(
     try {
       const res = await axios.post(`${API_URL}/login`, userData);
       const normalizedUser = normalizeUserRoleData(res.data.user || {});
+      clearAiAssistantStorage();
 
       localStorage.setItem(
         "user",
@@ -819,6 +827,7 @@ export const createCoreTeamUser = createAsyncThunk(
 );
 
 export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
+  clearAiAssistantStorage();
   localStorage.removeItem("user");
   await axios.post(`${API_URL}/logout`);
 });

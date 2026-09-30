@@ -1009,18 +1009,18 @@ const AgentDashboard = ({ session, token, attendanceScore, employeeDashboardSumm
       {/* ========== SHIFT CONTROLS - Only Start/End Shift ========== */}
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-2">
-          <button 
+          {/* <button 
             onClick={onStartShift} 
             className="rounded-lg border border-[#86EFAC] bg-[#DCFCE7] px-3 py-2 text-xs font-semibold text-[#166534]"
           >
             Start Shift
-          </button>
-          <button 
+          </button> */}
+          {/* <button 
             onClick={onEndShift} 
             className="rounded-lg border border-[#FECACA] bg-[#FEF2F2] px-3 py-2 text-xs font-semibold text-[#B91C1C]"
           >
             End Shift
-          </button>
+          </button> */}
           {/* NO PAUSE BUTTON HERE - Shift Detail mein pause nahi hai */}
         </div>
         {isAccountsUser ? (

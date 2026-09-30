@@ -86,6 +86,7 @@
 //   return `${formatHour(start)}-${formatHour(end)}`;
 // };
 
+// // Predefined document categories with separate Appointment Letter and Offer Letter
 // const DOCUMENT_CATEGORIES = [
 //   { id: "resume", name: "Resume", icon: <Description />, required: true, category: "Personal" },
 //   { id: "photo", name: "Photo", icon: <Image />, required: true, category: "Personal" },
@@ -115,6 +116,24 @@
 
 // const isPreviousEmploymentDoc = (name = "") =>
 //   PREVIOUS_EMPLOYMENT_DOC_NAMES.has(String(name || "").trim().toLowerCase());
+
+// const ACCOUNT_DETAILS_INITIAL = {
+//   panNumber: "",
+//   aadhaarNumber: "",
+//   uanNumber: "",
+//   bankAccountNumber: "",
+//   ifscCode: "",
+//   accountHolderName: "",
+// };
+
+// const ACCOUNT_DETAIL_FIELDS = [
+//   { name: "panNumber", label: "PAN Number" },
+//   { name: "aadhaarNumber", label: "Aadhaar Number" },
+//   { name: "uanNumber", label: "UAN Number" },
+//   { name: "bankAccountNumber", label: "Bank Account Number" },
+//   { name: "ifscCode", label: "IFSC Code" },
+//   { name: "accountHolderName", label: "Account Holder Name" },
+// ];
 
 // const parseOptionalAmount = (value) => {
 //   if (value === "" || value === null || value === undefined) return null;
@@ -183,6 +202,7 @@
 //     isCoreTeam: false,
 //     isTeamLeader: false,
 //     isActive: true,
+//     accountDetails: ACCOUNT_DETAILS_INITIAL,
 //     password: "",
 //     confirmPassword: ""
 //   });
@@ -219,7 +239,8 @@
 //     { id: "basic", label: "Basic Info", icon: <Person sx={{ fontSize: 18 }} /> },
 //     { id: "work", label: "Work Details", icon: <Work sx={{ fontSize: 18 }} /> },
 //     { id: "documents", label: "Documents", icon: <Description sx={{ fontSize: 18 }} /> },
-//     { id: "security", label: "Security", icon: <Security sx={{ fontSize: 18 }} /> }
+//     { id: "security", label: "Security", icon: <Security sx={{ fontSize: 18 }} /> },
+//     { id: "account", label: "Account", icon: <CreditCard sx={{ fontSize: 18 }} /> }
 //   ];
 
 //   const isHrUser = isHrDepartment(currentUser || {});
@@ -389,6 +410,10 @@
 //       isCoreTeam: user.isCoreTeam || false,
 //       isTeamLeader: Boolean(user.isTeamLeader),
 //       isActive: user.isActive !== false,
+//       accountDetails: {
+//         ...ACCOUNT_DETAILS_INITIAL,
+//         ...(user.accountDetails || {}),
+//       },
 //       password: "",
 //       confirmPassword: ""
 //     });
@@ -462,6 +487,7 @@
 //       isCoreTeam: false,
 //       isTeamLeader: false,
 //       isActive: true,
+//       accountDetails: ACCOUNT_DETAILS_INITIAL,
 //       password: "",
 //       confirmPassword: ""
 //     });
@@ -490,6 +516,17 @@
 //         return next;
 //       });
 //     }
+//   };
+
+//   const handleAccountDetailsChange = (e) => {
+//     const { name, value } = e.target;
+//     setFormData((prev) => ({
+//       ...prev,
+//       accountDetails: {
+//         ...(prev.accountDetails || ACCOUNT_DETAILS_INITIAL),
+//         [name]: name === "ifscCode" ? value.toUpperCase() : value,
+//       },
+//     }));
 //   };
 
 //   const stopCameraStream = () => {
@@ -1077,6 +1114,7 @@
 //         ctc: parseOptionalAmount(formData.ctc),
 //         inHandSalary: parseOptionalAmount(formData.inHandSalary),
 //         transportAllowance: parseOptionalAmount(formData.transportAllowance),
+//         accountDetails: formData.accountDetails || ACCOUNT_DETAILS_INITIAL,
 //         reportingManager: formData.reportingManager || null,
 //         documents: documentsArray,
 //         policyDocuments: STATIC_POLICY_DOCS,
@@ -2694,6 +2732,52 @@
 //               </div>
 //             </div>
 //           )}
+
+//           {activeSection === "account" && (
+//             <div className="p-6">
+//               <div className="rounded-xl p-4 mb-6" style={{ backgroundColor: "#f0f9ff", border: "1px solid #eaeaea" }}>
+//                 <div className="flex items-start gap-2">
+//                   <CreditCard sx={{ fontSize: 18, color: "#0284c7" }} />
+//                   <div>
+//                     <p className="text-sm font-medium text-sky-900">Account Details</p>
+//                     <p className="text-xs text-sky-700 mt-0.5">
+//                       PAN, Aadhaar, UAN and bank details linked to this employee.
+//                     </p>
+//                   </div>
+//                 </div>
+//               </div>
+
+//               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+//                 {ACCOUNT_DETAIL_FIELDS.map((field) => (
+//                   <div key={field.name}>
+//                     <label className="block text-xs font-medium text-slate-500 mb-1.5">{field.label}</label>
+//                     <TextField
+//                       fullWidth
+//                       name={field.name}
+//                       value={formData.accountDetails?.[field.name] || ""}
+//                       onChange={handleAccountDetailsChange}
+//                       size="small"
+//                       sx={{
+//                         "& .MuiOutlinedInput-root": {
+//                           borderRadius: "12px",
+//                           "& fieldset": {
+//                             borderColor: "#eaeaea",
+//                           },
+//                           "&:hover fieldset": {
+//                             borderColor: "#cbd5e1",
+//                           },
+//                           "&.Mui-focused fieldset": {
+//                             borderColor: "#3b82f6",
+//                             borderWidth: "2px",
+//                           },
+//                         },
+//                       }}
+//                     />
+//                   </div>
+//                 ))}
+//               </div>
+//             </div>
+//           )}
 //           </fieldset>
 //         </DialogContent>
 
@@ -2897,6 +2981,7 @@
 // };
 
 // export default ManageEmployee;       
+
 
 
 
@@ -3266,8 +3351,9 @@ const ManageEmployee = () => {
     }
 
     return [...uniqueManagers.values()].sort((a, b) => {
-      const aLabel = a.realName ? `${a.realName} (${a.username})` : String(a.username || "");
-      const bLabel = b.realName ? `${b.realName} (${b.username})` : String(b.username || "");
+      // Modified: Show only pseudo name for reporting manager dropdown
+      const aLabel = a.pseudoName || a.username || "";
+      const bLabel = b.pseudoName || b.username || "";
       return aLabel.localeCompare(bLabel);
     });
   }, [employees, localEmployees, reportingManagers, selectedUser]);
@@ -4992,7 +5078,7 @@ const ManageEmployee = () => {
                     <MenuItem value="">— None —</MenuItem>
                     {reportingManagerOptions.map((manager) => (
                       <MenuItem key={manager._id} value={manager._id}>
-                        {manager.realName ? `${manager.realName} (${manager.username})` : manager.username}
+                        {manager.pseudoName || manager.username}
                       </MenuItem>
                     ))}
                   </TextField>
@@ -5885,4 +5971,4 @@ const ManageEmployee = () => {
   );
 };
 
-export default ManageEmployee;       
+export default ManageEmployee;

@@ -1,5 +1,3 @@
-
-
 // import PunchSession from "../Modals/PunchSession.modal.js";
 // import Roster from "../Modals/Roster.modal.js";
 // import User from "../Modals/User.modal.js";
@@ -9,7 +7,7 @@
 // const APP_TZ = "Asia/Kolkata";
 // const IDLE_WARN_MS = 25 * 60 * 1000;
 // const SESSION_RESUME_GRACE_MS = 0;
-// const OPERATIONAL_DAY_START_HOUR_IST = 14; // 2:00 PM IST
+// const OPERATIONAL_DAY_START_HOUR_IST = 12;
 // const PUNCHX_DEBUG_TIME = process.env.PUNCHX_DEBUG_TIME === "1";
 
 // const getNow = () => new Date();
@@ -62,6 +60,191 @@
 //     .replace(/[._\-()/,]+/g, " ")
 //     .replace(/\s+/g, " ");
 
+// // const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
+// //   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
+// //   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
+// //   const targetObjectIds = (employees || []).map((employee) => employee?._id).filter(Boolean);
+// //   const userIdByEmpId = new Map();
+// //   const userIdByName = new Map();
+
+// //   for (const employee of employees || []) {
+// //     const userId = String(employee?._id || "").trim();
+// //     if (!userId) continue;
+
+// //     const empId = String(employee?.empId || "").trim().toLowerCase();
+// //     if (empId && !userIdByEmpId.has(empId)) {
+// //       userIdByEmpId.set(empId, userId);
+// //     }
+
+// //     const nameKeys = [
+// //       employee?.pseudoName,
+// //       employee?.realName,
+// //       employee?.username,
+// //       `${employee?.pseudoName || ""} ${employee?.department || ""}`,
+// //       `${employee?.realName || ""} ${employee?.department || ""}`,
+// //     ]
+// //       .map(normalizeRosterName)
+// //       .filter(Boolean);
+
+// //     for (const nameKey of nameKeys) {
+// //       if (!userIdByName.has(nameKey)) {
+// //         userIdByName.set(nameKey, userId);
+// //       }
+// //     }
+// //   }
+
+// //   const dayStartMs = parseDateKeyStartMs(dateKey);
+// //   const emptyRosterSnapshot = () => ({
+// //     presentCount: 0,
+// //     rosterStatusByUserId: new Map(),
+// //     departmentStatusByUserId: new Map(),
+// //     rosterShiftStartHourByUserId: new Map(),
+// //     rosterShiftEndHourByUserId: new Map(),
+// //     transportArrivalTimeByUserId: new Map(),
+// //   });
+// //   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) {
+// //     return emptyRosterSnapshot();
+// //   }
+
+// //   const dayStart = new Date(dayStartMs);
+// //   const dayEnd = new Date(dayStartMs + 24 * 60 * 60 * 1000 - 1);
+// //   const rosterQuery = {
+// //     $or: [
+// //       {
+// //         rosterStartDate: { $lte: dayEnd },
+// //         rosterEndDate: { $gte: dayStart },
+// //       },
+// //       {
+// //         weeks: {
+// //           $elemMatch: {
+// //             startDate: { $lte: dayEnd },
+// //             endDate: { $gte: dayStart },
+// //           },
+// //         },
+// //       },
+// //     ],
+// //   };
+
+// //   if (!countAllRosterEmployees && targetIds.size) {
+// //     rosterQuery["weeks.employees.userId"] = { $in: targetObjectIds };
+// //   }
+
+// //   const pipeline = [
+// //     { $match: rosterQuery },
+// //     {
+// //       $project: {
+// //         weeks: {
+// //           $filter: {
+// //             input: "$weeks",
+// //             as: "week",
+// //             cond: {
+// //               $and: [
+// //                 { $lte: ["$$week.startDate", dayEnd] },
+// //                 { $gte: ["$$week.endDate", dayStart] },
+// //               ],
+// //             },
+// //           },
+// //         },
+// //       },
+// //     },
+// //     { $unwind: "$weeks" },
+// //     { $unwind: "$weeks.employees" },
+// //   ];
+
+// //   if (!countAllRosterEmployees && targetObjectIds.length) {
+// //     pipeline.push({ $match: { "weeks.employees.userId": { $in: targetObjectIds } } });
+// //   }
+
+// //   pipeline.push(
+// //     {
+// //       $project: {
+// //         rosterUserId: "$weeks.employees.userId",
+// //         rosterEmpId: "$weeks.employees.empId",
+// //         rosterName: "$weeks.employees.name",
+// //         shiftStartHour: "$weeks.employees.shiftStartHour",
+// //         shiftEndHour: "$weeks.employees.shiftEndHour",
+// //         matchingDay: {
+// //           $first: {
+// //             $filter: {
+// //               input: "$weeks.employees.dailyStatus",
+// //               as: "day",
+// //               cond: {
+// //                 $and: [
+// //                   { $gte: ["$$day.date", dayStart] },
+// //                   { $lte: ["$$day.date", dayEnd] },
+// //                 ],
+// //               },
+// //             },
+// //           },
+// //         },
+// //       },
+// //     },
+// //     { $match: { matchingDay: { $ne: null } } }
+// //   );
+
+// //   const rosterRows = await Roster.aggregate(pipeline).allowDiskUse(true);
+
+// //   const presentIds = new Set();
+// //   const rosterStatusByUserId = new Map();
+// //   const departmentStatusByUserId = new Map();
+// //   const rosterShiftStartHourByUserId = new Map();
+// //   const rosterShiftEndHourByUserId = new Map();
+// //   const transportArrivalTimeByUserId = new Map();
+// //   for (const row of rosterRows || []) {
+// //     const rosterUserId = String(row?.rosterUserId || "").trim();
+// //     const rosterEmpId = String(row?.rosterEmpId || "").trim().toLowerCase();
+// //     const rosterNameKey = normalizeRosterName(row?.rosterName || "");
+// //     const matchedUserId =
+// //       (rosterUserId && targetIds.has(rosterUserId) ? rosterUserId : "") ||
+// //       userIdByEmpId.get(rosterEmpId) ||
+// //       userIdByName.get(rosterNameKey) ||
+// //       "";
+// //     const presentKey = matchedUserId ||
+// //       (countAllRosterEmployees
+// //         ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
+// //         : "");
+
+// //     if (!presentKey || presentIds.has(presentKey)) continue;
+
+// //     const matchingDay = row?.matchingDay;
+// //     const rosterStatus = String(matchingDay?.status || "P").trim().toUpperCase();
+// //     const departmentStatus = String(matchingDay?.departmentStatus || "").trim().toUpperCase();
+
+// //     if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
+// //       rosterStatusByUserId.set(matchedUserId, rosterStatus || "P");
+// //     }
+// //     if (matchedUserId && !departmentStatusByUserId.has(matchedUserId)) {
+// //       departmentStatusByUserId.set(matchedUserId, departmentStatus);
+// //     }
+// //     if (matchedUserId) {
+// //       if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
+// //         transportArrivalTimeByUserId.set(matchedUserId, matchingDay.transportArrivalTime);
+// //       }
+// //       const rosterStartHour = Number(row?.shiftStartHour);
+// //       const rosterEndHour = Number(row?.shiftEndHour);
+// //       if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
+// //         rosterShiftStartHourByUserId.set(matchedUserId, rosterStartHour);
+// //       }
+// //       if (Number.isFinite(rosterEndHour) && !rosterShiftEndHourByUserId.has(matchedUserId)) {
+// //         rosterShiftEndHourByUserId.set(matchedUserId, rosterEndHour);
+// //       }
+// //     }
+
+// //     if (rosterStatus === "P") {
+// //       presentIds.add(presentKey);
+// //     }
+// //   }
+
+// //   return {
+// //     presentCount: presentIds.size,
+// //     rosterStatusByUserId,
+// //     departmentStatusByUserId,
+// //     rosterShiftStartHourByUserId,
+// //     rosterShiftEndHourByUserId,
+// //     transportArrivalTimeByUserId,
+// //   };
+// // };
+
 // const getRosterPresentCountForUsers = async (employees = [], dateKey = "", options = {}) => {
 //   const countAllRosterEmployees = options?.countAllRosterEmployees === true;
 //   const targetIds = new Set((employees || []).map((employee) => String(employee?._id || "")).filter(Boolean));
@@ -99,10 +282,13 @@
 //   const emptyRosterSnapshot = () => ({
 //     presentCount: 0,
 //     rosterStatusByUserId: new Map(),
+//     departmentStatusByUserId: new Map(),
+//     woCountByUserId: new Map(),
 //     rosterShiftStartHourByUserId: new Map(),
 //     rosterShiftEndHourByUserId: new Map(),
 //     transportArrivalTimeByUserId: new Map(),
 //   });
+  
 //   if ((!countAllRosterEmployees && !targetIds.size) || !Number.isFinite(dayStartMs)) {
 //     return emptyRosterSnapshot();
 //   }
@@ -187,9 +373,12 @@
 
 //   const presentIds = new Set();
 //   const rosterStatusByUserId = new Map();
+//   const departmentStatusByUserId = new Map();
+//   const woCountByUserId = new Map();
 //   const rosterShiftStartHourByUserId = new Map();
 //   const rosterShiftEndHourByUserId = new Map();
 //   const transportArrivalTimeByUserId = new Map();
+  
 //   for (const row of rosterRows || []) {
 //     const rosterUserId = String(row?.rosterUserId || "").trim();
 //     const rosterEmpId = String(row?.rosterEmpId || "").trim().toLowerCase();
@@ -204,23 +393,38 @@
 //         ? (rosterUserId ? `uid:${rosterUserId}` : rosterEmpId ? `emp:${rosterEmpId}` : rosterNameKey ? `name:${rosterNameKey}` : "")
 //         : "");
 
-//     if (!presentKey || presentIds.has(presentKey)) continue;
+//     if (!presentKey) continue;
 
 //     const matchingDay = row?.matchingDay;
-//     const effectiveStatus = String(
-//       matchingDay?.status ||
-//       matchingDay?.departmentStatus ||
-//       matchingDay?.transportStatus ||
-//       "P"
-//     ).trim().toUpperCase();
+//     const rosterStatus = String(matchingDay?.status || "P").trim().toUpperCase();
+//     const departmentStatus = String(matchingDay?.departmentStatus || "").trim().toUpperCase();
 
-//     if (matchedUserId && !rosterStatusByUserId.has(matchedUserId)) {
-//       rosterStatusByUserId.set(matchedUserId, effectiveStatus || "P");
-//     }
+//     // Track for each matched user
 //     if (matchedUserId) {
+//       // Set roster status
+//       if (!rosterStatusByUserId.has(matchedUserId)) {
+//         rosterStatusByUserId.set(matchedUserId, rosterStatus || "P");
+//       }
+      
+//       // Set department status
+//       if (!departmentStatusByUserId.has(matchedUserId)) {
+//         departmentStatusByUserId.set(matchedUserId, departmentStatus);
+//       }
+      
+//       // Count WO - CRITICAL FIX: Count when departmentStatus is "WO"
+//       const isWO = departmentStatus === "WO";
+//       if (isWO) {
+//         const currentWO = woCountByUserId.get(matchedUserId) || 0;
+//         woCountByUserId.set(matchedUserId, currentWO + 1);
+//         console.log(`WO found for user ${matchedUserId} on ${dateKey}: ${departmentStatus}`); // Debug log
+//       }
+      
+//       // Transport arrival time
 //       if (matchingDay?.transportArrivalTime && !transportArrivalTimeByUserId.has(matchedUserId)) {
 //         transportArrivalTimeByUserId.set(matchedUserId, matchingDay.transportArrivalTime);
 //       }
+      
+//       // Shift hours
 //       const rosterStartHour = Number(row?.shiftStartHour);
 //       const rosterEndHour = Number(row?.shiftEndHour);
 //       if (Number.isFinite(rosterStartHour) && !rosterShiftStartHourByUserId.has(matchedUserId)) {
@@ -231,14 +435,19 @@
 //       }
 //     }
 
-//     if (effectiveStatus === "P") {
+//     // Track present count based on roster status
+//     if (rosterStatus === "P") {
 //       presentIds.add(presentKey);
 //     }
 //   }
 
+//   console.log('WO Count Map:', Object.fromEntries(woCountByUserId)); // Debug log
+
 //   return {
 //     presentCount: presentIds.size,
 //     rosterStatusByUserId,
+//     departmentStatusByUserId,
+//     woCountByUserId,
 //     rosterShiftStartHourByUserId,
 //     rosterShiftEndHourByUserId,
 //     transportArrivalTimeByUserId,
@@ -267,7 +476,7 @@
 //       nowIso: now.toISOString(),
 //       nyHour,
 //       resolvedDateKey: yesterdayKey,
-//       rule: "before_14_ist_use_previous_day",
+//       rule: `before_${OPERATIONAL_DAY_START_HOUR_IST}_ist_use_previous_day`,
 //     });
 //     return yesterdayKey;
 //   }
@@ -275,7 +484,7 @@
 //     nowIso: now.toISOString(),
 //     nyHour,
 //     resolvedDateKey: todayKey,
-//     rule: "at_or_after_14_ist_use_same_day",
+//     rule: `at_or_after_${OPERATIONAL_DAY_START_HOUR_IST}_ist_use_same_day`,
 //   });
 //   return todayKey;
 // };
@@ -287,6 +496,7 @@
 // };
 
 // const NINE_HOURS_MS = 9 * 60 * 60 * 1000;
+// const VALID_BREAK_TYPES = ["lunch", "bio_1", "bio_2"];
 
 // const formatIstDateTime = (value) => {
 //   if (!value) return "";
@@ -299,22 +509,30 @@
 //   });
 // };
 
+// // ========== UPDATED: getBreakUsage ==========
 // const getBreakUsage = (session, now = getNow()) => {
-//   if (!session) return { manualBreakMs: 0, autoIdleBreakMs: 0, totalBreakMs: 0 };
+//   if (!session) return { lunchBreakMs: 0, bioBreak1Ms: 0, bioBreak2Ms: 0, totalBreakMs: 0 };
+  
 //   const breaks = Array.isArray(session.breaks) ? session.breaks : [];
-//   let manualBreakMs = 0;
+//   let lunchBreakMs = 0;
+//   let bioBreak1Ms = 0;
+//   let bioBreak2Ms = 0;
 
 //   for (const br of breaks) {
 //     const baseDuration = Number(br?.durationMs || 0);
 //     const openDuration = !br?.endAt ? toMs(br?.startAt, now) : 0;
 //     const durationMs = Math.max(0, baseDuration + openDuration);
-//     if (br?.type === "manual") manualBreakMs += durationMs;
+    
+//     if (br?.type === "lunch" || br?.type === "manual") lunchBreakMs += durationMs;
+//     else if (br?.type === "bio_1") bioBreak1Ms += durationMs;
+//     else if (br?.type === "bio_2") bioBreak2Ms += durationMs;
 //   }
 
 //   return {
-//     manualBreakMs,
-//     autoIdleBreakMs: 0,
-//     totalBreakMs: manualBreakMs,
+//     lunchBreakMs,
+//     bioBreak1Ms,
+//     bioBreak2Ms,
+//     totalBreakMs: lunchBreakMs + bioBreak1Ms + bioBreak2Ms,
 //   };
 // };
 
@@ -330,11 +548,7 @@
 //     meta,
 //   });
 
-//   if (type === "manual") session.activityStatus = "manual_break";
-//   if (type === "auto_idle") {
-//     session.activityStatus = "auto_break";
-//     session.autoBreakStartedAt = now;
-//   }
+//   session.activityStatus = "manual_break";
 //   return true;
 // };
 
@@ -445,16 +659,16 @@
 //   return PunchSession.create({ userId, dateKey });
 // };
 
+// // ========== UPDATED: scoreSession ==========
 // const scoreSession = (session) => {
 //   let score = 100;
 //   const latePenalty = session.shiftStartAt ? 0 : 25;
 //   const completionPenalty = session.shiftEndAt ? 0 : 25;
 
-//   const manualBreakMs = session.breaks
-//     .filter((b) => b.type === "manual")
-//     .reduce((sum, b) => sum + (b.durationMs || 0), 0);
-
-//   const breakPenalty = manualBreakMs > 90 * 60 * 1000 ? 20 : manualBreakMs > 60 * 60 * 1000 ? 10 : 0;
+//   const breakUsage = getBreakUsage(session);
+//   const totalBreakMs = breakUsage.totalBreakMs;
+  
+//   const breakPenalty = totalBreakMs > 90 * 60 * 1000 ? 20 : totalBreakMs > 60 * 60 * 1000 ? 10 : 0;
 //   const idlePenalty = session.totalIdleMs > 90 * 60 * 1000 ? 25 : session.totalIdleMs > 60 * 60 * 1000 ? 15 : session.totalIdleMs > 30 * 60 * 1000 ? 8 : 0;
 
 //   score -= latePenalty + completionPenalty + breakPenalty + idlePenalty;
@@ -616,12 +830,16 @@
 //   }
 // };
 
+// // ========== UPDATED: startBreak ==========
 // export const startBreak = async (req, res) => {
 //   try {
 //     const userId = req.user?._id;
-//     const { type = "manual", reason = "" } = req.body || {};
-//     if (!["manual", "system_disconnect"].includes(type)) {
-//       return res.status(400).json({ message: "Invalid break type" });
+//     const { type = "lunch", reason = "" } = req.body || {};
+    
+//     if (!VALID_BREAK_TYPES.includes(type)) {
+//       return res.status(400).json({ 
+//         message: "Invalid break type. Allowed: lunch, bio_1, bio_2" 
+//       });
 //     }
 
 //     const now = getNow();
@@ -630,12 +848,20 @@
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
 //     if (session.status === "ended" || session.shiftEndAt) {
-//       return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+//       return res.status(409).json({ 
+//         message: "Shift already ended", 
+//         session, 
+//         attendanceScore: scoreSession(session) 
+//       });
 //     }
 
 //     if (autoEndShiftIfDue(session, now)) {
 //       await session.save();
-//       return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+//       return res.status(409).json({ 
+//         message: "Shift already auto-ended after 9 hours", 
+//         session, 
+//         attendanceScore: scoreSession(session) 
+//       });
 //     }
 
 //     if (session.status === "not_started") {
@@ -643,16 +869,66 @@
 //       session.status = "active";
 //     }
 
-//     const added = addBreak(session, type, now, { reason, source: "ui" });
-//     if (!added) return res.status(409).json({ message: "A break is already active", session });
+//     const existingOpen = session.breaks.find((b) => !b.endAt);
+//     if (existingOpen) {
+//       return res.status(409).json({ 
+//         message: "A break is already active. Please end the current break first.", 
+//         session 
+//       });
+//     }
 
+//     if (!session.breakTracking) {
+//       session.breakTracking = {
+//         lunch: { totalMs: 0, isCompleted: false, sessions: 0 },
+//         bio_1: { totalMs: 0, isCompleted: false, sessions: 0 },
+//         bio_2: { totalMs: 0, isCompleted: false, sessions: 0 },
+//       };
+//     }
+
+//     const breakLimit = type === "lunch" ? 30 * 60 * 1000 : 15 * 60 * 1000;
+//     if (session.breakTracking[type]?.isCompleted) {
+//       return res.status(409).json({ 
+//         message: `${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} is already completed for today.`, 
+//         session 
+//       });
+//     }
+
+//     const usedMs = session.breakTracking[type]?.totalMs || 0;
+//     if (usedMs >= breakLimit) {
+//       session.breakTracking[type].isCompleted = true;
+//       await session.save();
+//       return res.status(409).json({ 
+//         message: `${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} limit already reached for today.`, 
+//         session 
+//       });
+//     }
+
+//     session.breaks.push({
+//       type,
+//       startAt: now,
+//       endAt: null,
+//       durationMs: 0,
+//       meta: { reason, source: "ui" },
+//     });
+
+//     session.activityStatus = "manual_break";
 //     await session.save();
-//     return res.status(200).json({ message: "Break started", session, attendanceScore: scoreSession(session) });
+
+//     const remainingMs = Math.max(0, breakLimit - usedMs);
+//     const remainingMinutes = Math.ceil(remainingMs / 60000);
+
+//     return res.status(200).json({ 
+//       message: `${type === "lunch" ? "Lunch" : type === "bio_1" ? "Short Break 1" : "Short Break 2"} started`, 
+//       session, 
+//       attendanceScore: scoreSession(session),
+//       remainingTime: `${remainingMinutes} minutes remaining`
+//     });
 //   } catch (error) {
 //     return res.status(500).json({ message: "Failed to start break", error: error.message });
 //   }
 // };
 
+// // ========== UPDATED: endBreak ==========
 // export const endBreak = async (req, res) => {
 //   try {
 //     const userId = req.user?._id;
@@ -663,20 +939,84 @@
 //     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
 //     if (session.status === "ended" || session.shiftEndAt) {
-//       return res.status(409).json({ message: "Shift already ended", session, attendanceScore: scoreSession(session) });
+//       return res.status(409).json({ 
+//         message: "Shift already ended", 
+//         session, 
+//         attendanceScore: scoreSession(session) 
+//       });
 //     }
 
 //     if (autoEndShiftIfDue(session, now)) {
 //       await session.save();
-//       return res.status(409).json({ message: "Shift already auto-ended after 9 hours", session, attendanceScore: scoreSession(session) });
+//       return res.status(409).json({ 
+//         message: "Shift already auto-ended after 9 hours", 
+//         session, 
+//         attendanceScore: scoreSession(session) 
+//       });
 //     }
 
-//     const closed = closeOpenBreak(session, now, type || null);
-//     if (!closed) return res.status(404).json({ message: "No active break found", session });
+//     const openBreakIndex = session.breaks.findIndex((b) => !b.endAt && (!type || b.type === type));
+//     if (openBreakIndex === -1) {
+//       return res.status(404).json({ 
+//         message: type ? `No active ${type} break found` : "No active break found", 
+//         session 
+//       });
+//     }
 
+//     const br = session.breaks[openBreakIndex];
+//     br.endAt = now;
+//     br.durationMs = toMs(br.startAt, now);
+//     session.totalBreakMs += br.durationMs;
+
+//     if (!session.breakTracking) {
+//       session.breakTracking = {
+//         lunch: { totalMs: 0, isCompleted: false, sessions: 0 },
+//         bio_1: { totalMs: 0, isCompleted: false, sessions: 0 },
+//         bio_2: { totalMs: 0, isCompleted: false, sessions: 0 },
+//       };
+//     }
+
+//     const breakType = br.type;
+//     if (session.breakTracking[breakType]) {
+//       session.breakTracking[breakType].totalMs += br.durationMs;
+//       session.breakTracking[breakType].sessions += 1;
+
+//       const breakLimit = breakType === "lunch" ? 30 * 60 * 1000 : 15 * 60 * 1000;
+//       if (session.breakTracking[breakType].totalMs >= breakLimit) {
+//         session.breakTracking[breakType].isCompleted = true;
+        
+//         const actualMinutes = Math.ceil(session.breakTracking[breakType].totalMs / 60000);
+//         const limitMinutes = breakLimit / 60000;
+        
+//         session.alerts.push({
+//           type: "break_completed",
+//           message: `${breakType === "lunch" ? "Lunch" : breakType === "bio_1" ? "Short Break 1" : "Short Break 2"} completed (${actualMinutes} min / ${limitMinutes} min limit)`,
+//           at: now,
+//         });
+//       }
+//     }
+
+//     session.activityStatus = "active";
 //     session.lastActivityAt = now;
 //     await session.save();
-//     return res.status(200).json({ message: "Break ended", session, attendanceScore: scoreSession(session) });
+
+//     const usedMs = session.breakTracking[breakType]?.totalMs || 0;
+//     const breakLimit = breakType === "lunch" ? 30 * 60 * 1000 : 15 * 60 * 1000;
+//     const remainingMs = Math.max(0, breakLimit - usedMs);
+//     const isCompleted = usedMs >= breakLimit;
+
+//     return res.status(200).json({ 
+//       message: `${breakType === "lunch" ? "Lunch" : breakType === "bio_1" ? "Short Break 1" : "Short Break 2"} ended`, 
+//       session, 
+//       attendanceScore: scoreSession(session),
+//       breakSummary: {
+//         type: breakType,
+//         totalUsed: Math.ceil(usedMs / 60000),
+//         limit: breakLimit / 60000,
+//         remaining: Math.ceil(remainingMs / 60000),
+//         isCompleted,
+//       }
+//     });
 //   } catch (error) {
 //     return res.status(500).json({ message: "Failed to end break", error: error.message });
 //   }
@@ -794,7 +1134,9 @@
 //         activityStatus: session.activityStatus || "no_activity",
 //         totalWorkedMs: durationMs,
 //         totalBreakMs: Number(breakUsage.totalBreakMs || 0),
-//         manualBreakMs: Number(breakUsage.manualBreakMs || 0),
+//         lunchBreakMs: Number(breakUsage.lunchBreakMs || 0),
+//         bioBreak1Ms: Number(breakUsage.bioBreak1Ms || 0),
+//         bioBreak2Ms: Number(breakUsage.bioBreak2Ms || 0),
 //         alertCount: Array.isArray(session.alerts) ? session.alerts.length : 0,
 //         latestAlert: Array.isArray(session.alerts) && session.alerts.length > 0 ? session.alerts[session.alerts.length - 1] : null,
 //         hasCompletedNineHours: durationMs >= NINE_HOURS_MS,
@@ -815,6 +1157,7 @@
 //   }
 // };
 
+// // ========== UPDATED: getManagerTeamStatus ==========
 // export const getManagerTeamStatus = async (req, res) => {
 //   try {
 //     const user = req.user || {};
@@ -897,14 +1240,16 @@
 //         idleTimeMs: session?.totalIdleMs || 0,
 //         breakType: openBreak?.type || "",
 //         totalBreakMs: breakUsage.totalBreakMs,
-//         manualBreakMs: breakUsage.manualBreakMs,
-//         autoIdleBreakMs: breakUsage.autoIdleBreakMs,
+//         lunchBreakMs: breakUsage.lunchBreakMs,
+//         bioBreak1Ms: breakUsage.bioBreak1Ms,
+//         bioBreak2Ms: breakUsage.bioBreak2Ms,
 //         shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
 //         shiftStartedAt: session?.shiftStartAt || null,
 //         loginTime: session?.shiftStartAt || null,
 //         logoutTime: session?.shiftEndAt || null,
 //         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
 //         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(member._id)) || "",
+//         floorDepartmentStatus: rosterSnapshot.departmentStatusByUserId.get(String(member._id)) || "",
 //         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(member._id)) || null,
 //         isOnBreak: Boolean(openBreak),
 //         lateByMs,
@@ -951,26 +1296,19 @@
 //   return candidates.reduce((latest, current) => (!latest || current > latest ? current : latest), null);
 // };
 
-// export const getSuperAdminDailyStatus = async (req, res) => {
-//   try {
-//     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
-//     const userId = req.user?._id ? String(req.user._id) : "";
-//     const isSuperAdmin = role === "superadmin";
-//     const isSupervisor = role === "supervisor" || Boolean(req.user?.isTeamLeader);
+// const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateKey = "" } = {}) => {
+//   const role = String(requester?.roleType || requester?.accountType || "").toLowerCase();
+//   const userId = requester?._id ? String(requester._id) : "";
+//   const isSuperAdmin = role === "superadmin";
+//   const dateKey = String(requestedDateKey || resolveOperationalDateKeyForUser({}, getNow()));
+//   const employeeQuery = {
+//     accountType: { $in: ["employee", "agent", "supervisor"] },
+//     isActive: { $ne: false },
+//   };
 
-//     if (!isSuperAdmin && !isSupervisor) {
-//       return res.status(403).json({ message: "Only superAdmin or supervisor can access this dashboard" });
-//     }
-
-//     const dateKey = String(req.query?.dateKey || resolveOperationalDateKeyForUser({}, getNow()));
-//     const employeeQuery = {
-//       accountType: { $in: ["employee", "agent", "supervisor"] },
-//       isActive: { $ne: false },
-//     };
-
-//     if (!isSuperAdmin && userId) {
-//       employeeQuery.reportingManager = req.user._id;
-//     }
+//   if (!isSuperAdmin && userId) {
+//     employeeQuery.reportingManager = requester._id;
+//   }
 
 //     const employees = await User.find(employeeQuery)
 //       .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
@@ -1008,8 +1346,9 @@
 //       return {
 //         userId: emp._id,
 //         username: emp.username || "",
+//         realName: emp.realName || "",
 //         pseudoName: emp.pseudoName || "",
-//         name: emp.pseudoName || emp.username || "",
+//         name: emp.realName || emp.pseudoName || emp.username || "",
 //         department: emp.department || "",
 //         accountType: emp.accountType || "employee",
 //         isTeamLeader: Boolean(emp.isTeamLeader),
@@ -1019,14 +1358,16 @@
 //         logoutTime: session?.shiftEndAt || null,
 //         logoutReason: session?.shiftEndReason || (session?.shiftEndAt ? "manual" : ""),
 //         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
+//         floorDepartmentStatus: rosterSnapshot.departmentStatusByUserId.get(String(emp._id)) || "",
 //         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(emp._id)) || null,
 //         isOnBreak: Boolean(openBreak),
 //         breakType: openBreak?.type || "",
 //         breakStartAt: openBreak?.startAt || null,
 //         totalBreakMs: breakUsage.totalBreakMs,
-//         totalIdleMs: breakUsage.autoIdleBreakMs,
-//         manualBreakMs: breakUsage.manualBreakMs,
-//         autoIdleBreakMs: breakUsage.autoIdleBreakMs,
+//         lunchBreakMs: breakUsage.lunchBreakMs,
+//         bioBreak1Ms: breakUsage.bioBreak1Ms,
+//         bioBreak2Ms: breakUsage.bioBreak2Ms,
+//         totalIdleMs: session?.totalIdleMs || 0,
 //         status: session?.status || "not_started",
 //         activityStatus: session?.activityStatus || "no_activity",
 //         lastActivityAt: session?.lastActivityAt || null,
@@ -1047,12 +1388,31 @@
 //       lateLoginCount: rows.filter((r) => r.lateByMs > 0).length,
 //     };
 
-//     return res.status(200).json({
+//     return {
 //       dateKey,
 //       timezone: APP_TZ,
 //       summary,
 //       rows,
+//     };
+// };
+
+// // ========== UPDATED: getSuperAdminDailyStatus ==========
+// export const getSuperAdminDailyStatus = async (req, res) => {
+//   try {
+//     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
+//     const isSuperAdmin = role === "superadmin";
+//     const isSupervisor = role === "supervisor" || Boolean(req.user?.isTeamLeader);
+
+//     if (!isSuperAdmin && !isSupervisor) {
+//       return res.status(403).json({ message: "Only superAdmin or supervisor can access this dashboard" });
+//     }
+
+//     const payload = await buildDailyStatusPayload({
+//       requester: req.user || {},
+//       dateKey: req.query?.dateKey,
 //     });
+
+//     return res.status(200).json(payload);
 //   } catch (error) {
 //     return res.status(500).json({
 //       message: "Failed to fetch superAdmin daily login status",
@@ -1061,6 +1421,195 @@
 //   }
 // };
 
+// export const getFloorStatusDashboard = async (req, res) => {
+//   try {
+//     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
+//     const isAllowed = role === "floorstatus" || role === "superadmin";
+
+//     if (!isAllowed) {
+//       return res.status(403).json({ message: "Only floorStatus or superAdmin can access this dashboard" });
+//     }
+
+//     const payload = await buildDailyStatusPayload({
+//       requester: { ...(req.user || {}), roleType: "superAdmin", accountType: "superAdmin" },
+//       dateKey: req.query?.dateKey,
+//     });
+
+//     const rows = Array.isArray(payload.rows) ? payload.rows : [];
+    
+//     const toFloorRow = (row = {}) => {
+//       let formattedLogoutTime = null;
+//       if (row.logoutTime) {
+//         const logoutDate = new Date(row.logoutTime);
+//         formattedLogoutTime = logoutDate.toLocaleString('en-IN', {
+//           day: '2-digit',
+//           month: '2-digit',
+//           year: 'numeric',
+//           hour: '2-digit',
+//           minute: '2-digit',
+//           second: '2-digit',
+//           hour12: true
+//         });
+//       }
+
+//       return {
+//         userId: row.userId,
+//         username: row.username || "",
+//         pseudoName: row.pseudoName || "",
+//         name: row.pseudoName || row.username || "",
+//         department: row.department || "",
+//         floorRosterStatus: row.floorRosterStatus || "",
+//         floorDepartmentStatus: row.floorDepartmentStatus || "",
+//         isOnBreak: Boolean(row.isOnBreak),
+//         breakType: row.breakType || "",
+//         breakStartAt: row.breakStartAt || null,
+//         totalBreakMs: row.totalBreakMs || 0,
+//         totalWorkedMs: row.totalWorkedMs || 0,
+//         loginTime: row.loginTime || null,
+//         logoutTime: row.logoutTime || null,
+//         formattedLogoutTime: formattedLogoutTime,
+//         isActive: row.isActive || false,
+//         status: !row.loginTime ? 'Never Logged In' : 
+//                 (row.logoutTime || !row.isActive) ? 'Logged Out' : 'Logged In',
+//         loggedOutAt: formattedLogoutTime,
+//         hasRoster: String(row.floorRosterStatus || "").trim().toUpperCase() === "P",
+//       };
+//     };
+    
+//     const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
+//     const isDepartmentPresent = (row = {}) => String(row.floorDepartmentStatus || "").trim().toUpperCase() === "P";
+//     const isDepartmentEmpty = (row = {}) => String(row.floorDepartmentStatus || "").trim() === "";
+    
+//     const rosterPresentRows = rows.filter(isRosterPresent);
+    
+//     // ✅ FIX: Get ALL employees on break regardless of roster status
+//     const allOnBreakRows = rows.filter((row) => row.isOnBreak).map(toFloorRow);
+    
+//     // ✅ FIX: Get on break employees WITH roster (for backward compatibility)
+//     const onBreakRows = rosterPresentRows.filter((row) => row.isOnBreak).map(toFloorRow);
+    
+//     // ✅ NEW: Get on break employees WITHOUT roster
+//     const onBreakWithoutRoster = allOnBreakRows.filter(row => !row.hasRoster);
+    
+//     // Not logged in rows (only those with roster present)
+//     const notLoggedInRows = rosterPresentRows.filter((row) => {
+//       // Skip if on break
+//       if (row.isOnBreak) return false;
+      
+//       // Condition 1: Roster P + dept status empty + not logged in
+//       const condition1 = isDepartmentEmpty(row) && !row.loginTime;
+      
+//       // Condition 2: Roster P + dept P + logged in but logged out
+//       const condition2 = isDepartmentPresent(row) && row.loginTime && (!row.isActive || row.logoutTime);
+      
+//       // Condition 3: Roster P + dept P + never logged in
+//       const condition3 = isDepartmentPresent(row) && !row.loginTime;
+      
+//       return condition1 || condition2 || condition3;
+//     }).map(toFloorRow);
+
+//     // Separate logged out from never logged in
+//     const loggedOutRows = notLoggedInRows.filter(row => row.logoutTime);
+//     const neverLoggedInRows = notLoggedInRows.filter(row => !row.loginTime);
+
+//     return res.status(200).json({
+//       ...payload,
+//       rows: rosterPresentRows.map(toFloorRow),
+//       summary: {
+//         ...(payload.summary || {}),
+//         totalEmployees: rosterPresentRows.length,
+//         // ✅ FIX: Show ALL on break employees in count
+//         onBreakCount: allOnBreakRows.length,
+//         onBreakWithRosterCount: onBreakRows.length,
+//         onBreakWithoutRosterCount: onBreakWithoutRoster.length,
+//         notLoggedInCount: notLoggedInRows.length,
+//         notLoggedInDetails: {
+//           loggedOutCount: loggedOutRows.length,
+//           neverLoggedInCount: neverLoggedInRows.length,
+//           loggedOutEmployees: loggedOutRows.map(row => ({
+//             name: row.name,
+//             loggedOutAt: row.formattedLogoutTime,
+//             logoutTime: row.logoutTime,
+//             loginTime: row.loginTime
+//           }))
+//         }
+//       },
+//       // ✅ FIX: Include all on break employees in the response
+//       onBreakRows: allOnBreakRows, // Now includes ALL employees on break
+//       onBreakWithRoster: onBreakRows, // Employees on break WITH roster
+//       onBreakWithoutRoster: onBreakWithoutRoster, // Employees on break WITHOUT roster
+//       notLoggedInRows,
+//       loggedOutRows,
+//       neverLoggedInRows,
+//       generatedAt: new Date().toISOString(),
+//     });
+//   } catch (error) {
+//     return res.status(500).json({
+//       message: "Failed to fetch floor status dashboard",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+// // export const getFloorStatusDashboard = async (req, res) => {
+// //   try {
+// //     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
+// //     const isAllowed = role === "floorstatus" || role === "superadmin";
+
+// //     if (!isAllowed) {
+// //       return res.status(403).json({ message: "Only floorStatus or superAdmin can access this dashboard" });
+// //     }
+
+// //     const payload = await buildDailyStatusPayload({
+// //       requester: { ...(req.user || {}), roleType: "superAdmin", accountType: "superAdmin" },
+// //       dateKey: req.query?.dateKey,
+// //     });
+
+// //     const rows = Array.isArray(payload.rows) ? payload.rows : [];
+// //     const toFloorRow = (row = {}) => ({
+// //       userId: row.userId,
+// //       username: row.username || "",
+// //       pseudoName: row.pseudoName || "",
+// //       name: row.pseudoName || row.username || "",
+// //       department: row.department || "",
+// //       floorRosterStatus: row.floorRosterStatus || "",
+// //       floorDepartmentStatus: row.floorDepartmentStatus || "",
+// //       isOnBreak: Boolean(row.isOnBreak),
+// //       breakType: row.breakType || "",
+// //       breakStartAt: row.breakStartAt || null,
+// //       totalBreakMs: row.totalBreakMs || 0,
+// //       totalWorkedMs: row.totalWorkedMs || 0,
+// //       loginTime: row.loginTime || null,
+// //     });
+// //     const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
+// //     const isDepartmentPresent = (row = {}) => String(row.floorDepartmentStatus || "").trim().toUpperCase() === "P";
+// //     const rosterPresentRows = rows.filter(isRosterPresent);
+// //     const onBreakRows = rosterPresentRows.filter((row) => row.isOnBreak).map(toFloorRow);
+// //     const notLoggedInRows = rosterPresentRows.filter((row) => !row.loginTime && isDepartmentPresent(row)).map(toFloorRow);
+
+// //     return res.status(200).json({
+// //       ...payload,
+// //       rows: rosterPresentRows.map(toFloorRow),
+// //       summary: {
+// //         ...(payload.summary || {}),
+// //         totalEmployees: rosterPresentRows.length,
+// //         onBreakCount: onBreakRows.length,
+// //         notLoggedInCount: notLoggedInRows.length,
+// //       },
+// //       onBreakRows,
+// //       notLoggedInRows,
+// //       generatedAt: new Date().toISOString(),
+// //     });
+// //   } catch (error) {
+// //     return res.status(500).json({
+// //       message: "Failed to fetch floor status dashboard",
+// //       error: error.message,
+// //     });
+// //   }
+// // };
+
+// // ========== UPDATED: exportSuperAdminDailyStatusExcel ==========
 // export const exportSuperAdminDailyStatusExcel = async (req, res) => {
 //   try {
 //     const role = String(req.user?.roleType || req.user?.accountType || "").toLowerCase();
@@ -1081,6 +1630,9 @@
 //     const sessions = await PunchSession.find({ userId: { $in: employeeIds }, dateKey }).lean();
 //     const sessionsByUser = new Map(sessions.map((s) => [String(s.userId), s]));
 //     const now = new Date();
+//     const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+//       countAllRosterEmployees: true,
+//     });
 
 //     const formatDateTime = (value) => {
 //       if (!value) return "";
@@ -1125,7 +1677,8 @@
 //         const endAt = b?.endAt ? new Date(b.endAt) : null;
 //         const openDuration = !endAt && startAt ? Math.max(0, now.getTime() - startAt.getTime()) : 0;
 //         const durationMs = Math.max(0, Number(b?.durationMs || 0) + openDuration);
-//         return `${b?.type || "unknown"}: ${formatDateTime(startAt)} - ${formatDateTime(endAt)} (${formatDuration(durationMs)})`;
+//         const typeLabel = b?.type === "lunch" ? "Lunch" : b?.type === "bio_1" ? "Bio 1" : b?.type === "bio_2" ? "Bio 2" : b?.type;
+//         return `${typeLabel}: ${formatDateTime(startAt)} - ${formatDateTime(endAt)} (${formatDuration(durationMs)})`;
 //       });
 
 //       return {
@@ -1140,9 +1693,10 @@
 //         "Last Activity (IST)": formatDateTime(session?.lastActivityAt || null),
 //         "On Break": session?.breaks?.some((b) => !b.endAt) ? "Yes" : "No",
 //         "Break Type (Open)": (session?.breaks || []).find((b) => !b.endAt)?.type || "",
+//         "Lunch Break": formatDuration(breakUsage.lunchBreakMs || 0),
+//         "Bio Break 1": formatDuration(breakUsage.bioBreak1Ms || 0),
+//         "Bio Break 2": formatDuration(breakUsage.bioBreak2Ms || 0),
 //         "Total Break": formatDuration(breakUsage.totalBreakMs || 0),
-//         "Manual Break": formatDuration(breakUsage.manualBreakMs || 0),
-//         "Auto Idle Break": formatDuration(breakUsage.autoIdleBreakMs || 0),
 //         "Total Worked": formatDuration(totalWorkedMs || 0),
 //         "Late By": lateByMs > 0 ? formatDuration(lateByMs) : "On Time",
 //         "Status 9h": totalWorkedMs >= 9 * 60 * 60 * 1000 ? "Completed" : "Pending",
@@ -1165,6 +1719,465 @@
 //     });
 //   }
 // };
+
+
+// //for counting total week off in employee login status in ongoing month
+// // Add this function to your controller file
+// // export const getMonthlyWOUtilization = async (req, res) => {
+// //   try {
+// //     const user = req.user || {};
+// //     const role = String(user?.roleType || user?.accountType || "").toLowerCase();
+    
+// //     // Check if user has HR role (add this to your check)
+// //     const isHR = role === "hr" || role === "humanresources";
+// //     const isSuperAdmin = role === "superadmin";
+    
+// //     // Allow only SuperAdmin or HR to access this endpoint
+// //     if (!isSuperAdmin && !isHR) {
+// //       return res.status(403).json({ 
+// //         success: false,
+// //         message: "Access denied. Only SuperAdmin or HR can access this data." 
+// //       });
+// //     }
+
+// //     // Get month and year from query params
+// //     const { month, year, department } = req.query;
+// //     const currentDate = new Date();
+// //     const targetMonth = month ? parseInt(month) - 1 : currentDate.getMonth();
+// //     const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+
+// //     // Validate month and year
+// //     if (targetMonth < 0 || targetMonth > 11) {
+// //       return res.status(400).json({
+// //         success: false,
+// //         message: "Invalid month. Month must be between 1 and 12"
+// //       });
+// //     }
+
+// //     if (targetYear < 2000 || targetYear > 2100) {
+// //       return res.status(400).json({
+// //         success: false,
+// //         message: "Invalid year"
+// //       });
+// //     }
+
+// //     // Get all dates in the month
+// //     const startDate = new Date(targetYear, targetMonth, 1);
+// //     const endDate = new Date(targetYear, targetMonth + 1, 0);
+    
+// //     // Build employee query - SuperAdmin and HR can see all employees
+// //     const employeeQuery = {
+// //       accountType: { $in: ["employee", "agent", "supervisor"] },
+// //       isActive: { $ne: false },
+// //     };
+
+// //     // Department filter if provided
+// //     if (department) {
+// //       employeeQuery.department = department;
+// //     }
+
+// //     const employees = await User.find(employeeQuery)
+// //       .select("_id empId username realName pseudoName department accountType isTeamLeader")
+// //       .sort({ department: 1, realName: 1 })
+// //       .lean();
+
+// //     if (employees.length === 0) {
+// //       return res.status(200).json({
+// //         success: true,
+// //         message: "No employees found",
+// //         summary: {
+// //           month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+// //           year: targetYear,
+// //           totalEmployees: 0,
+// //           totalWOUtilized: 0,
+// //           employeesWithWO: 0,
+// //           employeesWithoutWO: 0,
+// //           averageWOPerEmployee: 0,
+// //           totalWorkingDays: 0
+// //         },
+// //         results: []
+// //       });
+// //     }
+
+// //     // Generate all date keys for the month
+// //     const dateKeys = [];
+// //     let current = new Date(startDate);
+// //     while (current <= endDate) {
+// //       dateKeys.push(getNyDateKey(current));
+// //       current.setDate(current.getDate() + 1);
+// //     }
+
+// //     // Initialize WO tracking for each employee
+// //     const woData = new Map();
+// //     employees.forEach(emp => {
+// //       woData.set(String(emp._id), {
+// //         totalWO: 0,
+// //         woDates: [],
+// //         departmentStatusByDate: {},
+// //         employee: emp
+// //       });
+// //     });
+
+// //     // Process each day of the month
+// //     for (const dateKey of dateKeys) {
+// //       const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+// //         countAllRosterEmployees: true, // SuperAdmin/HR can see all employees
+// //       });
+      
+// //       // Update WO counts for each employee
+// //       for (const [empId, woCount] of rosterSnapshot.woCountByUserId || []) {
+// //         if (woData.has(empId)) {
+// //           const data = woData.get(empId);
+// //           data.totalWO += woCount;
+// //           if (woCount > 0) {
+// //             data.woDates.push(dateKey);
+// //           }
+// //           // Store department status for this date
+// //           const deptStatus = rosterSnapshot.departmentStatusByUserId?.get(empId) || "";
+// //           data.departmentStatusByDate[dateKey] = {
+// //             status: deptStatus,
+// //             isWO: deptStatus === "WO"
+// //           };
+// //           woData.set(empId, data);
+// //         }
+// //       }
+// //     }
+
+// //     // Build response with all employee data
+// //     const results = employees.map(emp => {
+// //       const empId = String(emp._id);
+// //       const data = woData.get(empId) || { totalWO: 0, woDates: [], departmentStatusByDate: {} };
+      
+// //       // Calculate working days in month (excluding weekends if needed)
+// //       // You can modify this to exclude Saturdays and Sundays if needed
+// //       const workingDays = dateKeys.length;
+      
+// //       return {
+// //         employeeId: emp._id,
+// //         empId: emp.empId || "",
+// //         username: emp.username || "",
+// //         realName: emp.realName || "",
+// //         pseudoName: emp.pseudoName || "",
+// //         department: emp.department || "",
+// //         accountType: emp.accountType || "",
+// //         isTeamLeader: Boolean(emp.isTeamLeader),
+// //         totalWOUsed: data.totalWO,
+// //         woDates: data.woDates.sort(), // Dates when WO was taken
+// //         departmentStatusByDate: data.departmentStatusByDate,
+// //         workingDays: workingDays,
+// //         woPercentage: workingDays > 0 
+// //           ? Number(((data.totalWO / workingDays) * 100).toFixed(1))
+// //           : 0
+// //       };
+// //     });
+
+// //     // Summary statistics
+// //     const totalWO = results.reduce((sum, r) => sum + r.totalWOUsed, 0);
+// //     const employeesWithWO = results.filter(r => r.totalWOUsed > 0).length;
+    
+// //     const summary = {
+// //       month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+// //       year: targetYear,
+// //       totalEmployees: results.length,
+// //       totalWOUtilized: totalWO,
+// //       employeesWithWO: employeesWithWO,
+// //       employeesWithoutWO: results.length - employeesWithWO,
+// //       averageWOPerEmployee: results.length > 0 
+// //         ? Number((totalWO / results.length).toFixed(2))
+// //         : 0,
+// //       totalWorkingDays: dateKeys.length,
+// //       // Department-wise breakdown
+// //       departmentWise: {}
+// //     };
+
+// //     // Add department-wise breakdown
+// //     results.forEach(emp => {
+// //       const dept = emp.department || "Unassigned";
+// //       if (!summary.departmentWise[dept]) {
+// //         summary.departmentWise[dept] = {
+// //           totalEmployees: 0,
+// //           totalWO: 0,
+// //           averageWO: 0,
+// //           employees: []
+// //         };
+// //       }
+// //       summary.departmentWise[dept].totalEmployees += 1;
+// //       summary.departmentWise[dept].totalWO += emp.totalWOUsed;
+// //       summary.departmentWise[dept].employees.push({
+// //         name: emp.realName || emp.pseudoName || emp.username,
+// //         empId: emp.empId,
+// //         woUsed: emp.totalWOUsed
+// //       });
+// //     });
+
+// //     // Calculate average for each department
+// //     Object.keys(summary.departmentWise).forEach(dept => {
+// //       const deptData = summary.departmentWise[dept];
+// //       deptData.averageWO = Number((deptData.totalWO / deptData.totalEmployees).toFixed(2));
+// //       // Sort employees within department by WO used (highest first)
+// //       deptData.employees.sort((a, b) => b.woUsed - a.woUsed);
+// //     });
+
+// //     // Sort results by total WO used (highest first)
+// //     results.sort((a, b) => b.totalWOUsed - a.totalWOUsed);
+
+// //     return res.status(200).json({
+// //       success: true,
+// //       summary,
+// //       results
+// //     });
+
+// //   } catch (error) {
+// //     console.error("Error in getMonthlyWOUtilization:", error);
+// //     return res.status(500).json({
+// //       success: false,
+// //       message: "Failed to fetch monthly WO utilization",
+// //       error: error.message
+// //     });
+// //   }
+// // };
+
+
+
+
+
+// export const getMonthlyWOUtilization = async (req, res) => {
+//   try {
+//     const user = req.user || {};
+//     const role = String(user?.roleType || user?.accountType || "").toLowerCase();
+    
+//     const isHR = role === "hr" || role === "humanresources";
+//     const isSuperAdmin = role === "superadmin";
+//     const isSupervisor = role === "supervisor" || user?.isTeamLeader === true;
+    
+//     // Allow SuperAdmin, HR, and Supervisor
+//     if (!isSuperAdmin && !isHR && !isSupervisor) {
+//       return res.status(403).json({ 
+//         success: false,
+//         message: "Access denied. Only SuperAdmin, HR, or Supervisor can access this data." 
+//       });
+//     }
+
+//     const { month, year, department } = req.query;
+//     const currentDate = new Date();
+//     const targetMonth = month ? parseInt(month) - 1 : currentDate.getMonth();
+//     const targetYear = year ? parseInt(year) : currentDate.getFullYear();
+
+//     if (targetMonth < 0 || targetMonth > 11) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid month. Month must be between 1 and 12"
+//       });
+//     }
+
+//     if (targetYear < 2000 || targetYear > 2100) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid year"
+//       });
+//     }
+
+//     const startDate = new Date(targetYear, targetMonth, 1);
+//     const endDate = new Date(targetYear, targetMonth + 1, 0);
+    
+//     // Build employee query
+//     let employeeQuery = {
+//       accountType: { $in: ["employee", "agent", "supervisor"] },
+//       isActive: { $ne: false },
+//     };
+
+//     if (department) {
+//       employeeQuery.department = department;
+//     }
+
+//     let employees = [];
+
+//     if (isSuperAdmin || isHR) {
+//       // SuperAdmin and HR see all employees
+//       employees = await User.find(employeeQuery)
+//         .select("_id empId username realName pseudoName department accountType isTeamLeader")
+//         .sort({ department: 1, realName: 1 })
+//         .lean();
+//     } else if (isSupervisor) {
+//       // ========== FIX: Get employees where reportingManager = supervisor's ID ==========
+//       const supervisorId = user?._id ? String(user._id) : "";
+      
+//       console.log('[WO DEBUG] Supervisor ID:', supervisorId);
+      
+//       // Query employees where reportingManager matches supervisor ID
+//       employeeQuery.reportingManager = supervisorId;
+      
+//       employees = await User.find(employeeQuery)
+//         .select("_id empId username realName pseudoName department accountType isTeamLeader")
+//         .sort({ department: 1, realName: 1 })
+//         .lean();
+      
+//       console.log('[WO DEBUG] Employees found for supervisor:', employees.length);
+//       console.log('[WO DEBUG] Employee names:', employees.map(e => e.username));
+//     }
+
+//     // If no employees found
+//     if (!employees || employees.length === 0) {
+//       return res.status(200).json({
+//         success: true,
+//         message: "No employees found for this supervisor",
+//         summary: {
+//           month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+//           year: targetYear,
+//           totalEmployees: 0,
+//           totalWOUtilized: 0,
+//           employeesWithWO: 0,
+//           employeesWithoutWO: 0,
+//           averageWOPerEmployee: 0,
+//           totalWorkingDays: 0
+//         },
+//         results: []
+//       });
+//     }
+
+//     // Generate all date keys for the month
+//     const dateKeys = [];
+//     let current = new Date(startDate);
+//     while (current <= endDate) {
+//       dateKeys.push(getNyDateKey(current));
+//       current.setDate(current.getDate() + 1);
+//     }
+
+//     // Initialize WO tracking for each employee
+//     const woData = new Map();
+//     employees.forEach(emp => {
+//       woData.set(String(emp._id), {
+//         totalWO: 0,
+//         woDates: [],
+//         departmentStatusByDate: {},
+//         employee: emp
+//       });
+//     });
+
+//     // Process each day of the month
+//     for (const dateKey of dateKeys) {
+//       // ========== IMPORTANT: Pass employees to get roster data ==========
+//       const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
+//         countAllRosterEmployees: false, // Don't count all, only for these employees
+//       });
+      
+//       console.log(`[WO DEBUG] Date ${dateKey} - WO Count Map:`, Object.fromEntries(rosterSnapshot.woCountByUserId || new Map()));
+      
+//       // Update WO counts for each employee
+//       for (const [empId, woCount] of rosterSnapshot.woCountByUserId || []) {
+//         if (woData.has(empId)) {
+//           const data = woData.get(empId);
+//           data.totalWO += woCount;
+//           if (woCount > 0) {
+//             data.woDates.push(dateKey);
+//           }
+//           // Store department status for this date
+//           const deptStatus = rosterSnapshot.departmentStatusByUserId?.get(empId) || "";
+//           data.departmentStatusByDate[dateKey] = {
+//             status: deptStatus,
+//             isWO: deptStatus === "WO"
+//           };
+//           woData.set(empId, data);
+//         }
+//       }
+//     }
+
+//     // Build response with all employee data
+//     const results = employees.map(emp => {
+//       const empId = String(emp._id);
+//       const data = woData.get(empId) || { totalWO: 0, woDates: [], departmentStatusByDate: {} };
+      
+//       const workingDays = dateKeys.length;
+      
+//       return {
+//         employeeId: emp._id,
+//         empId: emp.empId || "",
+//         username: emp.username || "",
+//         realName: emp.realName || "",
+//         pseudoName: emp.pseudoName || "",
+//         department: emp.department || "",
+//         accountType: emp.accountType || "",
+//         isTeamLeader: Boolean(emp.isTeamLeader),
+//         totalWOUsed: data.totalWO,
+//         woDates: data.woDates.sort(),
+//         departmentStatusByDate: data.departmentStatusByDate,
+//         workingDays: workingDays,
+//         woPercentage: workingDays > 0 
+//           ? Number(((data.totalWO / workingDays) * 100).toFixed(1))
+//           : 0
+//       };
+//     });
+
+//     // Summary statistics
+//     const totalWO = results.reduce((sum, r) => sum + r.totalWOUsed, 0);
+//     const employeesWithWO = results.filter(r => r.totalWOUsed > 0).length;
+    
+//     const summary = {
+//       month: new Date(targetYear, targetMonth).toLocaleString('default', { month: 'long' }),
+//       year: targetYear,
+//       totalEmployees: results.length,
+//       totalWOUtilized: totalWO,
+//       employeesWithWO: employeesWithWO,
+//       employeesWithoutWO: results.length - employeesWithWO,
+//       averageWOPerEmployee: results.length > 0 
+//         ? Number((totalWO / results.length).toFixed(2))
+//         : 0,
+//       totalWorkingDays: dateKeys.length,
+//       departmentWise: {}
+//     };
+
+//     // Add department-wise breakdown
+//     results.forEach(emp => {
+//       const dept = emp.department || "Unassigned";
+//       if (!summary.departmentWise[dept]) {
+//         summary.departmentWise[dept] = {
+//           totalEmployees: 0,
+//           totalWO: 0,
+//           averageWO: 0,
+//           employees: []
+//         };
+//       }
+//       summary.departmentWise[dept].totalEmployees += 1;
+//       summary.departmentWise[dept].totalWO += emp.totalWOUsed;
+//       summary.departmentWise[dept].employees.push({
+//         name: emp.realName || emp.pseudoName || emp.username,
+//         empId: emp.empId,
+//         woUsed: emp.totalWOUsed
+//       });
+//     });
+
+//     // Calculate average for each department
+//     Object.keys(summary.departmentWise).forEach(dept => {
+//       const deptData = summary.departmentWise[dept];
+//       deptData.averageWO = Number((deptData.totalWO / deptData.totalEmployees).toFixed(2));
+//       deptData.employees.sort((a, b) => b.woUsed - a.woUsed);
+//     });
+
+//     // Sort results by total WO used (highest first)
+//     results.sort((a, b) => b.totalWOUsed - a.totalWOUsed);
+
+//     console.log('[WO DEBUG] Final Results:', results.map(r => ({ 
+//       username: r.username, 
+//       totalWOUsed: r.totalWOUsed 
+//     })));
+
+//     return res.status(200).json({
+//       success: true,
+//       summary,
+//       results
+//     });
+
+//   } catch (error) {
+//     console.error("Error in getMonthlyWOUtilization:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to fetch monthly WO utilization",
+//       error: error.message
+//     });
+//   }
+// };
+
+
 
 
 
@@ -2468,7 +3481,7 @@ const getSessionHistoryStartDate = (userLike = {}, session = null) => {
   return candidates.reduce((latest, current) => (!latest || current > latest ? current : latest), null);
 };
 
-const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateKey = "" } = {}) => {
+const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateKey = "", officeLocation = "", excludeOfficeLocation = "" } = {}) => {
   const role = String(requester?.roleType || requester?.accountType || "").toLowerCase();
   const userId = requester?._id ? String(requester._id) : "";
   const isSuperAdmin = role === "superadmin";
@@ -2482,8 +3495,14 @@ const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateK
     employeeQuery.reportingManager = requester._id;
   }
 
+  if (officeLocation) {
+    employeeQuery.officeLocation = officeLocation;
+  } else if (excludeOfficeLocation) {
+    employeeQuery.officeLocation = { $exists: true, $type: "string", $nin: ["", null, excludeOfficeLocation] };
+  }
+
     const employees = await User.find(employeeQuery)
-      .select("_id empId username realName pseudoName department accountType shiftStartHour shiftEndHour isTeamLeader")
+      .select("_id empId username realName pseudoName department accountType officeLocation shiftStartHour shiftEndHour isTeamLeader")
       .lean();
 
     const rosterSnapshot = await getRosterPresentCountForUsers(employees, dateKey, {
@@ -2500,6 +3519,16 @@ const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateK
       const session = sessionsByUser.get(String(emp._id)) || null;
       const breakUsage = getBreakUsage(session, now);
       const openBreak = getOpenBreak(session);
+      const currentActivityStatus = String(session?.activityStatus || "").toLowerCase();
+      const statusShowsBreak = ["manual_break", "auto_break"].includes(currentActivityStatus);
+      const recentBreak = [...(session?.breaks || [])].reverse().find((breakEntry) => breakEntry?.startAt) || null;
+      const isOnBreak = Boolean(openBreak) || statusShowsBreak;
+      const breakType = openBreak?.type || (statusShowsBreak
+        ? recentBreak?.type || (currentActivityStatus === "auto_break" ? "auto_idle" : "manual")
+        : "");
+      const breakStartAt = openBreak?.startAt || (statusShowsBreak
+        ? recentBreak?.startAt || session?.autoBreakStartedAt || session?.lastActivityAt || null
+        : null);
       const rosterShiftStartHour = rosterSnapshot.rosterShiftStartHourByUserId.get(String(emp._id));
       const rosterShiftEndHour = rosterSnapshot.rosterShiftEndHourByUserId.get(String(emp._id));
       const shiftStartHour = Number.isFinite(rosterShiftStartHour) ? rosterShiftStartHour : Number(emp.shiftStartHour);
@@ -2522,6 +3551,7 @@ const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateK
         pseudoName: emp.pseudoName || "",
         name: emp.realName || emp.pseudoName || emp.username || "",
         department: emp.department || "",
+        officeLocation: emp.officeLocation || "",
         accountType: emp.accountType || "employee",
         isTeamLeader: Boolean(emp.isTeamLeader),
         shiftStartHour: Number.isFinite(shiftStartHour) ? shiftStartHour : null,
@@ -2532,9 +3562,9 @@ const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateK
         floorRosterStatus: rosterSnapshot.rosterStatusByUserId.get(String(emp._id)) || "",
         floorDepartmentStatus: rosterSnapshot.departmentStatusByUserId.get(String(emp._id)) || "",
         transportArrivalTime: rosterSnapshot.transportArrivalTimeByUserId.get(String(emp._id)) || null,
-        isOnBreak: Boolean(openBreak),
-        breakType: openBreak?.type || "",
-        breakStartAt: openBreak?.startAt || null,
+        isOnBreak,
+        breakType,
+        breakStartAt,
         totalBreakMs: breakUsage.totalBreakMs,
         lunchBreakMs: breakUsage.lunchBreakMs,
         bioBreak1Ms: breakUsage.bioBreak1Ms,
@@ -2602,9 +3632,29 @@ export const getFloorStatusDashboard = async (req, res) => {
       return res.status(403).json({ message: "Only floorStatus or superAdmin can access this dashboard" });
     }
 
+    const requestedOfficeLocation = String(req.query?.officeLocation || "").trim();
+    let officeLocation = "";
+    const excludeOfficeLocation = role === "floorstatus" && !requestedOfficeLocation ? "Udyog Vihar" : "";
+
+    if (requestedOfficeLocation) {
+      const availableLocations = await User.distinct("officeLocation", {
+        accountType: { $in: ["employee", "agent", "supervisor"] },
+        isActive: { $ne: false },
+        officeLocation: { $nin: ["", null] },
+      });
+      officeLocation = availableLocations
+        .map((location) => String(location || "").trim())
+        .find((location) => location.toLowerCase() === requestedOfficeLocation.toLowerCase()) || "";
+      if (!officeLocation) {
+        return res.status(400).json({ message: "No employees are assigned to this office location" });
+      }
+    }
+
     const payload = await buildDailyStatusPayload({
       requester: { ...(req.user || {}), roleType: "superAdmin", accountType: "superAdmin" },
       dateKey: req.query?.dateKey,
+      officeLocation,
+      excludeOfficeLocation,
     });
 
     const rows = Array.isArray(payload.rows) ? payload.rows : [];
@@ -2686,6 +3736,7 @@ export const getFloorStatusDashboard = async (req, res) => {
 
     return res.status(200).json({
       ...payload,
+      officeLocation: officeLocation || (excludeOfficeLocation ? "" : ""),
       rows: rosterPresentRows.map(toFloorRow),
       summary: {
         ...(payload.summary || {}),
@@ -3348,3 +4399,5 @@ export const getMonthlyWOUtilization = async (req, res) => {
     });
   }
 };
+
+

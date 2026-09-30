@@ -186,7 +186,7 @@ router.put('/update', authMiddleware, invalidateCacheTag("attendance"), updateOp
 // Roster Excel Upload - Using existing config
 router.post("/upload-excel", 
   authMiddleware, 
-  uploadSingleFile,  // ✅ Reuses existing multer config
+  uploadSingleFile,  
   rosterUploadFromExcel
 );
 
@@ -194,11 +194,7 @@ router.get('/export-template', authMiddleware, exportRosterTemplate);
 
 router.get('/by-department', authMiddleware, getRostersByDepartment);
 
-// ============================================
-// ATTENDANCE ROUTES
-// ============================================
 
-// Arrival Time
 router.put(
   "/update-arrival",
   authMiddleware,

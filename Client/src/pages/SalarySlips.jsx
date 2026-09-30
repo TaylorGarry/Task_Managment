@@ -4273,7 +4273,7 @@ const SalarySlips = () => {
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Code</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Department</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Salary Status</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Details</th>
+                    {/* <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bank Details</th> */}
                     <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
@@ -4319,7 +4319,7 @@ const SalarySlips = () => {
                               {emp.hasSalarySlip || salaryRecord ? '✅ Uploaded' : '⏳ Pending'}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          {/* <td className="px-4 py-3">
                             {(emp.hasSalarySlip || salaryRecord) ? (
                               <div className="text-xs space-y-0.5">
                                 <p className="text-gray-600"><span className="font-medium">Bank:</span> {bankAccountNo}</p>
@@ -4330,7 +4330,7 @@ const SalarySlips = () => {
                             ) : (
                               <span className="text-xs text-gray-400">No data</span>
                             )}
-                          </td>
+                          </td> */}
                           <td className="px-4 py-3 whitespace-nowrap text-sm">
                             {(emp.hasSalarySlip || salaryRecord) && (salaryRecord || emp.salaryRecordId) ? (
                               <div className="flex items-center gap-2 flex-wrap">
@@ -4469,7 +4469,6 @@ const SalarySlips = () => {
         )}
       </div>
 
-      {/* ===== Failed Employees Modal ===== */}
       {showFailedModal && selectedBatch && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col">
@@ -4489,9 +4488,7 @@ const SalarySlips = () => {
               </button>
             </div>
             
-            {/* Modal Body */}
             <div className="flex-1 overflow-y-auto p-4">
-              {/* Summary Stats */}
               <div className="grid grid-cols-4 gap-3 mb-4">
                 <div className="bg-red-50 rounded-lg p-3 text-center">
                   <p className="text-2xl font-bold text-red-600">{failedEmployees.length}</p>
@@ -4517,7 +4514,6 @@ const SalarySlips = () => {
                 </div>
               </div>
               
-              {/* Failed Employees Table */}
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
@@ -4572,7 +4568,6 @@ const SalarySlips = () => {
               </div>
             </div>
             
-            {/* Modal Footer */}
             <div className="flex items-center justify-between p-4 border-t border-slate-200">
               <div className="text-sm text-slate-500">
                 Total: {failedEmployees.length} failed employees

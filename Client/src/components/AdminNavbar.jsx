@@ -433,13 +433,10 @@ const AdminNavbar = ({ showOutlet = true }) => {
 
   return (
     <>
-      {/* Mobile Menu Button */}
       <MobileMenuButton />
 
-      {/* Mobile Overlay */}
       <MobileMenuOverlay />
 
-      {/* Sidebar Navigation */}
       <nav className={`
         fixed top-0 left-0 z-45 h-screen w-72 sm:w-80 bg-white border-r border-[#efefef] flex flex-col justify-between font-sans
         transition-transform duration-300 ease-in-out
@@ -461,24 +458,19 @@ const AdminNavbar = ({ showOutlet = true }) => {
           @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
         `}</style>
 
-        {/* Branding & Main Call-to-Action */}
         <div className="p-4 border-b border-[#f3f4f6]">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg bg-[#0e5c7a] flex items-center justify-center shadow-sm flex-shrink-0">
-                <span className="text-white text-xs font-bold font-serif">FD</span>
-              </div>
-              <div>
-                <h1 className="text-sm font-semibold text-[#0f172a] tracking-tight leading-tight" style={{ fontFamily: "'Playfair Display', serif" }}>FDBS</h1>
-                <p className="text-[10px] font-medium text-[#64748b] uppercase tracking-wider">{getRoleLabel(user) || "Workspace"}</p>
+              <div className="w-18 h-8 rounded-lg bg-[#e4e9f9] flex items-center justify-center shadow-sm flex-shrink-0">
+                <span className="text-black font-extrabold font-sans">FD</span>
+                <span className="text-black font-extrabold font-sans">BS</span>
               </div>
             </div>
-            {/* Close button for mobile */}
             <button
               onClick={() => setShowMobileMenu(false)}
               className="lg:hidden w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-50 transition-colors"
             >
-              <FiX className="w-4 h-4" />
+              <FiX className="w-4 h-4"/>
             </button>
           </div>
 
@@ -497,7 +489,6 @@ const AdminNavbar = ({ showOutlet = true }) => {
           )}
         </div>
 
-        {/* Main Content Areas & Core Items */}
         <div className="flex-1 overflow-y-auto py-3 px-2.5 space-y-4 custom-scrollbar">
           
           <div>

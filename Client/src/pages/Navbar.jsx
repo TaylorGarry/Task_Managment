@@ -753,7 +753,7 @@ const Navbar = () => {
           .filter((r) => r?.isOnBreak)
           .map((r) => ({
             id: String(r.userId || ""),
-            name: r.name || r.username || "Employee",
+            name: r.pseudoname || r.username || "Employee",
             breakType: r.breakType || "manual",
           }))
           .filter((r) => r.id);

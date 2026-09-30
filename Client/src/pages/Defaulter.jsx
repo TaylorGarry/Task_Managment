@@ -399,7 +399,7 @@ const Defaulter = () => {
   return (
     <>
       <AdminNavbar />
-      <div className="relative mt-16 min-h-[70vh] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-4 sm:p-6">
+      <div className="relative mt-2 min-h-[70vh] bg-gradient-to-br from-slate-50 via-blue-50 to-cyan-50 p-4 sm:p-6">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70 backdrop-blur-sm z-20">
             <div className="flex space-x-2">
