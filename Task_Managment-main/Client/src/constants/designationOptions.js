@@ -1,0 +1,22 @@
+export const DESIGNATION_OPTIONS = [
+  "Assistant Manager",
+  "Executive - Accounts",
+  "Executive -CS",
+  "Executive - Finance",
+  "Executive - Marketing",
+  "Executive - SEO",
+  "Executive - Ticketing",
+  "Front-End Developer",
+  "Intern- SEO",
+  "Intern - Software Developer",
+  "Manager",
+  "Software Developer",
+  "System Administrator",
+  "Team Leader - CS",
+  "Team Leader - Sales",
+  "Travel Sales Consultant",
+  "Travel Sales Trainee",
+  "Operations Manager - Sales",
+  "Quality Analyst",
+];
+
