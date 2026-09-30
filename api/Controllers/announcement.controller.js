@@ -178,7 +178,7 @@
 // };
 
 import Announcement from "../Modals/Announcement.modal.js";
-import { getRoleType } from "../utils/roleAccess.js";
+import { getRoleType, normalizeDepartment } from "../utils/roleAccess.js";
 
 const ANNOUNCEMENT_VISIBILITY_HOURS = 72;
 
@@ -211,6 +211,24 @@ const getStatusFilter = (status = "all", now = new Date()) => {
   return {};
 };
 
+const normalizeAudience = (body = {}) => {
+  const audienceType = ["all", "department", "user"].includes(body.audienceType)
+    ? body.audienceType
+    : "all";
+  const targetDepartments = [...new Set((Array.isArray(body.targetDepartments) ? body.targetDepartments : [])
+    .map(normalizeDepartment).filter(Boolean))];
+  const targetUsers = [...new Set((Array.isArray(body.targetUsers) ? body.targetUsers : [])
+    .map(String).filter((id) => /^[a-f\d]{24}$/i.test(id)))];
+
+  if (audienceType === "department" && !targetDepartments.length) {
+    throw new Error("Select at least one department");
+  }
+  if (audienceType === "user" && !targetUsers.length) {
+    throw new Error("Select at least one user");
+  }
+  return { audienceType, targetDepartments, targetUsers };
+};
+
 export const createAnnouncement = async (req, res) => {
   try {
     if (!isSuperAdmin(req.user || {})) {
@@ -224,6 +242,11 @@ export const createAnnouncement = async (req, res) => {
       return res.status(400).json({ message: "Title and description are required" });
     }
 
+    let audience;
+    try { audience = normalizeAudience(req.body); } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
     const expiresAt = new Date(Date.now() + ANNOUNCEMENT_VISIBILITY_HOURS * 60 * 60 * 1000);
 
     const announcement = await Announcement.create({
@@ -232,6 +255,7 @@ export const createAnnouncement = async (req, res) => {
       expiresAt,
       createdBy: req.user._id,
       updatedBy: req.user._id,
+      ...audience,
     });
 
     return res.status(201).json({
@@ -263,6 +287,17 @@ export const updateAnnouncement = async (req, res) => {
         ? String(req.body.description || "").trim()
         : existing.description;
 
+    let audience;
+    try {
+      audience = normalizeAudience({
+        audienceType: req.body?.audienceType ?? existing.audienceType,
+        targetDepartments: req.body?.targetDepartments ?? existing.targetDepartments,
+        targetUsers: req.body?.targetUsers ?? existing.targetUsers,
+      });
+    } catch (error) {
+      return res.status(400).json({ message: error.message });
+    }
+
     if (!title || !description) {
       return res.status(400).json({ message: "Title and description are required" });
     }
@@ -270,6 +305,7 @@ export const updateAnnouncement = async (req, res) => {
     existing.title = title;
     existing.description = description;
     existing.updatedBy = req.user._id;
+    Object.assign(existing, audience);
     await existing.save();
 
     return res.status(200).json({
@@ -319,7 +355,18 @@ export const getAnnouncements = async (req, res) => {
         ? getStatusFilter(req.query?.status, now)
         : getStatusFilter("active", now);
 
-    const announcements = await Announcement.find(statusFilter).sort({ createdAt: -1 }).lean();
+    const visibilityFilter = isAdmin
+      ? {}
+      : {
+          $or: [
+            { audienceType: "all" },
+            { audienceType: { $exists: false } },
+            { audienceType: "department", targetDepartments: normalizeDepartment(req.user?.department) },
+            { audienceType: "user", targetUsers: req.user._id },
+          ],
+        };
+    const announcements = await Announcement.find({ $and: [statusFilter, visibilityFilter] })
+      .sort({ createdAt: -1 }).lean();
     const normalized = announcements.map((announcement) => ({
       ...announcement,
       status: getStatus(announcement),

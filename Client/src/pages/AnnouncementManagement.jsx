@@ -3,11 +3,14 @@ import { useSelector } from "react-redux";
 import toast from "react-hot-toast";
 import { CalendarClock, PencilLine, Plus, Trash2, X } from "lucide-react";
 import api from "../../api.js";
-import { canManageAdminPanels } from "../utils/roleAccess.js";
+import { canManageAdminPanels, DEPARTMENT_OPTIONS } from "../utils/roleAccess.js";
 
 const emptyForm = {
   title: "",
   description: "",
+  audienceType: "all",
+  targetDepartments: [],
+  targetUsers: [],
 };
 
 const formatDateTime = (value) =>
@@ -25,6 +28,7 @@ const AnnouncementManagement = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState(emptyForm);
+  const [employees, setEmployees] = useState([]);
 
   const loadAnnouncements = async () => {
     try {
@@ -43,6 +47,12 @@ const AnnouncementManagement = () => {
     loadAnnouncements();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (!isSuperAdmin) return;
+    api.get("/api/v1/employees").then((res) => setEmployees(Array.isArray(res.data) ? res.data : []))
+      .catch(() => toast.error("Failed to load employees"));
+  }, [isSuperAdmin]);
 
   const activeCount = useMemo(
     () => announcements.filter((item) => item.status === "active").length,
@@ -77,6 +87,9 @@ const AnnouncementManagement = () => {
     setForm({
       title: announcement.title || "",
       description: announcement.description || "",
+      audienceType: announcement.audienceType || "all",
+      targetDepartments: announcement.targetDepartments || [],
+      targetUsers: (announcement.targetUsers || []).map((user) => String(user?._id || user)),
     });
     setShowModal(true);
   };
@@ -99,7 +112,8 @@ const AnnouncementManagement = () => {
 
     try {
       setSaving(true);
-      const payload = { title, description };
+      const payload = { title, description, audienceType: form.audienceType,
+        targetDepartments: form.targetDepartments, targetUsers: form.targetUsers };
       if (editingId) {
         await api.put(`/api/v1/announcements/${editingId}`, payload);
         toast.success("Announcement updated successfully");
@@ -142,7 +156,7 @@ const AnnouncementManagement = () => {
       : "bg-slate-100 text-slate-600 border-slate-200";
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-sky-50 via-white to-blue-50 px-4 py-6 md:px-6 lg:px-8">
+    <div className="relative min-h-screen overflow-y-auto bg-gradient-to-br from-sky-50 via-white to-blue-50 px-4 py-6 md:px-6 lg:px-8">
       <div className="absolute inset-0 bg-[radial-gradient(60%_40%_at_10%_10%,rgba(59,130,246,0.12),rgba(248,250,252,0))]" />
       <div className="absolute inset-0 bg-[radial-gradient(45%_45%_at_90%_0%,rgba(14,165,233,0.10),rgba(248,250,252,0))]" />
 
@@ -318,8 +332,8 @@ const AnnouncementManagement = () => {
       </div>
 
       {showModal && isSuperAdmin && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4 backdrop-blur-md">
-          <div className="w-full max-w-3xl overflow-hidden rounded-[30px] border border-sky-100 bg-white shadow-[0_24px_80px_-40px_rgba(37,99,235,0.45)]">
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/45 p-4 backdrop-blur-md sm:items-center">
+          <div className="flex max-h-[calc(100vh-2rem)] w-full max-w-3xl flex-col overflow-hidden rounded-[30px] border border-sky-100 bg-white shadow-[0_24px_80px_-40px_rgba(37,99,235,0.45)]">
             <div className="bg-gradient-to-r from-sky-100 via-blue-100 to-sky-200 px-6 py-5 text-slate-900">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -341,7 +355,7 @@ const AnnouncementManagement = () => {
               </div>
             </div>
 
-            <div className="p-6">
+            <div className="min-h-0 overflow-y-auto p-6">
               <div className="space-y-4">
                 <div>
                   <label className="mb-2 block text-xs uppercase tracking-[0.35em] text-sky-500">Title</label>
@@ -363,6 +377,53 @@ const AnnouncementManagement = () => {
                     className="w-full rounded-2xl border border-sky-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
                   />
                 </div>
+
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-[0.35em] text-sky-500">Show announcement to</label>
+                  <select
+                    value={form.audienceType}
+                    onChange={(e) => setForm((prev) => ({ ...prev, audienceType: e.target.value, targetDepartments: [], targetUsers: [] }))}
+                    className="w-full rounded-2xl border border-sky-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                  >
+                    <option value="all">All departments and users</option>
+                    <option value="department">Specific department(s)</option>
+                    <option value="user">Specific user(s)</option>
+                  </select>
+                </div>
+
+                {form.audienceType === "department" && (
+                  <div>
+                    <label className="mb-2 block text-xs uppercase tracking-[0.35em] text-sky-500">Departments</label>
+                    <select
+                      multiple
+                      value={form.targetDepartments}
+                      onChange={(e) => setForm((prev) => ({ ...prev, targetDepartments: [...e.target.selectedOptions].map((option) => option.value) }))}
+                      className="min-h-32 w-full rounded-2xl border border-sky-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                    >
+                      {DEPARTMENT_OPTIONS.map((department) => <option key={department} value={department}>{department}</option>)}
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">Hold Ctrl/Cmd to select multiple departments.</p>
+                  </div>
+                )}
+
+                {form.audienceType === "user" && (
+                  <div>
+                    <label className="mb-2 block text-xs uppercase tracking-[0.35em] text-sky-500">Users</label>
+                    <select
+                      multiple
+                      value={form.targetUsers}
+                      onChange={(e) => setForm((prev) => ({ ...prev, targetUsers: [...e.target.selectedOptions].map((option) => option.value) }))}
+                      className="min-h-32 w-full rounded-2xl border border-sky-100 bg-slate-50 px-4 py-3 text-sm text-slate-700 outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                    >
+                      {employees.map((employee) => (
+                        <option key={employee._id} value={employee._id}>
+                          {employee.pseudoName || employee.username || "Unnamed user"} ({employee.department || "No department"})
+                        </option>
+                      ))}
+                    </select>
+                    <p className="mt-1 text-xs text-slate-500">Hold Ctrl/Cmd to select multiple users.</p>
+                  </div>
+                )}
               </div>
 
               <div className="mt-6 flex flex-wrap items-center justify-end gap-3 border-t border-sky-100 pt-5">
