@@ -1,0 +1,3 @@
+Sample HR Document
+
+This is a static placeholder HR-uploaded document file for testing.
