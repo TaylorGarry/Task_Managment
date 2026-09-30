@@ -742,6 +742,13 @@ const EMPLOYEE_SEARCH_THROTTLE_MS = 1200;
 const normalizeEmployeeSearch = (value = "") =>
   String(value || "").trim().toLowerCase();
 
+const clearAiAssistantStorage = () => {
+  localStorage.removeItem("aiAssistant:conversationId");
+  localStorage.removeItem("aiAssistant:messages");
+  sessionStorage.removeItem("aiAssistant:conversationId");
+  sessionStorage.removeItem("aiAssistant:messages");
+};
+
 const getToken = () => {
   const user = JSON.parse(localStorage.getItem("user"));
   return user?.token;
@@ -762,6 +769,7 @@ export const loginUser = createAsyncThunk(
     try {
       const res = await axios.post(`${API_URL}/login`, userData);
       const normalizedUser = normalizeUserRoleData(res.data.user || {});
+      clearAiAssistantStorage();
 
       localStorage.setItem(
         "user",
@@ -819,6 +827,7 @@ export const createCoreTeamUser = createAsyncThunk(
 );
 
 export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
+  clearAiAssistantStorage();
   localStorage.removeItem("user");
   await axios.post(`${API_URL}/logout`);
 });

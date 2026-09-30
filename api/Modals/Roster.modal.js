@@ -233,14 +233,14 @@ const dailyStatusSchema = new mongoose.Schema({
   // Roster Status (from weekly roster)
   status: {
     type: String,
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", ""],
+    enum: ["P", "A", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", ""],
     default: "P"
   },
 
   // Explicit marker for Accounts override uploads.
   overrideStatus: {
     type: String,
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", ""],
+    enum: ["P", "A", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", ""],
     default: ""
   },
   overrideStatusUpdatedBy: {
@@ -289,7 +289,7 @@ const dailyStatusSchema = new mongoose.Schema({
   // Transport Status (updated by transport team)
   transportStatus: { 
     type: String, 
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", "Self", "Did Not Board", "Cab Moved", ""],
+    enum: ["P", "A", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", "Self", "Did Not Board", "Cab Moved", ""],
     default: ""
   },
   transportStatusUpdatedBy: {
@@ -305,7 +305,7 @@ const dailyStatusSchema = new mongoose.Schema({
   // Department Status (updated by HR/Team Leaders)
   departmentStatus: { 
     type: String, 
-    enum: ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", "Self", "Did Not Board", "Cab Moved", ""],
+    enum: ["P", "A", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", "Self", "Did Not Board", "Cab Moved", ""],
     default: ""
   },
   departmentStatusUpdatedBy: {

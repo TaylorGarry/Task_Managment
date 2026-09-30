@@ -24417,7 +24417,7 @@ export const updateAttendance = async (req, res) => {
         message: "At least one field (transportStatus, departmentStatus, or arrivalTime) is required"
       });
     }
-    const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO", "EXIT", "Self", "Did Not Board", "Cab Moved"];
+    const validStatuses = ["P", "A", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", "Self", "Did Not Board", "Cab Moved"];
 
     if (transportStatus && !validStatuses.includes(transportStatus)) {
       return res.status(400).json({
@@ -27369,7 +27369,7 @@ export const updateAttendanceBulk = async (req, res) => {
       });
     }
 
-    const validStatuses = ["P", "WO", "L", "NCNS", "UL", "LWP", "BL", "H", "LWD", "HD", "OT", "FWO", "EXIT", "Self", "Did Not Board", "Cab Moved"];
+    const validStatuses = ["P", "A", "WO", "L", "NCNS", "UL", "LWP", "BL", "FL", "H", "LWD", "HD", "OT", "FWO", "Exit", "EXIT", "Self", "Did Not Board", "Cab Moved"];
 
     if (transportStatus && !validStatuses.includes(transportStatus)) {
       return res.status(400).json({
