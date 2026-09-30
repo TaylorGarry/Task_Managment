@@ -15,6 +15,21 @@ const announcementSchema = new mongoose.Schema(
       trim: true,
       default: "",
     },
+    audienceType: {
+      type: String,
+      enum: ["all", "department", "user"],
+      default: "all",
+      index: true,
+    },
+    targetDepartments: {
+      type: [String],
+      default: [],
+      index: true,
+    },
+    targetUsers: [{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    }],
     expiresAt: {
       type: Date,
       required: true,
