@@ -2917,6 +2917,33 @@ const computeSessionLateByMs = (session, userLike = {}) => {
   return actualStartMs > expectedStartMs ? actualStartMs - expectedStartMs : 0;
 };
 
+const getScheduledShiftEndMs = (row = {}) => {
+  const startHour = normalizeShiftStartHour(
+    row.shiftStartHour,
+    row.shiftEndHour,
+    getIstHourFromDateLike(row.loginTime)
+  );
+  const endHour = Number(row.shiftEndHour);
+  const dateStartMs = parseDateKeyStartMs(row.dateKey || "");
+
+  if (!Number.isFinite(startHour) || !Number.isFinite(endHour) || !Number.isFinite(dateStartMs)) {
+    return null;
+  }
+
+  // Operational dates begin at noon. A morning shift belongs to the
+  // calendar day after the operational date key; evening shifts start on
+  // the operational date itself.
+  const shiftStartDateMs = dateStartMs + (startHour < OPERATIONAL_DAY_START_HOUR_IST ? 24 : 0) * 60 * 60 * 1000;
+  const normalizedEndHour = ((endHour % 24) + 24) % 24;
+  const endDateMs = shiftStartDateMs + (normalizedEndHour <= startHour ? 24 : 0) * 60 * 60 * 1000;
+  return endDateMs + normalizedEndHour * 60 * 60 * 1000;
+};
+
+const isShiftStillRemaining = (row = {}, now = getNow()) => {
+  const shiftEndMs = getScheduledShiftEndMs(row);
+  return Number.isFinite(shiftEndMs) && new Date(now).getTime() < shiftEndMs;
+};
+
 const getSessionWorkedMs = (session, now = getNow()) => {
   if (!session?.shiftStartAt) return 0;
   const startMs = new Date(session.shiftStartAt).getTime();
@@ -2970,11 +2997,11 @@ export const startShift = async (req, res) => {
     const dateKey = resolveOperationalDateKeyForUser(userProfile || {}, now);
     const session = await ensureSession(userId, userProfile || {}, dateKey, now);
 
-    if (session.status === "ended" && session.shiftStartAt && session.shiftEndAt) {
-      return res.status(409).json({ message: "Shift already ended for this session", session, attendanceScore: scoreSession(session) });
-    }
-
     if (!session.shiftStartAt) session.shiftStartAt = now;
+    // Re-login within the same operational day resumes the existing
+    // PunchSession instead of leaving it permanently ended. This preserves
+    // the session/timer history while clearing the previous logout state.
+    session.shiftEndAt = null;
     session.status = "active";
     session.activityStatus = "active";
     session.lastActivityAt = now;
@@ -3545,6 +3572,7 @@ const buildDailyStatusPayload = async ({ requester = {}, dateKey: requestedDateK
         : 0;
 
       return {
+        dateKey: session?.dateKey || dateKey,
         userId: emp._id,
         username: emp.username || "",
         realName: emp.realName || "",
@@ -3699,8 +3727,6 @@ export const getFloorStatusDashboard = async (req, res) => {
     };
     
     const isRosterPresent = (row = {}) => String(row.floorRosterStatus || "").trim().toUpperCase() === "P";
-    const isDepartmentPresent = (row = {}) => String(row.floorDepartmentStatus || "").trim().toUpperCase() === "P";
-    const isDepartmentEmpty = (row = {}) => String(row.floorDepartmentStatus || "").trim() === "";
     
     const rosterPresentRows = rows.filter(isRosterPresent);
     
@@ -3713,21 +3739,24 @@ export const getFloorStatusDashboard = async (req, res) => {
     // ✅ NEW: Get on break employees WITHOUT roster
     const onBreakWithoutRoster = allOnBreakRows.filter(row => !row.hasRoster);
     
-    // Not logged in rows (only those with roster present)
-    const notLoggedInRows = rosterPresentRows.filter((row) => {
+    // Not logged in rows require roster status P. This deliberately ignores
+    // department attendance status: roster P is the source of truth here.
+    const notLoggedInRows = rows.filter((row) => {
+      if (!isRosterPresent(row)) return false;
+
       // Skip if on break
       if (row.isOnBreak) return false;
-      
-      // Condition 1: Roster P + dept status empty + not logged in
-      const condition1 = isDepartmentEmpty(row) && !row.loginTime;
-      
-      // Condition 2: Roster P + dept P + logged in but logged out
-      const condition2 = isDepartmentPresent(row) && row.loginTime && (!row.isActive || row.logoutTime);
-      
-      // Condition 3: Roster P + dept P + never logged in
-      const condition3 = isDepartmentPresent(row) && !row.loginTime;
-      
-      return condition1 || condition2 || condition3;
+
+      // A user who has never logged in is shown for the roster-P shift.
+      const neverLoggedIn = !row.loginTime;
+
+      // A user who logged in and manually logged out is shown only while
+      // their assigned shift is still ongoing.
+      const loggedOutDuringShift = row.loginTime && row.logoutTime
+        && row.logoutReason !== "auto_9h"
+        && isShiftStillRemaining(row);
+
+      return neverLoggedIn || loggedOutDuringShift;
     }).map(toFloorRow);
 
     // Separate logged out from never logged in

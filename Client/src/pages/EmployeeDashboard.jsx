@@ -1265,8 +1265,19 @@ useEffect(() => {
   const syncPunchSession = async () => {
     try {
       const res = await axios.get(`${API_URL}/punchx/session/today`, authHeaders());
-      setPunchSession(res.data?.session || null);
-      setAttendanceScore(res.data?.attendanceScore || null);
+      let nextSession = res.data?.session || null;
+      let nextAttendanceScore = res.data?.attendanceScore || null;
+
+      // Logging in again after the previous logout should resume the current
+      // operational-day PunchX session so the timer and floor status recover.
+      if (nextSession?.status === "ended" || nextSession?.shiftEndAt) {
+        const restartRes = await axios.post(`${API_URL}/punchx/shift/start`, {}, authHeaders());
+        nextSession = restartRes.data?.session || nextSession;
+        nextAttendanceScore = restartRes.data?.attendanceScore || nextAttendanceScore;
+      }
+
+      setPunchSession(nextSession);
+      setAttendanceScore(nextAttendanceScore);
     } catch (err) {
       console.error("PunchX session sync failed:", err?.response?.data || err.message);
     }

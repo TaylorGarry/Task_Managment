@@ -289,6 +289,14 @@ const formatDuration = (ms = 0) => {
   return hours > 0 ? `${pad(hours)}:${pad(minutes)}` : `${pad(minutes)}:${pad(seconds)}`;
 };
 
+const formatBreakDuration = (ms = 0) => {
+  const totalSeconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h : ${minutes}m : ${seconds}S`;
+};
+
 const formatClock = (date) =>
   date.toLocaleTimeString("en-IN", {
     timeZone: "Asia/Kolkata",
@@ -492,9 +500,9 @@ const FloorStatusDashboard = ({ officeLocation = "", floorLabel = "" }) => {
 	                <span>{page * pageSize + index + 1}</span>
 	                <span>{getDisplayName(row)}</span>
 	                <span>{getBreakTypeLabel(row.breakType)}</span>
-	                <span>{formatDuration(now.getTime() - new Date(row.breakStartAt || now).getTime())}</span>
-	                <span>{formatDuration(row.totalWorkedMs || 0)}</span>
-                <span>{formatDuration(row.totalBreakMs || 0)}</span>
+                <span>{formatBreakDuration(now.getTime() - new Date(row.breakStartAt || now).getTime())}</span>
+                <span>{formatBreakDuration(row.totalWorkedMs || 0)}</span>
+                <span>{formatBreakDuration(row.totalBreakMs || 0)}</span>
               </div>
             ))}
             {!activeBreakRows.length ? <div className="floor-status-empty">No employees on break</div> : null}

@@ -826,7 +826,22 @@ export const createCoreTeamUser = createAsyncThunk(
   }
 );
 
-export const logoutUser = createAsyncThunk("auth/logoutUser", async () => {
+export const logoutUser = createAsyncThunk("auth/logoutUser", async (_, thunkAPI) => {
+  const currentUser = thunkAPI.getState().auth.user;
+  const accountType = String(currentUser?.accountType || currentUser?.roleType || "").toLowerCase();
+  const shouldEndPunchShift = ["employee", "agent", "supervisor"].includes(accountType);
+
+  if (shouldEndPunchShift && currentUser?.token) {
+    try {
+      await axios.post(`${API_URL}/punchx/shift/end`, {}, {
+        headers: { Authorization: `Bearer ${currentUser.token}` },
+      });
+    } catch (error) {
+      // Authentication logout should still complete if the shift endpoint is unavailable.
+      console.warn("PunchX shift end during logout failed:", error?.response?.data || error?.message);
+    }
+  }
+
   clearAiAssistantStorage();
   localStorage.removeItem("user");
   await axios.post(`${API_URL}/logout`);
