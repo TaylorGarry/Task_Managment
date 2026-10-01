@@ -1894,7 +1894,7 @@ useEffect(() => {
             100% { transform: translateX(-50%); }
           }
           .announcement-marquee {
-            animation: announcement-marquee 200s linear infinite;
+            animation: announcement-marquee 100s linear infinite;
           }
         `}</style>
 
