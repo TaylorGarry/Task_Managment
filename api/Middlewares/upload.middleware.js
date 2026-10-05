@@ -92,7 +92,10 @@ const upload = multer({
 });
 
 export const uploadSingleFile = (req, res, next) => {
-  const uploadMiddleware = upload.single('excelFile');
+  const uploadMiddleware = upload.fields([
+    { name: 'file', maxCount: 1 },
+    { name: 'excelFile', maxCount: 1 },
+  ]);
   
   uploadMiddleware(req, res, (err) => {
     if (err) {
@@ -118,6 +121,9 @@ export const uploadSingleFile = (req, res, next) => {
       });
     }
     
+    // Keep the existing req.file contract for all consumers.
+    req.file = req.files?.excelFile?.[0] || req.files?.file?.[0];
+
     // Log file info for debugging
     if (req.file) {
       console.log(`📁 File received: ${req.file.originalname}, Size: ${req.file.size} bytes, Type: ${req.file.mimetype}`);
