@@ -198,7 +198,6 @@ const Login = () => {
       <div className="mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center justify-center">
         <div className="grid w-full overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-[0_28px_70px_-35px_rgba(15,23,42,0.35)] md:grid-cols-2">
           
-          {/* Left Panel - Branding Side with Blue Gradient Background */}
           <div className="relative bg-gradient-to-br from-blue-700 via-blue-600 to-cyan-500 p-8 text-white md:p-10">
             {/* Decorative blur elements */}
             <div className="absolute -right-16 -top-14 h-44 w-44 rounded-full bg-white/20 blur-2xl" />
