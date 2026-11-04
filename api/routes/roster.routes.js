@@ -99,6 +99,10 @@
 
 import express from "express";
 import { authMiddleware } from "../Middlewares/auth.middleware.js";
+import { 
+  previewAttendanceExcelUpload, 
+  confirmAttendanceExcelUpload 
+} from "../Controllers/attendanceExcel.controller.js";
 import {
   addRosterWeek,
   getRosterForCRMUsers,
@@ -315,6 +319,24 @@ router.post(
   invalidateCacheTag("attendance"),
   uploadAttendanceOverrideExcel,
   uploadAttendanceOverrideFromExcel
+);
+
+// ============================================
+// HR ATTENDANCE EXCEL UPLOAD
+// ============================================
+router.post(
+  "/attendance-excel/preview",
+  authMiddleware,
+  uploadSingleFile,
+  previewAttendanceExcelUpload
+);
+
+router.post(
+  "/attendance-excel/confirm",
+  authMiddleware,
+  invalidateCacheTag("attendance"),
+  uploadSingleFile,
+  confirmAttendanceExcelUpload
 );
 
 export default router;
