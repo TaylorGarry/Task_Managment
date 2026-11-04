@@ -68,17 +68,36 @@ const KraManagement = () => {
     return DEPARTMENT_OPTIONS;
   }, [isSuperAdmin, user?.department]);
 
+  // const filteredEmployees = useMemo(() => {
+  //   if (!isSuperAdmin) return [];
+  //   const selectedDepartment = normalizeDepartment(form.department);
+  //   return (Array.isArray(employees) ? employees : [])
+  //     .filter((employee) => employee?.accountType !== "superAdmin")
+  //     .filter((employee) => {
+  //       if (!selectedDepartment) return true;
+  //       return normalizeDepartment(employee?.department) === selectedDepartment;
+  //     })
+  //     .sort((a, b) => String(a.username || "").localeCompare(String(b.username || "")));
+  // }, [employees, form.department, isSuperAdmin]);
+
   const filteredEmployees = useMemo(() => {
-    if (!isSuperAdmin) return [];
-    const selectedDepartment = normalizeDepartment(form.department);
-    return (Array.isArray(employees) ? employees : [])
-      .filter((employee) => employee?.accountType !== "superAdmin")
-      .filter((employee) => {
-        if (!selectedDepartment) return true;
-        return normalizeDepartment(employee?.department) === selectedDepartment;
-      })
-      .sort((a, b) => String(a.username || "").localeCompare(String(b.username || "")));
-  }, [employees, form.department, isSuperAdmin]);
+  if (!isSuperAdmin) return [];
+  const selectedDepartment = normalizeDepartment(form.department);
+  return (Array.isArray(employees) ? employees : [])
+    .filter((employee) => {
+      const empDept = normalizeDepartment(employee?.department);
+      const empRole = getRoleType(employee || {});
+      const isSuperAdminEmployee = empRole === "superAdmin";
+
+      // Super admins are always selectable, regardless of department
+      if (isSuperAdminEmployee) return true;
+
+      if (!selectedDepartment) return true;
+      return empDept === selectedDepartment;
+    })
+    .sort((a, b) => String(a.username || "").localeCompare(String(b.username || "")));
+}, [employees, form.department, isSuperAdmin]);
+
 
   const filteredKras = useMemo(() => {
     const text = query.trim().toLowerCase();
@@ -174,16 +193,29 @@ const KraManagement = () => {
   const handleFormChange = (field, value) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
+      // if (field === "department") {
+      //   const nextDepartment = normalizeDepartment(value);
+      //   next.assignedTo = prev.assignedTo.filter((id) => {
+      //     const employee = employees.find((item) => String(item._id) === String(id));
+      //     return normalizeDepartment(employee?.department) === nextDepartment;
+      //   });
+      //   if (!nextDepartment) {
+      //     next.assignmentScope = "department";
+      //   }
+      // }
       if (field === "department") {
-        const nextDepartment = normalizeDepartment(value);
-        next.assignedTo = prev.assignedTo.filter((id) => {
-          const employee = employees.find((item) => String(item._id) === String(id));
-          return normalizeDepartment(employee?.department) === nextDepartment;
-        });
-        if (!nextDepartment) {
-          next.assignmentScope = "department";
-        }
-      }
+  const nextDepartment = normalizeDepartment(value);
+  next.assignedTo = prev.assignedTo.filter((id) => {
+    const employee = employees.find((item) => String(item._id) === String(id));
+    if (!employee) return false;
+    // keep super admins no matter the department
+    if (getRoleType(employee) === "superAdmin") return true;
+    return normalizeDepartment(employee?.department) === nextDepartment;
+  });
+  if (!nextDepartment) {
+    next.assignmentScope = "department";
+  }
+}
       return next;
     });
   };
@@ -589,9 +621,14 @@ const KraManagement = () => {
                           >
                             <div>
                               <p className="text-sm font-semibold text-slate-900">{employee.username}</p>
-                              <p className="text-xs text-slate-500">
+                              {/* <p className="text-xs text-slate-500">
                                 {employee.department || "No department"}
-                              </p>
+                              </p> */}
+                              <p className="text-xs text-slate-500">
+  {getRoleType(employee) === "superAdmin"
+    ? "Super Admin"
+    : employee.department || "No department"}
+</p>
                             </div>
                             <input
                               type="checkbox"

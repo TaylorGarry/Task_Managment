@@ -1,5 +1,6 @@
 export const DEPARTMENT_OPTIONS = [
   "Accounts",
+  "SuperAdmin",
   "Customer Service",
   "Developer",
   "IT",
@@ -21,6 +22,7 @@ const DEPARTMENT_ALIASES = {
   "customer service": "Customer Service",
   seo: "SEO",
   hr: "HR",
+  SuperAdmin: "SuperAdmin",
 };
 
 const normalizeText = (value = "") => String(value || "").trim();

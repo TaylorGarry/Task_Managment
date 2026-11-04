@@ -84,12 +84,17 @@ export const createKra = async (req, res) => {
         _id: { $in: assignedToIds },
       }).select("_id department isActive accountType username");
 
-      const validUsers = assignedUsers.filter((user) => isSameDepartment(user.department, department));
-      if (validUsers.length !== assignedUsers.length) {
-        return res.status(400).json({
-          message: "All assigned users must belong to the selected department",
-        });
-      }
+      // const validUsers = assignedUsers.filter((user) => isSameDepartment(user.department, department));
+      // if (validUsers.length !== assignedUsers.length) {
+      //   return res.status(400).json({
+      //     message: "All assigned users must belong to the selected department",
+      //   });
+      // }
+
+      const validUsers = assignedUsers.filter((user) => {
+        if (getRoleType(user) === "superAdmin") return true; // super admins can be assigned to any KRA
+        return isSameDepartment(user.department, department);
+      });
 
       assignedUsers = validUsers;
       if (!assignedUsers.length) {
