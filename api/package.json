@@ -28,6 +28,7 @@
     "node-cron": "^4.2.1",
     "nodemailer": "^6.10.1",
     "pdf-lib": "^1.17.1",
+    "puppeteer": "^25.17.0",
     "socket.io": "^4.8.1",
     "web-push": "^3.6.7",
     "xlsx": "^0.18.5",
@@ -35,5 +36,8 @@
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
+  },
+  "allowScripts": {
+    "puppeteer@25.17.0": true
   }
 }
