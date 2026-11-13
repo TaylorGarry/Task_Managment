@@ -41,6 +41,8 @@ import TicketManagement from "./pages/TicketManagement.jsx";
 import SalarySlips from "./pages/SalarySlips.jsx";
 import FloorStatusDashboard from "./pages/FloorStatusDashboard.jsx";
 import { subscribeUserToPush } from "./utils/pushNotifications.js";
+import EmployeeOnboardingEsign from "./pages/EmployeeOnboardingEsign.jsx";
+import PublicEmployeeDetails from "./pages/PublicEmployeeDetails.jsx";
 import {
   canManageAdminPanels,
   getRoleType,
@@ -438,6 +440,32 @@ function App() {
     );
   }
 
+    // ─── PUBLIC ONBOARDING ROUTES (no login, no auth, no layout) ───
+  if (
+    location.pathname.startsWith("/onboarding/upload") ||
+    location.pathname.startsWith("/onboarding/esign") ||
+    location.pathname.startsWith("/employee-onboarding")
+  ) {
+    return (
+      <Routes>
+        <Route path="/onboarding/upload" element={<EmployeeOnboardingUpload />} />
+        <Route path="/onboarding/esign" element={<EmployeeOnboardingEsign />} />
+        <Route path="/employee-onboarding" element={<EmployeeOnboardingUpload />} />
+        <Route path="/employee-onboarding-esign" element={<EmployeeOnboardingEsign />} />
+        <Route path="*" element={<Navigate to="/onboarding/upload" replace />} />
+      </Routes>
+    );
+  }
+
+    // ─── PUBLIC EMPLOYEE DETAILS FORM (no login, no auth, no layout) ───
+  if (location.pathname.startsWith("/employee-details")) {
+    return (
+      <Routes>
+        <Route path="/employee-details" element={<PublicEmployeeDetails />} />
+        <Route path="*" element={<Navigate to="/employee-details" replace />} />
+      </Routes>
+    );
+  }
   if (isAdminLeavePath) {
     return (
       <div className="theme-crm">
@@ -520,7 +548,7 @@ function App() {
         />
 
         <Route path="/login" element={<Login />} />
-        <Route path="/employee-onboarding" element={<EmployeeOnboardingUpload />} />
+        {/* <Route path="/employee-onboarding" element={<EmployeeOnboardingUpload />} /> */}
         <Route
           path="/floor-status"
           element={

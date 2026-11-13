@@ -31,6 +31,8 @@ const policySignaturePartySchema = new mongoose.Schema(
 const policySignatureSchema = new mongoose.Schema(
   {
     documentUrl: { type: String, trim: true, required: true },
+    documentKey: { type: String, trim: true, default: "" },
+    documentTitle: { type: String, trim: true, default: "" },
     employee: { type: policySignaturePartySchema, default: () => ({}) },
     hr: { type: policySignaturePartySchema, default: () => ({}) },
     signedPdfUrl: { type: String, trim: true, default: "" },
@@ -157,7 +159,7 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
-     sessionHistoryStartAt: {
+    sessionHistoryStartAt: {
       type: Date,
       default: null,
     },
@@ -178,15 +180,21 @@ const userSchema = new mongoose.Schema(
       default: "",
     },
 
+     pickupLocation: {
+      type: String,
+      trim: true,
+      default: "",
+    },
+    
     bloodGroup: {
       type: String,
       trim: true,
       default: "",
     },
     contactNumber: {
-    type: String,
-    trim: true,
-    default: "",
+      type: String,
+      trim: true,
+      default: "",
     },
     emergencyContactNumber: {
       type: String,
@@ -315,6 +323,8 @@ const userSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    offerLetterPath: { type: String, trim: true, default: "" },
+    onboardingEmailSentAt: { type: Date, default: null },
     hrGlobalDocumentOverrideBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

@@ -28,6 +28,8 @@ import { authMiddleware } from "./Middlewares/auth.middleware.js";
 import { isFloorStatus, isPrivilegedUser, normalizeDepartment } from "./utils/roleAccess.js";
 import ticketRoutes from "./routes/ticket.routes.js";
 import salarySlipRoutes from "./routes/salarySlip.routes.js";
+import employeeOnboardingPublic from "./routes/employeeOnboarding.public.routes.js";
+import publicEmployeeDetailsRoutes from "./routes/publicEmployeeDetails.routes.js";
 dotenv.config();
 const app = express();
 
@@ -51,7 +53,7 @@ const io = new Server(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
   connectionStateRecovery: {
-    maxDisconnectionDuration: 2 * 60 * 1000,  
+    maxDisconnectionDuration: 2 * 60 * 1000,
     skipMiddlewares: true,
   }
 });
@@ -113,34 +115,96 @@ app.use((req, res, next) => {
 });
 
 app.use((req, res, next) => {
-  req.io = io;  
+  req.io = io;
   next();
 });
+
 
 const publicRoutes = [
   "/api/v1/login",
   "/api/v1/signup",
-  "/api/v1/logout"
+  "/api/v1/logout",
+  // ── Public onboarding routes (token-gated internally, no login) ──
+  "/api/v1/employee/onboarding/v2/verify",
+  "/api/v1/employee/onboarding/v2/upload-asset",
+  "/api/v1/employee/onboarding/v2/submit",
+  "/api/v1/employee/onboarding/v2/esign/verify",
+  "/api/v1/employee/onboarding/v2/esign/sign",
+
+  // ── Old onboarding flow (18 docs) — backward compat for existing email links ──
+  "/api/v1/employee/onboarding/verify",
+  "/api/v1/employee/onboarding/upload-asset",
+  "/api/v1/employee/onboarding/submit",
+
+  // ── NEW: Public employee details form ──
+  "/api/public/employee-details/verify",
+  "/api/public/employee-details/submit",
+
+  // ── Public static files (policy PDFs, uploaded docs, offer letters) ──
+  "/policies",
+  "/storage/onboarding",
+  "/storage/offerLetters",
 ];
+
+
+// const publicRoutes = [
+//   "/api/v1/login",
+//   "/api/v1/signup",
+//   "/api/v1/logout",
+//   // ── Public onboarding routes (token-gated internally, no login) ──
+//   "/api/v1/employee/onboarding/v2/verify",
+//   "/api/v1/employee/onboarding/v2/upload-asset",
+//   "/api/v1/employee/onboarding/v2/submit",
+//   "/api/v1/employee/onboarding/v2/esign/verify",
+//   "/api/v1/employee/onboarding/v2/submit",
+//   "/api/v1/employee/onboarding/v2/esign/verify",
+//   "/api/v1/employee/onboarding/v2/esign/sign",
+
+//   // ── Old onboarding flow (18 docs) — backward compat for existing email links ──
+//   "/api/v1/employee/onboarding/verify",
+//   "/api/v1/employee/onboarding/upload-asset",
+//   "/api/v1/employee/onboarding/submit",
+
+//   // ── Public static files (policy PDFs, uploaded docs, offer letters) ──
+//   "/policies",
+//   "/storage/onboarding",
+//   "/storage/offerLetters",
+// ];
 const ipFreeRoutes = [
   "/api/v1/push/subscribe"
 ];
 
 const ENFORCE_IP_RESTRICTION = true;
 
+// app.use((req, res, next) => {
+//   if (publicRoutes.includes(req.path)) {
+//     return next();
+//   }
+//   return authMiddleware(req, res, next);
+// });
+
+const isPublicRoute = (reqPath = "") =>
+  publicRoutes.some((p) =>
+    p.endsWith("/") ? reqPath.startsWith(p) : reqPath === p || reqPath.startsWith(p + "/")
+  );
+
 app.use((req, res, next) => {
-  if (publicRoutes.includes(req.path)) {
-    return next();
+  if (req.path.includes("employee-details")) {
+    console.log("[AUTH-GATE DEBUG] path=", JSON.stringify(req.path));
+    console.log("[AUTH-GATE DEBUG] isPublicRoute=", isPublicRoute(req.path));
+    console.log("[AUTH-GATE DEBUG] publicRoutes=", publicRoutes);
   }
+  if (isPublicRoute(req.path)) return next();
   return authMiddleware(req, res, next);
 });
 
 app.use((req, res, next) => {
   if (!ENFORCE_IP_RESTRICTION) return next();
 
-  if (publicRoutes.includes(req.path)) return next(); 
-  if (ipFreeRoutes.includes(req.path)) return next(); 
+  if (isPublicRoute(req.path)) return next();
+  // if (ipFreeRoutes.includes(req.path)) return next();
 
+  if (ipFreeRoutes.some((p) => req.path === p || req.path.startsWith(p + "/"))) return next();
   let clientIp =
     req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
     req.socket?.remoteAddress ||
@@ -170,31 +234,31 @@ app.use((req, res, next) => {
 
 io.use(async (socket, next) => {
   try {
-    console.log("🔐 Socket connection attempt:", {
+    console.log("Socket connection attempt:", {
       auth: socket.handshake.auth,
       query: socket.handshake.query
     });
 
-    let userId = socket.handshake.auth.userId || 
-                 socket.handshake.query.userId;
-    
+    let userId = socket.handshake.auth.userId ||
+      socket.handshake.query.userId;
+
     if (userId === "undefined" || userId === "null") {
-      console.log("⚠️ Invalid userId format, setting as anonymous");
+      console.log("Invalid userId format, setting as anonymous");
       userId = null;
     }
-    
+
     if (userId) {
       socket.userId = userId;
-      console.log("✅ Socket authenticated for user:", userId);
+      console.log("Socket authenticated for user:", userId);
       return next();
     }
-    
-    console.log("⚠️ Socket connection without valid userId, allowing as anonymous");
+
+    console.log("Socket connection without valid userId, allowing as anonymous");
     socket.userId = 'anonymous_' + Date.now();
     next();
-    
+
   } catch (error) {
-    console.error("❌ Socket middleware error:", error);
+    console.error("Socket middleware error:", error);
     socket.userId = 'error_' + Date.now();
     next();
   }
@@ -203,7 +267,7 @@ io.use(async (socket, next) => {
 const connectedUsers = new Map();
 
 io.on("connection", (socket) => {
-  console.log("👤 User connected:", socket.userId, "Socket ID:", socket.id);
+  console.log("User connected:", socket.userId, "Socket ID:", socket.id);
 
   connectedUsers.set(socket.userId, socket.id);
   socket.join(socket.userId);
@@ -212,12 +276,12 @@ io.on("connection", (socket) => {
 
   socket.on("join_chat", (chatId) => {
     socket.join(chatId);
-    console.log(`📥 User ${socket.userId} joined chat ${chatId}`);
+    console.log(`User ${socket.userId} joined chat ${chatId}`);
   });
 
   socket.on("leave_chat", (chatId) => {
     socket.leave(chatId);
-    console.log(`📤 User ${socket.userId} left chat ${chatId}`);
+    console.log(`User ${socket.userId} left chat ${chatId}`);
   });
 
   socket.on("typing", ({ chatId }) => {
@@ -235,8 +299,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("message_edited", (data) => {
-    console.log(`✏️ User ${socket.userId} editing message ${data.messageId} in chat ${data.chatId}`);
-    
+    console.log(`User ${socket.userId} editing message ${data.messageId} in chat ${data.chatId}`);
+
     socket.to(data.chatId).emit("message_edited", {
       ...data,
       editedBy: socket.userId,
@@ -245,8 +309,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("message_deleted", (data) => {
-    console.log(`🗑️ User ${socket.userId} deleting message ${data.messageId} in chat ${data.chatId}`);
-    
+    console.log(`User ${socket.userId} deleting message ${data.messageId} in chat ${data.chatId}`);
+
     socket.to(data.chatId).emit("message_deleted", {
       ...data,
       deletedBy: socket.userId,
@@ -255,8 +319,8 @@ io.on("connection", (socket) => {
   });
 
   socket.on("message_reaction", (data) => {
-    console.log(`❤️ User ${socket.userId} reacted to message ${data.messageId} in chat ${data.chatId}`);
-    
+    console.log(`User ${socket.userId} reacted to message ${data.messageId} in chat ${data.chatId}`);
+
     socket.to(data.chatId).emit("message_reaction", {
       ...data,
       reactedBy: socket.userId,
@@ -296,8 +360,17 @@ io.on("connection", (socket) => {
   });
 });
 
+// Public onboarding routes — no auth, no IP restriction (already whitelisted above)
+app.use("/api/v1", employeeOnboardingPublic);
+
+// Static file serving
+app.use("/policies", express.static(path.resolve("assets/policies")));
+app.use("/storage/onboarding", express.static(path.resolve("storage/onboarding")));
+app.use("/storage/offerLetters", express.static(path.resolve("storage", "offerLetters")));
+
 // ============= ROUTES REGISTRATION =============
 app.use("/api/v1", authRoutes);
+app.use("/api/public/employee-details", publicEmployeeDetailsRoutes);
 app.use("/api/v1/tasks", taskRoutes);
 app.use("/api/v1/task-status", taskStatusRoutes);
 app.use("/api/remarks", remarkRoutes);
@@ -305,7 +378,7 @@ app.use("/api/v1/roster", rosterRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/v1/push", pushRoutes);
-app.use("/api/v1/delegations", delegationRoutes);   
+app.use("/api/v1/delegations", delegationRoutes);
 app.use("/api/v1/leaves", leaveRoutes);
 app.use("/api/v1/notifications", notificationRoutes);
 app.use("/api/v1/punchx", punchxRoutes);
@@ -352,7 +425,7 @@ app.get("/check-ip", (req, res) => {
 app.get("/socket-debug", (req, res) => {
   const sockets = Array.from(io.sockets.sockets.values());
   const rooms = Array.from(io.sockets.adapter.rooms.entries());
-  
+
   res.json({
     totalConnections: sockets.length,
     connections: sockets.map(socket => ({
@@ -379,12 +452,12 @@ app.get("/socket-debug", (req, res) => {
 
 app.get("/socket-health", (req, res) => {
   const activeRooms = Array.from(io.sockets.adapter.rooms);
-  const chatRooms = activeRooms.filter(([roomId]) => 
-    roomId.length === 24 ||  
-    roomId.startsWith('chat_') || 
-    /^[0-9a-fA-F]{24}$/.test(roomId)  
+  const chatRooms = activeRooms.filter(([roomId]) =>
+    roomId.length === 24 ||
+    roomId.startsWith('chat_') ||
+    /^[0-9a-fA-F]{24}$/.test(roomId)
   );
-  
+
   res.json({
     socket: {
       connectedClients: io.engine.clientsCount,
@@ -407,17 +480,17 @@ app.post("/api/test-upload", (req, res) => {
 
 setInterval(() => {
   const now = Date.now();
-  const maxAge = 30 * 60 * 1000;  
-  
+  const maxAge = 30 * 60 * 1000;
+
   if (fs.existsSync(uploadsDir)) {
     fs.readdir(uploadsDir, (err, files) => {
       if (err) return;
-      
+
       files.forEach(file => {
         const filePath = path.join(uploadsDir, file);
         fs.stat(filePath, (err, stats) => {
           if (err) return;
-          
+
           if (now - stats.mtimeMs > maxAge) {
             fs.unlink(filePath, (err) => {
               if (!err) console.log(`🧹 Cleaned up old temp file: ${file}`);
@@ -427,7 +500,7 @@ setInterval(() => {
       });
     });
   }
-}, 60 * 60 * 1000); 
+}, 60 * 60 * 1000);
 
 app.use((req, res) => {
   res.status(404).json({
@@ -440,14 +513,14 @@ app.use((req, res) => {
 app.use((err, req, res, next) => {
   console.error("❌ Error:", err.message);
   console.error("Stack:", err.stack);
-  
+
   if (err.message.includes("CORS")) {
-    return res.status(403).json({ 
+    return res.status(403).json({
       success: false,
-      message: "CORS not allowed for this origin" 
+      message: "CORS not allowed for this origin"
     });
   }
-  
+
   if (err.name === "MulterError") {
     return res.status(400).json({
       success: false,
@@ -463,7 +536,7 @@ app.use((err, req, res, next) => {
       error: process.env.NODE_ENV === "production" ? "Payload too large" : err.message,
     });
   }
-  
+
   res.status(500).json({
     success: false,
     message: "Internal Server Error",

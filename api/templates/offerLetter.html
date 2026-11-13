@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        body {
+            font-family: "Times New Roman", Georgia, serif;
+            font-size: 11.5pt;
+            line-height: 1.55;
+            color: #111;
+            margin: 0;
+            padding: 22mm 18mm;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            border-bottom: 2px solid #0a4a8a;
+            padding-bottom: 8px;
+            margin-bottom: 22px;
+        }
+
+        .header .brand {
+            font-size: 20pt;
+            font-weight: bold;
+            color: #0a4a8a;
+            letter-spacing: 0.5px;
+        }
+
+        .header .brand small {
+            display: block;
+            font-size: 9pt;
+            font-weight: normal;
+            color: #555;
+            letter-spacing: 1.5px;
+            margin-top: 2px;
+        }
+
+        .header .contact {
+            text-align: right;
+            font-size: 8.5pt;
+            color: #333;
+            line-height: 1.35;
+        }
+
+        h1.title {
+            font-size: 14pt;
+            text-align: center;
+            margin: 10px 0 4px;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+        }
+
+        .meta {
+            font-size: 9.5pt;
+            color: #555;
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        p {
+            margin: 6px 0;
+            text-align: justify;
+        }
+
+        ol.terms {
+            padding-left: 20px;
+            margin: 8px 0;
+        }
+
+        ol.terms li {
+            margin: 5px 0;
+        }
+
+        ol.terms b {
+            color: #0a4a8a;
+        }
+
+        .signature {
+            margin-top: 36px;
+            font-size: 10.5pt;
+        }
+
+        .signature .name {
+            margin-top: 30px;
+            font-weight: bold;
+        }
+
+        .acceptance {
+            margin-top: 26px;
+            padding: 12px;
+            border: 1px dashed #888;
+            font-size: 9.5pt;
+        }
+
+        .acceptance .line {
+            display: inline-block;
+            border-bottom: 1px solid #333;
+            min-width: 220px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="header">
+        <div class="brand">FD BUSINESS SERVICE<small>PVT. LTD.</small></div>
+        <div class="contact">
+            Phone: +91-9220190744<br />
+            Email: info@fdbs.in<br />
+            118–119–120 Suncity Success Tower<br />
+            Gurgaon 122005
+        </div>
+    </div>
+
+    <h1 class="title">Offer of Employment</h1>
+    <div class="meta">Ref: {{offerRef}} &nbsp;|&nbsp; Date: {{letterDate}} {{empId}}</div>
+
+    <p>Dear <b>{{realName}}</b>,</p>
+
+    <p>We are pleased to offer you the position of <b>{{designation}}</b> with FD Business Service Private Limited
+        ({{department}}). After careful consideration of your skills and experience, we believe you will make a
+        significant contribution to our organization.</p>
+
+    <p>The terms and conditions of your employment are as follows:</p>
+
+    <ol class="terms">
+        <li><b>Position and Reporting</b> — You will be appointed as {{designation}}.</li>
+        <li><b>Commencement of Employment</b> — Your employment with the company will commence on {{dateOfJoining}}.
+        </li>
+        <li><b>Place of Work</b> — Your primary place of work will be FD Business Service Private Limited at
+            {{officeLocation}}. You may be required to travel or work from other locations as necessary.</li>
+        <li><b>Remuneration</b> — You will receive a salary of {{ctc}} CTC per year, payable in accordance with the
+            company's payroll policies and subject to applicable taxes and deductions.</li>
+        <li><b>Probationary Period</b> — You will be on probation for 3 (Three) months from your date of joining. During
+            this time, your performance and conduct will be reviewed. Upon satisfactory completion of the probation,
+            your employment will be confirmed in writing.</li>
+        <li><b>Working Hours</b> — Your normal working hours will be 9 hours, 5.5 days per week. You may be required to
+            work additional hours depending on business needs.</li>
+        <li><b>Leave Entitlement</b> — You will be entitled to 18 paid leaves annually as per company policy.</li>
+        <li><b>Benefits</b> — You will be eligible for benefits in accordance with company policy, including provident
+            fund, etc.</li>
+        <li><b>Termination</b> — Either party may terminate this employment by providing 30 days written notice or
+            salary in lieu thereof, as per company FNF policy.</li>
+        <li><b>Confidentiality</b> — You shall maintain strict confidentiality regarding all company information and
+            trade secrets during and after your employment.</li>
+        <li><b>Code of Conduct and Policies</b> — You are required to adhere to all company policies, rules, and
+            regulations as may be in force from time to time.</li>
+    </ol>
+
+    <p>Please sign and return a copy of this letter as a token of your acceptance of the above terms and conditions. You
+        may also e-sign your acceptance via the secure link sent to your email.</p>
+
+    <p>We look forward to welcoming you to FD Business Service Pvt. Ltd. and wish you every success in your new role.
+    </p>
+
+    <div class="acceptance">
+        <b>Acceptance</b><br /><br />
+        I, <span class="line">&nbsp;</span>, hereby accept the above offer on the terms stated.<br /><br />
+        Signature: <span class="line">&nbsp;</span><br /><br />
+        Date: <span class="line">&nbsp;</span>
+    </div>
+
+    <div class="signature">
+        Warm Regards,<br />
+        <div class="name">Mehak Chhabra</div>
+        Manager – Human Resource<br />
+        FD Business Service Pvt Ltd<br />
+        E-mail: hr@fdbs.in &nbsp;|&nbsp; M: 7400340800
+    </div>
+</body>
+
+</html>
